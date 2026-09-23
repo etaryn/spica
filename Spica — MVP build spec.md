@@ -390,6 +390,8 @@ Assertion types:
 - **State:** after the script, fact F has status S, thread T is resolved, and so on.
 - **Reach-out:** within a simulated window, a reach-out fires (or does not) and references thread T.
 
+Eval scripts are YAML in `evals/scripts/`; `pnpm eval --compare` checks results against `evals/baseline.json`.
+
 Minimum eval set before leaving each phase: 20 scripts for Phase 1, plus 10 more per later phase. Every bug found in manual testing SHOULD become a new script. Run the full set on every change to prompts, scoring or reconciliation.
 
 ## 9. Open decisions and guardrails

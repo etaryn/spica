@@ -151,7 +151,11 @@ system).
   repos; `src/app` Next.js; `src/worker` pg-boss; `prompts/`; `evals/`.
 - Timestamps come from the injected `Clock`; never `DEFAULT now()`.
 - Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
-  `pnpm eval --llm=fake --compare`.
+  `pnpm eval --llm=fake --compare`; `pnpm db:up`, `pnpm db:migrate` (dev
+  DB only; tests migrate their own), `pnpm worker`.
+- Drizzle property names for domain tables are the spec's snake_case names
+  (`session_log.user_id`); Better Auth tables use camelCase (required).
+- TypeScript is pinned `~6.0` (typescript-eslint doesn't support 7 yet).
 - Uncovered choices go in `DECISIONS.md`.
 <!-- Not yet decided: branch naming, commit style. -->
 

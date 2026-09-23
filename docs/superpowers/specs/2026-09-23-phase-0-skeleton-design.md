@@ -1,6 +1,6 @@
 # Phase 0 — Skeleton: design
 
-Date: 2026-09-23 · Status: awaiting review · Parent: `Spica — MVP build spec.md` (§7, Phase 0)
+Date: 2026-09-23 · Status: implemented (branch phase-0-skeleton) · Parent: `Spica — MVP build spec.md` (§7, Phase 0)
 
 ## 1. Goal and exit test
 

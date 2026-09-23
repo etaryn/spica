@@ -1,0 +1,9 @@
+.wrap { padding: 20px; font-size: 14px; }
+.nav { display: flex; gap: 14px; margin: 12px 0 18px; flex-wrap: wrap; }
+.active { font-weight: 700; text-decoration: none; color: var(--fg); }
+.table { border-collapse: collapse; width: 100%; }
+.table th, .table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--fg) 12%, transparent); vertical-align: top; }
+.empty { color: var(--muted); font-style: italic; }
+.session { margin: 16px 0 6px; color: var(--muted); font-family: ui-monospace, monospace; }
+.pre { white-space: pre-wrap; margin: 0; font-family: ui-monospace, monospace; font-size: 12px; }
+.filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }

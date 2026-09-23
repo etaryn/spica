@@ -1,0 +1,44 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { adminGetUser } from "@/db/repos/users";
+import { getDeps } from "@/lib/deps";
+import { parseUserIdParam } from "@/lib/inspector-access";
+import { assertInspectorAccess } from "@/lib/inspector-guard";
+import styles from "../inspector.module.css";
+import { EntitiesThreadsTab, FactsTab, IdentityTab, ReachOutsTab, RetrievalTab, TranscriptTab } from "./tabs";
+
+const TABS = { transcript: "Transcript", facts: "Facts", graph: "Entities & Threads", identity: "Identity & Relationship", retrieval: "Retrieval", reachouts: "Reach-outs" } as const;
+type Tab = keyof typeof TABS;
+
+export default async function InspectUser({ params, searchParams }: {
+  params: Promise<{ userId: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  await assertInspectorAccess();
+  const userId = parseUserIdParam((await params).userId);
+  if (!userId) notFound();
+  const { db } = getDeps();
+  const target = await adminGetUser(db, userId);
+  if (!target) notFound();
+  const sp = await searchParams;
+  const tab: Tab = sp.tab && sp.tab in TABS ? (sp.tab as Tab) : "transcript";
+  const base = `/inspector/${userId}`;
+
+  return (
+    <>
+      <Link href="/inspector">← users</Link>
+      <h1>{target.name} <small>{target.email}</small></h1>
+      <nav className={styles.nav}>
+        {(Object.keys(TABS) as Tab[]).map((t) => (
+          <Link key={t} href={`${base}?tab=${t}`} className={t === tab ? styles.active : undefined}>{TABS[t]}</Link>
+        ))}
+      </nav>
+      {tab === "transcript" && <TranscriptTab db={db} userId={userId} />}
+      {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}
+      {tab === "graph" && <EntitiesThreadsTab db={db} userId={userId} base={base} />}
+      {tab === "identity" && <IdentityTab db={db} userId={userId} />}
+      {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
+      {tab === "reachouts" && <ReachOutsTab db={db} userId={userId} />}
+    </>
+  );
+}

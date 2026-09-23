@@ -1,0 +1,68 @@
+import { and, arrayContains, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { z } from "zod";
+import type { Db } from "../client";
+import {
+  ego_tick, entity, fact, factStatus, factSubject, identity, reach_out_log, relationship, retrieval_trace, thread,
+} from "../schema";
+
+export type FactFilters = {
+  subject: (typeof factSubject.enumValues)[number] | undefined;
+  status: (typeof factStatus.enumValues)[number] | undefined;
+  entityId: string | undefined;
+  threadId: string | undefined;
+  sort: "salience" | "recency";
+};
+
+const opt = <T extends z.ZodType>(s: T) => s.optional().catch(undefined);
+
+export function parseFactFilters(sp: Record<string, string | undefined>): FactFilters {
+  return {
+    subject: opt(z.enum(factSubject.enumValues)).parse(sp.subject),
+    status: opt(z.enum(factStatus.enumValues)).parse(sp.status),
+    entityId: opt(z.uuid()).parse(sp.entityId),
+    threadId: opt(z.uuid()).parse(sp.threadId),
+    sort: z.enum(["salience", "recency"]).catch("recency").parse(sp.sort),
+  };
+}
+
+const { embedding: _embedding, ...factColumns } = getTableColumns(fact);
+
+export async function listFacts(db: Db, userId: string, f: FactFilters) {
+  const conds = [eq(fact.user_id, userId)];
+  if (f.subject) conds.push(eq(fact.subject, f.subject));
+  if (f.status) conds.push(eq(fact.status, f.status));
+  if (f.entityId) conds.push(arrayContains(fact.entity_refs, [f.entityId]));
+  if (f.threadId) conds.push(eq(fact.thread_id, f.threadId));
+  const recency = sql`greatest(${fact.created_at}, coalesce(${fact.last_recalled_at}, ${fact.created_at}))`;
+  return db.select(factColumns).from(fact).where(and(...conds))
+    .orderBy(f.sort === "salience" ? desc(fact.salience) : desc(recency))
+    .limit(500);
+}
+
+export const listEntities = (db: Db, userId: string) =>
+  db.select().from(entity).where(eq(entity.user_id, userId)).orderBy(desc(entity.salience));
+
+export const listThreads = (db: Db, userId: string) =>
+  db.select().from(thread).where(eq(thread.user_id, userId)).orderBy(desc(thread.last_touched));
+
+export async function getIdentity(db: Db, userId: string) {
+  return (await db.select().from(identity).where(eq(identity.user_id, userId)))[0] ?? null;
+}
+
+export async function getRelationship(db: Db, userId: string) {
+  return (await db.select().from(relationship).where(eq(relationship.user_id, userId)))[0] ?? null;
+}
+
+export const listEgoTicks = (db: Db, userId: string) =>
+  db.select().from(ego_tick).where(eq(ego_tick.user_id, userId)).orderBy(desc(ego_tick.created_at)).limit(100);
+
+export const listRetrievalTraces = (db: Db, userId: string) =>
+  db.select({ trace: retrieval_trace, content: fact.content })
+    .from(retrieval_trace)
+    .leftJoin(fact, eq(fact.id, retrieval_trace.fact_id))
+    .where(eq(retrieval_trace.user_id, userId))
+    .orderBy(desc(retrieval_trace.created_at), desc(retrieval_trace.score))
+    .limit(500);
+
+export const listReachOuts = (db: Db, userId: string) =>
+  db.select().from(reach_out_log).where(eq(reach_out_log.user_id, userId)).orderBy(desc(reach_out_log.created_at)).limit(200);

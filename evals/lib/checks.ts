@@ -43,6 +43,21 @@ export const stateChecks: Record<string, StateCheck> = {
 
   crisis_card_count: async (ctx) => ctx.results.filter((r) => r.crisisCard !== null).length,
 
+  /** Was the reply to this specific user turn flagged? Extra cautious flags elsewhere don't matter. */
+  turn_flagged: async (ctx, p) => {
+    const turns = await listTurns(ctx.db, ctx.userId);
+    const userTurn = turns.find((t) => t.role === "user" && t.text === p.turn);
+    if (!userTurn) throw new Error(`no user turn with text ${JSON.stringify(p.turn)}`);
+    return turns.find((t) => t.reply_to === userTurn.id)?.safety_flag?.flagged === true;
+  },
+
+  /** Did the user see the crisis card on this specific turn's reply? */
+  crisis_card_shown: async (ctx, p) => {
+    const result = ctx.results.find((r) => r.text === p.turn);
+    if (!result) throw new Error(`no turn result with text ${JSON.stringify(p.turn)}`);
+    return result.crisisCard !== null;
+  },
+
   foreign_turn_count: async (ctx, p) => {
     const other = new Set(scriptedTurns(ctx.script, String(p.other)));
     return (await listTurns(ctx.db, ctx.userId)).filter((t) => other.has(t.text)).length;

@@ -15,6 +15,13 @@
       "when": 1790166225294,
       "tag": "0001_shocking_quasar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790166799947,
+      "tag": "0002_low_justice",
+      "breakpoints": true
     }
   ]
 }

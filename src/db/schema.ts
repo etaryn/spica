@@ -11,7 +11,7 @@ const emptyTextArray = sql`'{}'::text[]`;
 // ---------- Better Auth (camelCase property names are required by Better Auth) ----------
 
 export const user = pgTable("user", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
@@ -22,7 +22,7 @@ export const user = pgTable("user", {
 });
 
 export const session = pgTable("session", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   expiresAt: ts("expires_at").notNull(),
   token: text("token").notNull().unique(),
   createdAt: ts("created_at").notNull(),
@@ -33,7 +33,7 @@ export const session = pgTable("session", {
 });
 
 export const account = pgTable("account", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   accountId: text("account_id").notNull(),
   providerId: text("provider_id").notNull(),
   userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -49,7 +49,7 @@ export const account = pgTable("account", {
 });
 
 export const verification = pgTable("verification", {
-  id: uuid("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: ts("expires_at").notNull(),

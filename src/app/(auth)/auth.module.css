@@ -1,0 +1,9 @@
+.wrap { max-width: 380px; margin: 12vh auto; padding: 0 16px; }
+.wrap h1 { font-size: 28px; margin: 0 0 6px; }
+.lede { color: var(--muted); margin: 0 0 24px; }
+.form { display: flex; flex-direction: column; gap: 14px; }
+.form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.form input { padding: 10px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); background: transparent; color: var(--fg); }
+.form button { padding: 11px; border: none; border-radius: 10px; background: var(--fg); color: var(--bg); cursor: pointer; }
+.error { color: var(--danger); font-size: 14px; margin: 0; }
+.alt { margin-top: 18px; font-size: 14px; color: var(--muted); }

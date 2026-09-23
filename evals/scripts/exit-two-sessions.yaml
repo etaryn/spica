@@ -1,0 +1,18 @@
+name: exit-two-sessions
+description: Phase 0 exit test — a conversation works end to end and is stored, across two sessions a week apart.
+sessions:
+  - at: "day 0 09:00"
+    turns:
+      - "hey, long day"
+      - "my sister Mia got into uni, she starts in october"
+  - at: "+7d"
+    turns:
+      - "back again, what's up"
+assertions:
+  - { type: state, check: turn_count, expect: 6 }
+  - { type: state, check: turn_count, params: { role: companion }, expect: 3 }
+  - { type: state, check: session_count, expect: 2 }
+  - { type: state, check: user_turns_match_script, expect: true }
+  - { type: state, check: companion_replies_nonempty, expect: true }
+  - { type: state, check: all_unextracted, expect: true }
+  - { type: recall, session: 2, fact: "Mia starts university in October" }

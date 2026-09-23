@@ -13,5 +13,5 @@ test("loads the configured reply and classifier prompts", () => {
 
 test("rejects path traversal and reports missing prompts", () => {
   expect(() => loadPrompt("../package", "v1")).toThrow(/invalid/);
-  expect(() => loadPrompt("reply", "v999")).toThrow(/prompts[\/]reply[\/]v999\.md/);
+  expect(() => loadPrompt("reply", "v999")).toThrow(/prompts[\\/]reply[\\/]v999\.md/);
 });

@@ -29,7 +29,7 @@ personality test. Tables exist; behaviour does not.
 | Database | Postgres 16 + pgvector; local via `docker-compose.yml` |
 | Job queue | pg-boss (runs inside the same Postgres — one database) |
 | Reply model | Anthropic `claude-sonnet-5` (config) |
-| Cheap strict-JSON model | Anthropic `claude-haiku-4-5-20251001` (config); used in P0 only for the crisis classifier |
+| Cheap strict-JSON model | Anthropic `claude-haiku-4-5` (config); used in P0 only for the crisis classifier |
 | Embeddings | Voyage AI `voyage-3.5`, 1024 dims (config); wired but unused until Phase 1 |
 | Auth | Better Auth, email + password, tables in our Postgres |
 | Tests | Vitest against a real Postgres (docker), `FakeLLMProvider` |
@@ -129,6 +129,10 @@ Phase 0 writes only `session_log` (and auth tables). No `identity` or
      gate_results jsonb, sent bool, turn_id nullable → session_log.id, created_at`
 3. **`session_log.safety_flag`** `jsonb, nullable` on companion turns:
    `{flagged, category, source: "classifier" | "keyword_fallback"}`.
+4. **`session_log.reply_to`** `uuid, nullable → session_log.id`, unique, on
+   companion turns: the user turn this reply answers. Makes retries and
+   double-submits idempotent (at most one reply per user turn). Transcript
+   ordering is `created_at`, ties broken by role (`user` before `companion`).
 
 ## 5. Chat flow
 
@@ -247,8 +251,10 @@ Phase 0 history.
 
 ```
 models.reply                    claude-sonnet-5
-models.cheap                    claude-haiku-4-5-20251001
-models.reply_max_tokens         1024
+models.cheap                    claude-haiku-4-5
+models.reply_max_tokens         4096   -- adaptive thinking tokens count toward this
+models.reply_effort             low    -- hot-path latency
+models.reply_max_retries        1
 models.reply_timeout_ms         30000
 embedding.provider              voyage
 embedding.model                 voyage-3.5
@@ -257,6 +263,7 @@ session.idle_gap_minutes        30
 chat.recent_turns               20
 chat.max_parts                  4
 chat.history_page_size          50
+chat.max_message_chars          4000
 safety.classifier_timeout_ms    3000
 safety.keywords                 [...]
 safety.resources                { default: [...] }   -- region-keyed

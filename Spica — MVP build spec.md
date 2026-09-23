@@ -180,6 +180,7 @@ Inside jokes are `fact` rows with `subject = shared`. High-stakes unresolved mat
 id, user_id, session_id, role (user | companion), text, created_at,
 trigger (null | reach_out), extracted (bool),
 safety_flag (jsonb, nullable)   -- companion turns: {flagged, category, source}
+reply_to (uuid, nullable, unique) -- companion turns: the user turn answered
 ```
 
 Raw transcript. The source for extraction and for the short-term context window. Never queried directly for long-term recall.

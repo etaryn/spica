@@ -20,3 +20,6 @@ the human.
 | 2026-09-23 | Inspector disabled in production by default (`INSPECTOR_ENABLED`) + admin allowlist | Staff access to user memories is a privacy question; closed until deliberately opened. |
 | 2026-09-23 | Replies returned whole, no streaming | Fits texting metaphor; simpler retry/idempotency. |
 | 2026-09-23 | Crisis resources are region-keyed config with an international default | Resources differ by country; content must be reviewed before launch. |
+| 2026-09-23 | `session_log.reply_to` (unique) links a companion turn to the user turn it answers | Makes client retries and double-submits idempotent without a second table. |
+| 2026-09-23 | Reply model runs at `effort: low`, `reply_max_tokens` 4096 | Hot-path latency; Sonnet 5 adaptive-thinking tokens count toward max_tokens. |
+| 2026-09-23 | Eval/test DB wipes refuse unless the DB name ends in `_test` or `_eval` | A misconfigured URL must never truncate dev or prod data. |

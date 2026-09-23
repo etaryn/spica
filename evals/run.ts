@@ -5,6 +5,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig, parseConfigOverrides } from "@/core/config";
 import { AnthropicProvider } from "@/core/llm/anthropic";
 import { FakeLLMProvider, keywordClassifier } from "@/core/llm/fake";
+import { messageToJudge } from "@/core/safety/crisis";
 import { assertDisposableDatabase } from "@/db/admin";
 import { createDb } from "@/db/client";
 import { runMigrations } from "@/db/migrate";
@@ -29,7 +30,7 @@ const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
 if (args.llm !== "real" && args.llm !== "fake") throw new Error(`--llm must be fake or real, got ${args.llm}`);
 const makeLlm = args.llm === "real"
   ? () => new AnthropicProvider(new Anthropic(), config.models)
-  : () => new FakeLLMProvider({ classify: keywordClassifier(config.safety.keywords) });
+  : () => new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
 
 const { db, pool } = createDb(dbUrl);
 await runMigrations(db);

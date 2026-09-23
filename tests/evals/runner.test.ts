@@ -1,13 +1,14 @@
 import { afterAll, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { FakeLLMProvider, keywordClassifier } from "@/core/llm/fake";
+import { messageToJudge } from "@/core/safety/crisis";
 import { runScript } from "../../evals/lib/runner";
 import { ScriptSchema } from "../../evals/lib/script";
 import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";
 
 afterAll(closeTestDb);
 const config = loadConfig();
-const makeLlm = () => new FakeLLMProvider({ classify: keywordClassifier(config.safety.keywords) });
+const makeLlm = () => new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
 
 test("runs a two-session script and evaluates state assertions", async () => {
   const script = ScriptSchema.parse({

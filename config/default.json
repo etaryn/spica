@@ -24,6 +24,7 @@
   "safety": {
     "classifier_timeout_ms": 3000,
     "classifier_max_tokens": 256,
+    "classifier_context_turns": 4,
     "keywords": [
       "kill myself",
       "killing myself",
@@ -56,6 +57,9 @@
   },
   "prompts": {
     "reply": "v1",
-    "crisis_classifier": "v1"
+    "crisis_classifier": "v2"
+  },
+  "queue": {
+    "enqueue_timeout_ms": 2000
   }
 }

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, lte } from "drizzle-orm";
 import type { Db } from "../client";
 import { session_log } from "../schema";
 import { one } from "./util";
@@ -36,6 +36,20 @@ export async function recentTurns(db: Db, userId: string, limit: number): Promis
     .orderBy(desc(session_log.created_at), desc(session_log.role))
     .limit(limit);
   return rows.reverse();
+}
+
+/**
+ * Up to `limit` turns ending at `anchor`, oldest first. The prompt window for a
+ * reply to `anchor`, so a retried older message never sees later turns.
+ */
+export async function turnsUpTo(db: Db, userId: string, anchor: Turn, limit: number): Promise<Turn[]> {
+  const rows = await db.select().from(session_log)
+    .where(and(eq(session_log.user_id, userId), lte(session_log.created_at, anchor.created_at)))
+    .orderBy(desc(session_log.created_at), desc(session_log.role))
+    .limit(limit * 2);
+  const ordered = rows.reverse();
+  const i = ordered.findIndex((t) => t.id === anchor.id);
+  return i === -1 ? [anchor] : ordered.slice(0, i + 1).slice(-limit);
 }
 
 export async function listTurns(db: Db, userId: string): Promise<Turn[]> {

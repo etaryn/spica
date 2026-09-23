@@ -7,6 +7,7 @@ import { ConflictError, InputError, isUniqueViolation, ReplyFailedError } from "
 import { loadPrompt } from "../prompts";
 import { COLD_PATH_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
+import { withTimeout } from "../timeout";
 import { assemblePrompt, emptyRetrieval } from "./assemble";
 import { splitParts } from "./parts";
 import { resolveSessionId } from "./session";
@@ -65,8 +66,9 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   // 2. Retrieve (Phase 1)
   const retrieval = emptyRetrieval();
 
-  // 3. Assemble
-  const recent = await sessionLog.recentTurns(db, userId, config.chat.recent_turns);
+  // 3. Assemble — the window ends at this user turn, so retrying an older
+  // message never sends later turns (or an assistant-last history).
+  const recent = await sessionLog.turnsUpTo(db, userId, userTurn, config.chat.recent_turns);
   const prompt = assemblePrompt({
     valuesDoc: loadPrompt("reply", config.prompts.reply),
     egoLine: null,
@@ -77,7 +79,8 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   });
 
   // 4. Generate + crisis check in parallel (checkCrisis never rejects)
-  const [reply, safety] = await Promise.allSettled([llm.generateReply(prompt), checkCrisis(deps, userTurn.text)]);
+  const context = recent.slice(0, -1);
+  const [reply, safety] = await Promise.allSettled([llm.generateReply(prompt), checkCrisis(deps, userTurn.text, context)]);
   const flag = safety.status === "fulfilled" ? safety.value : null;
   if (reply.status === "rejected") {
     log.error("reply generation failed", { userId, turnId: userTurn.id, error: String((reply.reason as Error)?.name ?? "Error") });
@@ -104,7 +107,11 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   }
 
   try {
-    await queue.enqueue(COLD_PATH_QUEUE, { userId, turnIds: [userTurn.id, companion.id] });
+    // Bounded: a slow or hung queue must never delay the reply (spec principle 5).
+    await withTimeout(
+      queue.enqueue(COLD_PATH_QUEUE, { userId, turnIds: [userTurn.id, companion.id] }),
+      config.queue.enqueue_timeout_ms,
+    );
   } catch (e) {
     // Never block or fail a reply on the cold path (spec §4.2). Unextracted turns are reprocessed.
     log.error("cold_path enqueue failed", { userId, turnId: companion.id, error: String((e as Error)?.name ?? "Error") });

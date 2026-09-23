@@ -27,3 +27,7 @@ the human.
 | 2026-09-23 | pnpm `allowBuilds: esbuild` only | pnpm 12 blocks install scripts by default; esbuild backs tsx, drizzle-kit and vitest. |
 | 2026-09-23 | Better Auth table ids default to `gen_random_uuid()` | Better Auth 1.7 with `generateId: "uuid"` lets Postgres generate ids. |
 | 2026-09-23 | `readEnv` treats blank `.env` values as unset | `KEY=` lines from `.env.example` must not crash startup. |
+| 2026-09-23 | Inspector admins allowlisted by user id (`INSPECTOR_ADMIN_USER_IDS`), not email | Sign-up emails are unverified; an email allowlist could be claimed by whoever registers the address first. |
+| 2026-09-23 | Crisis classifier sees the last `safety.classifier_context_turns` (4) turns as context (prompt v2) | Intent spread over messages ("yes, tonight") must still surface resources. Keyword fallback stays on the latest message only. |
+| 2026-09-23 | Cold-path enqueue bounded by `queue.enqueue_timeout_ms` (2000); producer pg-boss warmed at server start | A slow queue must never delay a reply. A timed-out enqueue may still land; unextracted turns are reprocessed either way. |
+| 2026-09-23 | Prompt window ends at the user turn being answered (`turnsUpTo`) | Retrying an older failed message must not send later turns or an assistant-last history. |

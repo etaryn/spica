@@ -126,6 +126,45 @@ describe("handleUserMessage", () => {
     expect(await listTurns(getTestDb(), b)).toEqual([]);
   });
 
+  test("review I1: retrying an older failed message ends the prompt at that message", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const a = msg("message A");
+    deps.llm.failReplies = 1;
+    await expect(handleUserMessage(deps, u, a)).rejects.toBeInstanceOf(ReplyFailedError);
+    deps.clock.advance(60_000);
+    await handleUserMessage(deps, u, msg("message B"));
+    deps.clock.advance(60_000);
+    await handleUserMessage(deps, u, a); // retry A after B was answered
+    const call = deps.llm.calls.at(-1)!;
+    expect(call.messages.at(-1)).toEqual({ role: "user", content: "message A" });
+    expect(call.messages.map((m) => m.content)).not.toContain("message B");
+  });
+
+  test("review I4: a hung queue cannot delay the reply past the enqueue timeout", async () => {
+    const base = makeTestDeps({ queue: { enqueue_timeout_ms: 50 } });
+    const deps = { ...base, queue: { enqueue: () => new Promise<void>(() => {}) } };
+    const u = await createTestUser();
+    const started = Date.now();
+    await expect(handleUserMessage(deps, u, msg("hi"))).resolves.toMatchObject({ parts: expect.any(Array) });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("review I3: the crisis classifier sees recent context, not just the latest message", async () => {
+    const deps = makeTestDeps();
+    const seen: string[] = [];
+    deps.llm.classify = (input: string) => { seen.push(input); return { flag: false, category: "none" }; };
+    const u = await createTestUser();
+    deps.llm.replies.push("are you thinking about hurting yourself?");
+    await handleUserMessage(deps, u, msg("i can't do this anymore"));
+    deps.clock.advance(60_000);
+    await handleUserMessage(deps, u, msg("yes, tonight"));
+    const last = seen.at(-1)!;
+    expect(last).toContain("are you thinking about hurting yourself?");
+    expect(last).toContain("i can't do this anymore");
+    expect(last).toMatch(/Message to judge:\s*yes, tonight$/);
+  });
+
   test("concurrent double submit yields exactly one companion reply", async () => {
     const deps = makeTestDeps();
     deps.llm.replyDelayMs = 20;

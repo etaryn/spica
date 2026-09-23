@@ -265,11 +265,13 @@ chat.max_parts                  4
 chat.history_page_size          50
 chat.max_message_chars          4000
 safety.classifier_timeout_ms    3000
+safety.classifier_context_turns 4      -- earlier turns shown to the classifier as context
 safety.keywords                 [...]
 safety.resources                { default: [...] }   -- region-keyed
 auth.min_age                    18
 prompts.reply                   v1
-prompts.crisis_classifier       v1
+prompts.crisis_classifier       v2
+queue.enqueue_timeout_ms        2000   -- cold-path enqueue never delays a reply
 ```
 
 Secrets (`ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `DATABASE_URL`,

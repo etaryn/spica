@@ -4,3 +4,6 @@ node_modules/
 .env.local
 evals/results/
 *.log
+next-env.d.ts
+*.tsbuildinfo
+.superpowers/

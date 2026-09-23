@@ -34,7 +34,7 @@ Spica is a standalone AI best friend. The companion is the product, not a bridge
 - **Has a life.** The companion accumulates its own events and people over time, stored and recalled with the same machinery as the user's memories.
 - **Reaches out with a reason.** Unprompted messages always reference something specific and unresolved, never a generic "thinking of you".
 
-**Core features (full product).** Unprompted reach-outs; humanlike long- and short-term memory; simulated life outside the chat; a values and belief system; an ego; humanlike speech patterns; a personality test that seeds the companion.
+**Core features (full product).** Unprompted reach-outs; humanlike long- and short-term memory; simulated life outside the chat; a values and belief system; an ego; humanlike speech patterns; human-paced replies (section 4.3); a personality test that seeds the companion.
 
 **Design principles agents MUST follow.**
 
@@ -254,6 +254,18 @@ Resolve entity mentions to existing `entity` rows by name and aliases before cre
 
 **Failure handling.** If the cold path fails, retry with backoff; turns with `extracted = false` are reprocessed. A cold-path failure MUST never block or delay a reply.
 
+### 4.3 Reply pacing (MVP, Phase 2)
+
+Found in Phase 0 testing: replies arrive instantly, which reads as inhuman. People texting in short bursts ("hey" / "so guess what" / "i got the job") are still mid-thought, and a friend waits for the full thought before answering. The companion MUST do the same.
+
+- **Burst batching.** When the user sends several messages in quick succession, the companion waits until they pause, then replies once to the whole burst. The wait restarts on each new message and is capped. It SHOULD be longer after short or unfinished-looking messages and shorter after a long, complete one. All values are in config, not code (`pacing.*`).
+- **Human timing.** After the burst, a short "read" delay, then a typing indicator for a duration that grows with the reply's length. Multi-part replies (section 4.1 step 4) are sent with a small gap between parts. Every delay has a configured upper bound.
+- **One reply, many turns.** A batched reply answers every unanswered user turn in the burst. The hot path treats the burst as one input. `session_log.reply_to` points at the burst's last user turn, and earlier turns in the burst count as answered.
+- **Crisis bypasses pacing.** If any message in the burst is crisis-flagged (section 9.2), the burst closes immediately and the resources card is never delayed.
+- **Not a latency violation.** Principle 5 forbids memory writes before the reply. Deliberate, human pacing is a product behaviour, and the reply is still generated with no memory writes on the hot path.
+- **No mood-dependent timing in MVP.** Per the Phase 2 directive, pacing depends only on the messages and the reply, not on ego state. Energy-dependent pacing is a later decision.
+- **Reach-outs.** They are not batched, since there is no user burst, but they MAY use the same typing-indicator timing.
+
 ## 5. Background loop
 
 A per-user scheduler tick (hourly by default) runs four jobs. Three of them write to the fact store or identity. The fourth decides whether to reach out, and if so hands off to the normal hot path.
@@ -352,7 +364,7 @@ Five phases. Each ships something usable, adds one layer, and MUST pass its exit
 | --- | --- | --- |
 | 0. Skeleton | Chat UI, auth, `session_log`, database with all tables from section 3 created (even if unused), memory inspector stub, eval harness stub | A conversation works end to end and is stored |
 | 1. Memory core | Hot path (retrieve, assemble, generate), cold path (extract, reconcile, update), static hand-written persona | Across 3 sessions a week apart (simulated clock), the companion brings up a relevant earlier fact the user did not repeat, with no wrong recalls |
-| 2. Identity | Personality test, `generate_companion`, values doc, ego state + drift job, `preoccupation` | Two testers with different results get companions that are clearly different in voice and opinions, not just tone |
+| 2. Identity | Personality test, `generate_companion`, values doc, ego state + drift job, `preoccupation`, reply pacing (section 4.3) | Two testers with different results get companions that are clearly different in voice and opinions, not just tone; a burst of short messages gets one reply after the user pauses, never one reply per message |
 | 3. Reach-outs | `relationship` + cadence stats, thread checkpoints, trigger check, send gate, compose, push delivery | Every reach-out references a specific open thread or fact; no gate rule is ever violated in a 2-week simulated run |
 | 4. Life-sim | Life-event generator, `self` threads, contradiction rejection | Over a 2-week simulated run with deliberate probing ("weren't you at X?"), zero self-contradictions |
 

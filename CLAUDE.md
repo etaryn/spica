@@ -90,6 +90,12 @@ entity mentions, thread updates; companion's own stated facts get
 → update relationship + ego + cadence. Cold-path failure must never block or
 delay a reply.
 
+**Reply pacing (spec §4.3, Phase 2)** — never reply instantly to each message.
+Batch a burst of short user messages and reply once after the user pauses
+(debounce window restarts on each message, capped); then read delay + typing
+indicator scaled to reply length. All timings in config (`pacing.*`). Crisis-
+flagged messages bypass pacing. No ego/mood-dependent timing in MVP.
+
 ## Background loop (hourly tick)
 Decay pass (lower salience, floor → stale, never deleted) · ego drift
 (toward baseline + noise + daily rhythm) · life-event generator (Phase 4,
@@ -102,7 +108,7 @@ system).
 |---|---|---|
 | 0. Skeleton | Chat UI, auth, session_log, full DB schema (unused tables OK), memory inspector stub, eval harness stub | A conversation works end to end and is stored |
 | 1. Memory core | Hot + cold path, static hand-written persona | Across 3 sessions a week apart, companion recalls an earlier fact unprompted, zero wrong recalls |
-| 2. Identity | Personality test, generate_companion, values doc, ego + drift, preoccupation | Two testers get companions clearly different in voice/opinions, not just tone |
+| 2. Identity | Personality test, generate_companion, values doc, ego + drift, preoccupation, reply pacing (spec §4.3) | Two testers get companions clearly different in voice/opinions, not just tone; a burst of short messages gets one reply after the user pauses |
 | 3. Reach-outs | relationship + cadence, thread checkpoints, trigger check, send gate, compose, push | Every reach-out references a specific thread/fact; no gate rule violated in a 2-week sim |
 | 4. Life-sim | Life-event generator, self threads, contradiction rejection | 2-week sim with deliberate probing, zero self-contradictions |
 

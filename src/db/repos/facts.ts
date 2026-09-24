@@ -1,0 +1,126 @@
+import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { z } from "zod";
+import type { RecalledFact } from "@/core/memory/types";
+import type { Db } from "../client";
+import { fact, factStatus, identity, retrieval_trace } from "../schema";
+import { one } from "./util";
+
+export type FactRow = typeof fact.$inferSelect;
+export type NewFact = Omit<typeof fact.$inferInsert, "user_id">;
+type Subject = "user" | "self" | "shared";
+const INACTIVE = ["superseded", "stale"] as const;
+
+export const vecLiteral = (v: number[]) => `[${v.join(",")}]`;
+
+export type CandidateFact = {
+  id: string; subject: Subject; content: string; salience: number;
+  created_at: Date; last_recalled_at: Date | null; occurred_at: Date | null;
+  sim: number; entity_salience: number;
+};
+
+/** Nearest active private facts for this user, with max entity salience (v2 §6.2 step 1). */
+export async function candidateFacts(db: Db, userId: string, queryVec: number[], limit: number): Promise<CandidateFact[]> {
+  const q = vecLiteral(queryVec);
+  return db.transaction(async (tx) => {
+    // The HNSW index spans all users; iterative scan keeps filtered result sets full.
+    await tx.execute(sql`SET LOCAL hnsw.iterative_scan = relaxed_order`);
+    const res = await tx.execute(sql`
+      SELECT f.id, f.subject, f.content, f.salience, f.created_at, f.last_recalled_at, f.occurred_at,
+             (1 - (f.embedding <=> ${q}::vector))::float8 AS sim,
+             COALESCE((SELECT max(e.salience) FROM entity e
+                       WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
+      FROM fact f
+      WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
+      ORDER BY f.embedding <=> ${q}::vector
+      LIMIT ${limit}`);
+    return res.rows.map((r) => ({
+      id: String(r.id), subject: r.subject as Subject, content: String(r.content), salience: Number(r.salience),
+      created_at: r.created_at as Date, last_recalled_at: (r.last_recalled_at as Date | null) ?? null,
+      occurred_at: (r.occurred_at as Date | null) ?? null, sim: Number(r.sim), entity_salience: Number(r.entity_salience),
+    }));
+  });
+}
+
+export type Neighbor = { id: string; content: string; status: string; sim: number };
+
+/** Active facts of the same subject at or above `minSim` (reconcile candidates, approach A). */
+export async function nearFacts(db: Db, userId: string, subject: Subject, vec: number[], k: number, minSim: number): Promise<Neighbor[]> {
+  const q = vecLiteral(vec);
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL hnsw.iterative_scan = relaxed_order`);
+    const res = await tx.execute(sql`
+      SELECT id, content, status, (1 - (embedding <=> ${q}::vector))::float8 AS sim
+      FROM fact
+      WHERE user_id = ${userId} AND scope = 'private' AND subject = ${subject}
+        AND status NOT IN ('superseded', 'stale')
+        AND (1 - (embedding <=> ${q}::vector)) >= ${minSim}
+      ORDER BY embedding <=> ${q}::vector
+      LIMIT ${k}`);
+    return res.rows.map((r) => ({ id: String(r.id), content: String(r.content), status: String(r.status), sim: Number(r.sim) }));
+  });
+}
+
+export async function insertFact(db: Db, userId: string, row: NewFact): Promise<FactRow> {
+  return one(await db.insert(fact).values({ ...row, user_id: userId }).returning());
+}
+
+export async function getFact(db: Db, userId: string, id: string): Promise<FactRow | null> {
+  if (!z.uuid().safeParse(id).success) return null;
+  const rows = await db.select().from(fact).where(and(eq(fact.user_id, userId), eq(fact.id, id))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function bumpDuplicate(db: Db, userId: string, id: string, bump: number, cap: number, confidence: number): Promise<void> {
+  await db.update(fact)
+    .set({ salience: sql`LEAST(${cap}::real, ${fact.salience} + ${bump}::real)`, confidence: sql`GREATEST(${fact.confidence}, ${confidence}::real)` })
+    .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
+}
+
+export async function setFactStatus(
+  db: Db, userId: string, id: string, status: (typeof factStatus.enumValues)[number], supersededBy: string | null = null,
+): Promise<void> {
+  await db.update(fact).set({ status, ...(supersededBy ? { superseded_by: supersededBy } : {}) })
+    .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
+}
+
+/** Cold-path recall write-back. Returns ids actually updated (deleted or foreign facts are skipped). */
+export async function applyRecall(
+  db: Db, userId: string, recalled: RecalledFact[], now: Date, bump: number, cap: number, turnId: string | null,
+): Promise<string[]> {
+  const ids = [...new Set(recalled.map((r) => r.factId))];
+  if (ids.length === 0) return [];
+  const updated = await db.update(fact).set({
+    last_recalled_at: now,
+    recall_count: sql`${fact.recall_count} + 1`,
+    salience: sql`LEAST(${cap}::real, ${fact.salience} + ${bump}::real)`,
+  }).where(and(eq(fact.user_id, userId), inArray(fact.id, ids))).returning({ id: fact.id });
+  const alive = new Set(updated.map((r) => r.id));
+  const rows = recalled.filter((r) => alive.has(r.factId)).map((r) => ({
+    user_id: userId, turn_id: turnId!, fact_id: r.factId, sim: r.sim, fact_salience: r.fact_salience,
+    entity_salience: r.entity_salience, recency: r.recency, score: r.score, forced: r.forced, created_at: now,
+  }));
+  if (turnId && rows.length > 0) await db.insert(retrieval_trace).values(rows);
+  return [...alive];
+}
+
+export async function getPreoccupationFact(db: Db, userId: string): Promise<FactRow | null> {
+  const rows = await db.select({ f: fact }).from(identity)
+    .innerJoin(fact, and(eq(fact.id, identity.preoccupation), eq(fact.user_id, identity.user_id)))
+    .where(and(eq(identity.user_id, userId), notInArray(fact.status, [...INACTIVE]))).limit(1);
+  return rows[0]?.f ?? null;
+}
+
+/** The "what I remember" list (spec §7). */
+export async function listRememberedFacts(db: Db, userId: string) {
+  return db.select({ id: fact.id, kind: fact.kind, content: fact.content, created_at: fact.created_at })
+    .from(fact)
+    .where(and(eq(fact.user_id, userId), eq(fact.subject, "user"), eq(fact.scope, "private"), notInArray(fact.status, [...INACTIVE])))
+    .orderBy(desc(fact.created_at));
+}
+
+/** User-initiated hard delete (v2 §7.5). False for malformed or foreign ids. */
+export async function forgetFact(db: Db, userId: string, factId: string): Promise<boolean> {
+  if (!z.uuid().safeParse(factId).success) return false;
+  const rows = await db.delete(fact).where(and(eq(fact.user_id, userId), eq(fact.id, factId))).returning({ id: fact.id });
+  return rows.length > 0;
+}

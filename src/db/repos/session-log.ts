@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
 import type { Db } from "../client";
 import { session_log } from "../schema";
 import { one } from "./util";
@@ -56,4 +56,16 @@ export async function listTurns(db: Db, userId: string): Promise<Turn[]> {
   return db.select().from(session_log)
     .where(eq(session_log.user_id, userId))
     .orderBy(asc(session_log.created_at), asc(session_log.role));
+}
+
+export async function getTurnsByIds(db: Db, userId: string, ids: string[]): Promise<Turn[]> {
+  if (ids.length === 0) return [];
+  return db.select().from(session_log)
+    .where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)))
+    .orderBy(asc(session_log.created_at), asc(session_log.role));
+}
+
+export async function markExtracted(db: Db, userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.update(session_log).set({ extracted: true }).where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }

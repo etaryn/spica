@@ -61,7 +61,7 @@ describe("facts", () => {
     await facts.forgetFact(db(), u, f2.id);
     const rec = (id: string) => ({ factId: id, sim: 0.9, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.45, forced: false });
     const now = new Date("2026-01-06T09:00:00Z");
-    const updated = await facts.applyRecall(db(), u, [rec(f1.id), rec(f2.id), rec(f3.id)], now, 0.03, 0.95, turnId);
+    const updated = await facts.applyRecall(db(), u, [rec(f1.id), rec(f2.id), rec(f3.id)], now, { bump: 0.03, cap: 0.95, minSim: 0.5 }, turnId);
     expect(updated).toEqual([f1.id]);
     const after = await facts.getFact(db(), u, f1.id);
     expect(after!.salience).toBeCloseTo(0.95, 5);
@@ -70,6 +70,51 @@ describe("facts", () => {
     const traces = await db().select().from(s.retrieval_trace);
     expect(traces.map((t) => t.fact_id)).toEqual([f1.id]);
     expect((await facts.getFact(db(), other, f3.id))!.recall_count).toBe(0);
+  });
+
+  test("applyRecall reinforces only unforced recalls at or above minSim; traces every surviving recall", async () => {
+    const u = await createTestUser();
+    const high = await fact(u, "high sim", ax(1));
+    const low = await fact(u, "low sim", ax(2));
+    const forced = await fact(u, "forced", ax(3));
+    const turnId = randomUUID();
+    await db().insert(s.session_log).values({ id: turnId, user_id: u, session_id: randomUUID(), role: "companion", text: "x", created_at: T0 });
+    const rec = (id: string, sim: number, isForced = false) => ({ factId: id, sim, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.4, forced: isForced });
+    const now = new Date("2026-01-06T09:00:00Z");
+    const reinforced = await facts.applyRecall(db(), u, [rec(high.id, 0.8), rec(low.id, 0.3), rec(forced.id, 0.9, true)], now, { bump: 0.03, cap: 0.95, minSim: 0.5 }, turnId);
+    expect(reinforced).toEqual([high.id]);
+    const h = (await facts.getFact(db(), u, high.id))!;
+    expect(h.salience).toBeCloseTo(0.53, 5);
+    expect(h.recall_count).toBe(1);
+    expect(h.last_recalled_at!.toISOString()).toBe(now.toISOString());
+    for (const id of [low.id, forced.id]) {
+      const r = (await facts.getFact(db(), u, id))!;
+      expect(r.salience).toBeCloseTo(0.5, 5);
+      expect(r.recall_count).toBe(0);
+      expect(r.last_recalled_at).toBeNull();
+    }
+    const traces = await db().select().from(s.retrieval_trace);
+    expect(traces.map((t) => t.fact_id).sort()).toEqual([high.id, low.id, forced.id].sort());
+  });
+
+  test("forgetFact deletes an orphaned thread but keeps a thread other facts still reference", async () => {
+    const u = await createTestUser();
+    const other = await createTestUser("o");
+    const cp = new Date("2026-01-08T09:00:00Z");
+    const lone = await threads.insertThread(db(), u, { title: "lone", subject: "user", stakes: "med", next_checkpoint: cp }, T0);
+    const shared = await threads.insertThread(db(), u, { title: "shared", subject: "user", stakes: "med", next_checkpoint: cp }, T0);
+    const onlyFact = await fact(u, "only", ax(1), { thread_id: lone.id });
+    const f1 = await fact(u, "one", ax(2), { thread_id: shared.id });
+    await fact(u, "two (superseded)", ax(3), { thread_id: shared.id, status: "superseded" });
+    const later = new Date("2026-01-10T09:00:00Z");
+    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id).sort()).toEqual([lone.id, shared.id].sort());
+    expect(await facts.forgetFact(db(), other, onlyFact.id)).toBe(false);
+    expect(await threads.getOwnedThread(db(), u, lone.id)).not.toBeNull();
+    expect(await facts.forgetFact(db(), u, onlyFact.id)).toBe(true);
+    expect(await threads.getOwnedThread(db(), u, lone.id)).toBeNull();
+    expect(await facts.forgetFact(db(), u, f1.id)).toBe(true);
+    expect(await threads.getOwnedThread(db(), u, shared.id)).not.toBeNull();
+    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id)).toEqual([shared.id]);
   });
 
   test("forgetFact is scoped and malformed-safe", async () => {
@@ -124,5 +169,17 @@ describe("threads", () => {
     await threads.resolveThread(db(), u, t.id, new Date("2026-01-12T10:00:00Z"));
     expect(await threads.dueThreads(db(), u, new Date("2026-01-12T11:00:00Z"), 5)).toEqual([]);
     expect(await threads.getOwnedThread(db(), u, "not-a-uuid")).toBeNull();
+  });
+
+  test("a thread touched after its checkpoint stops being due until a new checkpoint passes", async () => {
+    const u = await createTestUser();
+    const t = await threads.insertThread(db(), u, { title: "driving test", subject: "user", stakes: "med", next_checkpoint: new Date("2026-01-08T09:00:00Z") }, T0);
+    expect((await threads.dueThreads(db(), u, new Date("2026-01-09T09:00:00Z"), 5)).map((d) => d.id)).toEqual([t.id]);
+    await threads.touchThread(db(), u, t.id, new Date("2026-01-09T10:00:00Z"), null);
+    expect(await threads.dueThreads(db(), u, new Date("2026-01-09T11:00:00Z"), 5)).toEqual([]);
+    const next = new Date("2026-01-20T09:00:00Z");
+    await threads.touchThread(db(), u, t.id, new Date("2026-01-10T09:00:00Z"), next);
+    expect(await threads.dueThreads(db(), u, new Date("2026-01-19T09:00:00Z"), 5)).toEqual([]);
+    expect((await threads.dueThreads(db(), u, new Date("2026-01-21T09:00:00Z"), 5)).map((d) => d.id)).toEqual([t.id]);
   });
 });

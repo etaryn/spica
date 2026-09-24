@@ -46,6 +46,7 @@ export const ConfigSchema = z.object({
     recency_half_life_days: z.number().positive(),
     recall_bump: unit,
     recall_cap: unit,
+    reinforce_min_sim: unit,
     embed_timeout_ms: z.number().int().positive(),
     context_turns: z.number().int().min(0),
     max_due_threads: z.number().int().min(0),

@@ -243,9 +243,9 @@ Seed test traces (from the directive): the "insane day → promotion" story and 
      `score = sim × salience × max(entity.salience | 1.0) × recency(max(created_at, last_recalled_at))`
      `recency` is an exponential decay with a half-life of `retrieval.recency_half_life_days` (30).
    - Take the top `retrieval.top_n` (12).
-   - Force-include every open thread whose `next_checkpoint` has passed, up to `retrieval.max_due_threads` (5), plus the current `preoccupation`.
+   - Force-include every open thread whose `next_checkpoint` has passed and that hasn't been touched since (`last_touched < next_checkpoint`, the same rule the decay pass uses for `dormant`), up to `retrieval.max_due_threads` (5), plus the current `preoccupation`.
    - Onboarding facts are gated by reveal pacing (section 12).
-   - **The hot path is read-only.** The IDs of the facts it included, with their factor scores, go into the `cold_path` job payload. The cold path then writes `retrieval_trace` and applies recall reinforcement: `last_recalled_at`, `recall_count + 1`, and a `salience` bump of `retrieval.recall_bump` (0.03) capped at `retrieval.recall_cap` (0.95) (section 7.2). [DECIDED; Ethan 2026-09-24, Phase 1 design]
+   - **The hot path is read-only.** The IDs of the facts it included, with their factor scores, go into the `cold_path` job payload. The cold path then writes `retrieval_trace` and applies recall reinforcement: `last_recalled_at`, `recall_count + 1`, and a `salience` bump of `retrieval.recall_bump` (0.03) capped at `retrieval.recall_cap` (0.95) (section 7.2). [DECIDED; Ethan 2026-09-24, Phase 1 design] Reinforcement applies only to recalls that were not force-included and whose similarity is at least `retrieval.reinforce_min_sim` (0.5); every recalled fact that still exists gets a `retrieval_trace` row either way, and inclusion in the prompt is unaffected. [ADDED; final Phase 1 review 2026-09-25]
    - **Failure handling:** a Voyage error/timeout, a retrieval SQL error, or a missing `VOYAGE_API_KEY` all degrade to the forced items only (due threads and preoccupation); the reply still goes out.
 2. **Assemble** the prompt in this fixed order:
    1. the persona document
@@ -276,7 +276,8 @@ The hot path contains **one generation call plus one guard check** (plus at most
    - Otherwise one small classification call (prompt version `prompts.reconcile`, `reconcile.max_tokens` 256) picks one of:
      - **duplicate**: merge and bump salience by `reconcile.duplicate_bump` (0.05), capped at `retrieval.recall_cap`
      - **resolves**: set `status = resolved` and store the outcome as a new fact
-     - **contradicts**: supersede the old fact and insert the new one
+     - **contradicts**: supersede the old fact and insert the new one. If the old fact is newer than the exchange (a late or retried job), the candidate is inserted already `superseded`, with `superseded_by` = the old fact, which stays untouched. [ADDED; final Phase 1 review 2026-09-25]
+   - Inserted facts take `created_at` from the exchange's earliest turn, not from when the job ran; recall write-back and entity/thread `last_touched` use the job's time.
      - **new**: insert
    - Code applies the result in a single transaction, holding a per-user advisory lock for the whole exchange (section 14.5) so a user's exchanges are never reconciled concurrently.
    - Resolve entity mentions against names and aliases. A low-confidence match creates a new entity rather than merging.
@@ -311,7 +312,7 @@ There is a single store (`fact`, `entity`, `thread`) for the user, Spica and oth
 ### 7.2 Weight dynamics [DECIDED]
 
 - Extraction assigns the initial salience. Emotionally charged facts (high |valence|) and repeated ones start and stay higher. A repeat is a reconcile duplicate, which bumps salience by `reconcile.duplicate_bump`.
-- **Recall reinforces weight.** Each inclusion in a prompt bumps salience by `retrieval.recall_bump` (0.03), capped at `retrieval.recall_cap` (0.95), and increments `recall_count`.
+- **Recall reinforces weight.** Each inclusion in a prompt bumps salience by `retrieval.recall_bump` (0.03), capped at `retrieval.recall_cap` (0.95), and increments `recall_count`. Only unforced inclusions with similarity at least `retrieval.reinforce_min_sim` (0.5) count, so a fact dragged in by salience alone, a due thread or the preoccupation doesn't keep itself alive. [ADDED; final Phase 1 review 2026-09-25]
 - **Decay pass** (`decay_pass`, a `decay.cron`-scheduled pg-boss job over all users at once, not per-user batches; built in Phase 1 by Ethan's 2026-09-24 decision):
   - Facts untouched for `decay.grace_days` (3) since the later of `created_at` / `last_recalled_at` lose salience at a rate of `decay.rate` (0.08), inversely proportional to salience (so high-salience facts fade slower).
   - Below `decay.stale_floor` (0.05, config), set `status = stale`. The fact is excluded from retrieval but never deleted.
@@ -329,7 +330,7 @@ She uses at most one or two memories per reply, and only when they come up natur
 
 ### 7.5 "What I remember" view [DECIDED; Ethan 2026-09-24; built in Phase 1]
 
-A page listing the user's own facts (`subject = user`, not superseded or stale). Each one can be deleted, and deletion is a hard delete, so the fact is never retrieved again. Account deletion (built in Phase 0) removes everything.
+A page listing the user's own facts (`subject = user`, not superseded or stale). Each one can be deleted, and deletion is a hard delete, so the fact is never retrieved again. A thread left with no facts (of any status) by the delete is deleted with it, so she doesn't ask about a forgotten storyline. Account deletion (built in Phase 0) removes everything.
 
 ---
 
@@ -525,7 +526,9 @@ Three pg-boss jobs, all scoped to the one Postgres instance:
 
 - **`cold_path`**: extraction → reconcile → apply for one exchange, run inside a transaction holding a per-user advisory lock. Retry policy from `cold_path.retry_limit` / `cold_path.retry_delay_seconds`.
 - **`cold_path_sweep`**: cron `cold_path.sweep_cron`; re-enqueues exchanges older than `cold_path.sweep_min_age_minutes` that are still unextracted, in batches of `cold_path.sweep_batch`, up to `cold_path.max_sweep_attempts` each.
-- **`decay_pass`**: cron `decay.cron`; the daily decay pass (section 6).
+- **`decay_pass`**: cron `decay.cron`; the daily decay pass (section 7.2). Never retried (`retryLimit: 0`): a retry would apply a second day of decay.
+
+Every job handler logs a failure with job ids and the error's class name only, and rethrows a bare `Error(<class name>)`, so pg-boss never stores Postgres error `detail` (which can contain fact or message text) in job output.
 
 ---
 
@@ -569,7 +572,7 @@ Each phase MUST pass its exit test before the next one starts.
 
 ### 16.2 Guardrails (not optional, apply in every phase) [DECIDED; from v1; strengthened by directive rule 7]
 
-- **Crisis handling.** Detection runs on every incoming message, with a classifier that sees recent context, a keyword fallback, and a timeout. It bypasses turn-taking waits, availability and friction. A resources card is attached by code, and is shown even if reply generation fails.
+- **Crisis handling.** Detection runs on every incoming message, with a classifier that sees recent context, a keyword fallback, and a timeout. It bypasses turn-taking waits, availability and friction. A resources card is attached by code, and is shown even if reply generation fails. Because the card appears only when risk is detected, the reply prompt (`prompts.reply`, v3) tells her not to assume they can see it: if they may be at risk, she names a crisis line or emergency services herself.
 - **Age gating.** Adults only, enforced server-side at signup.
 - **Data handling.**
   - Encryption at rest (storage-level).

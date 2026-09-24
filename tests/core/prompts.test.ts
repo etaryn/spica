@@ -8,6 +8,9 @@ test("loads persona, reply rules, extraction, reconcile and crisis prompts", () 
   const reply = loadPrompt("reply", c.prompts.reply);
   expect(reply).toMatch(/at most one or two/i);
   expect(reply).toMatch(/crisis|988|emergency/i);
+  // The resources card appears only when the app detects risk, so the prompt must not promise it unconditionally.
+  expect(reply).not.toMatch(/The app shows them crisis resources alongside your message/);
+  expect(reply).toMatch(/only when it detects/i);
   expect(reply).toMatch(/AI/);
   expect(reply).toMatch(/never claim to remember/i);
   expect(loadPrompt("extract", c.prompts.extract)).toMatch(/subject/);

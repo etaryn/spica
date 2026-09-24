@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { RecalledFact } from "@/core/memory/types";
 import type { Db } from "../client";
-import { fact, factStatus, identity, retrieval_trace } from "../schema";
+import { fact, factStatus, identity, retrieval_trace, thread } from "../schema";
 import { one, toDate, toDateOrNull } from "./util";
 
 export type FactRow = typeof fact.$inferSelect;
@@ -84,19 +84,30 @@ export async function setFactStatus(
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
 }
 
-/** Cold-path recall write-back. Returns ids actually updated (deleted or foreign facts are skipped). */
+/**
+ * Cold-path recall write-back. Every recalled fact that still exists gets a retrieval_trace row;
+ * only unforced recalls with sim >= minSim are reinforced (salience, recall_count, last_recalled_at).
+ * Returns the reinforced ids (deleted or foreign facts are skipped).
+ */
 export async function applyRecall(
-  db: Db, userId: string, recalled: RecalledFact[], now: Date, bump: number, cap: number, turnId: string | null,
+  db: Db, userId: string, recalled: RecalledFact[], now: Date,
+  opts: { bump: number; cap: number; minSim: number }, turnId: string | null,
 ): Promise<string[]> {
   const ids = [...new Set(recalled.map((r) => r.factId))];
   if (ids.length === 0) return [];
+  const reinforce = [...new Set(recalled.filter((r) => !r.forced && r.sim >= opts.minSim).map((r) => r.factId))];
   return db.transaction(async (tx) => {
-    const updated = await tx.update(fact).set({
-      last_recalled_at: now,
-      recall_count: sql`${fact.recall_count} + 1`,
-      salience: sql`LEAST(${cap}::real, ${fact.salience} + ${bump}::real)`,
-    }).where(and(eq(fact.user_id, userId), inArray(fact.id, ids))).returning({ id: fact.id });
-    const alive = new Set(updated.map((r) => r.id));
+    const existing = await tx.select({ id: fact.id }).from(fact)
+      .where(and(eq(fact.user_id, userId), inArray(fact.id, ids)));
+    const alive = new Set(existing.map((r) => r.id));
+    const toBump = reinforce.filter((id) => alive.has(id));
+    if (toBump.length > 0) {
+      await tx.update(fact).set({
+        last_recalled_at: now,
+        recall_count: sql`${fact.recall_count} + 1`,
+        salience: sql`LEAST(${opts.cap}::real, ${fact.salience} + ${opts.bump}::real)`,
+      }).where(and(eq(fact.user_id, userId), inArray(fact.id, toBump)));
+    }
     if (turnId) {
       const rows = recalled.filter((r) => alive.has(r.factId)).map((r) => ({
         user_id: userId, turn_id: turnId, fact_id: r.factId, sim: r.sim, fact_salience: r.fact_salience,
@@ -104,7 +115,7 @@ export async function applyRecall(
       }));
       if (rows.length > 0) await tx.insert(retrieval_trace).values(rows);
     }
-    return [...alive];
+    return toBump;
   });
 }
 
@@ -123,9 +134,22 @@ export async function listRememberedFacts(db: Db, userId: string) {
     .orderBy(desc(fact.created_at));
 }
 
-/** User-initiated hard delete (v2 §7.5). False for malformed or foreign ids. */
+/**
+ * User-initiated hard delete (v2 §7.5). False for malformed or foreign ids. A thread left with no
+ * facts (any status) is deleted too, so a forgotten storyline isn't asked about again.
+ */
 export async function forgetFact(db: Db, userId: string, factId: string): Promise<boolean> {
   if (!z.uuid().safeParse(factId).success) return false;
-  const rows = await db.delete(fact).where(and(eq(fact.user_id, userId), eq(fact.id, factId))).returning({ id: fact.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const rows = await tx.delete(fact).where(and(eq(fact.user_id, userId), eq(fact.id, factId)))
+      .returning({ id: fact.id, thread_id: fact.thread_id });
+    const threadId = rows[0]?.thread_id;
+    if (threadId) {
+      await tx.delete(thread).where(and(
+        eq(thread.user_id, userId), eq(thread.id, threadId),
+        sql`NOT EXISTS (SELECT 1 FROM fact f WHERE f.user_id = ${userId} AND f.thread_id = ${threadId})`,
+      ));
+    }
+    return rows.length > 0;
+  });
 }

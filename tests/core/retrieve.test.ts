@@ -13,6 +13,7 @@ afterAll(closeTestDb);
 
 const D = 1024;
 const now = new Date("2026-01-12T09:00:00Z");
+const opened = new Date("2026-01-05T09:00:00Z"); // threads open before their checkpoint passes
 
 async function turn(userId: string, text: string): Promise<Turn> {
   return insertTurn(getTestDb(), userId, { id: randomUUID(), session_id: randomUUID(), role: "user", text, created_at: now });
@@ -31,7 +32,7 @@ test("ranks by the scoring formula, groups by subject, forces due threads, and r
   await facts.insertFact(getTestDb(), u, { ...base, subject: "user", content: "The user's dog is called Biscuit.", embedding: ScriptedEmbedder.axis(D, 1), salience: 0.9 });
   await facts.insertFact(getTestDb(), u, { ...base, subject: "self", content: "Spica has a cat called Pesto.", embedding: ScriptedEmbedder.near(D, 1, 2, 0.7), salience: 0.9 });
   await facts.insertFact(getTestDb(), u, { ...base, subject: "user", content: "Low relevance.", embedding: ScriptedEmbedder.near(D, 1, 3, 0.1), salience: 0.9 });
-  const t = await threads.insertThread(getTestDb(), u, { title: "job interview at Acme", subject: "user", stakes: "high", next_checkpoint: new Date("2026-01-10T09:00:00Z") }, now);
+  const t = await threads.insertThread(getTestDb(), u, { title: "job interview at Acme", subject: "user", stakes: "high", next_checkpoint: new Date("2026-01-10T09:00:00Z") }, opened);
   await facts.insertFact(getTestDb(), u, { ...base, subject: "user", content: "The user's interview at Acme was on Friday.", embedding: ScriptedEmbedder.axis(D, 50), salience: 0.7, thread_id: t.id });
 
   const r = await retrieve(deps(e), u, { answering: [q], context: [], now });
@@ -50,7 +51,7 @@ test("embedder failure degrades to forced items only, and never throws", async (
   const e = new ScriptedEmbedder(D);
   e.failNext = true;
   const q = await turn(u, "hey");
-  const t = await threads.insertThread(getTestDb(), u, { title: "driving test", subject: "user", stakes: "med", next_checkpoint: new Date("2026-01-11T09:00:00Z") }, now);
+  const t = await threads.insertThread(getTestDb(), u, { title: "driving test", subject: "user", stakes: "med", next_checkpoint: new Date("2026-01-11T09:00:00Z") }, opened);
   const r = await retrieve(deps(e), u, { answering: [q], context: [], now });
   expect(r.facts.user).toEqual([]);
   expect(r.dueThreads.map((d) => d.title)).toEqual(["driving test"]);

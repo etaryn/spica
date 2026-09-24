@@ -10,7 +10,8 @@ import type { RecalledFact } from "./types";
 
 export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision };
 export type ApplyInput = {
-  userId: string; now: Date; entities: ExtractedEntity[]; facts: PlannedFact[]; threads: ExtractedThread[];
+  /** now: job run time (recall write-back, entity/thread last_touched). exchangeAt: the earliest turn's created_at (inserted facts' created_at). */
+  userId: string; now: Date; exchangeAt: Date; entities: ExtractedEntity[]; facts: PlannedFact[]; threads: ExtractedThread[];
   sensitive: boolean; sourceRef: string; recalled: RecalledFact[]; replyTurnId: string | null; turnIds: string[];
 };
 export type ApplyOutcome = {
@@ -77,7 +78,7 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
       : null;
     const base = {
       subject: f.subject, kind: f.kind, content: f.content, payload, embedding: p.embedding, entity_refs, thread_id,
-      occurred_at: f.occurred_at, created_at: now, salience: f.salience, valence: f.valence, confidence: f.confidence,
+      occurred_at: f.occurred_at, created_at: input.exchangeAt, salience: f.salience, valence: f.valence, confidence: f.confidence,
       source: "turn" as const, source_ref: input.sourceRef,
     };
     const target = p.decision.targetId ? await getFact(db, userId, p.decision.targetId) : null;
@@ -92,8 +93,13 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
       out.resolved += 1;
       out.inserted += 1;
     } else if (relation === "contradicts" && target) {
-      const row = await insertFact(db, userId, { ...base, status: "open" });
-      await setFactStatus(db, userId, target.id, "superseded", row.id);
+      if (target.created_at > input.exchangeAt) {
+        // A late job: the target is newer than this exchange, so the candidate is the outdated one.
+        await insertFact(db, userId, { ...base, status: "superseded", superseded_by: target.id });
+      } else {
+        const row = await insertFact(db, userId, { ...base, status: "open" });
+        await setFactStatus(db, userId, target.id, "superseded", row.id);
+      }
       out.superseded += 1;
       out.inserted += 1;
     } else {
@@ -102,9 +108,12 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
     }
   }
 
-  // 4. Recall write-back from the hot path's retrieval (skips facts deleted meanwhile).
+  // 4. Recall write-back from the hot path's retrieval: a trace for every surviving fact, reinforcement
+  //    only for unforced recalls with sim >= reinforce_min_sim (skips facts deleted meanwhile).
   out.recalledUpdated = (await applyRecall(
-    db, userId, input.recalled, now, config.retrieval.recall_bump, config.retrieval.recall_cap, input.replyTurnId,
+    db, userId, input.recalled, now,
+    { bump: config.retrieval.recall_bump, cap: config.retrieval.recall_cap, minSim: config.retrieval.reinforce_min_sim },
+    input.replyTurnId,
   )).length;
 
   // 5. Done.

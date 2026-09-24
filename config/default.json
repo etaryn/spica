@@ -33,6 +33,7 @@
     "recency_half_life_days": 30,
     "recall_bump": 0.03,
     "recall_cap": 0.95,
+    "reinforce_min_sim": 0.5,
     "embed_timeout_ms": 2000,
     "context_turns": 2,
     "max_due_threads": 5
@@ -89,7 +90,7 @@
     "min_password_length": 10
   },
   "prompts": {
-    "reply": "v2",
+    "reply": "v3",
     "crisis_classifier": "v2",
     "persona": "v1",
     "extract": "v1",

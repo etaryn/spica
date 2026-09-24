@@ -64,6 +64,7 @@ export async function dueThreads(db: Db, userId: string, now: Date, limit: numbe
       ORDER BY f.created_at DESC LIMIT 1
     ) lf ON true
     WHERE t.user_id = ${userId} AND t.status = 'open' AND t.next_checkpoint IS NOT NULL AND t.next_checkpoint <= ${now}
+      AND t.last_touched < t.next_checkpoint
     ORDER BY t.next_checkpoint ASC
     LIMIT ${limit}`);
   return res.rows.map((r) => ({

@@ -27,7 +27,7 @@ async function setup() {
   const ut = await insertTurn(db(), u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "x", created_at: now });
   const ct = await insertTurn(db(), u, { id: randomUUID(), session_id: ut.session_id, role: "companion", text: "y", created_at: now, reply_to: ut.id });
   const input = (over: Partial<ApplyInput>): ApplyInput => ({
-    userId: u, now, entities: [], facts: [], threads: [], sensitive: false, sourceRef: ct.id,
+    userId: u, now, exchangeAt: now, entities: [], facts: [], threads: [], sensitive: false, sourceRef: ct.id,
     recalled: [], replyTurnId: ct.id, turnIds: [ut.id, ct.id], ...over,
   });
   return { u, ut, ct, input };
@@ -73,6 +73,40 @@ describe("applyExtraction", () => {
     const replacement = await facts.getFact(db(), u, o!.superseded_by!);
     expect(replacement!.content).toBe("Mia starts in November.");
     expect((await facts.getFact(db(), u, plan.id))!.status).toBe("resolved");
+  });
+
+  test("inserted facts carry the exchange time; a contradiction older than its target is stored superseded by it", async () => {
+    const { u, input } = await setup();
+    const exchangeAt = new Date("2026-01-10T08:00:00Z");
+    const newer = await seed(u, "Mia starts in December.", { created_at: new Date("2026-01-11T00:00:00Z") });
+    const out = await applyExtraction(db(), config, input({ exchangeAt, facts: [
+      { fact: f("Mia starts in November."), embedding: vec(), decision: { relation: "contradicts", targetId: newer.id } },
+      { fact: f("The user likes tea."), embedding: vec(), decision: { relation: "new", targetId: null } },
+    ] }));
+    expect(out).toMatchObject({ inserted: 2, superseded: 1 });
+    expect((await facts.getFact(db(), u, newer.id))!).toMatchObject({ status: "open", superseded_by: null });
+    const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+    const late = rows.find((r) => r.content === "Mia starts in November.")!;
+    expect(late).toMatchObject({ status: "superseded", superseded_by: newer.id });
+    const tea = rows.find((r) => r.content === "The user likes tea.")!;
+    expect(late.created_at.toISOString()).toBe(exchangeAt.toISOString());
+    expect(tea.created_at.toISOString()).toBe(exchangeAt.toISOString());
+  });
+
+  test("recall write-back via apply: low-sim and forced recalls are traced but not reinforced", async () => {
+    const { u, input } = await setup();
+    const hi = await seed(u, "High.");
+    const lo = await seed(u, "Low.");
+    const fo = await seed(u, "Forced.");
+    const rec = (id: string, sim: number, forced = false) => ({ factId: id, sim, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.4, forced });
+    const out = await applyExtraction(db(), config, input({
+      recalled: [rec(hi.id, config.retrieval.reinforce_min_sim), rec(lo.id, config.retrieval.reinforce_min_sim - 0.01), rec(fo.id, 0.95, true)],
+    }));
+    expect(out.recalledUpdated).toBe(1);
+    expect((await facts.getFact(db(), u, hi.id))!.recall_count).toBe(1);
+    expect((await facts.getFact(db(), u, lo.id))!.recall_count).toBe(0);
+    expect((await facts.getFact(db(), u, fo.id))!.recall_count).toBe(0);
+    expect(await db().select().from(s.retrieval_trace)).toHaveLength(3);
   });
 
   test("foreign target id → inserted as new; foreign thread_id ignored", async () => {

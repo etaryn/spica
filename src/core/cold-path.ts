@@ -48,6 +48,7 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     const applied = await applyExtraction(tx, config, {
       userId: job.userId,
       now: clock.now(),
+      exchangeAt: turns[0]!.created_at, // getTurnsByIds sorts oldest first: the exchange's user turn
       entities: extraction.entities,
       facts: planned,
       threads: extraction.threads,

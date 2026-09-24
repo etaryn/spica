@@ -64,6 +64,7 @@ retrieval.top_n                   12
 retrieval.recency_half_life_days  30
 retrieval.recall_bump             0.03
 retrieval.recall_cap              0.95
+retrieval.reinforce_min_sim       0.5   [ADDED] unforced recalls below this similarity get a trace but no reinforcement
 retrieval.embed_timeout_ms        2000
 retrieval.context_turns           2
 retrieval.max_due_threads         5
@@ -130,7 +131,7 @@ score    = sim × salience × max_entity_salience × recency
 
 - Keep the top `top_n` facts.
 - **Force-include**:
-  - every open thread with `next_checkpoint <= now`, together with its most recent fact
+  - every open thread with `next_checkpoint <= now` and `last_touched < next_checkpoint` (not touched since the checkpoint passed; same rule as `dormant`), together with its most recent fact
   - the `identity.preoccupation` fact, if an identity row exists (none will until Phase 4)
 - Forced items are de-duplicated against the scored ones and marked `forced`.
 
@@ -197,13 +198,13 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
      - `new`: insert with status `open`.
      - `duplicate`: bump the target's salience by `duplicate_bump`, up to `recall_cap`, and set its confidence to the higher of the two.
      - `resolves`: set the target to `resolved`, and insert the outcome as a new fact with status `resolved`.
-     - `contradicts`: set the target to `superseded` with `superseded_by` pointing at the new fact, and insert the new fact.
-     - Every inserted fact gets `entity_refs`, a `thread_id` resolved from `thread_title`, `source = turn`, `source_ref` set to the turn id, and `payload.sensitive = true` if any turn in the exchange was crisis-flagged.
+     - `contradicts`: set the target to `superseded` with `superseded_by` pointing at the new fact, and insert the new fact. [ADDED] If the target's `created_at` is later than the exchange's (a late job), insert the candidate as `superseded` with `superseded_by` = the target instead, and leave the target untouched.
+     - Every inserted fact gets `created_at` = the exchange's earliest turn's `created_at` (not the job's run time), `entity_refs`, a `thread_id` resolved from `thread_title`, `source = turn`, `source_ref` set to the turn id, and `payload.sensitive = true` if any turn in the exchange was crisis-flagged.
    - **Threads:**
      - `open`: reuse an open thread with the same normalized title, otherwise insert one.
      - `touch`: update `last_touched`, and `next_checkpoint` if one was given.
      - `resolve`: set status `resolved`.
-   - **Recall write-back** for each item in `recalled`: set `last_recalled_at = now`, increment `recall_count`, set salience to `min(recall_cap, salience + recall_bump)`, and insert a `retrieval_trace` row.
+   - **Recall write-back** for each item in `recalled` whose fact still exists: insert a `retrieval_trace` row; and, only if the item is not `forced` and its `sim ≥ reinforce_min_sim` [ADDED], set `last_recalled_at = now`, increment `recall_count`, and set salience to `min(recall_cap, salience + recall_bump)`.
    - **Entity** `last_mentioned` updates.
    - Mark the `turnIds` as `extracted = true`.
 7. **Commit** the transaction, which releases the advisory lock automatically.
@@ -226,13 +227,13 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
 - **Threads.** An open thread whose `next_checkpoint < now − dormant_after_days`, and whose `last_touched` is earlier than `next_checkpoint`, becomes `dormant`.
 - **Entities.** No decay in the MVP (v2 does not specify any).
 
-A missed run just means a little less decay, and nothing catches up. The eval harness calls the pass once for every simulated day it advances.
+A missed run just means a little less decay, and nothing catches up. The `decay_pass` queue has `retryLimit: 0`: a retried run would apply a second day of decay. The eval harness calls the pass once for every simulated day it advances.
 
 ## 7. "What I remember" view
 
 - **Route and links.** The page lives at `/memory` and is linked from the chat header and from Settings. It is titled "What Spica remembers about you".
 - **What it lists.** The user's facts with `subject = user`, status not in (`superseded`, `stale`) and `scope = 'private'`, newest first and loosely grouped by kind.
-- **Forget.** Each fact has a **Forget** button, a server action that hard-deletes it (`DELETE … WHERE id = $1 AND user_id = $2`). The confirmation is a one-step inline confirm, not a browser dialog. Foreign keys already cascade the delete to `retrieval_trace`, and set `superseded_by` and `preoccupation` to null.
+- **Forget.** Each fact has a **Forget** button, a server action that hard-deletes it (`DELETE … WHERE id = $1 AND user_id = $2`). The confirmation is a one-step inline confirm, not a browser dialog. Foreign keys already cascade the delete to `retrieval_trace`, and set `superseded_by` and `preoccupation` to null. In the same transaction, if the fact had a `thread_id` and no other fact of this user (any status) references that thread, the thread is deleted too.
 - **What the page tells the user.** It says plainly that forgetting removes the memory from what Spica recalls, but that the chat transcript stays until account deletion, and that her last ~20 messages are still in her short-term context.
 
 ## 8. Persona and reply prompts
@@ -246,7 +247,7 @@ A missed run just means a little less decay, and nothing catches up. The eval ha
   - one or two likely disagreements with users
 
   It is written in the second person ("You are Spica…"), and its content is test-phase.
-- **`prompts/reply/v2.md`** holds the shared rules from §4.5. It replaces `reply/v1`, which stays in the repo as a history record.
+- **`prompts/reply/v2.md`** holds the shared rules from §4.5. It replaces `reply/v1`, which stays in the repo as a history record. `reply/v3` (current) differs only in the care-and-safety line: the app shows crisis resources only when it detects risk, so she names a crisis line or emergency services herself if they may be at risk.
 - **Canon.** Her canon lives only in the persona file. When she mentions a canon person, the cold path extracts it as a `self` fact for that user.
 
 ## 9. Time zone capture [ADDED]

@@ -86,8 +86,19 @@ test("advancing the clock by N days runs N decay passes; prompt_mentions sees on
     ],
   });
   const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
-  expect(r.meta.decayPasses).toBe(9);
+  expect(r.meta.decayPasses).toBe(10);
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
+});
+
+test("+1d after a multi-turn session runs exactly one decay pass", async () => {
+  const script = ScriptSchema.parse({
+    name: "d1",
+    sessions: [{ at: "day 0 09:00", turns: ["a", "b", "c"] }, { at: "+1d", turns: ["d"] }],
+    assertions: [{ type: "state", check: "turn_count", expect: 8 }],
+  });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  expect(r.status).toBe("pass");
+  expect(r.meta.decayPasses).toBe(1);
 });
 
 test("judged assertions call the judge with an ordered transcript", async () => {

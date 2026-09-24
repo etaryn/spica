@@ -36,14 +36,17 @@ export function toBaseline(summaries: ScriptSummary[]): Record<string, BaselineE
   return Object.fromEntries(summaries.map((s) => [s.name, { status: s.status, runs: s.runs, passedRuns: s.passedRuns }]));
 }
 
-/** Baseline-passing scripts that no longer pass, or whose pass rate dropped. Scripts not run are ignored. */
+/**
+ * Baseline-passing scripts that no longer pass, or whose pass rate dropped. Scripts not run are ignored, and a
+ * `skipped` script counts as not run (e.g. a `mode: real` script under --llm=fake against a real-run baseline).
+ */
 export function findRegressions(current: ScriptSummary[], baseline: Record<string, BaselineEntry>): string[] {
   const now = new Map(current.map((s) => [s.name, s]));
   const out: string[] = [];
   for (const [name, entry] of Object.entries(baseline)) {
     const cur = now.get(name);
     const status = typeof entry === "string" ? entry : entry.status;
-    if (!cur || status !== "pass") continue;
+    if (!cur || cur.status === "skipped" || status !== "pass") continue;
     if (cur.status !== "pass") out.push(name);
     else if (typeof entry !== "string" && entry.runs > 0 && cur.runs > 0 && cur.passedRuns / cur.runs < entry.passedRuns / entry.runs) {
       out.push(`${name} (pass rate ${cur.passedRuns}/${cur.runs} < ${entry.passedRuns}/${entry.runs})`);

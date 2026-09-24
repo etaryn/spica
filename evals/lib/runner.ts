@@ -69,9 +69,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
-      // One decay pass per whole simulated day that passes between sessions (the worker runs it daily).
-      while (start.getTime() - clock.now().getTime() >= DAY) {
-        clock.advance(DAY);
+      // v2 §10.1: a session whose `at` advances the clock by N days (from the previous session's start) runs N decay passes.
+      const days = prevStart ? Math.round((start.getTime() - prevStart.getTime()) / DAY) : 0;
+      for (let k = 1; k <= days; k++) {
+        const at = prevStart!.getTime() + k * DAY;
+        if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;
       }

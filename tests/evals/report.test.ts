@@ -31,3 +31,9 @@ test("regressions: status drop or pass-rate drop; old string baselines still wor
   })).toEqual(["a", "b (pass rate 2/3 < 3/3)"]);
   expect(toBaseline([s("a", "pass", 3)])).toEqual({ a: { status: "pass", runs: 3, passedRuns: 3 } });
 });
+
+test("a skipped script counts as not run, never a regression (real-mode scripts under --llm=fake)", () => {
+  const skipped = { name: "real-only", status: "skipped" as const, runs: 1, passedRuns: 0, assertions: [], errors: [] };
+  expect(findRegressions([skipped], { "real-only": { status: "pass", runs: 3, passedRuns: 3 } })).toEqual([]);
+  expect(findRegressions([skipped], { "real-only": "pass" })).toEqual([]);
+});

@@ -31,13 +31,14 @@ describe("facts", () => {
     await fact(a, "near", ScriptedEmbedder.near(D, 1, 2, 0.8));
     await fact(a, "old news", ax(1), { status: "superseded" });
     await fact(a, "faded", ax(1), { status: "stale" });
-    await fact(a, "group", ax(1), { scope: "group" });
+    const group = await fact(a, "group", ax(1), { scope: "group" });
     await fact(b, "other user", ax(1));
     const got = await facts.candidateFacts(db(), a, ax(1), 10);
     expect(got.map((f) => f.content)).toEqual(["exact", "near"]);
     expect(got[0]!.sim).toBeCloseTo(1, 4);
     expect(got[0]!.entity_salience).toBeCloseTo(0.9, 4);
     expect(got[1]!.entity_salience).toBe(1);
+    expect(await facts.getFact(db(), a, group.id)).toBeNull();
   });
 
   test("nearFacts: same subject, above threshold only", async () => {

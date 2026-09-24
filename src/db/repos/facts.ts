@@ -66,7 +66,8 @@ export async function insertFact(db: Db, userId: string, row: NewFact): Promise<
 
 export async function getFact(db: Db, userId: string, id: string): Promise<FactRow | null> {
   if (!z.uuid().safeParse(id).success) return null;
-  const rows = await db.select().from(fact).where(and(eq(fact.user_id, userId), eq(fact.id, id))).limit(1);
+  const rows = await db.select().from(fact)
+    .where(and(eq(fact.user_id, userId), eq(fact.id, id), eq(fact.scope, "private"))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -89,23 +90,27 @@ export async function applyRecall(
 ): Promise<string[]> {
   const ids = [...new Set(recalled.map((r) => r.factId))];
   if (ids.length === 0) return [];
-  const updated = await db.update(fact).set({
-    last_recalled_at: now,
-    recall_count: sql`${fact.recall_count} + 1`,
-    salience: sql`LEAST(${cap}::real, ${fact.salience} + ${bump}::real)`,
-  }).where(and(eq(fact.user_id, userId), inArray(fact.id, ids))).returning({ id: fact.id });
-  const alive = new Set(updated.map((r) => r.id));
-  const rows = recalled.filter((r) => alive.has(r.factId)).map((r) => ({
-    user_id: userId, turn_id: turnId!, fact_id: r.factId, sim: r.sim, fact_salience: r.fact_salience,
-    entity_salience: r.entity_salience, recency: r.recency, score: r.score, forced: r.forced, created_at: now,
-  }));
-  if (turnId && rows.length > 0) await db.insert(retrieval_trace).values(rows);
-  return [...alive];
+  return db.transaction(async (tx) => {
+    const updated = await tx.update(fact).set({
+      last_recalled_at: now,
+      recall_count: sql`${fact.recall_count} + 1`,
+      salience: sql`LEAST(${cap}::real, ${fact.salience} + ${bump}::real)`,
+    }).where(and(eq(fact.user_id, userId), inArray(fact.id, ids))).returning({ id: fact.id });
+    const alive = new Set(updated.map((r) => r.id));
+    if (turnId) {
+      const rows = recalled.filter((r) => alive.has(r.factId)).map((r) => ({
+        user_id: userId, turn_id: turnId, fact_id: r.factId, sim: r.sim, fact_salience: r.fact_salience,
+        entity_salience: r.entity_salience, recency: r.recency, score: r.score, forced: r.forced, created_at: now,
+      }));
+      if (rows.length > 0) await tx.insert(retrieval_trace).values(rows);
+    }
+    return [...alive];
+  });
 }
 
 export async function getPreoccupationFact(db: Db, userId: string): Promise<FactRow | null> {
   const rows = await db.select({ f: fact }).from(identity)
-    .innerJoin(fact, and(eq(fact.id, identity.preoccupation), eq(fact.user_id, identity.user_id)))
+    .innerJoin(fact, and(eq(fact.id, identity.preoccupation), eq(fact.user_id, identity.user_id), eq(fact.scope, "private")))
     .where(and(eq(identity.user_id, userId), notInArray(fact.status, [...INACTIVE]))).limit(1);
   return rows[0]?.f ?? null;
 }

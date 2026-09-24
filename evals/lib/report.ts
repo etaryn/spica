@@ -1,13 +1,53 @@
 import type { ScriptResult } from "./runner";
 
-/** Scripts that pass in the baseline but not now. Scripts not run this time are ignored. */
-export function findRegressions(current: ScriptResult[], baseline: Record<string, string>): string[] {
-  const now = new Map(current.map((r) => [r.name, r.status]));
-  return Object.entries(baseline)
-    .filter(([name, status]) => status === "pass" && now.has(name) && now.get(name) !== "pass")
-    .map(([name]) => name);
+export type AssertionSummary = {
+  type: string; check?: string; user?: string; passes: number; runs: number;
+  status: "pass" | "fail" | "skipped"; detail?: string;
+};
+export type ScriptSummary = {
+  name: string; status: "pass" | "fail" | "skipped" | "error"; runs: number; passedRuns: number;
+  assertions: AssertionSummary[]; errors: string[];
+};
+type BaselineEntry = string | { status: string; runs: number; passedRuns: number };
+
+/** v2 §14.2: `recall` passes on a majority of runs; every other assertion must pass on every run. */
+export function aggregateRuns(runs: ScriptResult[]): ScriptSummary {
+  const name = runs[0]?.name ?? "";
+  const errors = runs.filter((r) => r.status === "error").map((r) => r.error ?? "error");
+  const counted = runs.filter((r) => r.status !== "error" && r.status !== "skipped");
+  const base = { name, runs: runs.length, passedRuns: runs.filter((r) => r.status === "pass").length, errors };
+  if (errors.length > 0) return { ...base, status: "error", assertions: [] };
+  if (counted.length === 0) return { ...base, status: "skipped", assertions: [] };
+
+  const assertions: AssertionSummary[] = counted[0]!.assertions.map((a0, i) => {
+    const sts = counted.map((r) => r.assertions[i]?.status ?? "error");
+    const passes = sts.filter((s) => s === "pass").length;
+    const skipped = sts.every((s) => s === "skipped");
+    const ok = a0.type === "recall" ? passes * 2 > counted.length : passes === counted.length;
+    const detail = counted.map((r) => r.assertions[i]).find((x) => x && x.status !== "pass")?.detail;
+    return { type: a0.type, check: a0.check, user: a0.user, passes, runs: counted.length,
+      status: skipped ? "skipped" : ok ? "pass" : "fail", detail };
+  });
+  const status = assertions.some((a) => a.status === "fail") ? "fail" : assertions.some((a) => a.status === "pass") ? "pass" : "skipped";
+  return { ...base, status, assertions };
 }
 
-export function toBaseline(results: ScriptResult[]): Record<string, string> {
-  return Object.fromEntries(results.map((r) => [r.name, r.status]));
+export function toBaseline(summaries: ScriptSummary[]): Record<string, BaselineEntry> {
+  return Object.fromEntries(summaries.map((s) => [s.name, { status: s.status, runs: s.runs, passedRuns: s.passedRuns }]));
+}
+
+/** Baseline-passing scripts that no longer pass, or whose pass rate dropped. Scripts not run are ignored. */
+export function findRegressions(current: ScriptSummary[], baseline: Record<string, BaselineEntry>): string[] {
+  const now = new Map(current.map((s) => [s.name, s]));
+  const out: string[] = [];
+  for (const [name, entry] of Object.entries(baseline)) {
+    const cur = now.get(name);
+    const status = typeof entry === "string" ? entry : entry.status;
+    if (!cur || status !== "pass") continue;
+    if (cur.status !== "pass") out.push(name);
+    else if (typeof entry !== "string" && entry.runs > 0 && cur.runs > 0 && cur.passedRuns / cur.runs < entry.passedRuns / entry.runs) {
+      out.push(`${name} (pass rate ${cur.passedRuns}/${cur.runs} < ${entry.passedRuns}/${entry.runs})`);
+    }
+  }
+  return out;
 }

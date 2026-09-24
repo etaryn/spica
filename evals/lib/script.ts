@@ -6,28 +6,29 @@ import { z } from "zod";
 const Session = z.object({
   at: z.string(),
   user: z.string().regex(/^[a-z0-9_-]+$/).default("main"),
+  forget: z.array(z.string().min(1)).default([]),
   turns: z.array(z.string().min(1)).min(1),
 });
 
 const StateAssertion = z.object({
-  type: z.literal("state"),
-  check: z.string(),
-  user: z.string().default("main"),
-  params: z.record(z.string(), z.unknown()).default({}),
-  expect: z.unknown(),
+  type: z.literal("state"), check: z.string(), user: z.string().default("main"),
+  params: z.record(z.string(), z.unknown()).default({}), expect: z.unknown(),
 });
+const RecallAssertion = z.object({ type: z.literal("recall"), session: z.number().int().min(1), fact: z.string().min(1), user: z.string().default("main") });
+const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), user: z.string().default("main") });
+const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main") });
 
-/** Assertion types defined by spec §8.2 but implemented in later phases. */
-export const DEFERRED: Record<string, number> = { recall: 1, no_false_recall: 1, consistency: 1, reach_out: 3 };
-
-const DeferredAssertion = z.looseObject({ type: z.enum(["recall", "no_false_recall", "consistency", "reach_out"]) });
+/** Assertion types defined by v2 §14.2 but implemented in later phases. */
+export const DEFERRED: Record<string, number> = { reach_out: 5 };
+const DeferredAssertion = z.looseObject({ type: z.enum(["reach_out"]) });
 
 export const ScriptSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   description: z.string().optional(),
+  mode: z.enum(["any", "real"]).default("any"),
   turn_gap_seconds: z.number().int().positive().default(30),
   sessions: z.array(Session).min(1),
-  assertions: z.array(z.union([StateAssertion, DeferredAssertion])).min(1),
+  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, DeferredAssertion])).min(1),
 });
 
 export type Script = z.infer<typeof ScriptSchema>;

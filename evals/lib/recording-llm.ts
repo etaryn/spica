@@ -1,0 +1,14 @@
+import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
+
+/** Records every reply prompt (system + messages) so evals can check what each user's model saw. */
+export class RecordingLLM implements LLMProvider {
+  prompts: string[] = [];
+  constructor(private readonly inner: LLMProvider) {}
+  generateReply(req: ReplyRequest): Promise<string> {
+    this.prompts.push([req.system, ...req.messages.map((m) => m.content)].join("\n"));
+    return this.inner.generateReply(req);
+  }
+  classifyJson<T>(req: ClassifyRequest<T>): Promise<T> {
+    return this.inner.classifyJson(req);
+  }
+}

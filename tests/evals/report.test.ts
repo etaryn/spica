@@ -1,0 +1,33 @@
+import { expect, test } from "vitest";
+import type { ScriptResult } from "../../evals/lib/runner";
+import { aggregateRuns, findRegressions, toBaseline } from "../../evals/lib/report";
+
+const run = (statuses: [string, string][], status: ScriptResult["status"] = "pass"): ScriptResult => ({
+  name: "s", status, meta: { decayPasses: 0 },
+  assertions: statuses.map(([type, st]) => ({ type, status: st as "pass" | "fail" | "skipped" | "error" })),
+});
+
+test("recall passes on a majority; no_false_recall / state need every run", () => {
+  const a = aggregateRuns([
+    run([["recall", "pass"], ["no_false_recall", "pass"], ["state", "pass"]]),
+    run([["recall", "fail"], ["no_false_recall", "pass"], ["state", "pass"]], "fail"),
+    run([["recall", "pass"], ["no_false_recall", "pass"], ["state", "pass"]]),
+  ]);
+  expect(a.status).toBe("pass");
+  expect(a.assertions.map((x) => [x.type, x.passes, x.status])).toEqual([["recall", 2, "pass"], ["no_false_recall", 3, "pass"], ["state", 3, "pass"]]);
+  const b = aggregateRuns([run([["no_false_recall", "pass"]]), run([["no_false_recall", "fail"]], "fail"), run([["no_false_recall", "pass"]])]);
+  expect(b.status).toBe("fail");
+});
+
+test("an errored run fails the script; all-skipped is skipped", () => {
+  expect(aggregateRuns([run([], "error"), run([["state", "pass"]])]).status).toBe("error");
+  expect(aggregateRuns([run([], "skipped")]).status).toBe("skipped");
+});
+
+test("regressions: status drop or pass-rate drop; old string baselines still work", () => {
+  const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({ name, status, runs: 3, passedRuns, assertions: [], errors: [] });
+  expect(findRegressions([s("a", "fail", 0), s("b", "pass", 2), s("c", "pass", 3)], {
+    a: "pass", b: { status: "pass", runs: 3, passedRuns: 3 }, c: { status: "pass", runs: 3, passedRuns: 3 }, missing: "pass",
+  })).toEqual(["a", "b (pass rate 2/3 < 3/3)"]);
+  expect(toBaseline([s("a", "pass", 3)])).toEqual({ a: { status: "pass", runs: 3, passedRuns: 3 } });
+});

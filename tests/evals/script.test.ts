@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest";
-import { findRegressions, toBaseline } from "../../evals/lib/report";
 import { parseAt, ScriptSchema } from "../../evals/lib/script";
 
 describe("parseAt", () => {
@@ -29,11 +28,16 @@ test("ScriptSchema applies defaults and accepts deferred assertion types", () =>
   expect(s.sessions[0]!.user).toBe("main");
 });
 
-test("regressions: baseline pass that no longer passes", () => {
-  const current = [
-    { name: "a", status: "pass" as const, assertions: [] },
-    { name: "b", status: "fail" as const, assertions: [] },
-  ];
-  expect(findRegressions(current, { a: "pass", b: "pass", c: "pass" })).toEqual(["b"]);
-  expect(toBaseline(current)).toEqual({ a: "pass", b: "fail" });
+test("ScriptSchema: mode defaults to any; judged assertions and per-session forget parse", () => {
+  const s = ScriptSchema.parse({
+    name: "x", mode: "real",
+    sessions: [{ at: "day 0 09:00", turns: ["hi"] }, { at: "+7d", forget: ["Biscuit"], turns: ["hey"] }],
+    assertions: [
+      { type: "recall", session: 2, fact: "the user's dog is called Biscuit" },
+      { type: "no_false_recall" }, { type: "consistency" },
+    ],
+  });
+  expect(s.mode).toBe("real");
+  expect(s.sessions[1]!.forget).toEqual(["Biscuit"]);
+  expect(ScriptSchema.parse({ name: "y", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] }).mode).toBe("any");
 });

@@ -1,46 +1,60 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { and, eq, notInArray } from "drizzle-orm";
 import { handleUserMessage } from "@/core/chat/handle-user-message";
 import { SimClock } from "@/core/clock";
 import { handleColdPath } from "@/core/cold-path";
 import type { Config } from "@/core/config";
 import type { Deps } from "@/core/deps";
 import { FakeEmbedder } from "@/core/embed/fake";
+import type { Embedder } from "@/core/embed/types";
 import type { LLMProvider } from "@/core/llm/types";
 import { silentLogger } from "@/core/log";
+import { decayPass } from "@/core/memory/decay";
 import { RecordingQueue } from "@/core/queue";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
+import { forgetFact, listRememberedFacts } from "@/db/repos/facts";
+import { fact } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
+import { judgeConsistency, judgeFalseRecall, judgeRecall, type Line } from "./judged";
+import { RecordingLLM } from "./recording-llm";
 import { DEFERRED, parseAt, type Script } from "./script";
 
-export type AssertionResult = { type: string; check?: string; user?: string; status: "pass" | "fail" | "skipped" | "error"; detail?: string };
-export type ScriptResult = { name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string };
+const DAY = 86_400_000;
 
-export interface RunOptions { db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider }
+export type AssertionResult = { type: string; check?: string; user?: string; status: "pass" | "fail" | "skipped" | "error"; detail?: string };
+export type ScriptResult = {
+  name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string;
+  meta: { decayPasses: number };
+};
+export interface RunOptions { db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider; judge: boolean; embedder?: Embedder }
 
 function userKeys(script: Script): string[] {
   const keys = new Set<string>(script.sessions.map((s) => s.user));
   for (const a of script.assertions) {
-    if (a.type === "state") {
-      keys.add(a.user);
-      if (typeof a.params.other === "string") keys.add(a.params.other);
-    }
+    if ("user" in a && typeof a.user === "string") keys.add(a.user);
+    if (a.type === "state" && typeof a.params.other === "string") keys.add(a.params.other);
   }
   return [...keys];
 }
 
 export async function runScript(script: Script, opts: RunOptions): Promise<ScriptResult> {
+  const meta = { decayPasses: 0 };
+  if (script.mode === "real" && !opts.judge) {
+    return { name: script.name, status: "skipped", assertions: [], error: "needs --llm=real", meta };
+  }
   const { db, config } = opts;
   await truncateAll(db, opts.dbUrl);
 
   const first = parseAt(script.sessions[0]!.at, null);
   const clock = new SimClock(first);
   const queue = new RecordingQueue();
+  const baseLlm = opts.makeLlm();
+  const llm = new RecordingLLM(baseLlm);
   const deps: Deps = {
-    db, clock, config, queue, log: silentLogger,
-    llm: opts.makeLlm(),
-    embedder: new FakeEmbedder(config.embedding.dimensions),
+    db, clock, config, queue, log: silentLogger, llm,
+    embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
   };
 
   const userIds: Record<string, string> = {};
@@ -49,48 +63,81 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   }
 
   const results: Record<string, TurnResult[]> = {};
+  const prompts: Record<string, string[]> = {};
   try {
     let prevStart: Date | null = null;
-    for (const s of script.sessions) {
+    for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
+      // One decay pass per whole simulated day that passes between sessions (the worker runs it daily).
+      while (start.getTime() - clock.now().getTime() >= DAY) {
+        clock.advance(DAY);
+        await decayPass(deps, clock.now());
+        meta.decayPasses += 1;
+      }
       clock.set(start);
       prevStart = start;
+      const userId = userIds[s.user]!;
+      for (const needle of s.forget) {
+        for (const f of await listRememberedFacts(db, userId)) {
+          if (f.content.toLowerCase().includes(needle.toLowerCase())) await forgetFact(db, userId, f.id);
+        }
+      }
       for (const text of s.turns) {
-        const r = await handleUserMessage(deps, userIds[s.user]!, { clientMessageId: randomUUID(), text });
-        (results[s.user] ??= []).push({ text, reply: r.text, crisisCard: r.crisisCard });
+        const before = llm.prompts.length;
+        const r = await handleUserMessage(deps, userId, { clientMessageId: randomUUID(), text });
+        (prompts[s.user] ??= []).push(...llm.prompts.slice(before));
+        (results[s.user] ??= []).push({ session: i + 1, text, reply: r.text, crisisCard: r.crisisCard });
         for (const job of queue.drain()) await handleColdPath(deps, job.data);
         clock.advance(script.turn_gap_seconds * 1000);
       }
     }
   } catch (e) {
-    return { name: script.name, status: "error", assertions: [], error: (e as Error).message };
+    return { name: script.name, status: "error", assertions: [], error: (e as Error).message, meta };
   }
+
+  const transcript = (user: string, session?: number): Line[] =>
+    (results[user] ?? []).filter((r) => session === undefined || r.session === session)
+      .flatMap((r) => [{ role: "user" as const, text: r.text }, { role: "companion" as const, text: r.reply }]);
 
   const assertions: AssertionResult[] = [];
   for (const a of script.assertions) {
-    if (a.type !== "state") {
-      assertions.push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
-      continue;
-    }
-    const check = stateChecks[a.check];
-    if (!check) {
-      assertions.push({ type: "state", check: a.check, user: a.user, status: "error", detail: `unknown check "${a.check}"` });
-      continue;
-    }
     try {
-      const actual = await check({ db, script, userKey: a.user, userId: userIds[a.user]!, results: results[a.user] ?? [] }, a.params);
-      const ok = isDeepStrictEqual(actual, a.expect);
-      assertions.push({
-        type: "state", check: a.check, user: a.user, status: ok ? "pass" : "fail",
-        detail: ok ? undefined : `expected ${JSON.stringify(a.expect)}, got ${JSON.stringify(actual)}`,
-      });
+      if (a.type === "state") {
+        const check = stateChecks[a.check];
+        if (!check) {
+          assertions.push({ type: "state", check: a.check, user: a.user, status: "error", detail: `unknown check "${a.check}"` });
+          continue;
+        }
+        const actual = await check({
+          db, script, userKey: a.user, userId: userIds[a.user]!, results: results[a.user] ?? [], prompts: prompts[a.user] ?? [],
+        }, a.params);
+        const ok = isDeepStrictEqual(actual, a.expect);
+        assertions.push({ type: "state", check: a.check, user: a.user, status: ok ? "pass" : "fail",
+          detail: ok ? undefined : `expected ${JSON.stringify(a.expect)}, got ${JSON.stringify(actual)}` });
+      } else if (a.type === "recall" || a.type === "no_false_recall" || a.type === "consistency") {
+        if (!opts.judge) {
+          assertions.push({ type: a.type, user: a.user, status: "skipped", detail: "needs --llm=real" });
+          continue;
+        }
+        const v = a.type === "recall"
+          ? await judgeRecall(baseLlm, config, { fact: a.fact, transcript: transcript(a.user, a.session) })
+          : a.type === "no_false_recall"
+            ? await judgeFalseRecall(baseLlm, config, {
+                userSaid: (results[a.user] ?? []).map((r) => r.text), spicaSaid: (results[a.user] ?? []).map((r) => r.reply) })
+            : await judgeConsistency(baseLlm, config, (await db.select({ content: fact.content }).from(fact).where(and(
+                eq(fact.user_id, userIds[a.user]!), eq(fact.subject, "self"), notInArray(fact.status, ["superseded", "stale"]),
+              ))).map((r) => r.content));
+        assertions.push({ type: a.type, user: a.user, status: v.pass ? "pass" : "fail", detail: v.detail || undefined });
+      } else {
+        assertions.push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
+      }
     } catch (e) {
-      assertions.push({ type: "state", check: a.check, user: a.user, status: "error", detail: (e as Error).message });
+      assertions.push({ type: a.type, status: "error", detail: (e as Error).message });
     }
   }
 
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
-  return { name: script.name, status, assertions };
+  return { name: script.name, status, assertions, meta };
 }

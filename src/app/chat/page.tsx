@@ -22,6 +22,7 @@ export default async function ChatPage() {
     <div className={styles.shell}>
       <header className={styles.header}>
         <span className={styles.title}>Spica</span>
+        <Link href="/memory" className={styles.settings}>Memory</Link>
         <Link href="/settings" className={styles.settings}>Settings</Link>
       </header>
       <ChatClient initial={initial} />

@@ -169,8 +169,8 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
 
 ### 5.1 Steps
 
-1. **Lock.** Take `pg_try_advisory_lock(hashtext('cold_path:' || userId))` on a dedicated connection. If the lock isn't acquired, the job is retried after `retry_delay_seconds`. This means a user's exchanges are never reconciled concurrently.
-2. **Idempotency.** If every turn in `turnIds` is already `extracted`, release the lock and stop.
+1. **Lock.** Open a transaction and take `pg_try_advisory_xact_lock(hashtext('cold_path:' || userId))` inside it (transaction-scoped, not a session lock on a dedicated connection — DECISIONS.md, 2026-09-24: same serialization guarantee, releases automatically on commit or rollback). If the lock isn't acquired, the job is retried after `retry_delay_seconds`. This means a user's exchanges are never reconciled concurrently.
+2. **Idempotency.** If every turn in `turnIds` is already `extracted`, roll back (releasing the lock) and stop.
 3. **Extract** (`models.extract`, strict JSON via `messages.parse` and a zod schema, prompt `prompts/extract/v1.md`).
    - Input:
      - the new turns
@@ -187,7 +187,7 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
    - Claims Spica makes about herself in her own reply become facts with `subject = self` (v2 MUST).
    - `max_candidates` caps the number of facts.
 4. **Embed** all candidate fact contents in one Voyage `document` call.
-5. **Reconcile** each candidate (approach A). All LLM calls happen before any write.
+5. **Reconcile** each candidate (approach A). Steps 3–6 all run inside the one transaction opened in step 1, so every LLM call happens before any write commits.
    - Fetch up to `neighbor_k` active facts with the same user and subject and similarity ≥ `near_match_similarity`.
    - **No neighbours:** the candidate is `new`, and no LLM call is made.
    - **Neighbours found:** make one call (`prompts/reconcile/v1.md`, strict JSON), which returns `{relation: duplicate|resolves|contradicts|new, target_fact_id|null}`. A `target_fact_id` that isn't one of the neighbours is treated as `new`.
@@ -206,7 +206,7 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
    - **Recall write-back** for each item in `recalled`: set `last_recalled_at = now`, increment `recall_count`, set salience to `min(recall_cap, salience + recall_bump)`, and insert a `retrieval_trace` row.
    - **Entity** `last_mentioned` updates.
    - Mark the `turnIds` as `extracted = true`.
-7. **Release the lock.**
+7. **Commit** the transaction, which releases the advisory lock automatically.
 
 ### 5.2 Failures and backfill
 
@@ -217,7 +217,7 @@ Job payload: `cold_path {userId, turnIds, replyTurnId, recalled: RecalledFact[]}
 
 ## 6. Decay pass
 
-`decay_pass` is a pg-boss scheduled job (`decay.cron`). Each run processes all users in batches, applies **one day** of decay, and has its core logic in a pure, tested function.
+`decay_pass` is a pg-boss scheduled job (`decay.cron`). Each run applies **one day** of decay as a set of `UPDATE` statements over all users at once (not per-user batches — DECISIONS.md, 2026-09-24: simpler at MVP scale, one statement per step; revisit with a batch size and per-user chunking if fact counts grow), and has its core logic in a pure, tested function.
 
 - **Facts.** For each fact with status not in (`superseded`, `stale`), `scope = 'private'`, and `now − max(created_at, last_recalled_at) > grace_days`:
   - set salience to `salience × (1 − rate × (1 − salience))`

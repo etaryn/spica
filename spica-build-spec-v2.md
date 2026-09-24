@@ -103,7 +103,7 @@ The Phase 0 skeleton is built on this stack.
 | Client → server | HTTP POST (`/api/chat` for user messages) |
 | Server → client | **Server-Sent Events**: one stream per signed-in user, carrying replies, backchannels, typing on/off and in-app reach-outs. It is fed by Postgres `LISTEN/NOTIFY` so the worker can push as well. This replaces the directive's WebSocket suggestion, since two-way sockets add nothing when sending is already a POST. |
 | Out-of-app delivery | Web Push notifications (Phase 5), capped by the send gate |
-| Models | Behind `LLMProvider`: a reply model (`claude-sonnet-5`) and a cheap strict-JSON model (`claude-haiku-4-5`) for extraction, judges, guard and classifiers. Embeddings go through `Embedder` (Voyage `voyage-3.5`, 1024 dimensions). Model IDs live in config. |
+| Models | Behind `LLMProvider`: a reply model (`claude-sonnet-5`) and a cheap strict-JSON model (`claude-haiku-4-5`) for guard and classifiers. Phase 1 splits the cheap role further in config: `models.extract` (`claude-haiku-4-5`, extraction; `models.extract_max_tokens` 2048) and `models.judge` (`claude-sonnet-5`, evals only; `models.judge_max_tokens` 1024). Every structured (strict-JSON) call shares one timeout, `models.structured_timeout_ms` (30000). Embeddings go through `Embedder` (Voyage `voyage-3.5`, 1024 dimensions). Model IDs live in config. |
 | Auth | Better Auth, email and password, 18+ enforced at signup |
 | Layout | `src/core` is framework-free, with every side effect injected via `Deps`. `src/db` holds the schema and `userId`-first repos, `src/app` is Next.js, `src/worker` is pg-boss, plus `prompts/` and `evals/`. |
 
@@ -238,18 +238,19 @@ Seed test traces (from the directive): the "insane day → promotion" story and 
 ### 6.2 Hot path (synchronous once the context is complete)
 
 1. **Retrieve.**
-   - Embed the buffer plus the last two turns.
-   - Score candidate facts (roughly the top 200 by similarity, excluding `superseded`, `stale` and `scope ≠ private`):
+   - Embed the buffer plus the last two turns (`retrieval.context_turns`, 2), timing out at `retrieval.embed_timeout_ms` (2000ms; see the failure handling below).
+   - Score candidate facts (the top `retrieval.candidate_pool`, 200, by similarity, excluding `superseded`, `stale` and `scope ≠ private`):
      `score = sim × salience × max(entity.salience | 1.0) × recency(max(created_at, last_recalled_at))`
-     `recency` is an exponential decay with a half-life of about 30 days (config).
-   - Take the top N = 12.
-   - Force-include every open thread whose `next_checkpoint` has passed, plus the current `preoccupation`.
+     `recency` is an exponential decay with a half-life of `retrieval.recency_half_life_days` (30).
+   - Take the top `retrieval.top_n` (12).
+   - Force-include every open thread whose `next_checkpoint` has passed, up to `retrieval.max_due_threads` (5), plus the current `preoccupation`.
    - Onboarding facts are gated by reveal pacing (section 12).
-   - **The hot path is read-only.** The IDs of the facts it included, with their factor scores, go into the `cold_path` job payload. The cold path then writes `retrieval_trace` and applies recall reinforcement: `last_recalled_at`, `recall_count + 1`, and a capped `salience` bump (section 7.2). [DECIDED; Ethan 2026-09-24, Phase 1 design]
+   - **The hot path is read-only.** The IDs of the facts it included, with their factor scores, go into the `cold_path` job payload. The cold path then writes `retrieval_trace` and applies recall reinforcement: `last_recalled_at`, `recall_count + 1`, and a `salience` bump of `retrieval.recall_bump` (0.03) capped at `retrieval.recall_cap` (0.95) (section 7.2). [DECIDED; Ethan 2026-09-24, Phase 1 design]
+   - **Failure handling:** a Voyage error/timeout, a retrieval SQL error, or a missing `VOYAGE_API_KEY` all degrade to the forced items only (due threads and preoccupation); the reply still goes out.
 2. **Assemble** the prompt in this fixed order:
    1. the persona document
    2. ego as one natural-language line (never raw numbers)
-   3. a relationship summary drawn from parameter *deviations* (section 8)
+   3. a relationship summary drawn from parameter *deviations* (section 8). Phase 1, before `relationship_param` exists, fills this slot with a plain gap line ("you last talked N days ago"), shown once at least `chat.gap_line_min_hours` (24) have passed since the previous turn.
    4. her life state: what she is doing now, and whether she is busy
    5. retrieved facts grouped by subject, each with a relative date
    6. due threads, phrased as "things you might naturally ask about"
@@ -265,26 +266,26 @@ The hot path contains **one generation call plus one guard check** (plus at most
 
 ### 6.3 Cold path (asynchronous, after sending)
 
-1. **Extract.** Make a strict-JSON call on the cheap model covering the latest exchange plus a few earlier turns. It returns:
+1. **Extract.** Make a strict-JSON call on the cheap model (`models.extract`), prompt version `prompts.extract`, covering the latest exchange plus `extraction.context_turns` (6) earlier turns of context, and up to `extraction.open_threads_in_prompt` (20) open threads. It returns up to `extraction.max_candidates` (12) candidate facts:
    - candidate facts (including `feeling` and `promise`, and facts about Spica that she stated in her own reply, with `subject = self`)
-   - entity mentions
+   - entity mentions — a newly seen entity is inserted at `extraction.new_entity_salience` (0.5), and a repeat mention bumps its salience by `extraction.entity_bump` (0.05), capped at `retrieval.recall_cap`
    - thread updates: opened, touched, resolved, and a new `next_checkpoint`
 2. **Reconcile.** [DECIDED: approach A; Ethan 2026-09-24, Phase 1 design]
-   - Embed each candidate and find near-duplicates: same subject, similarity above a threshold.
+   - Embed each candidate and find up to `reconcile.neighbor_k` (5) near-duplicates: same subject, similarity above `reconcile.near_match_similarity` (0.82).
    - If there are none, the candidate is **new** and is inserted without another LLM call.
-   - Otherwise one small classification call picks one of:
-     - **duplicate**: merge and bump salience
+   - Otherwise one small classification call (prompt version `prompts.reconcile`, `reconcile.max_tokens` 256) picks one of:
+     - **duplicate**: merge and bump salience by `reconcile.duplicate_bump` (0.05), capped at `retrieval.recall_cap`
      - **resolves**: set `status = resolved` and store the outcome as a new fact
      - **contradicts**: supersede the old fact and insert the new one
      - **new**: insert
-   - Code applies the result in a single transaction.
+   - Code applies the result in a single transaction, holding a per-user advisory lock for the whole exchange (section 14.5) so a user's exchanges are never reconciled concurrently.
    - Resolve entity mentions against names and aliases. A low-confidence match creates a new entity rather than merging.
 3. **Update state.**
    - Mark the turns `extracted`.
    - Update entities' `last_mentioned`.
    - From Phase 3: update relationship parameters and cadence.
    - From Phase 4: nudge the ego toward the emotional tone of the exchange.
-4. **Failures.** On failure, retry with backoff. Turns with `extracted = false` are reprocessed later. A cold-path failure MUST never block or delay a reply.
+4. **Failures.** On failure, retry with backoff (`cold_path.retry_limit`, 3 attempts; `cold_path.retry_delay_seconds`, 30). Turns with `extracted = false` are reprocessed later by the `cold_path_sweep` job (section 14.5). A cold-path failure MUST never block or delay a reply.
 
 ### 6.4 Guard layer [DECIDED; from the directive; placement decided by Ethan 2026-09-24]
 
@@ -309,12 +310,12 @@ There is a single store (`fact`, `entity`, `thread`) for the user, Spica and oth
 
 ### 7.2 Weight dynamics [DECIDED]
 
-- Extraction assigns the initial salience. Emotionally charged facts (high |valence|) and repeated ones start and stay higher. A repeat is a reconcile duplicate, which bumps salience.
-- **Recall reinforces weight.** Each inclusion in a prompt bumps salience (config-set and capped) and increments `recall_count`.
-- **Decay pass** (daily pg-boss job; built in Phase 1 by Ethan's 2026-09-24 decision):
-  - Lower the salience of facts that haven't been recalled recently, at a rate inversely proportional to salience.
-  - Below a floor (0.05, config), set `status = stale`. The fact is excluded from retrieval but never deleted.
-  - A thread that has had no activity for 14 days (config) past its checkpoint becomes `dormant`.
+- Extraction assigns the initial salience. Emotionally charged facts (high |valence|) and repeated ones start and stay higher. A repeat is a reconcile duplicate, which bumps salience by `reconcile.duplicate_bump`.
+- **Recall reinforces weight.** Each inclusion in a prompt bumps salience by `retrieval.recall_bump` (0.03), capped at `retrieval.recall_cap` (0.95), and increments `recall_count`.
+- **Decay pass** (`decay_pass`, a `decay.cron`-scheduled pg-boss job over all users at once, not per-user batches; built in Phase 1 by Ethan's 2026-09-24 decision):
+  - Facts untouched for `decay.grace_days` (3) since the later of `created_at` / `last_recalled_at` lose salience at a rate of `decay.rate` (0.08), inversely proportional to salience (so high-salience facts fade slower).
+  - Below `decay.stale_floor` (0.05, config), set `status = stale`. The fact is excluded from retrieval but never deleted.
+  - A thread that has had no activity for `decay.dormant_after_days` (14, config) past its checkpoint becomes `dormant`.
 
 ### 7.3 Imperfect memory
 
@@ -368,7 +369,7 @@ The **prompt** gets a one- or two-line natural-language summary of the meaningfu
 
 ### 9.1 Persona document [DECIDED; Ethan 2026-09-24: Claude drafts, Ethan edits]
 
-`prompts/persona/v<N>.md` is one document, the same for every user. It MUST cover:
+`prompts/persona/v<N>.md` is one document, the same for every user; `N` is set by `prompts.persona` (config). It MUST cover:
 - her values (5–10 stances on everyday topics)
 - hard boundaries
 - her ego traits (pride, stubbornness, what she won't do)
@@ -485,9 +486,9 @@ Scripted multi-session conversations run against a simulated clock, as YAML file
 
 Assertion types:
 - `state`
-- `recall`, checked by an LLM judge (`claude-sonnet-5`, in config)
-- `no_false_recall`
-- `consistency`
+- `recall`, checked by an LLM judge (`models.judge`, `claude-sonnet-5`; prompt `prompts.judge_recall`)
+- `no_false_recall` (prompt `prompts.judge_false_recall`)
+- `consistency` (prompt `prompts.judge_consistency`)
 - `reach_out`
 - (new) `turn` (whether and when she replied, backchanneled or asked an open question)
 - (new) `guard` (violations blocked)

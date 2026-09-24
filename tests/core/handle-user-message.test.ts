@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleUserMessage } from "@/core/chat/handle-user-message";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
+import { insertFact } from "@/db/repos/facts";
 import { listTurns } from "@/db/repos/session-log";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
+import { getTimezone } from "@/db/repos/users";
+import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
 beforeEach(resetDb);
@@ -30,7 +32,9 @@ describe("handleUserMessage", () => {
     expect(turns[1]!.reply_to).toBe(input.clientMessageId);
     expect(turns[1]!.session_id).toBe(turns[0]!.session_id);
     expect(turns[1]!.safety_flag).toEqual({ flagged: false, category: "none", source: "classifier" });
-    expect(deps.queue.jobs).toEqual([{ name: "cold_path", data: { userId: u, turnIds: [turns[0]!.id, turns[1]!.id] } }]);
+    expect(deps.queue.jobs).toEqual([{ name: "cold_path", data: {
+      userId: u, turnIds: [turns[0]!.id, turns[1]!.id], replyTurnId: turns[1]!.id, recalled: [],
+    } }]);
   });
 
   test("prompt carries the persona and the conversation, starting with a user turn", async () => {
@@ -41,6 +45,7 @@ describe("handleUserMessage", () => {
     await handleUserMessage(deps, u, msg("second"));
     const call = deps.llm.calls[1]!;
     expect(call.system).toMatch(/at most one or two/i);
+    expect(call.system).toMatch(/You are Spica/);
     expect(call.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
     expect(call.messages.at(-1)!.content).toBe("second");
   });
@@ -175,5 +180,51 @@ describe("handleUserMessage", () => {
     const turns = await listTurns(getTestDb(), u);
     expect(turns.filter((t) => t.role === "companion")).toHaveLength(1);
     expect(turns.filter((t) => t.role === "user")).toHaveLength(1);
+  });
+
+  test("retrieved memories and the gap line reach the prompt; recalled ids ride the cold-path job", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await insertFact(getTestDb(), u, {
+      subject: "user", kind: "trait", content: "The user's dog is called Biscuit.", embedding: vec(),
+      created_at: new Date("2026-01-01T09:00:00Z"), status: "open", salience: 0.9, valence: 0.5, confidence: 1, source: "turn",
+    });
+    await handleUserMessage(deps, u, msg("first"));
+    deps.clock.advance(8 * 86_400_000);
+    await handleUserMessage(deps, u, msg("hey again"));
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("The user's dog is called Biscuit.");
+    expect(system).toContain("You last talked 8 days ago.");
+    const job = deps.queue.jobs.at(-1)!.data;
+    expect(job.recalled!.length).toBeGreaterThan(0);
+  });
+
+  test("user B's prompts never contain user A's facts", async () => {
+    const deps = makeTestDeps();
+    const a = await createTestUser("a");
+    const b = await createTestUser("b");
+    await insertFact(getTestDb(), a, {
+      subject: "user", kind: "trait", content: "Alice's cat is called Biscuit.", embedding: vec(),
+      created_at: new Date("2026-01-01T09:00:00Z"), status: "open", salience: 1, valence: 0, confidence: 1, source: "turn",
+    });
+    await handleUserMessage(deps, b, msg("what's a good cat name"));
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("Biscuit");
+  });
+
+  test("an embedder failure still produces a reply", async () => {
+    const base = makeTestDeps();
+    const deps = { ...base, embedder: { dimensions: 1024, embed: async () => { throw new Error("voyage down"); } } };
+    const u = await createTestUser();
+    await expect(handleUserMessage(deps, u, msg("hi"))).resolves.toMatchObject({ parts: expect.any(Array) });
+  });
+
+  test("valid timezone is stored; invalid one is ignored", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await handleUserMessage(deps, u, { ...msg("hi"), timezone: "Mars/Olympus" });
+    expect(await getTimezone(getTestDb(), u)).toBeNull();
+    deps.clock.advance(60_000);
+    await handleUserMessage(deps, u, { ...msg("hi again"), timezone: "Europe/London" });
+    expect(await getTimezone(getTestDb(), u)).toBe("Europe/London");
   });
 });

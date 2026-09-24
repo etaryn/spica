@@ -3,7 +3,7 @@ import { handleUserMessage } from "@/core/chat/handle-user-message";
 import type { Deps } from "@/core/deps";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
 
-const Body = z.object({ clientMessageId: z.uuid(), text: z.string() });
+const Body = z.object({ clientMessageId: z.uuid(), text: z.string(), timezone: z.string().max(64).optional() });
 
 export function createChatHandler(opts: { getUserId(req: Request): Promise<string | null>; getDeps(): Deps }) {
   return async function POST(req: Request): Promise<Response> {

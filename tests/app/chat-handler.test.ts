@@ -54,3 +54,10 @@ test("409 on another user's message id", async () => {
   const res = await createChatHandler({ getUserId: async () => b, getDeps: () => deps })(post({ clientMessageId: id, text: "b" }));
   expect(res.status).toBe(409);
 });
+
+test("timezone is accepted in the body", async () => {
+  const u = await createTestUser();
+  const h = createChatHandler({ getUserId: async () => u, getDeps: () => makeTestDeps() });
+  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: "Europe/London" }))).status).toBe(200);
+  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: 42 }))).status).toBe(400);
+});

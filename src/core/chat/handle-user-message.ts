@@ -1,18 +1,21 @@
 import { randomUUID } from "node:crypto";
+import { setTimezone } from "@/db/repos/users";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import type { CrisisCard } from "../config";
 import type { Deps } from "../deps";
 import { ConflictError, InputError, isUniqueViolation, ReplyFailedError } from "../errors";
+import { retrieve } from "../memory/retrieve";
 import { loadPrompt } from "../prompts";
 import { COLD_PATH_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
+import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
-import { assemblePrompt, emptyRetrieval } from "./assemble";
+import { assemblePrompt, gapLine } from "./assemble";
 import { splitParts } from "./parts";
 import { resolveSessionId } from "./session";
 
-export type UserMessageInput = { clientMessageId: string; text: string };
+export type UserMessageInput = { clientMessageId: string; text: string; timezone?: string };
 export type ReplyResult = { turnId: string; text: string; parts: string[]; crisisCard: CrisisCard | null };
 
 function toResult(companion: Turn, deps: Deps): ReplyResult {
@@ -63,24 +66,38 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   const answered = await sessionLog.getReplyTo(db, userId, userTurn.id);
   if (answered) return toResult(answered, deps);
 
-  // 2. Retrieve (Phase 1)
-  const retrieval = emptyRetrieval();
+  // Best-effort: the browser's time zone, for resolving relative dates in extraction.
+  if (input.timezone && isValidTimeZone(input.timezone)) {
+    await setTimezone(db, userId, input.timezone).catch((e) =>
+      log.error("timezone update failed", { userId, error: String((e as Error)?.name ?? "Error") }));
+  }
 
-  // 3. Assemble — the window ends at this user turn, so retrying an older
-  // message never sends later turns (or an assistant-last history).
+  // The window ends at this user turn, so retrying an older message never sends later turns.
   const recent = await sessionLog.turnsUpTo(db, userId, userTurn, config.chat.recent_turns);
+  const earlier = recent.slice(0, -1);
+
+  // Crisis check starts now and runs alongside retrieval and generation (it never rejects).
+  const crisis = checkCrisis(deps, userTurn.text, earlier);
+
+  // 2. Retrieve: read-only; recalled ids go to the cold path (v2 §6.2).
+  const retrieval = await retrieve(deps, userId, {
+    answering: [userTurn],
+    context: config.retrieval.context_turns > 0 ? earlier.slice(-config.retrieval.context_turns) : [],
+    now: clock.now(),
+  });
+
+  // 3. Assemble
   const prompt = assemblePrompt({
-    valuesDoc: loadPrompt("reply", config.prompts.reply),
+    valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     egoLine: null,
-    relationshipSummary: null,
+    relationshipSummary: gapLine(earlier.at(-1)?.created_at ?? null, userTurn.created_at, config.chat.gap_line_min_hours),
     retrieval,
     recentTurns: recent,
     now: clock.now(),
   });
 
-  // 4. Generate + crisis check in parallel (checkCrisis never rejects)
-  const context = recent.slice(0, -1);
-  const [reply, safety] = await Promise.allSettled([llm.generateReply(prompt), checkCrisis(deps, userTurn.text, context)]);
+  // 4. Generate
+  const [reply, safety] = await Promise.allSettled([llm.generateReply(prompt), crisis]);
   const flag = safety.status === "fulfilled" ? safety.value : null;
   if (reply.status === "rejected") {
     log.error("reply generation failed", { userId, turnId: userTurn.id, error: String((reply.reason as Error)?.name ?? "Error") });
@@ -109,7 +126,9 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   try {
     // Bounded: a slow or hung queue must never delay the reply (spec principle 5).
     await withTimeout(
-      queue.enqueue(COLD_PATH_QUEUE, { userId, turnIds: [userTurn.id, companion.id] }),
+      queue.enqueue(COLD_PATH_QUEUE, {
+        userId, turnIds: [userTurn.id, companion.id], replyTurnId: companion.id, recalled: retrieval.recalled,
+      }),
       config.queue.enqueue_timeout_ms,
     );
   } catch (e) {

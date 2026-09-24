@@ -1,5 +1,10 @@
+import type { RecalledFact } from "./memory/types";
+
 export const COLD_PATH_QUEUE = "cold_path";
-export type ColdPathJob = { userId: string; turnIds: string[] };
+export const SWEEP_QUEUE = "cold_path_sweep";
+export const DECAY_QUEUE = "decay_pass";
+/** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
+export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };
 
 export interface JobQueue {
   enqueue(name: typeof COLD_PATH_QUEUE, data: ColdPathJob): Promise<void>;

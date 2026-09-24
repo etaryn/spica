@@ -30,7 +30,7 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ clientMessageId: id, text }),
+        body: JSON.stringify({ clientMessageId: id, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       if (res.status === 401) { window.location.href = "/login"; return; }
       const body = await res.json().catch(() => ({}));

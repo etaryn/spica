@@ -17,6 +17,7 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   dateOfBirth: text("date_of_birth").notNull(), // YYYY-MM-DD, validated at signup
+  timezone: text("timezone"), // IANA name from the browser; null = UTC
   createdAt: ts("created_at").notNull(),
   updatedAt: ts("updated_at").notNull(),
 });
@@ -61,9 +62,10 @@ export const verification = pgTable("verification", {
 
 export const factSubject = pgEnum("fact_subject", ["user", "self", "shared"]);
 export const entitySubject = pgEnum("entity_subject", ["user", "self"]);
-export const factKind = pgEnum("fact_kind", ["event", "trait", "preference", "state", "opinion"]);
+export const factKind = pgEnum("fact_kind", ["event", "trait", "preference", "state", "opinion", "feeling", "promise"]);
 export const factStatus = pgEnum("fact_status", ["open", "resolved", "recurring", "stale", "superseded"]);
-export const factSource = pgEnum("fact_source", ["turn", "generated", "onboarding"]);
+export const factSource = pgEnum("fact_source", ["turn", "generated", "onboarding", "inferred"]);
+export const factScope = pgEnum("fact_scope", ["private", "group"]);
 export const entityType = pgEnum("entity_type", ["person", "pet", "place", "project", "org", "other"]);
 export const threadStatus = pgEnum("thread_status", ["open", "resolved", "dormant"]);
 export const threadStakes = pgEnum("thread_stakes", ["low", "med", "high"]);
@@ -127,10 +129,14 @@ export const fact = pgTable("fact", {
   confidence: real("confidence").notNull(),
   source: factSource("source").notNull(),
   source_ref: text("source_ref"),
+  recall_count: integer("recall_count").notNull().default(0),
+  scope: factScope("scope").notNull().default("private"), // post-MVP group hook; MVP reads only 'private'
+  space_id: uuid("space_id"),                               // post-MVP group hook; never read in MVP
 }, (t) => [
   index("fact_embedding_hnsw").using("hnsw", t.embedding.op("vector_cosine_ops")),
   index("fact_entity_refs_gin").using("gin", t.entity_refs),
   index("fact_user_status_idx").on(t.user_id, t.status),
+  index("fact_user_active_idx").on(t.user_id).where(sql`${t.status} NOT IN ('superseded', 'stale')`),
   check("fact_salience_range", sql`${t.salience} BETWEEN 0 AND 1`),
   check("fact_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
   check("fact_confidence_range", sql`${t.confidence} BETWEEN 0 AND 1`),
@@ -139,12 +145,12 @@ export const fact = pgTable("fact", {
 export const identity = pgTable("identity", {
   user_id: userRef().primaryKey(),
   // values (rarely changes)
-  traits: jsonb("traits").notNull(),
-  stances: jsonb("stances").notNull(),
-  boundaries: text("boundaries").array().notNull(),
-  humor_style: text("humor_style").notNull(),
-  verbal_tics: text("verbal_tics").array().notNull(),
-  speech_rules: text("speech_rules").array().notNull(),
+  traits: jsonb("traits"),
+  stances: jsonb("stances"),
+  boundaries: text("boundaries").array(),
+  humor_style: text("humor_style"),
+  verbal_tics: text("verbal_tics").array(),
+  speech_rules: text("speech_rules").array(),
   // ego (changes hourly)
   mood_valence: real("mood_valence").notNull(),
   mood_arousal: real("mood_arousal").notNull(),
@@ -189,6 +195,7 @@ export const session_log = pgTable("session_log", {
   extracted: boolean("extracted").notNull().default(false),
   safety_flag: jsonb("safety_flag").$type<SafetyFlag>(),
   reply_to: uuid("reply_to").references((): AnyPgColumn => session_log.id, { onDelete: "cascade" }),
+  extract_attempts: integer("extract_attempts").notNull().default(0),
 }, (t) => [
   index("session_log_user_created_idx").on(t.user_id, t.created_at),
   index("session_log_user_session_idx").on(t.user_id, t.session_id),

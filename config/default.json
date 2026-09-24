@@ -2,6 +2,11 @@
   "models": {
     "reply": "claude-sonnet-5",
     "cheap": "claude-haiku-4-5",
+    "extract": "claude-haiku-4-5",
+    "extract_max_tokens": 2048,
+    "judge": "claude-sonnet-5",
+    "judge_max_tokens": 1024,
+    "structured_timeout_ms": 30000,
     "reply_max_tokens": 4096,
     "reply_effort": "low",
     "reply_timeout_ms": 30000,
@@ -19,7 +24,35 @@
     "recent_turns": 20,
     "max_parts": 4,
     "history_page_size": 50,
-    "max_message_chars": 4000
+    "max_message_chars": 4000,
+    "gap_line_min_hours": 24
+  },
+  "retrieval": {
+    "candidate_pool": 200,
+    "top_n": 12,
+    "recency_half_life_days": 30,
+    "recall_bump": 0.03,
+    "recall_cap": 0.95,
+    "embed_timeout_ms": 2000,
+    "context_turns": 2,
+    "max_due_threads": 5
+  },
+  "extraction": {
+    "context_turns": 6,
+    "max_candidates": 12,
+    "open_threads_in_prompt": 20,
+    "new_entity_salience": 0.5,
+    "entity_bump": 0.05
+  },
+  "reconcile": { "neighbor_k": 5, "near_match_similarity": 0.82, "duplicate_bump": 0.05, "max_tokens": 256 },
+  "decay": { "cron": "0 4 * * *", "grace_days": 3, "rate": 0.08, "stale_floor": 0.05, "dormant_after_days": 14 },
+  "cold_path": {
+    "retry_limit": 3,
+    "retry_delay_seconds": 30,
+    "max_sweep_attempts": 3,
+    "sweep_cron": "30 4 * * *",
+    "sweep_min_age_minutes": 10,
+    "sweep_batch": 500
   },
   "safety": {
     "classifier_timeout_ms": 3000,
@@ -57,7 +90,13 @@
   },
   "prompts": {
     "reply": "v1",
-    "crisis_classifier": "v2"
+    "crisis_classifier": "v2",
+    "persona": "v1",
+    "extract": "v1",
+    "reconcile": "v1",
+    "judge_recall": "v1",
+    "judge_false_recall": "v1",
+    "judge_consistency": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000

@@ -36,6 +36,17 @@ describe("loadConfig", () => {
   });
 });
 
+test("phase 1 config groups load with defaults", () => {
+  const c = loadConfig();
+  expect(c.models.extract).toBe("claude-haiku-4-5");
+  expect(c.models.judge).toBe("claude-sonnet-5");
+  expect(c.retrieval).toMatchObject({ candidate_pool: 200, top_n: 12, recency_half_life_days: 30, max_due_threads: 5 });
+  expect(c.reconcile.near_match_similarity).toBe(0.82);
+  expect(c.decay).toMatchObject({ grace_days: 3, rate: 0.08, stale_floor: 0.05, dormant_after_days: 14 });
+  expect(c.cold_path.max_sweep_attempts).toBe(3);
+  expect(c.prompts.persona).toBe("v1");
+});
+
 test("isUniqueViolation finds wrapped pg errors", () => {
   expect(isUniqueViolation({ code: "23505" })).toBe(true);
   expect(isUniqueViolation(new Error("x", { cause: { code: "23505" } }))).toBe(true);

@@ -92,6 +92,39 @@ describe("schema", () => {
   });
 });
 
+describe("phase 1 schema", () => {
+  test("fact gains kinds, inferred source, scope/recall_count defaults", async () => {
+    const u = await createTestUser();
+    const [f] = await getTestDb().insert(s.fact).values({
+      user_id: u, subject: "user", kind: "promise", content: "The user promised to call Mia on Sunday.",
+      embedding: vec(), created_at: T, status: "open", salience: 0.5, valence: 0.2, confidence: 0.9, source: "inferred",
+    }).returning();
+    expect(f!.scope).toBe("private");
+    expect(f!.recall_count).toBe(0);
+    expect(f!.space_id).toBeNull();
+    await getTestDb().insert(s.fact).values({
+      user_id: u, subject: "user", kind: "feeling", content: "The user feels nervous about the interview.",
+      embedding: vec(), created_at: T, status: "open", salience: 0.6, valence: -0.4, confidence: 0.8, source: "turn",
+    });
+  });
+
+  test("identity values columns are nullable (persona file is the source of truth)", async () => {
+    const u = await createTestUser();
+    await getTestDb().insert(s.identity).values({ user_id: u, mood_valence: 0, mood_arousal: 0.5, energy: 0.5, baseline: {} });
+  });
+
+  test("session_log.extract_attempts defaults to 0; user.timezone is settable", async () => {
+    const u = await createTestUser();
+    const [t] = await getTestDb().insert(s.session_log).values({
+      id: crypto.randomUUID(), user_id: u, session_id: crypto.randomUUID(), role: "user", text: "hi", created_at: T,
+    }).returning();
+    expect(t!.extract_attempts).toBe(0);
+    await getTestDb().update(s.user).set({ timezone: "Europe/London" }).where(eq(s.user.id, u));
+    const [row] = await getTestDb().select({ tz: s.user.timezone }).from(s.user).where(eq(s.user.id, u));
+    expect(row!.tz).toBe("Europe/London");
+  });
+});
+
 describe("assertDisposableDatabase", () => {
   test("allows _test and _eval, refuses anything else", () => {
     expect(() => assertDisposableDatabase("postgres://u:p@h:5432/spica_test")).not.toThrow();

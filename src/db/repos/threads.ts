@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Db } from "../client";
 import { thread, threadStakes } from "../schema";
 import { normalizeName } from "./entities";
-import { one } from "./util";
+import { one, toDate } from "./util";
 
 export type ThreadRow = typeof thread.$inferSelect;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -67,7 +67,7 @@ export async function dueThreads(db: Db, userId: string, now: Date, limit: numbe
     ORDER BY t.next_checkpoint ASC
     LIMIT ${limit}`);
   return res.rows.map((r) => ({
-    id: String(r.id), title: String(r.title), next_checkpoint: r.next_checkpoint as Date,
+    id: String(r.id), title: String(r.title), next_checkpoint: toDate(r.next_checkpoint),
     fact_id: r.fact_id ? String(r.fact_id) : null, content: r.content ? String(r.content) : null,
     salience: r.salience == null ? null : Number(r.salience),
   }));

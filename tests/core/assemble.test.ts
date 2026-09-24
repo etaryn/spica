@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { assemblePrompt, emptyRetrieval, relativeDate } from "@/core/chat/assemble";
+import { assemblePrompt, emptyRetrieval, gapLine, relativeDate } from "@/core/chat/assemble";
 import { splitParts } from "@/core/chat/parts";
 import { resolveSessionId } from "@/core/chat/session";
 
@@ -49,6 +49,7 @@ describe("assemblePrompt", () => {
           self: [], shared: [],
         },
         dueThreads: [{ title: "job interview at Acme" }],
+        recalled: [],
       },
       recentTurns: [{ role: "user", text: "hi" }],
     });
@@ -68,6 +69,24 @@ describe("relativeDate", () => {
     expect(relativeDate(new Date("2025-12-20T08:00:00Z"), now)).toBe("3 weeks ago");
     expect(relativeDate(new Date("2025-10-01T08:00:00Z"), now)).toBe("3 months ago");
     expect(relativeDate(new Date("2026-01-20T08:00:00Z"), now)).toBe("in 8 days");
+  });
+});
+
+describe("gapLine and due-thread detail", () => {
+  const n = new Date("2026-01-12T12:00:00Z");
+  test("gap buckets", () => {
+    expect(gapLine(null, n, 24)).toBeNull();
+    expect(gapLine(new Date("2026-01-12T01:00:00Z"), n, 24)).toBeNull();
+    expect(gapLine(new Date("2026-01-11T10:00:00Z"), n, 24)).toBe("You last talked yesterday.");
+    expect(gapLine(new Date("2026-01-04T12:00:00Z"), n, 24)).toBe("You last talked 8 days ago.");
+    expect(gapLine(new Date("2025-12-01T12:00:00Z"), n, 24)).toBe("You last talked about 6 weeks ago.");
+  });
+  test("due threads render their latest detail", () => {
+    const p = assemblePrompt({
+      ...base, recentTurns: [{ role: "user", text: "hi" }],
+      retrieval: { ...emptyRetrieval(), dueThreads: [{ title: "job interview at Acme", detail: "It was on Friday." }] },
+    });
+    expect(p.system).toContain("- job interview at Acme (latest: It was on Friday.)");
   });
 });
 

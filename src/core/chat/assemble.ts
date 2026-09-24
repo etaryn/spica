@@ -1,16 +1,19 @@
 import type { ChatMessage } from "../llm/types";
+import type { RecalledFact } from "../memory/types";
 
 export type RetrievedFact = { content: string; when: Date };
-export type DueThread = { title: string };
+export type DueThread = { title: string; detail?: string | null };
 
 export interface RetrievalResult {
   facts: { user: RetrievedFact[]; self: RetrievedFact[]; shared: RetrievedFact[] };
   dueThreads: DueThread[];
+  /** Everything included in the prompt, for the cold path's recall write-back and trace. */
+  recalled: RecalledFact[];
 }
 
 /** Phase 0 has no retrieval; Phase 1 fills this without changing the pipeline. */
 export function emptyRetrieval(): RetrievalResult {
-  return { facts: { user: [], self: [], shared: [] }, dueThreads: [] };
+  return { facts: { user: [], self: [], shared: [] }, dueThreads: [], recalled: [] };
 }
 
 export interface AssembleInput {
@@ -55,7 +58,7 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     input.relationshipSummary ? `## You and them\n${input.relationshipSummary}` : null,
     memory.length ? `## What you remember\n${memory.join("\n\n")}` : null,
     retrieval.dueThreads.length
-      ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}`).join("\n")}`
+      ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}${t.detail ? ` (latest: ${t.detail})` : ""}`).join("\n")}`
       : null,
   ].filter((s): s is string => s !== null);
 
@@ -67,4 +70,15 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
   }));
 
   return { system: slots.join("\n\n"), messages };
+}
+
+/** Phase 1 relationship line: time since the previous turn, omitted under `minHours` (v2 §6.2 slot 3). */
+export function gapLine(prevAt: Date | null, now: Date, minHours: number): string | null {
+  if (!prevAt) return null;
+  const hours = (now.getTime() - prevAt.getTime()) / 3_600_000;
+  if (hours < minHours) return null;
+  const days = Math.floor(hours / 24);
+  if (days <= 1) return "You last talked yesterday.";
+  if (days < 14) return `You last talked ${days} days ago.`;
+  return `You last talked about ${Math.round(days / 7)} weeks ago.`;
 }

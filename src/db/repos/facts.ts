@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { RecalledFact } from "@/core/memory/types";
 import type { Db } from "../client";
 import { fact, factStatus, identity, retrieval_trace } from "../schema";
-import { one } from "./util";
+import { one, toDate, toDateOrNull } from "./util";
 
 export type FactRow = typeof fact.$inferSelect;
 export type NewFact = Omit<typeof fact.$inferInsert, "user_id">;
@@ -35,8 +35,8 @@ export async function candidateFacts(db: Db, userId: string, queryVec: number[],
       LIMIT ${limit}`);
     return res.rows.map((r) => ({
       id: String(r.id), subject: r.subject as Subject, content: String(r.content), salience: Number(r.salience),
-      created_at: r.created_at as Date, last_recalled_at: (r.last_recalled_at as Date | null) ?? null,
-      occurred_at: (r.occurred_at as Date | null) ?? null, sim: Number(r.sim), entity_salience: Number(r.entity_salience),
+      created_at: toDate(r.created_at), last_recalled_at: toDateOrNull(r.last_recalled_at),
+      occurred_at: toDateOrNull(r.occurred_at), sim: Number(r.sim), entity_salience: Number(r.entity_salience),
     }));
   });
 }

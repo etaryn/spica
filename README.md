@@ -1,6 +1,6 @@
 # Spica
 
-A standalone AI best friend. Source of truth: `Spica — MVP build spec.md`. Agent context: `CLAUDE.md`.
+A standalone AI best friend. Source of truth: `spica-build-spec-v2.md`. Agent context: `CLAUDE.md`.
 
 ## Run locally
 

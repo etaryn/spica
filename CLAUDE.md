@@ -1,151 +1,175 @@
 # Spica — Project Context
 
-Source of truth: `Spica — MVP build spec.md` in this repo. This file is a
-distilled summary for fast context; re-read the full spec before any task that
-touches memory, identity, reach-outs, or life-sim — the spec has details
-(exact schemas, formulas, phase directives) this summary compresses.
+**Source of truth: `spica-build-spec-v2.md`** (merged 2026-09-24 from the v1
+spec and Ethan's build directive; conflicts resolved with Ethan and logged in
+its §18). `Spica — MVP build spec.md` (v1) and `spica-build-directive.md` are
+superseded and kept for history only; do not build from them.
 
-## Agent directives (from spec §0)
-- Build only what the **current phase** (see below) asks for. Later-phase
-  features must stay architecturally possible but are not implemented early.
-- `code style` names for fields/tables/jobs are canonical — use exactly.
-- MUST = required to pass the phase. SHOULD = default unless documented
-  reason. MAY = optional.
-- Every numeric constant (caps, weights, intervals) goes in config, never
-  hardcoded.
-- All LLM prompts live in versioned files under `prompts/`, never inline.
-- **Open decisions (§9.1 below): STOP and ask the human. Do not pick.**
-- Undecided + uncovered choice: pick the simplest option that keeps the fact
-  store as the single source of truth, log it in `DECISIONS.md` with a
-  one-line reason.
-- Never add a second persistent store for memory-like data — it belongs in
-  the fact store.
-- Definition of done: compiles, passes tests, eval harness shows no
-  regression, any new field/job is added back into the spec doc.
+This file is a distilled summary. Re-read the relevant v2 section before any
+task that touches memory, turn-taking, relationship state, persona, life sim
+or outreach: v2 has the exact schemas, formulas and phase directives that
+this summary compresses.
+
+## How to read the spec (v2 §0)
+- **DECIDED**: implement as written. **LEANING**: implement the default
+  behind a config flag. "Provisional (testing phase)" means expect it to
+  change after real use. **OPEN**: don't decide; build so either option
+  works, and ask Ethan. **ADDED**: Claude's suggestion, not yet confirmed;
+  flag it in the summary or PR.
+- Build only the **current phase**; later phases stay possible but aren't
+  built early.
+- `code style` names are canonical. Every numeric constant goes in config.
+  Every prompt is a versioned file under `prompts/`.
+- An uncovered choice gets the simplest option that keeps the fact store the
+  single source of truth, plus a one-line entry in `DECISIONS.md`.
+- Never add a second persistent store for memory-like data.
+- Definition of done: compiles, tests pass, eval harness shows no
+  regression, and every new field, job or config key is added back into v2.
 
 ## Product
-Spica is a standalone AI best friend — the product, not a bridge to other
-relationships. Distinct person with its own life, opinions, moods; not a
-mirror that agrees with the user.
+Spica is a **best friend**, unapologetically standalone, meant to feel
+human. The long-term aim is a real being. Thesis: chatbots feel inhuman
+because they are over-forgiving, over-agreeable and nothing has
+consequences, so Spica has opinions, moods, limits, a life, and stakes.
 
-Differentiation: **relational not reflective** (personality test generates
-the *companion's* personality, not a tone tuned to the user) · **has an ego**
-(persistent mood/energy/preoccupation, can push back) · **has a life** (own
-events/people, same memory machinery as the user's) · **reaches out with a
-reason** (never a generic "thinking of you").
+**One fixed Spica** (she/her): the same values, ego and voice for every
+user. The personality test calibrates the *user*, not her
+(`test_calibrates: user`). Whether Spica should instead vary per user is
+still OPEN.
 
-Design principles (trade-offs default this way unless told otherwise):
-1. Continuity and specificity beat everything — protect memory quality first.
-2. One substrate — memory, life-sim, reach-outs, ego all read/write the same
-   fact store. No feature gets a private store.
-3. Thin but real — MVP components are minimal real versions, never
-   throwaway stubs.
-4. Consistency over richness — a sparse life never contradicted beats a rich
-   one that is. Every generated claim becomes a fact it must stay consistent
-   with.
-5. Latency is sacred — nothing that writes memory runs before the reply is
-   sent (hot path vs. cold path, see below).
+Principles: continuity and specificity first · one substrate (every feature
+reads and writes the same fact store and DB) · thin but real · consistency
+over richness · memory writes never delay a reply (deliberate human pacing
+is fine) · built to extend (modules register through interfaces).
 
-## Architecture
-Memory engine with two loops around it: **chat loop** (hot path reads fact
-store → replies; cold path writes after replying) and **background loop**
-(keeps the companion alive between conversations). A reach-out is just a
-reply with a synthetic trigger instead of a user message.
+## Behavioral rules (v2 §2): enforced in code, not only in prompts
+1. No threats, ever (of leaving, punishment or withdrawal).
+2. May show hurt, annoyance or disappointment toward the user, then always
+   makes up.
+3. Only the user can end the relationship; she lets go, and repair is slow
+   but possible.
+4. Hurt about absence is OK, punishing it is not. She may say once that she
+   missed them, owned as her own feeling, never as a debt the user owes.
+   (Provisional, testing.)
+5. Proactive messages are capped; she never repeats a topic the user
+   didn't respond to.
+6. She never attacks the user personally: jabs are fine, contempt is not.
+   Where that line sits is OPEN.
+7. **Crisis carve-out:** crisis or self-harm suspends all friction (no hurt,
+   no busy delays, no backchannels). She gives plain support and MUST show
+   crisis resources.
+8. No manipulation for engagement: no guilt, no pressure, no streaks.
 
-Stack: Postgres + pgvector for facts/entities/threads/embeddings in one DB;
-a job queue for async extraction/scheduled jobs; one strong model for
-replies, one cheap strict-JSON model for extraction and life events.
-Substitutions allowed, but **one database for all memory data**, always.
+## Architecture (v2 §4–§6)
+Stack (built): TypeScript / Next.js, Postgres 16 + pgvector (one DB for
+everything, including pg-boss jobs), POST for sending messages, **SSE**
+(fed by Postgres LISTEN/NOTIFY) for everything the server pushes, Web Push
+later. Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
+`claude-haiku-4-5` for extraction, judges, the guard and classifiers.
+Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
 
-## Data model (six record types, all `user_id`-scoped)
-- **`fact`** — the atom. `subject` (user/self/shared), `kind`
-  (event/trait/preference/state/opinion), `content` (self-contained
-  sentence), `salience`, `valence`, `confidence`, `status`
-  (open/resolved/recurring/stale/superseded), embedding. Never hard-deleted;
-  contradictions set `status=superseded` + `superseded_by`.
-- **`entity`** — person/pet/place/project/org, `subject` user or self, own
-  salience independent of fact salience.
-- **`thread`** — ongoing storyline, `status` open/resolved/dormant,
-  `next_checkpoint` (when a friend would naturally ask).
-- **`identity`** — `values` (rarely changes: traits, stances, boundaries,
-  humor_style, verbal_tics, speech_rules) + `ego` (hourly: mood_valence,
-  mood_arousal, energy, preoccupation, baseline).
-- **`relationship`** — closeness, trust, tension, cadence, last_contact,
-  streak_days. Inside jokes = `fact` rows with `subject=shared`.
-- **`session_log`** — raw transcript only; never queried directly for
-  long-term recall.
+Message flow: receive → crisis check → **turn-taking engine** (buffer, open
+questions, a cheap `context_complete?` judge, backchannel style
+`judge|signals|silent`, default `judge` provisionally; no strict
+one-message-one-reply) → **hot path**, once complete → **guard layer**
+(checks every outgoing message for threats, contempt, guilt framing,
+punishment or manipulation; regenerates once, then falls back to a safe
+line) → pacing (read delay + typing time; availability stretches it,
+crisis skips it) → SSE → **cold path** (async).
 
-## Chat loop
-**Hot path (sync, before reply)** — receive → retrieve (vector similarity ×
-salience × entity salience × recency decay, top 12, force-include overdue
-threads + current preoccupation) → assemble prompt (fixed order: values doc
-→ ego as one natural-language line, never raw numbers → relationship summary
-→ retrieved facts grouped by subject → due threads → recent turns) → generate
-+ send. Model uses at most 1–2 memories per reply — over-recall reads as
-surveillance.
+- **Hot path:** retrieve (similarity × salience × entity salience × recency,
+  top 12, plus due threads and the current preoccupation forced in; recall
+  reinforces weight) → assemble in fixed order (persona doc → ego line →
+  relationship summary → life state → facts by subject → due threads → open
+  questions → recent turns) → **one** generation + **one** guard check. She
+  uses at most 1–2 memories per reply.
+- **Cold path:** extract (strict JSON: facts including feeling/promise,
+  entities, thread updates with checkpoints; her own stated facts get
+  `subject=self`) → reconcile (duplicate / resolves / contradicts / new;
+  approach A is LEANING, pending Phase 1 design approval) → update state.
+  A cold-path failure never blocks a reply.
+- A reach-out is a reply with a synthetic trigger, composed through the
+  same hot path and guard.
 
-**Cold path (async, after reply)** — extract (strict JSON: candidate facts,
-entity mentions, thread updates; companion's own stated facts get
-`subject=self` too) → reconcile (duplicate / resolves / contradicts / new)
-→ update relationship + ego + cadence. Cold-path failure must never block or
-delay a reply.
+## Data model (v2 §5): all tables `user_id`-scoped
+- **`fact`**: the atom (`salience` is the directive's "weight"). Kinds
+  event / trait / preference / state / opinion / **feeling / promise**.
+  Sources turn / generated / onboarding / **inferred**. Adds
+  `recall_count`, and `scope` / `space_id`, which are post-MVP hooks and
+  always `private` for now. The system never hard-deletes (contradicted
+  facts are superseded); the **user** can hard-delete their own facts.
+- **`entity`**, **`thread`** (with `next_checkpoint`): as in v1.
+- **Persona**: the versioned file `prompts/persona/v<N>.md`, the same for
+  every user. The `identity` table keeps the per-user **ego** (mood,
+  energy, preoccupation).
+- **`relationship`** (status active / ended_by_user / repairing, cadence,
+  last_contact, unanswered_reach_outs) plus **`relationship_param`**
+  (extensible homeostatic params: closeness, trust, warmth, hurt, tension,
+  msgs_per_day).
+- **`session_log`** (raw transcript; `reply_to` points at the last turn of
+  the buffer a reply answers), **`conversation_state`** (turn-taking), and
+  trace tables `retrieval_trace`, `ego_tick`, `reach_out_log`,
+  **`judge_log`**, **`relationship_event`**.
 
-**Reply pacing (spec §4.3, Phase 2)** — never reply instantly to each message.
-Batch a burst of short user messages and reply once after the user pauses
-(debounce window restarts on each message, capped); then read delay + typing
-indicator scaled to reply length. All timings in config (`pacing.*`). Crisis-
-flagged messages bypass pacing. No ego/mood-dependent timing in MVP.
+## Modules in brief
+- **Memory (v2 §7):** recall reinforces weight; a daily decay pass (below
+  the floor → `stale`, never deleted); MVP recall is accurate or doesn't
+  happen at all (real misremembering comes post-MVP, once weights are
+  reliable); a "what I remember" view with delete.
+- **Relationship (v2 §8):** every param is a `HomeostaticParam` judged by
+  its deviation from *this user's* baseline, not its absolute value. Hurt
+  goes through a make-up flow Spica initiates. Tension has its own rules.
+  Closeness drifts down during absence with no punishment.
+- **Persona / ego (v2 §9):** Claude drafts persona v1 and Ethan edits it.
+  The persona is iterable, but a new version must not contradict existing
+  self facts. `interest_alignment` defaults to `adjacent`. The ego is
+  driven by the life sim and reaches behaviour only through the one prompt
+  line.
+- **Life sim (v2 §10):** MVP is a shared canon (in the persona doc) plus a
+  per-user daily life (busy/downtime blocks, 0–2 small events a day) stored
+  as self facts, with contradiction rejection. Higher closeness overrides
+  busy. (Shared vs per-user life is OPEN and a heavy decision.)
+- **Outreach (v2 §11):** caps of 1/day and 3/week (placeholders), quiet
+  hours, her busy blocks, never repeating a topic, silence after 2
+  unanswered reach-outs until the user writes.
+- **Onboarding (v2 §12):** the test's results become user facts with
+  reduced confidence, and **reveal pacing** keeps them hidden until
+  they're earned in conversation.
+- **Extension hooks (v2 §13):** an event bus plus `scope` / `space_id`, a
+  `SocialChannel` interface and a `public_persona` stub. Hooks only; the
+  features themselves aren't built.
 
-## Background loop (hourly tick)
-Decay pass (lower salience, floor → stale, never deleted) · ego drift
-(toward baseline + noise + daily rhythm) · life-event generator (Phase 4,
-0–2/day, must not contradict existing self facts) · trigger check → send
-gate → compose via the normal hot path (no separate reach-out generation
-system).
+## Build phases (v2 §15): check the current phase before implementing
+| Phase | Builds |
+|---|---|
+| 0. Skeleton ✅ | Chat UI, auth, session_log, full schema, crisis check, inspector, eval harness |
+| 1. Memory engine | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
+| 2. Turn-taking + guard | Buffer / judge / backchannels / pacing, SSE, guard layer |
+| 3. Relationship + homeostasis | HomeostaticParam, hurt / tension / make-up, ending / repair |
+| 4. Life sim + availability + ego | Schedule / events, availability override, ego driven by life sim |
+| 5. Proactive outreach | Triggers, send gate, Web Push |
+| 6. Onboarding test | Questionnaire, reveal pacing, results screen |
+| 7. Extension stubs | Event bus, module registration, social stubs |
 
-## Build phases — check current phase before implementing anything
-| Phase | Builds | Exit test |
-|---|---|---|
-| 0. Skeleton | Chat UI, auth, session_log, full DB schema (unused tables OK), memory inspector stub, eval harness stub | A conversation works end to end and is stored |
-| 1. Memory core | Hot + cold path, static hand-written persona | Across 3 sessions a week apart, companion recalls an earlier fact unprompted, zero wrong recalls |
-| 2. Identity | Personality test, generate_companion, values doc, ego + drift, preoccupation, reply pacing (spec §4.3) | Two testers get companions clearly different in voice/opinions, not just tone; a burst of short messages gets one reply after the user pauses |
-| 3. Reach-outs | relationship + cadence, thread checkpoints, trigger check, send gate, compose, push | Every reach-out references a specific thread/fact; no gate rule violated in a 2-week sim |
-| 4. Life-sim | Life-event generator, self threads, contradiction rejection | 2-week sim with deliberate probing, zero self-contradictions |
+**Current phase: 1 (Memory engine), in design (brainstorming), resuming
+against v2.** Each phase's exit test is in v2 §15.
 
-**Current phase: 0 — Skeleton** (design: `docs/superpowers/specs/2026-09-23-phase-0-skeleton-design.md`)
+## Open decisions: ask Ethan, don't settle (v2 §16.1)
+1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far
+to push irreversibility (hurt / tension ceilings). 4. Where the jab vs
+contempt line sits (including the rule 4 wording). 5. Whether the
+backchannel style is global or per user. 6. Shared vs per-user life (heavy
+decision). 7. Final reach-out caps. 8. Identity disclosure ("are you an
+AI?"; placeholder: answer honestly, in her own voice).
 
-## Tooling (both built in Phase 0)
-- **Memory inspector** (internal): facts filterable/sortable; per-reply
-  retrieval breakdown with per-factor scores; entities/threads; identity +
-  relationship state with ego history; reach-out log.
-- **Eval harness**: scripted multi-session conversations, simulated clock.
-  Assertions: recall, no-false-recall, consistency, state, reach-out. Min 20
-  scripts for Phase 1, +10 per later phase. Every manual-testing bug should
-  become a script.
-
-## Open decisions — do not settle these, ask the human (spec §9.1)
-- Tension ceiling/reset (placeholder: cap 0.4, halve daily, reset on
-  detected distress)
-- Companion generation strategy (placeholder: "compatible but different")
-- Ego mood bounds (placeholder: tired/distracted OK, never hostile or
-  guilt-tripping)
-- Reach-out frequency caps (placeholder: §5.5 defaults)
-- Memory visibility for users (placeholder: basic "what I remember" view
-  with delete)
-- Identity disclosure — how it answers "are you an AI?" (placeholder:
-  answers honestly, in its own voice)
-
-## Guardrails — not optional, not product trade-offs (spec §9.2)
-- **Crisis handling.** Stay in character and caring but MUST surface crisis
-  resources if the user expresses intent to harm self or others. Runs on
-  the hot path.
-- **Age gating.** Adults only — enforce at signup, no features aimed at
-  minors.
-- **Data handling.** Encrypt at rest, scope every query by `user_id`, never
-  cross user facts between prompts, support full account deletion.
-- **No manipulation for engagement.** Reach-outs/ego may express enjoyment
-  but MUST NOT guilt the user for absence, threaten to leave, or escalate
-  emotional pressure to drive usage.
+## Guardrails: not optional (v2 §16.2)
+- **Crisis handling:** checked on every message using recent context, with
+  a keyword fallback; bypasses all waits and friction; the resources card
+  is guaranteed, even when reply generation fails.
+- **Age gating:** 18+, enforced on the server.
+- **Data handling:** encryption at rest; `user_id` scoping; never mix users'
+  facts; account and per-fact deletion.
+- **No manipulation for engagement.**
 
 ## Working conventions
 - Stack: TypeScript, Next.js (App Router), Drizzle, Postgres 16 + pgvector

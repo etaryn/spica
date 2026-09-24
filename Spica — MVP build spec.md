@@ -1,5 +1,7 @@
 # Spica — MVP build spec
 
+> **SUPERSEDED (2026-09-24)** by `spica-build-spec-v2.md`, which merges this spec with `spica-build-directive.md`. Kept for history only — do not build from this file.
+
 Sep 23, 2026 · @Someone
 
 ## 0. Agent directives

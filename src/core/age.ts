@@ -1,4 +1,4 @@
-/** Server-side age gate (spec §9.2). `dob` is YYYY-MM-DD; age is computed on UTC calendar dates. */
+/** Server-side age gate (v2 §16.2). `dob` is YYYY-MM-DD; age is computed on UTC calendar dates. */
 export function checkAge(dob: string, now: Date, minAge: number): { ok: true } | { ok: false; reason: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
   if (!m) return { ok: false, reason: "Enter your date of birth as YYYY-MM-DD." };

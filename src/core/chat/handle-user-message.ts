@@ -54,7 +54,7 @@ async function receive(deps: Deps, userId: string, input: UserMessageInput): Pro
 }
 
 /**
- * The hot path (spec §4.1). Every companion reply goes through here: the chat
+ * The hot path (v2 §6.2). Every companion reply goes through here: the chat
  * route, the eval harness and, from Phase 3, reach-outs.
  */
 export async function handleUserMessage(deps: Deps, userId: string, input: UserMessageInput): Promise<ReplyResult> {
@@ -132,7 +132,7 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
       config.queue.enqueue_timeout_ms,
     );
   } catch (e) {
-    // Never block or fail a reply on the cold path (spec §4.2). Unextracted turns are reprocessed.
+    // Never block or fail a reply on the cold path (v2 §6.3). Unextracted turns are reprocessed.
     log.error("cold_path enqueue failed", { userId, turnId: companion.id, error: String((e as Error)?.name ?? "Error") });
   }
 

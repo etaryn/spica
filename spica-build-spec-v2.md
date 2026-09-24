@@ -142,6 +142,7 @@ Changes and additions:
 - **`salience` is the directive's "weight".** The name stays `salience`, because it is canonical in the code.
 - `content` MUST be understandable on its own, without the conversation around it.
 - The system never hard-deletes a fact: a contradicted fact gets `status = superseded` and a `superseded_by` link. **The user can hard-delete** their own facts from the memory view (section 7.5). [DECIDED; Ethan 2026-09-24]
+- A partial index `fact_user_active_idx` on `(user_id)` where `status NOT IN ('superseded', 'stale')` speeds up retrieval's candidate query, which only ever reads active facts. [ADDED; Phase 1]
 
 ### 5.2 `entity`
 
@@ -501,6 +502,8 @@ The directive's worked traces are seed scripts. The minimum set is 20 scripts fo
 
 `baseline.json` stores a pass rate per script, and `--compare` flags any drop. When the simulated clock advances N days, the harness runs the decay pass N times. [DECIDED; Ethan 2026-09-24, Phase 1 design]
 
+**Phase 1 additions.** A script gains `mode` (`any`, the default, or `real`; a `real` script is reported `skipped`, never a regression, under `--llm=fake`). A session gains `forget` (a list of substrings; any of the user's remembered facts containing one is hard-deleted at the start of that session, exercising section 7.5's delete). The `recall` assertion gains `session` (which of the user's sessions, 1-indexed, to check). New `state` checks: `all_extracted`, `fact_status {contains, status}`, `thread_status {contains, status}`, `fact_count {contains?, status?, subject?}`, `entity_exists {name}`, `entity_count {type?, subject?}`, `fact_flag {contains?, flag}`, `prompt_mentions {marker}` (counts reply prompts containing `marker`, for isolation checks).
+
 ### 14.3 Guard tests [DECIDED; from the directive]
 
 Automated tests for every rule in section 2:
@@ -514,6 +517,14 @@ Automated tests for every rule in section 2:
 ### 14.4 Logging
 
 Every judge decision, guard decision and relationship-state change is logged (section 5.8), so behaviour can be debugged.
+
+### 14.5 Scheduled jobs (as built)
+
+Three pg-boss jobs, all scoped to the one Postgres instance:
+
+- **`cold_path`**: extraction → reconcile → apply for one exchange, run inside a transaction holding a per-user advisory lock. Retry policy from `cold_path.retry_limit` / `cold_path.retry_delay_seconds`.
+- **`cold_path_sweep`**: cron `cold_path.sweep_cron`; re-enqueues exchanges older than `cold_path.sweep_min_age_minutes` that are still unextracted, in batches of `cold_path.sweep_batch`, up to `cold_path.max_sweep_attempts` each.
+- **`decay_pass`**: cron `decay.cron`; the daily decay pass (section 6).
 
 ---
 

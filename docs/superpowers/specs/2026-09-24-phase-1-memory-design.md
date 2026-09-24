@@ -65,12 +65,17 @@ retrieval.recency_half_life_days  30
 retrieval.recall_bump             0.03
 retrieval.recall_cap              0.95
 retrieval.embed_timeout_ms        2000
+retrieval.context_turns           2
+retrieval.max_due_threads         5
 extraction.context_turns          6
 extraction.max_candidates         12
 extraction.open_threads_in_prompt 20
+extraction.new_entity_salience    0.5
+extraction.entity_bump            0.05
 reconcile.neighbor_k              5
 reconcile.near_match_similarity   0.82
 reconcile.duplicate_bump          0.05
+reconcile.max_tokens              256
 decay.cron                        "0 4 * * *"   (UTC)
 decay.grace_days                  3
 decay.rate                        0.08
@@ -79,8 +84,15 @@ decay.dormant_after_days          14
 cold_path.retry_limit             3
 cold_path.retry_delay_seconds     30
 cold_path.max_sweep_attempts      3
+cold_path.sweep_cron              "30 4 * * *"   (UTC)
+cold_path.sweep_min_age_minutes   10
+cold_path.sweep_batch             500
+chat.gap_line_min_hours           24
 models.extract                    claude-haiku-4-5
+models.extract_max_tokens         2048
 models.judge                      claude-sonnet-5     (evals only)
+models.judge_max_tokens           1024
+models.structured_timeout_ms      30000
 prompts.persona                   v1
 prompts.reply                     v2
 prompts.extract                   v1

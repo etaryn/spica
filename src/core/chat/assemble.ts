@@ -43,7 +43,7 @@ function factList(title: string, facts: RetrievedFact[], now: Date): string | nu
   return `### ${title}\n${facts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})`).join("\n")}`;
 }
 
-/** Fixed slot order from spec §4.1 step 3. Empty slots are skipped. */
+/** Fixed slot order from v2 §6.2 step 2. Empty slots are skipped. */
 export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
   const { retrieval, now } = input;
   const memory = [

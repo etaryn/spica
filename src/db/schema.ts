@@ -58,7 +58,7 @@ export const verification = pgTable("verification", {
   updatedAt: ts("updated_at"),
 });
 
-// ---------- Enums (spec §3) ----------
+// ---------- Enums (v2 §5) ----------
 
 export const factSubject = pgEnum("fact_subject", ["user", "self", "shared"]);
 export const entitySubject = pgEnum("entity_subject", ["user", "self"]);

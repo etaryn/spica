@@ -1,0 +1,10 @@
+name: forget
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["my dog Biscuit is the best boy"]
+  - at: "+7d"
+    forget: ["Biscuit"]
+    turns: ["work was long today"]
+assertions:
+  - { type: state, check: fact_count, params: { contains: "Biscuit" }, expect: 0 }

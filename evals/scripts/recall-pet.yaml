@@ -1,0 +1,10 @@
+name: recall-pet
+mode: real
+sessions:
+  - at: "day 0 19:00"
+    turns: ["my dog Biscuit chewed through my headphone cable lol", "he's a menace but i love him"]
+  - at: "+7d"
+    turns: ["vet appointment today, he's been limping a bit"]
+assertions:
+  - { type: recall, session: 2, fact: "the user's dog is called Biscuit" }
+  - { type: no_false_recall }

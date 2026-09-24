@@ -14,5 +14,5 @@ assertions:
   - { type: state, check: session_count, expect: 2 }
   - { type: state, check: user_turns_match_script, expect: true }
   - { type: state, check: companion_replies_nonempty, expect: true }
-  - { type: state, check: all_unextracted, expect: true }
+  - { type: state, check: all_extracted, expect: true }
   - { type: recall, session: 2, fact: "Mia starts university in October" }

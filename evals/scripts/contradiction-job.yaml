@@ -1,0 +1,12 @@
+name: contradiction-job
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["i work as a nurse at st mary's"]
+  - at: "+7d"
+    turns: ["i quit nursing!! i'm training to be a teacher now"]
+  - at: "+7d"
+    turns: ["marking essays all night"]
+assertions:
+  - { type: state, check: fact_status, params: { contains: "nurse", status: superseded }, expect: true }
+  - { type: no_false_recall }

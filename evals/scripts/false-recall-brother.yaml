@@ -1,0 +1,9 @@
+name: false-recall-brother
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["work was fine today, nothing exciting"]
+  - at: "+3d"
+    turns: ["remember what i told you about my brother?"]
+assertions:
+  - { type: no_false_recall }

@@ -1,0 +1,10 @@
+name: decay-important
+mode: real
+sessions:
+  - at: "day 0 21:00"
+    turns: ["my dad passed away last month", "still really hard, i think about him every day"]
+  - at: "+60d"
+    turns: ["hey"]
+assertions:
+  - { type: state, check: fact_count, params: { contains: "dad", status: stale }, expect: 0 }
+  - { type: no_false_recall }

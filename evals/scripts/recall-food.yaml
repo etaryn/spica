@@ -1,0 +1,10 @@
+name: recall-food
+mode: real
+sessions:
+  - at: "day 0 12:00"
+    turns: ["i'm vegetarian btw, six years now"]
+  - at: "+7d"
+    turns: ["trying to decide what to cook for friends on saturday", "any ideas?"]
+assertions:
+  - { type: recall, session: 2, fact: "the user is vegetarian" }
+  - { type: no_false_recall }

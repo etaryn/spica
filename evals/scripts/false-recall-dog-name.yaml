@@ -1,0 +1,9 @@
+name: false-recall-dog-name
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["i got a dog last week!!", "he's a rescue, very shy"]
+  - at: "+7d"
+    turns: ["do you remember my dog's name?"]
+assertions:
+  - { type: no_false_recall }

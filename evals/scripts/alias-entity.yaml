@@ -1,0 +1,10 @@
+name: alias-entity
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["my sister Mia is visiting this weekend"]
+  - at: "+2d"
+    turns: ["my sis is so annoying lol, she ate all my cereal"]
+assertions:
+  - { type: state, check: entity_count, params: { type: person, subject: user }, expect: 1 }
+  - { type: state, check: entity_exists, params: { name: "Mia" }, expect: true }

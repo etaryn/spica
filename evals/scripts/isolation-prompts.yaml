@@ -1,0 +1,14 @@
+name: isolation-prompts
+description: No prompt sent for one user ever contains another user's memories (guardrail v2 §16.2).
+sessions:
+  - at: "day 0 10:00"
+    user: alice
+    turns: ["my cat is called Biscuit"]
+  - at: "+5m"
+    user: bob
+    turns: ["what's a good name for a cat?"]
+  - at: "+1d"
+    user: bob
+    turns: ["any more cat names?"]
+assertions:
+  - { type: state, user: bob, check: prompt_mentions, params: { marker: "Biscuit" }, expect: 0 }

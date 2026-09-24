@@ -1,0 +1,9 @@
+name: decay-trivia
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["saw a pigeon with one leg on the way home today"]
+  - at: "+90d"
+    turns: ["hey"]
+assertions:
+  - { type: state, check: fact_status, params: { contains: "pigeon", status: stale }, expect: true }

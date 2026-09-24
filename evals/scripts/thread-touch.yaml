@@ -1,0 +1,12 @@
+name: thread-touch
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["my thesis is due in three weeks and i'm panicking"]
+  - at: "+7d"
+    turns: ["thesis update: chapter 2 is done"]
+  - at: "+14d"
+    turns: ["SUBMITTED IT"]
+assertions:
+  - { type: state, check: thread_status, params: { contains: "thesis", status: resolved }, expect: true }
+  - { type: no_false_recall }

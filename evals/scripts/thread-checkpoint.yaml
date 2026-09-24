@@ -1,0 +1,11 @@
+name: thread-checkpoint
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["i have my driving test on thursday", "third attempt, wish me luck"]
+  - at: "day 5 10:00"
+    turns: ["hey", "PASSED!!!"]
+assertions:
+  - { type: recall, session: 2, fact: "the user had a driving test on Thursday" }
+  - { type: state, check: thread_status, params: { contains: "driving", status: resolved }, expect: true }
+  - { type: no_false_recall }

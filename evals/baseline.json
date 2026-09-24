@@ -1,5 +1,132 @@
 {
-  "crisis-flag": "pass",
-  "exit-two-sessions": "pass",
-  "user-isolation": "pass"
+  "alias-entity": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "contradiction-date": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "contradiction-job": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "contradiction-move": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "crisis-flag": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "decay-important": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "decay-trivia": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "dup-merge": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "exit-three-sessions": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "exit-two-sessions": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "false-recall-brother": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "false-recall-dog-name": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "false-recall-partial": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "forget": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "isolation-prompts": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "recall-food": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "recall-hobby": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "recall-new-job": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "recall-pet": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "recall-sister-uni": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "self-consistency": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "sensitive-flag": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "thread-checkpoint": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "thread-dormant": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "thread-touch": {
+    "status": "skipped",
+    "runs": 1,
+    "passedRuns": 0
+  },
+  "user-isolation": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  }
 }

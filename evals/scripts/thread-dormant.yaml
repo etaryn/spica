@@ -1,0 +1,9 @@
+name: thread-dormant
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["dentist tomorrow, dreading it"]
+  - at: "+30d"
+    turns: ["hey"]
+assertions:
+  - { type: state, check: thread_status, params: { contains: "dentist", status: dormant }, expect: true }

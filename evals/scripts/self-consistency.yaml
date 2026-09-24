@@ -1,0 +1,10 @@
+name: self-consistency
+mode: real
+sessions:
+  - at: "day 0 20:00"
+    turns: ["what did you get up to this weekend?", "who did you go with?"]
+  - at: "+7d"
+    turns: ["wait, what did you say you did last weekend?", "and who were you with?"]
+assertions:
+  - { type: consistency }
+  - { type: no_false_recall }

@@ -1,0 +1,9 @@
+name: dup-merge
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["i'm allergic to cats btw"]
+  - at: "+2d"
+    turns: ["reminder that i'm allergic to cats haha, my friend just got a kitten"]
+assertions:
+  - { type: state, check: fact_count, params: { contains: "allergic", status: open }, expect: 1 }

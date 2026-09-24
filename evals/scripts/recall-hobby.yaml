@@ -1,0 +1,10 @@
+name: recall-hobby
+mode: real
+sessions:
+  - at: "day 0 21:00"
+    turns: ["been getting into bouldering", "finally sent a v3 today!!"]
+  - at: "+10d"
+    turns: ["my forearms are absolutely destroyed"]
+assertions:
+  - { type: recall, session: 2, fact: "the user goes bouldering" }
+  - { type: no_false_recall }

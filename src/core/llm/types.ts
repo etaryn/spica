@@ -8,7 +8,13 @@ export interface ReplyRequest {
   messages: ChatMessage[];
 }
 
+/** Which configured model a structured call uses (config `models.<role>`). */
+export type StructuredModel = "cheap" | "extract" | "judge";
+
 export interface ClassifyRequest<T> {
+  /** What the call is for ("crisis", "extract", "reconcile", "judge_recall", …); fakes route on it. */
+  purpose: string;
+  model?: StructuredModel;
   system: string;
   input: string;
   schema: z.ZodType<T>;

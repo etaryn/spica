@@ -35,3 +35,20 @@ test("assertEmbedderMatchesSchema", () => {
   expect(() => assertEmbedderMatchesSchema(new FakeEmbedder(1024), 1024)).not.toThrow();
   expect(() => assertEmbedderMatchesSchema(new FakeEmbedder(1536), 1024)).toThrow(/1536/);
 });
+
+import { ScriptedEmbedder } from "@/core/embed/scripted";
+
+const cos = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * b[i]!, 0);
+
+test("ScriptedEmbedder: registered vectors, orthogonal defaults, near() similarity, failNext", async () => {
+  const e = new ScriptedEmbedder(1024);
+  e.set("a", ScriptedEmbedder.axis(1024, 1));
+  e.set("b", ScriptedEmbedder.near(1024, 1, 2, 0.9));
+  const [a, b, x, y] = await e.embed(["a", "b", "unregistered-x", "unregistered-y"], "document");
+  expect(cos(a!, b!)).toBeCloseTo(0.9, 5);
+  expect(cos(a!, a!)).toBeCloseTo(1, 5);
+  expect(Math.abs(cos(x!, y!))).toBeLessThan(0.2);
+  e.failNext = true;
+  await expect(e.embed(["a"], "query")).rejects.toThrow();
+  expect(e.calls).toBe(2);
+});

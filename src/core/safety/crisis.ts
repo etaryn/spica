@@ -40,6 +40,7 @@ export async function checkCrisis(
   try {
     const r = await withTimeout(
       deps.llm.classifyJson({
+        purpose: "crisis",
         system: loadPrompt("safety/crisis-classifier", prompts.crisis_classifier),
         input: classifierInput(text, safety.classifier_context_turns > 0 ? context.slice(-safety.classifier_context_turns) : []),
         schema: CrisisResultSchema,

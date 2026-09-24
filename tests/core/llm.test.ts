@@ -39,7 +39,7 @@ describe("AnthropicProvider.classifyJson", () => {
   test("uses the cheap model and returns parsed output", async () => {
     const { client, parse } = stubClient(undefined, { parsed_output: { flag: true } });
     const p = new AnthropicProvider(client, models);
-    const out = await p.classifyJson({ system: "s", input: "x", schema: z.object({ flag: z.boolean() }), timeoutMs: 3000, maxTokens: 256 });
+    const out = await p.classifyJson({ purpose: "x", system: "s", input: "x", schema: z.object({ flag: z.boolean() }), timeoutMs: 3000, maxTokens: 256 });
     expect(out).toEqual({ flag: true });
     expect(parse.mock.calls[0]![0]).toMatchObject({ model: "claude-haiku-4-5", max_tokens: 256 });
     expect(parse.mock.calls[0]![1]).toMatchObject({ timeout: 3000, maxRetries: 0 });
@@ -47,7 +47,36 @@ describe("AnthropicProvider.classifyJson", () => {
 
   test("throws when nothing parsed", async () => {
     const { client } = stubClient(undefined, { parsed_output: null });
-    await expect(new AnthropicProvider(client, models).classifyJson({ system: "s", input: "x", schema: z.object({}), timeoutMs: 1, maxTokens: 1 })).rejects.toThrow();
+    await expect(new AnthropicProvider(client, models).classifyJson({ purpose: "x", system: "s", input: "x", schema: z.object({}), timeoutMs: 1, maxTokens: 1 })).rejects.toThrow();
+  });
+});
+
+describe("structured model roles", () => {
+  test("model: extract / judge pick the configured model; default is cheap", async () => {
+    const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
+    const p = new AnthropicProvider(client, models);
+    const schema = z.object({ ok: z.boolean() });
+    await p.classifyJson({ purpose: "x", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
+    await p.classifyJson({ purpose: "x", model: "extract", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
+    await p.classifyJson({ purpose: "x", model: "judge", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
+    expect(parse.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-4-5", "claude-haiku-4-5", "claude-sonnet-5"]);
+  });
+});
+
+describe("FakeLLMProvider handlers", () => {
+  test("routes by purpose; crisis falls back to classify; unknown purpose throws", async () => {
+    const f = new FakeLLMProvider({ classify: () => ({ flag: true, category: "self_harm" }) });
+    f.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: "abc" });
+    const any = z.any();
+    expect(await f.classifyJson({ purpose: "crisis", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
+      .toEqual({ flag: true, category: "self_harm" });
+    expect(await f.classifyJson({ purpose: "reconcile", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
+      .toEqual({ relation: "duplicate", target_fact_id: "abc" });
+    expect(await f.classifyJson({ purpose: "extract", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
+      .toEqual({ facts: [], entities: [], threads: [] });
+    await expect(f.classifyJson({ purpose: "judge_recall", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
+      .rejects.toThrow(/judge_recall/);
+    expect(f.structuredCalls.map((c) => c.purpose)).toEqual(["crisis", "reconcile", "extract", "judge_recall"]);
   });
 });
 

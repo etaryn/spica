@@ -23,10 +23,11 @@ export class AnthropicProvider implements LLMProvider {
     return text;
   }
 
-  async classifyJson<T>({ system, input, schema, timeoutMs, maxTokens }: ClassifyRequest<T>): Promise<T> {
+  async classifyJson<T>({ system, input, schema, timeoutMs, maxTokens, model = "cheap" }: ClassifyRequest<T>): Promise<T> {
+    const modelId = { cheap: this.models.cheap, extract: this.models.extract, judge: this.models.judge }[model];
     const res = await this.client.messages.parse(
       {
-        model: this.models.cheap,
+        model: modelId,
         max_tokens: maxTokens,
         system,
         messages: [{ role: "user", content: input }],

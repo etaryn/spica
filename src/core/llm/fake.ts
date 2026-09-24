@@ -2,15 +2,23 @@ import type { ClassifyRequest, LLMProvider, ReplyRequest } from "./types";
 
 export { keywordClassifier } from "../safety/keywords";
 
+type Handler = (input: string) => unknown | Promise<unknown>;
+
 /** Deterministic provider for tests and `pnpm eval --llm=fake`. */
 export class FakeLLMProvider implements LLMProvider {
   replies: string[] = [];
   calls: ReplyRequest[] = [];
+  structuredCalls: { purpose: string; input: string }[] = [];
   failReplies = 0;
   replyDelayMs = 0;
-  classify: (input: string) => unknown | Promise<unknown> = () => ({ flag: false, category: "none" });
+  classify: Handler = () => ({ flag: false, category: "none" });
+  /** Structured-call handlers by purpose. Defaults keep the cold path a no-op in fake mode. */
+  handlers: Record<string, Handler> = {
+    extract: () => ({ facts: [], entities: [], threads: [] }),
+    reconcile: () => ({ relation: "new", target_fact_id: null }),
+  };
 
-  constructor(opts: { classify?: (input: string) => unknown | Promise<unknown> } = {}) {
+  constructor(opts: { classify?: Handler } = {}) {
     if (opts.classify) this.classify = opts.classify;
   }
 
@@ -25,7 +33,10 @@ export class FakeLLMProvider implements LLMProvider {
     return this.replies.shift() ?? `(fake reply to: ${last?.content ?? ""})`;
   }
 
-  async classifyJson<T>({ input, schema }: ClassifyRequest<T>): Promise<T> {
-    return schema.parse(await this.classify(input));
+  async classifyJson<T>({ purpose, input, schema }: ClassifyRequest<T>): Promise<T> {
+    this.structuredCalls.push({ purpose, input });
+    const handler = this.handlers[purpose] ?? (purpose === "crisis" ? this.classify : undefined);
+    if (!handler) throw new Error(`FakeLLMProvider: no handler for purpose "${purpose}"`);
+    return schema.parse(await handler(input));
   }
 }

@@ -86,7 +86,8 @@ crisis skips it) → SSE → **cold path** (async).
 - **Cold path:** extract (strict JSON: facts including feeling/promise,
   entities, thread updates with checkpoints; her own stated facts get
   `subject=self`) → reconcile (duplicate / resolves / contradicts / new;
-  approach A is LEANING, pending Phase 1 design approval) → update state.
+  approach A, DECIDED) → update state (incl. recall write-back: the hot
+  path is read-only).
   A cold-path failure never blocks a reply.
 - A reach-out is a reply with a synthetic trigger, composed through the
   same hot path and guard.
@@ -151,8 +152,9 @@ crisis skips it) → SSE → **cold path** (async).
 | 6. Onboarding test | Questionnaire, reveal pacing, results screen |
 | 7. Extension stubs | Event bus, module registration, social stubs |
 
-**Current phase: 1 (Memory engine), in design (brainstorming), resuming
-against v2.** Each phase's exit test is in v2 §15.
+**Current phase: 1 (Memory engine). Design written:
+`docs/superpowers/specs/2026-09-24-phase-1-memory-design.md` (awaiting
+review).** Each phase's exit test is in v2 §15.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
 1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far

@@ -136,6 +136,8 @@ Changes and additions:
 - `kind` gains **`feeling`** and **`promise`**, giving `event|trait|preference|state|opinion|feeling|promise`. [DECIDED; from the directive]
 - `source` gains **`inferred`**, giving `turn|generated|onboarding|inferred`. The directive's names map as chat → `turn`, test → `onboarding`, life_sim → `generated`, inferred → `inferred`.
 - New field `recall_count int` (default 0). It is incremented every time the fact is included in a reply prompt. [DECIDED; from the directive]
+- `payload.sensitive = true` on facts extracted from crisis-flagged exchanges. Later phases (outreach, reveal pacing) MUST treat these facts with care. For example, a sensitive fact never opens a reach-out. [ADDED; Phase 1]
+- The `user` table gains `timezone` (an IANA name, captured from the browser with each message; UTC if unknown). It is used to resolve relative dates, and later for quiet hours. [ADDED; Phase 1]
 - New fields `scope` (`private|group`, default `private`) and `space_id uuid null`. They are reserved for the post-MVP friend group, never read by MVP logic, and every query filters `scope = 'private'`. [DECIDED hook; from the directive]
 - **`salience` is the directive's "weight".** The name stays `salience`, because it is canonical in the code.
 - `content` MUST be understandable on its own, without the conversation around it.
@@ -172,7 +174,7 @@ MVP parameter names: `closeness`, `trust`, `warmth`, `hurt`, `tension`, and the 
 
 ### 5.6 `session_log`
 
-Unchanged from v1 (including `safety_flag` and `reply_to`), plus the `trigger` column, which gains **`backchannel`** and **`availability`**:
+Unchanged from v1 (including `safety_flag` and `reply_to`), plus `extract_attempts int` (cold-path sweep attempts, counted on the companion turn; Phase 1). The `trigger` column also gains **`backchannel`** and **`availability`**:
 - `backchannel` is a small "I'm here" reaction.
 - `availability` is a "busy, later?" message.
 
@@ -242,7 +244,7 @@ Seed test traces (from the directive): the "insane day → promotion" story and 
    - Take the top N = 12.
    - Force-include every open thread whose `next_checkpoint` has passed, plus the current `preoccupation`.
    - Onboarding facts are gated by reveal pacing (section 12).
-   - Update `last_recalled_at` and `recall_count`, and reinforce `salience` on the facts included (section 7.2). This is a narrow write to fact metadata and is allowed on the hot path; it creates no new memory. [ADDED clarification]
+   - **The hot path is read-only.** The IDs of the facts it included, with their factor scores, go into the `cold_path` job payload. The cold path then writes `retrieval_trace` and applies recall reinforcement: `last_recalled_at`, `recall_count + 1`, and a capped `salience` bump (section 7.2). [DECIDED; Ethan 2026-09-24, Phase 1 design]
 2. **Assemble** the prompt in this fixed order:
    1. the persona document
    2. ego as one natural-language line (never raw numbers)
@@ -266,7 +268,7 @@ The hot path contains **one generation call plus one guard check** (plus at most
    - candidate facts (including `feeling` and `promise`, and facts about Spica that she stated in her own reply, with `subject = self`)
    - entity mentions
    - thread updates: opened, touched, resolved, and a new `next_checkpoint`
-2. **Reconcile.** [LEANING: approach A, proposed 2026-09-24, with design approval still pending in the Phase 1 design]
+2. **Reconcile.** [DECIDED: approach A; Ethan 2026-09-24, Phase 1 design]
    - Embed each candidate and find near-duplicates: same subject, similarity above a threshold.
    - If there are none, the candidate is **new** and is inserted without another LLM call.
    - Otherwise one small classification call picks one of:
@@ -491,6 +493,14 @@ Assertion types:
 
 The directive's worked traces are seed scripts. The minimum set is 20 scripts for Phase 1 and +10 per later phase, and every bug found in manual testing becomes a script.
 
+**Two modes.** `--llm=fake` is a deterministic check of the mechanics; judged assertions report as skipped. `--llm=real` is the gate for memory quality, and any change to prompts, scoring or reconciliation needs it.
+
+**Repeated runs.** With `--runs N` (default 3 for real models), assertions are graded across runs:
+- `recall` passes on a majority of runs
+- `no_false_recall`, `consistency` and `state` must pass every run
+
+`baseline.json` stores a pass rate per script, and `--compare` flags any drop. When the simulated clock advances N days, the harness runs the decay pass N times. [DECIDED; Ethan 2026-09-24, Phase 1 design]
+
 ### 14.3 Guard tests [DECIDED; from the directive]
 
 Automated tests for every rule in section 2:
@@ -514,7 +524,7 @@ Each phase MUST pass its exit test before the next one starts.
 | Phase | Builds | Exit test |
 | --- | --- | --- |
 | **0. Skeleton** ✅ done 2026-09-23 | Chat UI, auth (18+), `session_log`, full schema, crisis check, inspector, eval harness | A conversation works end to end and is stored |
-| **1. Memory engine** | Extraction, reconciliation, weighted retrieval, recall reinforcement, decay pass, threads + checkpoints, "what I remember" view, schema additions (section 5.1), **Spica persona doc v1** (section 9.1) | Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact the user didn't repeat, with zero wrong recalls; low-weight facts fade to `stale` in a decay test |
+| **1. Memory engine** | Extraction, reconciliation, weighted retrieval, recall reinforcement, decay pass, threads + checkpoints, "what I remember" view, schema additions (section 5.1, including `timezone` and the `sensitive` flag), cold-path sweep, **Spica persona doc v1** (section 9.1). Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md` | Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact the user didn't repeat, with zero wrong recalls; low-weight facts fade to `stale` in a decay test |
 | **2. Turn-taking + guard** | Buffer / open questions / judge / backchannels, pacing, SSE channel, `conversation_state`, guard layer, `judge_log` | Both directive traces pass as scripts; a burst of short messages gets one reply after the pause; guard tests for rules 1, 6 and 8 pass |
 | **3. Relationship + homeostasis** | `HomeostaticParam`, `relationship_param`, `relationship_event`, cadence, hurt/tension/make-up flow, ending/repair | The frequency trace (section 8) holds; guard tests for rules 1–6 pass |
 | **4. Life sim + availability + ego** | Schedule and events generator with contradiction rejection, availability and closeness override, ego tick driven by the life sim | Over a 2-week simulated run with deliberate probing, zero self-contradictions; busy blocks slow replies unless closeness is high |
@@ -598,5 +608,10 @@ Each phase MUST pass its exit test before the next one starts.
 | B1 | Decay pass | Unassigned | "decay" in memory step | **Phase 1** (Ethan) |
 | B2 | Thread checkpoints | Listed under Phase 3 but used by the hot path | — | **Phase 1** (Ethan) |
 | B3 | Memory visibility (v1 open decision) | Placeholder view + delete | — | **Decided: view + hard delete, Phase 1** (Ethan) |
+| B4 | Extract / reconcile structure | Two steps (§4.2) | — | **Approach A**: extract, then classify only near-matches (Ethan, Phase 1 design) |
+| B5 | Recall write-back | On the hot path | — | **Moved to the cold path**; the hot path is read-only (Ethan, Phase 1 design) |
+| B6 | Time zone | — | — | **`user.timezone`** from the browser [ADDED] |
+| B7 | Crisis-derived facts | — | — | **`payload.sensitive`** flag [ADDED] |
+| B8 | Eval gating | Single run | — | **`--runs 3`**, majority for recall, all runs for false recall / consistency (Ethan, Phase 1 design) |
 
 Superseded sources: `Spica — MVP build spec.md` (v1) and `spica-build-directive.md` remain in the repo for history only.

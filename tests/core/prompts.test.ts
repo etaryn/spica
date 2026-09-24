@@ -2,12 +2,16 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { loadPrompt } from "@/core/prompts";
 
-test("loads the configured reply and classifier prompts", () => {
+test("loads persona, reply rules, extraction, reconcile and crisis prompts", () => {
   const c = loadConfig();
+  expect(loadPrompt("persona", c.prompts.persona)).toMatch(/You are Spica/);
   const reply = loadPrompt("reply", c.prompts.reply);
-  expect(reply).toMatch(/at most one or two/i); // memory-use rule (spec §4.1 step 3)
-  expect(reply).toMatch(/crisis|988|emergency/i); // crisis instruction
-  expect(reply).toMatch(/AI/); // identity disclosure placeholder
+  expect(reply).toMatch(/at most one or two/i);
+  expect(reply).toMatch(/crisis|988|emergency/i);
+  expect(reply).toMatch(/AI/);
+  expect(reply).toMatch(/never claim to remember/i);
+  expect(loadPrompt("extract", c.prompts.extract)).toMatch(/subject/);
+  expect(loadPrompt("reconcile", c.prompts.reconcile)).toMatch(/contradicts/);
   expect(loadPrompt("safety/crisis-classifier", c.prompts.crisis_classifier)).toMatch(/self_harm/);
 });
 

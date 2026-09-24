@@ -89,7 +89,7 @@
     "min_password_length": 10
   },
   "prompts": {
-    "reply": "v1",
+    "reply": "v2",
     "crisis_classifier": "v2",
     "persona": "v1",
     "extract": "v1",

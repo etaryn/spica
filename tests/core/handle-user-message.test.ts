@@ -40,7 +40,7 @@ describe("handleUserMessage", () => {
     deps.clock.advance(60_000);
     await handleUserMessage(deps, u, msg("second"));
     const call = deps.llm.calls[1]!;
-    expect(call.system).toMatch(/close friend/);
+    expect(call.system).toMatch(/at most one or two/i);
     expect(call.messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
     expect(call.messages.at(-1)!.content).toBe("second");
   });

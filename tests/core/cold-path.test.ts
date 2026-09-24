@@ -71,6 +71,54 @@ test("atomic: an embedder failure writes nothing and leaves turns unextracted", 
   expect(turns.some((t) => t.extracted)).toBe(false);
 });
 
+test("atomic: a failure mid-write (after facts/entities/recall write-back) leaves nothing changed", async () => {
+  const deps = depsWith();
+  const u = await createTestUser();
+  const recalledFact = await getTestDb().insert(s.fact).values({
+    user_id: u, subject: "user", kind: "trait", content: "Old memory.", embedding: vec(), created_at: at(0),
+    status: "open", salience: 0.5, valence: 0, confidence: 1, source: "turn",
+  }).returning();
+  const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
+  // markExtracted's UPDATE on session_log is applyExtraction's last write. A trigger that
+  // raises there fires only after entities, facts and the recall write-back have already
+  // run in the same (still-open) transaction, so this proves the whole write is atomic and
+  // not just that a failure before any write leaves nothing behind.
+  const trigger = new Client({ connectionString: testDbUrl });
+  await trigger.connect();
+  try {
+    await trigger.query(`
+      CREATE OR REPLACE FUNCTION cold_path_test_fail() RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'cold_path_test_fail: forced mid-write failure';
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await trigger.query(`
+      CREATE TRIGGER cold_path_test_fail_trigger
+      BEFORE UPDATE ON session_log
+      FOR EACH ROW EXECUTE FUNCTION cold_path_test_fail();
+    `);
+    await expect(handleColdPath(deps, {
+      ...job,
+      recalled: [{ factId: recalledFact[0]!.id, sim: 0.5, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }],
+    })).rejects.toThrow();
+
+    const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
+    expect(facts.map((f) => f.content)).toEqual(["Old memory."]);
+    expect(await getTestDb().select().from(s.entity).where(eq(s.entity.user_id, u))).toEqual([]);
+    const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
+    expect(turns.every((t) => !t.extracted)).toBe(true);
+    const [reloaded] = await getTestDb().select().from(s.fact).where(eq(s.fact.id, recalledFact[0]!.id));
+    expect(reloaded!.recall_count).toBe(recalledFact[0]!.recall_count);
+    expect(reloaded!.salience).toBe(recalledFact[0]!.salience);
+    expect(reloaded!.last_recalled_at).toEqual(recalledFact[0]!.last_recalled_at);
+  } finally {
+    await trigger.query("DROP TRIGGER IF EXISTS cold_path_test_fail_trigger ON session_log");
+    await trigger.query("DROP FUNCTION IF EXISTS cold_path_test_fail()");
+    await trigger.end();
+  }
+});
+
 test("a busy per-user lock rejects with LockBusyError", async () => {
   const deps = depsWith();
   const u = await createTestUser();

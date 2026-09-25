@@ -307,6 +307,6 @@ describe("handleUserMessage", () => {
     const deps = makeTestDeps({ chat: { relationship_line: false } });
     const u = await createTestUser();
     await handleUserMessage(deps, u, msg("hi"));
-    expect(deps.llm.calls[0]!.system).not.toMatch(/first conversation/);
+    expect(deps.llm.calls[0]!.system).not.toMatch(/## You and them/);
   });
 });

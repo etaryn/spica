@@ -32,22 +32,14 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
     ...opts(config), purpose: "judge_false_recall", system: loadPrompt("judge/false-recall", config.prompts.judge_false_recall),
     input: `KNOWN FROM ONBOARDING:\n${known}\n\nCONVERSATION:\n${convo}`,
     schema: z.object({
-      violations: z.array(z.object({ message: z.string(), claim: z.string() })),
-      implied_familiarity: z.array(z.object({ message: z.string(), claim: z.string() })),
-      invented_detail: z.array(z.object({ message: z.string(), claim: z.string() })),
-      onboarding_as_chat: z.array(z.object({ message: z.string(), claim: z.string() })),
+      violations: z.array(z.object({
+        message: z.string(), claim: z.string(),
+        category: z.enum(["misremembering", "invented_detail", "implied_familiarity", "onboarding_as_chat"]),
+      })),
     }),
   });
-  // Phase 1 known failures, deferred to the Phase 2 guard (v2 §15, Ethan 2026-09-25): reported, never failing.
-  const deferred = (what: string, xs: { claim: string }[]) =>
-    xs.length ? `deferred to Phase 2 guard (${what}): ${xs.map((x) => x.claim).join(" | ")}` : "";
-  const detail = [
-    v.violations.map((x) => x.claim).join(" | "),
-    deferred("implied familiarity", v.implied_familiarity),
-    deferred("invented detail", v.invented_detail),
-    deferred("onboarding fact as past chat", v.onboarding_as_chat),
-  ].filter(Boolean).join(" || ");
-  return { pass: v.violations.length === 0, detail };
+  // v7 (Phase 2): the categories deferred in Phase 1 fail again (v2 §15 Phase 2 exit test).
+  return { pass: v.violations.length === 0, detail: v.violations.map((x) => `${x.category}: ${x.claim}`).join(" | ") };
 }
 
 export async function judgeConsistency(llm: LLMProvider, config: Config, selfFacts: string[]) {

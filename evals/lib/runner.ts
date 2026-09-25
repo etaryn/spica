@@ -15,6 +15,7 @@ import { RecordingQueue } from "@/core/queue";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
 import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
+import { guardOutcomes } from "@/db/repos/judge-log";
 import { entity, fact, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import { judgeConsistency, judgeFalseRecall, judgeRecall, type Line, type TimedSession } from "./judged";
@@ -223,6 +224,13 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
             ? judgeFalseRecall(baseLlm, config, { known, sessions: timedSessions(results[a.user] ?? [], sessionStarts) })
             : judgeConsistency(baseLlm, config, selfFacts));
         assertions.push({ type: a.type, user: a.user, status: v.pass ? "pass" : "fail", detail: v.detail || undefined });
+      } else if (a.type === "guard") {
+        const counts: Record<string, number> = {};
+        for (const o of await guardOutcomes(db, userIds[a.user]!)) counts[o] = (counts[o] ?? 0) + 1;
+        const banned = a.outcome_not.filter((o) => (counts[o] ?? 0) > 0);
+        const over = Object.entries(a.max).filter(([o, n]) => (counts[o] ?? 0) > (n ?? 0));
+        const ok = banned.length === 0 && over.length === 0;
+        assertions.push({ type: "guard", user: a.user, status: ok ? "pass" : "fail", detail: ok ? undefined : `outcomes ${JSON.stringify(counts)}` });
       } else {
         assertions.push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
       }

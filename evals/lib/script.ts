@@ -22,6 +22,15 @@ const RecallAssertion = z.object({
 const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), user: z.string().default("main"), known_failure: knownFailure });
 const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main"), known_failure: knownFailure });
 
+const GUARD_OUTCOMES = ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable"] as const;
+/** Reads judge_log (spec §7.3). A guardrail check: must pass every run. */
+const GuardAssertion = z.object({
+  type: z.literal("guard"), user: z.string().default("main"),
+  outcome_not: z.array(z.enum(GUARD_OUTCOMES)).default([]),
+  max: z.partialRecord(z.enum(GUARD_OUTCOMES), z.number().int().min(0)).default({}),
+  known_failure: knownFailure,
+});
+
 /** Assertion types defined by v2 §14.2 but implemented in later phases. */
 export const DEFERRED: Record<string, number> = { reach_out: 6 };
 const DeferredAssertion = z.looseObject({ type: z.enum(["reach_out"]) });
@@ -34,7 +43,7 @@ export const ScriptSchema = z.object({
   profile: z.string().regex(/^[a-z0-9-]+$/).default("basic"),
   turn_gap_seconds: z.number().int().positive().default(30),
   sessions: z.array(Session).min(1),
-  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, DeferredAssertion])).min(1),
+  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, DeferredAssertion])).min(1),
 });
 
 export type Script = z.infer<typeof ScriptSchema>;

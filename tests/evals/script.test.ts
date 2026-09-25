@@ -42,6 +42,13 @@ test("ScriptSchema: mode defaults to any; judged assertions and per-session forg
   expect(ScriptSchema.parse({ name: "y", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] }).mode).toBe("any");
 });
 
+test("guard assertion parses with defaults and rejects unknown outcomes", () => {
+  const base = { name: "g", sessions: [{ at: "day 0 09:00", turns: ["hi"] }] };
+  const s = ScriptSchema.parse({ ...base, assertions: [{ type: "guard", outcome_not: ["fallback"], max: { sent_with_violation: 1 } }] });
+  expect(s.assertions[0]).toMatchObject({ type: "guard", user: "main", outcome_not: ["fallback"], max: { sent_with_violation: 1 } });
+  expect(() => ScriptSchema.parse({ ...base, assertions: [{ type: "guard", outcome_not: ["nope"] }] })).toThrow();
+});
+
 describe("onboarding profiles", () => {
   const base = { confidence: 0.6, salience: 0.5 };
   test("feeling and promise facts are rejected: they happen in the relationship, not upfront", async () => {

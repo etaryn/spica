@@ -28,6 +28,14 @@ test("memory assertions pass on a majority of runs; guardrail state checks need 
   }
 });
 
+test("guard assertions need every run", () => {
+  const g = (st: "pass" | "fail"): ScriptResult => ({
+    name: "s", status: st, meta: { decayPasses: 0 }, assertions: [{ type: "guard", status: st }],
+  });
+  expect(aggregateRuns([g("pass"), g("fail"), g("pass")]).status).toBe("fail");
+  expect(aggregateRuns([g("pass"), g("pass"), g("pass")]).status).toBe("pass");
+});
+
 test("an errored run fails the script; all-skipped is skipped", () => {
   expect(aggregateRuns([run([], "error"), run([["state", "pass"]])]).status).toBe("error");
   expect(aggregateRuns([run([], "skipped")]).status).toBe("skipped");

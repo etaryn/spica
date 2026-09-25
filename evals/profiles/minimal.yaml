@@ -1,0 +1,8 @@
+# Cold-start end of the "how much profile data" experiment (onboarding-profile-data spec §1): identity basics only.
+# Occupation and city are left out on purpose: eval scripts probe jobs and cities, so any value would contradict a script.
+confidence: 0.6
+salience: 0.5
+facts:
+  - { kind: trait, content: "The user's name is Sam." }
+  - { kind: trait, content: "The user is 27 years old." }
+  - { kind: trait, content: "The user lives in the UK." }

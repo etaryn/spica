@@ -20,6 +20,7 @@ const { values: args } = parseArgs({
     runs: { type: "string" },
     compare: { type: "boolean", default: false },
     only: { type: "string" },
+    profile: { type: "string" },
     trace: { type: "boolean", default: false },
     "update-baseline": { type: "boolean", default: false },
   },
@@ -46,7 +47,11 @@ const embedder = real
 const { db, pool } = createDb(dbUrl);
 await runMigrations(db);
 
-const scripts = loadScripts(path.join(root, "scripts")).filter((s) => !args.only || s.name === args.only);
+// `--profile <name>` runs the suite with one onboarding profile (the "how much profile data" experiment);
+// scripts that opt out with `profile: none` stay cold.
+const scripts = loadScripts(path.join(root, "scripts"))
+  .filter((s) => !args.only || s.name === args.only)
+  .map((s) => (args.profile && s.profile !== "none" ? { ...s, profile: args.profile } : s));
 if (scripts.length === 0) throw new Error(args.only ? `no script named ${args.only}` : "no eval scripts found");
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");

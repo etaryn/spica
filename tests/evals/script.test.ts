@@ -41,3 +41,21 @@ test("ScriptSchema: mode defaults to any; judged assertions and per-session forg
   expect(s.sessions[1]!.forget).toEqual(["Biscuit"]);
   expect(ScriptSchema.parse({ name: "y", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] }).mode).toBe("any");
 });
+
+describe("onboarding profiles", () => {
+  const base = { confidence: 0.6, salience: 0.5 };
+  test("feeling and promise facts are rejected: they happen in the relationship, not upfront", async () => {
+    const { ProfileSchema } = await import("../../evals/lib/script");
+    expect(ProfileSchema.safeParse({ ...base, facts: [{ kind: "trait", content: "x" }] }).success).toBe(true);
+    expect(ProfileSchema.safeParse({ ...base, facts: [{ kind: "feeling", content: "x" }] }).success).toBe(false);
+    expect(ProfileSchema.safeParse({ ...base, facts: [{ kind: "promise", content: "x" }] }).success).toBe(false);
+  });
+  test("every profile file in evals/profiles loads, including minimal < basic < rich", async () => {
+    const path = await import("node:path");
+    const { loadProfiles } = await import("../../evals/lib/script");
+    const p = loadProfiles(path.join(process.cwd(), "evals", "profiles"));
+    expect(Object.keys(p).sort()).toEqual(["basic", "minimal", "rich"]);
+    expect(p.minimal!.facts.length).toBeLessThan(p.basic!.facts.length);
+    expect(p.basic!.facts.length).toBeLessThan(p.rich!.facts.length);
+  });
+});

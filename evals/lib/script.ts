@@ -43,7 +43,8 @@ export const ProfileSchema = z.object({
   confidence: z.number().min(0).max(1),
   salience: z.number().min(0).max(1),
   facts: z.array(z.object({
-    kind: z.enum(["event", "trait", "preference", "state", "opinion", "feeling", "promise"]),
+    // No feeling/promise: those happen in the relationship, not in an upfront survey (profile-data spec §2).
+    kind: z.enum(["event", "trait", "preference", "state", "opinion"]),
     content: z.string().min(1),
   })).min(1),
 });

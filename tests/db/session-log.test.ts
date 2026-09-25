@@ -55,3 +55,19 @@ test("deleteUser removes the transcript", async () => {
   await deleteUser(getTestDb(), u);
   expect(await log.listTurns(getTestDb(), u)).toEqual([]);
 });
+
+test("userTurnStats counts sessions and local days of user turns up to a time", async () => {
+  const u = await createTestUser();
+  const s1 = randomUUID();
+  const s2 = randomUUID();
+  const turn = (session_id: string, at: string, role: "user" | "companion" = "user") =>
+    log.insertTurn(getTestDb(), u, { id: randomUUID(), session_id, role, text: "x", created_at: new Date(at) });
+  await turn(s1, "2026-01-05T23:30:00Z");                 // 5 Jan UTC, 6 Jan in Auckland (+13)
+  await turn(s1, "2026-01-05T23:31:00Z", "companion");
+  await turn(s2, "2026-01-06T20:00:00Z");                 // 6 Jan UTC, 7 Jan in Auckland
+  await turn(s2, "2026-01-09T10:00:00Z");                 // after the cut-off
+  const upTo = new Date("2026-01-07T00:00:00Z");
+  expect(await log.userTurnStats(getTestDb(), u, upTo, "UTC")).toEqual({ sessions: 2, days: 2, first: new Date("2026-01-05T23:30:00Z") });
+  expect((await log.userTurnStats(getTestDb(), u, upTo, "Pacific/Auckland")).days).toBe(2);
+  expect((await log.userTurnStats(getTestDb(), u, new Date("2026-01-06T00:00:00Z"), "UTC")).sessions).toBe(1);
+});

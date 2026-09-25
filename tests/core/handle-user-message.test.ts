@@ -292,4 +292,21 @@ describe("handleUserMessage", () => {
     await handleUserMessage(deps, u, input);
     expect(deps.llm.structuredCalls.filter((c) => c.purpose === "guard").length).toBe(guardCalls);
   });
+
+  test("relationship line: first conversation, then days talked", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await handleUserMessage(deps, u, msg("hi"));
+    expect(deps.llm.calls[0]!.system).toMatch(/## You and them\nThis is your first conversation with them\./);
+    deps.clock.advance(3 * 86_400_000);
+    await handleUserMessage(deps, u, msg("back again"));
+    expect(deps.llm.calls[1]!.system).toMatch(/You first talked 3 days ago, and have talked on 2 different days\. You last talked 3 days ago\./);
+  });
+
+  test("relationship line can be switched off", async () => {
+    const deps = makeTestDeps({ chat: { relationship_line: false } });
+    const u = await createTestUser();
+    await handleUserMessage(deps, u, msg("hi"));
+    expect(deps.llm.calls[0]!.system).not.toMatch(/first conversation/);
+  });
 });

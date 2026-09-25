@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { listOnboardingFacts } from "@/db/repos/facts";
-import { setTimezone } from "@/db/repos/users";
+import { getTimezone, setTimezone } from "@/db/repos/users";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import type { CrisisCard } from "../config";
@@ -13,7 +13,7 @@ import { COLD_PATH_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
-import { assemblePrompt, gapLine, type RetrievalResult } from "./assemble";
+import { assemblePrompt, gapLine, relationshipLine, type RetrievalResult } from "./assemble";
 import { splitParts } from "./parts";
 import { resolveSessionId } from "./session";
 
@@ -102,11 +102,24 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     now: clock.now(),
   });
 
+  // Relationship line (spec §6), best-effort.
+  let relLine: string | null = null;
+  if (config.chat.relationship_line) {
+    try {
+      const tz = await getTimezone(db, userId);
+      const stats = await sessionLog.userTurnStats(db, userId, userTurn.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
+      relLine = relationshipLine(stats, clock.now());
+    } catch (e) {
+      log.error("relationship line unavailable", { userId, error: String((e as Error)?.name ?? "Error") });
+    }
+  }
+
   // 3. Assemble
   const prompt = assemblePrompt({
     valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     egoLine: null,
-    relationshipSummary: gapLine(earlier.at(-1)?.created_at ?? null, userTurn.created_at, config.chat.gap_line_min_hours),
+    relationshipSummary: [relLine, gapLine(earlier.at(-1)?.created_at ?? null, userTurn.created_at, config.chat.gap_line_min_hours)]
+      .filter((x): x is string => !!x).join(" ") || null,
     retrieval,
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,

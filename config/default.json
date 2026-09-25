@@ -110,7 +110,7 @@
     ]
   },
   "prompts": {
-    "reply": "v4",
+    "reply": "v5",
     "crisis_classifier": "v2",
     "persona": "v1",
     "extract": "v2",

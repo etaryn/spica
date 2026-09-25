@@ -13,6 +13,7 @@ test("loads persona, reply rules, extraction, reconcile and crisis prompts", () 
   expect(reply).toMatch(/only when it detects/i);
   expect(reply).toMatch(/AI/);
   expect(reply).toMatch(/never claim to remember/i);
+  expect(reply).toMatch(/Trust it/);
   expect(loadPrompt("extract", c.prompts.extract)).toMatch(/subject/);
   expect(loadPrompt("reconcile", c.prompts.reconcile)).toMatch(/contradicts/);
   expect(loadPrompt("safety/crisis-classifier", c.prompts.crisis_classifier)).toMatch(/self_harm/);

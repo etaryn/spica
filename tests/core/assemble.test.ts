@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { assemblePrompt, emptyRetrieval, gapLine, relativeDate } from "@/core/chat/assemble";
+import { assemblePrompt, emptyRetrieval, gapLine, relationshipLine, relativeDate } from "@/core/chat/assemble";
 import { splitParts } from "@/core/chat/parts";
 import { resolveSessionId } from "@/core/chat/session";
 
@@ -128,4 +128,13 @@ describe("time-gap markers in the message window", () => {
     ] });
     expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "c", "d"]);
   });
+});
+
+test("relationshipLine: first conversation, same day, then days and first-contact date", () => {
+  const now = new Date("2026-01-20T09:00:00Z");
+  expect(relationshipLine({ sessions: 1, days: 1, first: now }, now)).toBe("This is your first conversation with them.");
+  expect(relationshipLine({ sessions: 0, days: 0, first: null }, now)).toBe("This is your first conversation with them.");
+  expect(relationshipLine({ sessions: 2, days: 1, first: now }, now)).toBe("You've already talked earlier today.");
+  expect(relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, now))
+    .toBe("You first talked 2 weeks ago, and have talked on 3 different days.");
 });

@@ -84,6 +84,13 @@ function elapsed(hours: number): string {
   return `about ${Math.round(days / 7)} weeks`;
 }
 
+/** Factual relationship line (spec §6): how well she knows them, so she doesn't guess. */
+export function relationshipLine(s: { sessions: number; days: number; first: Date | null }, now: Date): string {
+  if (!s.first || s.sessions <= 1) return "This is your first conversation with them.";
+  if (s.days <= 1) return "You've already talked earlier today.";
+  return `You first talked ${relativeDate(s.first, now)}, and have talked on ${s.days} different days.`;
+}
+
 /** Phase 1 relationship line: time since the previous turn, omitted under `minHours` (v2 §6.2 slot 3). */
 export function gapLine(prevAt: Date | null, now: Date, minHours: number): string | null {
   if (!prevAt) return null;

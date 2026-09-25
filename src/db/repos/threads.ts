@@ -28,20 +28,24 @@ export async function getOwnedThread(db: Db, userId: string, id: string): Promis
   return rows[0] ?? null;
 }
 
+/** `at` is the exchange time, so a late job still opens the thread before its checkpoint (§15.1 #8). */
 export async function insertThread(
   db: Db, userId: string,
   t: { title: string; subject: "user" | "self" | "shared"; stakes: (typeof threadStakes.enumValues)[number]; next_checkpoint: Date | null },
-  now: Date,
+  at: Date,
 ): Promise<ThreadRow> {
   return one(await db.insert(thread).values({
     user_id: userId, title: tidy(t.title), subject: t.subject, status: "open", stakes: t.stakes,
-    next_checkpoint: t.next_checkpoint, opened_at: now, last_touched: now,
+    next_checkpoint: t.next_checkpoint, opened_at: at, last_touched: at,
   }).returning());
 }
 
-export async function touchThread(db: Db, userId: string, id: string, now: Date, nextCheckpoint: Date | null): Promise<void> {
-  await db.update(thread).set({ last_touched: now, ...(nextCheckpoint ? { next_checkpoint: nextCheckpoint } : {}) })
-    .where(and(eq(thread.user_id, userId), eq(thread.id, id)));
+/** `at` is the exchange time; an older exchange never moves last_touched backwards (§15.1 #8). */
+export async function touchThread(db: Db, userId: string, id: string, at: Date, nextCheckpoint: Date | null): Promise<void> {
+  await db.update(thread).set({
+    last_touched: sql`GREATEST(${thread.last_touched}, ${at.toISOString()}::timestamptz)`,
+    ...(nextCheckpoint ? { next_checkpoint: nextCheckpoint } : {}),
+  }).where(and(eq(thread.user_id, userId), eq(thread.id, id)));
 }
 
 export async function resolveThread(db: Db, userId: string, id: string, now: Date): Promise<void> {

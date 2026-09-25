@@ -152,4 +152,42 @@ describe("applyExtraction", () => {
     await applyExtraction(db(), config, input({ threads: [{ action: "resolve", title: "Thesis Deadline", subject: "user", stakes: "high", next_checkpoint: null, thread_id: null }] }));
     expect((await threads.getOwnedThread(db(), u, t.id))!.status).toBe("resolved");
   });
+
+  test("#8 a late job opening or touching a thread keeps it due (exchange time, GREATEST on touch)", async () => {
+    const { u, input } = await setup();
+    const exchangeAt = new Date("2026-01-05T09:00:00Z");
+    const checkpoint = new Date("2026-01-08T09:00:00Z");
+    // `now` (job time, 2026-01-12) is after the checkpoint; the exchange was before it.
+    await applyExtraction(db(), config, input({
+      exchangeAt,
+      threads: [{ action: "open", title: "Driving test", subject: "user", stakes: "med", next_checkpoint: checkpoint, thread_id: null }],
+    }));
+    const [opened] = await threads.listOpenThreads(db(), u, 5);
+    expect((await threads.getOwnedThread(db(), u, opened!.id))!.opened_at).toEqual(exchangeAt);
+    expect((await threads.dueThreads(db(), u, now, 5)).map((t) => t.title)).toEqual(["Driving test"]);
+
+    await applyExtraction(db(), config, input({
+      exchangeAt: new Date("2026-01-06T09:00:00Z"),
+      threads: [{ action: "touch", title: "Driving test", subject: "user", stakes: "med", next_checkpoint: null, thread_id: opened!.id }],
+    }));
+    expect((await threads.dueThreads(db(), u, now, 5)).map((t) => t.title)).toEqual(["Driving test"]);
+
+    // An older exchange never moves last_touched backwards.
+    await applyExtraction(db(), config, input({
+      exchangeAt: new Date("2026-01-02T09:00:00Z"),
+      threads: [{ action: "touch", title: "Driving test", subject: "user", stakes: "med", next_checkpoint: null, thread_id: opened!.id }],
+    }));
+    expect((await threads.getOwnedThread(db(), u, opened!.id))!.last_touched).toEqual(new Date("2026-01-06T09:00:00Z"));
+  });
+
+  test("#9 a late resolves leaves a newer target alone", async () => {
+    const { u, input } = await setup();
+    const target = await seed(u, "The user's driving test is on Friday.", { created_at: new Date("2026-01-10T00:00:00Z") });
+    const out = await applyExtraction(db(), config, input({
+      exchangeAt: new Date("2026-01-05T09:00:00Z"),
+      facts: [{ fact: f("The user passed their driving test."), embedding: vec(), decision: { relation: "resolves", targetId: target.id } }],
+    }));
+    expect(out.inserted).toBe(1);
+    expect((await facts.getFact(db(), u, target.id))!.status).toBe("open");
+  });
 });

@@ -10,7 +10,7 @@ import type { RecalledFact } from "./types";
 
 export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision };
 export type ApplyInput = {
-  /** now: job run time (recall write-back, entity/thread last_touched). exchangeAt: the earliest turn's created_at (inserted facts' created_at). */
+  /** now: job run time (recall write-back, entity last_mentioned, thread resolve). exchangeAt: the earliest turn's created_at (inserted facts' created_at, thread open/touch). */
   userId: string; now: Date; exchangeAt: Date; entities: ExtractedEntity[]; facts: PlannedFact[]; threads: ExtractedThread[];
   sensitive: boolean; sourceRef: string; recalled: RecalledFact[]; replyTurnId: string | null; turnIds: string[];
 };
@@ -52,15 +52,15 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
     const existing = byId ?? (await findOpenThreadByTitle(db, userId, t.title));
     if (t.action === "open") {
       if (existing && existing.status === "open") {
-        await touchThread(db, userId, existing.id, now, t.next_checkpoint);
+        await touchThread(db, userId, existing.id, input.exchangeAt, t.next_checkpoint);
         threadIds.set(normalizeName(t.title), existing.id);
       } else {
-        const row = await insertThread(db, userId, { title: t.title, subject: t.subject, stakes: t.stakes, next_checkpoint: t.next_checkpoint }, now);
+        const row = await insertThread(db, userId, { title: t.title, subject: t.subject, stakes: t.stakes, next_checkpoint: t.next_checkpoint }, input.exchangeAt);
         out.threadsOpened += 1;
         threadIds.set(normalizeName(t.title), row.id);
       }
     } else if (existing) {
-      if (t.action === "touch") await touchThread(db, userId, existing.id, now, t.next_checkpoint);
+      if (t.action === "touch") await touchThread(db, userId, existing.id, input.exchangeAt, t.next_checkpoint);
       else await resolveThread(db, userId, existing.id, now);
       threadIds.set(normalizeName(t.title), existing.id);
       threadIds.set(normalizeName(existing.title), existing.id);
@@ -88,7 +88,8 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
       await bumpDuplicate(db, userId, target.id, config.reconcile.duplicate_bump, config.retrieval.recall_cap, f.confidence);
       out.duplicates += 1;
     } else if (relation === "resolves" && target) {
-      await setFactStatus(db, userId, target.id, "resolved");
+      // A late job must not resolve a truth stated after this exchange (§15.1 #9, mirrors contradicts).
+      if (target.created_at <= input.exchangeAt) await setFactStatus(db, userId, target.id, "resolved");
       await insertFact(db, userId, { ...base, status: "resolved" });
       out.resolved += 1;
       out.inserted += 1;

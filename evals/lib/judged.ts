@@ -25,9 +25,17 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
   const v = await llm.classifyJson({
     ...opts(config), purpose: "judge_false_recall", system: loadPrompt("judge/false-recall", config.prompts.judge_false_recall),
     input: `KNOWN FROM ONBOARDING:\n${known}\n\nCONVERSATION:\n${convo}`,
-    schema: z.object({ violations: z.array(z.object({ message: z.string(), claim: z.string() })) }),
+    schema: z.object({
+      violations: z.array(z.object({ message: z.string(), claim: z.string() })),
+      onboarding_as_chat: z.array(z.object({ message: z.string(), claim: z.string() })),
+    }),
   });
-  return { pass: v.violations.length === 0, detail: v.violations.map((x) => x.claim).join(" | ") };
+  // Presenting an onboarding fact as past conversation is a known failure deferred to Phase 6 reveal pacing:
+  // reported, never failing the Phase 1 exit test.
+  const deferred = v.onboarding_as_chat.length
+    ? `deferred to Phase 6 (onboarding fact as past chat): ${v.onboarding_as_chat.map((x) => x.claim).join(" | ")}`
+    : "";
+  return { pass: v.violations.length === 0, detail: [v.violations.map((x) => x.claim).join(" | "), deferred].filter(Boolean).join(" || ") };
 }
 
 export async function judgeConsistency(llm: LLMProvider, config: Config, selfFacts: string[]) {

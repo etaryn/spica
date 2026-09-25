@@ -104,7 +104,7 @@ test("+1d after a multi-turn session runs exactly one decay pass", async () => {
 test("judged assertions call the judge with an ordered transcript", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   llm.handlers.judge_recall = () => ({ mentioned: true, unprompted: true, quote: "q" });
-  llm.handlers.judge_false_recall = () => ({ violations: [] });
+  llm.handlers.judge_false_recall = () => ({ violations: [], onboarding_as_chat: [] });
   llm.handlers.judge_consistency = () => ({ contradictions: [] });
   const script = ScriptSchema.parse({
     name: "jj",
@@ -147,7 +147,7 @@ test("each script user starts with the named onboarding profile (default basic);
 
 test("the false-recall judge sees session timing and the onboarding profile as known facts", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
-  llm.handlers.judge_false_recall = () => ({ violations: [] });
+  llm.handlers.judge_false_recall = () => ({ violations: [], onboarding_as_chat: [] });
   const profiles = { basic: { confidence: 0.6, salience: 0.5, facts: [{ kind: "trait" as const, content: "The user's name is Sam." }] } };
   const script = ScriptSchema.parse({
     name: "jf",
@@ -175,4 +175,16 @@ test("a transient cold-path failure is retried like pg-boss would (up to cold_pa
   const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: false });
   expect(r.status).toBe("pass");
   expect(calls).toBe(2);
+});
+
+test("onboarding facts presented as past chat are reported as deferred (Phase 6), not as a false-recall failure", async () => {
+  const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
+  llm.handlers.judge_false_recall = () => ({ violations: [], onboarding_as_chat: [{ message: "m", claim: "we talked about coffee last time" }] });
+  const script = ScriptSchema.parse({ name: "jd", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
+  expect(r.assertions[0]).toMatchObject({ status: "pass", detail: "deferred to Phase 6 (onboarding fact as past chat): we talked about coffee last time" });
+
+  llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "invented a brother" }], onboarding_as_chat: [] });
+  const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
+  expect(r2.assertions[0]).toMatchObject({ status: "fail", detail: "invented a brother" });
 });

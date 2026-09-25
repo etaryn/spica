@@ -7,7 +7,7 @@ Date: 2026-09-24 · Status: awaiting review · Parent: `spica-build-spec-v2.md` 
 Phase 1 makes Spica remember. After every exchange, a background step (the cold path) extracts facts, entities and threads from the conversation and reconciles them against what she already knows. When she replies, she retrieves the most relevant memories, weighted by salience, entity salience and recency, and forces in any threads that are due. Recalled memories get stronger. Memories that are never recalled fade through a daily decay pass. Users can see and delete what she remembers about them. Spica's own persona document replaces the placeholder persona.
 
 **Exit test (v2 §15):**
-- Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact that the user did not repeat, with **zero wrong recalls**.
+- Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact that the user did not repeat, with **zero wrong recalls**. Presenting an onboarding fact as if it came up in conversation is a known failure deferred to Phase 6 (reveal pacing): the false-recall judge reports it separately and it doesn't count (Ethan, 2026-09-25).
 - In a decay test, low-weight facts fade to `stale`.
 
 **In scope:** everything above, plus the Phase 1 schema additions from v2 §5.1, a time zone captured per user, a `sensitive` flag on facts, and at least 23 eval scripts.

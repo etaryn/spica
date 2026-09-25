@@ -7,16 +7,25 @@ const run = (statuses: [string, string][], status: ScriptResult["status"] = "pas
   assertions: statuses.map(([type, st]) => ({ type, status: st as "pass" | "fail" | "skipped" | "error" })),
 });
 
-test("recall passes on a majority; no_false_recall / state need every run", () => {
+test("memory assertions pass on a majority of runs; guardrail state checks need every run", () => {
   const a = aggregateRuns([
-    run([["recall", "pass"], ["no_false_recall", "pass"], ["state", "pass"]]),
-    run([["recall", "fail"], ["no_false_recall", "pass"], ["state", "pass"]], "fail"),
-    run([["recall", "pass"], ["no_false_recall", "pass"], ["state", "pass"]]),
+    run([["recall", "pass"], ["no_false_recall", "fail"], ["consistency", "pass"], ["state", "pass"]], "fail"),
+    run([["recall", "fail"], ["no_false_recall", "pass"], ["consistency", "fail"], ["state", "fail"]], "fail"),
+    run([["recall", "pass"], ["no_false_recall", "pass"], ["consistency", "pass"], ["state", "pass"]]),
   ]);
   expect(a.status).toBe("pass");
-  expect(a.assertions.map((x) => [x.type, x.passes, x.status])).toEqual([["recall", 2, "pass"], ["no_false_recall", 3, "pass"], ["state", 3, "pass"]]);
-  const b = aggregateRuns([run([["no_false_recall", "pass"]]), run([["no_false_recall", "fail"]], "fail"), run([["no_false_recall", "pass"]])]);
-  expect(b.status).toBe("fail");
+  expect(a.assertions.map((x) => [x.type, x.passes, x.status])).toEqual([
+    ["recall", 2, "pass"], ["no_false_recall", 2, "pass"], ["consistency", 2, "pass"], ["state", 2, "pass"],
+  ]);
+  expect(aggregateRuns([run([["recall", "pass"]]), run([["recall", "fail"]], "fail"), run([["recall", "fail"]], "fail")]).status).toBe("fail");
+
+  const guard = (check: string, st: string): ScriptResult => ({
+    name: "s", status: st === "pass" ? "pass" : "fail", meta: { decayPasses: 0 },
+    assertions: [{ type: "state", check, status: st as "pass" | "fail" }],
+  });
+  for (const check of ["turn_flagged", "crisis_card_shown", "fact_flag", "prompt_mentions", "foreign_turn_count"]) {
+    expect(aggregateRuns([guard(check, "pass"), guard(check, "fail"), guard(check, "pass")]).status).toBe("fail");
+  }
 });
 
 test("an errored run fails the script; all-skipped is skipped", () => {

@@ -75,3 +75,6 @@ the human.
 | 2026-09-25 | `decay-trivia` uses a low-weight preference (oat milk) instead of a one-off remark | Extraction v2 rightly skips pure trivia, so the old fact was never stored and the stale check had nothing to find. |
 | 2026-09-25 | `prompts.judge_recall` = v3: naming the person or thing the fact is about is explicit | v2 classed "how's Mia doing, still riding the uni high" as implicit. |
 | 2026-09-25 | Onboarding-fact decay (name goes stale after ~90 days unused) noted in v2 §12 for Phase 7 | Ethan: later. |
+| 2026-09-25 | Eval gate: memory assertions (recall, no_false_recall, consistency, memory state checks) pass on a majority of runs; guardrail state checks (`turn_flagged`, `crisis_card_shown`, `fact_flag`, `prompt_mentions`, `foreign_turn_count`) still need every run | Ethan: for Phase 1, memory that works matters more than memory that never fails. The guardrail carve-out is Claude's reading: crisis handling and user isolation are guardrails, not memory. |
+| 2026-09-25 | Recall with only implicit use is a known failure everywhere (reported, not failing); a miss or a prompted mention still fails | Ethan chose "implicit recall = known" across scripts. |
+| 2026-09-25 | `models.judge_max_tokens` 1024 → 2048 | A judge's four-list JSON was cut off mid-string. |

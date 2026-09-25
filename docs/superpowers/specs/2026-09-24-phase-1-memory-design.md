@@ -40,7 +40,7 @@ Phase 1 makes Spica remember. After every exchange, a background step (the cold 
 | Persona | Claude drafts `prompts/persona/v1.md` and Ethan edits it. This counts as a test-phase persona. |
 | Time zone | [ADDED] The browser sends its IANA time zone and it is stored on the user row |
 | Sensitive facts | [ADDED] Facts extracted from crisis-flagged exchanges get `payload.sensitive = true` |
-| Eval gate | Real-model evals run 3 times each. `recall` passes on a majority of runs; `no_false_recall` and `consistency` must pass every run. |
+| Eval gate | Real-model evals run 3 times each. `recall` passes on a majority of runs; `no_false_recall` and `consistency` must pass every run. **Revised 2026-09-25 (Ethan):** every memory assertion passes on a majority; only guardrail checks (crisis, sensitive flag, cross-user isolation) must pass every run. |
 
 ## 3. Schema and config
 
@@ -262,9 +262,9 @@ The chat client sends `Intl.DateTimeFormat().resolvedOptions().timeZone` with ea
 ### 10.1 Harness changes
 
 - **`--runs N`** (default 1 with `--llm=fake`, 3 with `--llm=real`). Assertion rules:
-  - `recall` passes on a majority of runs.
-  - `no_false_recall` and `consistency` must pass every run.
-  - `state` must pass every run.
+  - Guardrail `state` checks (crisis flag and card, sensitive flag, cross-user isolation) must pass every run.
+  - Every other assertion passes on a majority of runs (revised 2026-09-25, Ethan: memory that works matters more than memory that never fails).
+  - `recall` with only implicit use is a known failure (reported, not failing).
 - **Baseline.** `baseline.json` stores a pass rate per script, and `--compare` flags any drop.
 - **Decay.** When a session's `at` advances the clock by N days, the runner calls `decayPass` N times.
 - **Judge.** A `judge` LLM (`models.judge`) is added to the eval deps. It is used only by the judged assertions.

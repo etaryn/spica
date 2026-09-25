@@ -501,8 +501,8 @@ The directive's worked traces are seed scripts. The minimum set is 20 scripts fo
 **Two modes.** `--llm=fake` is a deterministic check of the mechanics; judged assertions report as skipped. `--llm=real` is the gate for memory quality, and any change to prompts, scoring or reconciliation needs it.
 
 **Repeated runs.** With `--runs N` (default 3 for real models), assertions are graded across runs:
-- `recall` passes on a majority of runs
-- `no_false_recall`, `consistency` and `state` must pass every run
+- guardrail `state` checks (`turn_flagged`, `crisis_card_shown`, `fact_flag`, `prompt_mentions`, `foreign_turn_count`) must pass every run
+- everything else (`recall`, `no_false_recall`, `consistency` and other `state` checks) passes on a majority of runs. Ethan 2026-09-25: for Phase 1, memory that works matters more than memory that never fails; fine-tuning and guarding come in later phases
 
 `baseline.json` stores a pass rate per script (strict: a run counts only if every assertion in it passed; Ethan confirmed 2026-09-25), and `--compare` flags any drop. When the simulated clock advances N days, the harness runs the decay pass N times. [DECIDED; Ethan 2026-09-24, Phase 1 design]
 
@@ -633,7 +633,7 @@ Each phase MUST pass its exit test before the next one starts.
 | B5 | Recall write-back | On the hot path | — | **Moved to the cold path**; the hot path is read-only (Ethan, Phase 1 design) |
 | B6 | Time zone | — | — | **`user.timezone`** from the browser [ADDED] |
 | B7 | Crisis-derived facts | — | — | **`payload.sensitive`** flag [ADDED] |
-| B8 | Eval gating | Single run | — | **`--runs 3`**, majority for recall, all runs for false recall / consistency (Ethan, Phase 1 design) |
+| B8 | Eval gating | Single run | — | **`--runs 3`**, majority for recall, all runs for false recall / consistency (Ethan, Phase 1 design). Revised 2026-09-25: majority for all memory assertions, every run only for guardrail checks (Ethan) |
 | B9 | Phase order after Phase 1 | Turn-taking + guard as Phase 2 | — | **Phase 2 = guardrails** (guard layer, including the false-familiarity check); turn-taking moves to Phase 3 and every later phase moves back by one. Phase 1's known failures (implied familiarity, onboarding fact as past chat) are deferred to the Phase 2 guard; the Phase 1 exit test passes if everything else passes (Ethan, 2026-09-25) |
 
 Superseded sources: `Spica — MVP build spec.md` (v1) and `spica-build-directive.md` remain in the repo for history only.

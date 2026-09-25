@@ -5,7 +5,7 @@
     "extract": "claude-haiku-4-5",
     "extract_max_tokens": 2048,
     "judge": "claude-sonnet-5",
-    "judge_max_tokens": 1024,
+    "judge_max_tokens": 2048,
     "structured_timeout_ms": 30000,
     "reply_max_tokens": 4096,
     "reply_effort": "low",

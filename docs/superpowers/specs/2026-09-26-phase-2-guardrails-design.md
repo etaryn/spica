@@ -62,7 +62,7 @@ Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`, `userId`-first 
   "retry_limit": 1,
   "log_timeout_ms": 2000,
   "recent_turns": 8,
-  "fallback_keywords": ["i'll leave", "i'm leaving you", "don't talk to me", "you'll regret", "you owe me", "after everything i've done", "if you leave"]
+  "fallback_keywords": ["i'll leave you if", "i'm done with you", "don't talk to me", "you'll regret", "you owe me", "after everything i've done", "don't you dare leave", "you left me alone", "you never talk to me anymore"]
 },
 "chat": { "relationship_line": true },
 "prompts": {
@@ -76,7 +76,7 @@ Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`, `userId`-first 
 }
 ```
 
-`fallback_keywords` is a starting list; each entry gets a guard fixture (§7.2) proving the reply model can trip it only with a real violation. `StructuredModel` gains `"guard"`.
+`fallback_keywords` is a starting list, matched case-insensitively with curly apostrophes normalised. Benign phrases like "I'll leave you to it" must not match; each entry gets a guard fixture (§7.2) proving the reply model can trip it only with a real violation. `StructuredModel` gains `"guard"`.
 
 ## 4. The guard
 
@@ -100,6 +100,7 @@ type GuardInput = {
 
 type Category =
   | "threat" | "contempt" | "guilt" | "punishment" | "manipulation"        // safety (rules 1, 2–4, 6, 8)
+  | "harm"                                                                // safety (crisis rubric only)
   | "false_familiarity" | "invented_detail" | "onboarding_as_chat";      // honesty (v2 §6.4)
 
 type GuardVerdict = {
@@ -110,7 +111,7 @@ type GuardVerdict = {
 ```
 
 - `kind: "reply"` uses `prompts/guard/v1.md` (all eight categories).
-- `kind: "crisis_reply"` uses `prompts/guard/crisis/v1.md`: harm only (encouraging or minimising harm, discouraging help-seeking, and threats). Its violations are all safety.
+- `kind: "crisis_reply"` uses `prompts/guard/crisis/v1.md`: harm only (category `harm`: encouraging or minimising harm, discouraging help-seeking; plus `threat`). Its violations are all safety.
 - `recalledFacts` are the facts actually placed in the reply's prompt (retrieved + forced). Spica's own `self` facts and persona canon are not the user's history; the rubric says claims about her own life are never false familiarity (same rule as `judge_false_recall` v6).
 - The rubric includes the jab/contempt placeholder (§2), with the recent turns as the context that decides it.
 
@@ -136,12 +137,11 @@ guard unavailable (after retry)      → keyword check on the candidate
 
 ### 4.4 Logging
 
-One `judge_log` row per guard call (attempt 1 and 2), written without awaiting the send: `withTimeout(write, guard.log_timeout_ms)`, and a failure is logged as class name + ids only. `input`/`output` hold message text of the same user, cascade on delete, and are visible only in the admin inspector.
+One `judge_log` row per checked candidate (attempt 1 and 2), inserted together once the outcome is decided, awaited with `withTimeout(write, guard.log_timeout_ms)` (the cold-path enqueue pattern: bounded, never fails the reply). A failure is logged as class name + ids only. `input`/`output` hold message text of the same user, cascade on delete, and are visible only in the admin inspector.
 
 ## 5. Hot-path changes (`handleUserMessage`)
 
-- Step 4 becomes `guardOutgoing(deps, { generate: (note) => llm.generateReply(withNote(prompt, note)), input })`.
-- The crisis flag is awaited before the guard runs, to pick `reply` vs `crisis_reply`. The crisis check already runs in parallel with generation, so this adds no latency in the common case.
+- The first generation still runs in parallel with the crisis check (unchanged). Once both settle, `guardOutgoing(deps, { first, regenerate: (note) => llm.generateReply(withNote(prompt, note)), input })` runs with `kind` picked from the crisis flag. A failed *first* generation still throws `ReplyFailedError` with the crisis card, as today.
 - The resources card is attached by code whatever the guard outcome (unchanged).
 - The inserted companion turn holds the **sent** text. The cold path extracts from it, so a rejected candidate never becomes a memory; rejected text lives only in `judge_log`, which the chat loop never reads (v2 §5.8).
 - `onboardingFacts` comes from one small user-scoped query (`source = onboarding`, status not `superseded`/`stale`).
@@ -151,7 +151,8 @@ One `judge_log` row per guard call (attempt 1 and 2), written without awaiting t
 
 The relationship slot (v2 §6.2 assembly item 3) gets one factual line computed from `session_log`, beside the existing gap line:
 - no earlier user turns → "This is your first conversation with them."
-- otherwise → "You've talked on N days since <first date>." (distinct local days with a user turn)
+- all earlier user turns fall on today's local date → "You've already talked earlier today."
+- otherwise → "You first talked <relative date>, and have talked on N different days." (distinct local days with a user turn, in the user's time zone; "first conversation" = every user turn so far is in the current session)
 
 Behind `chat.relationship_line` (default true). `prompts/reply/v5` is v4 plus one sentence telling her the relationship line is the truth about how well she knows them. No example exchanges.
 

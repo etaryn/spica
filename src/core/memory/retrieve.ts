@@ -11,7 +11,7 @@ const errName = (e: unknown) => String((e as Error)?.name ?? "Error");
 /**
  * Hot-path retrieval (v2 §6.2 step 1). Read-only and never throws: any failure
  * degrades to whatever could still be retrieved, so a memory problem never costs
- * the user their reply. `answering` is a list so the Phase 2 turn buffer fits.
+ * the user their reply. `answering` is a list so the Phase 3 turn buffer fits.
  */
 export async function retrieve(
   deps: Pick<Deps, "db" | "embedder" | "config" | "log">,

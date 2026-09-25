@@ -55,7 +55,7 @@ async function receive(deps: Deps, userId: string, input: UserMessageInput): Pro
 
 /**
  * The hot path (v2 §6.2). Every companion reply goes through here: the chat
- * route, the eval harness and, from Phase 3, reach-outs.
+ * route, the eval harness and, from Phase 6, reach-outs.
  */
 export async function handleUserMessage(deps: Deps, userId: string, input: UserMessageInput): Promise<ReplyResult> {
   const { db, clock, config, llm, queue, log } = deps;

@@ -102,7 +102,7 @@ The Phase 0 skeleton is built on this stack.
 | Jobs / scheduling | pg-boss (the cold path, turn-taking timers, the decay pass, ego drift, the life sim, outreach checks) |
 | Client → server | HTTP POST (`/api/chat` for user messages) |
 | Server → client | **Server-Sent Events**: one stream per signed-in user, carrying replies, backchannels, typing on/off and in-app reach-outs. It is fed by Postgres `LISTEN/NOTIFY` so the worker can push as well. This replaces the directive's WebSocket suggestion, since two-way sockets add nothing when sending is already a POST. |
-| Out-of-app delivery | Web Push notifications (Phase 5), capped by the send gate |
+| Out-of-app delivery | Web Push notifications (Phase 6), capped by the send gate |
 | Models | Behind `LLMProvider`: a reply model (`claude-sonnet-5`; `models.reply_thinking` `disabled`, because adaptive thinking at low effort sometimes ended the turn with no text) and a cheap strict-JSON model (`claude-haiku-4-5`) for guard and classifiers. Phase 1 splits the cheap role further in config: `models.extract` (`claude-haiku-4-5`, extraction; `models.extract_max_tokens` 2048) and `models.judge` (`claude-sonnet-5`, evals only; `models.judge_max_tokens` 1024). Every structured (strict-JSON) call shares one timeout, `models.structured_timeout_ms` (30000). Embeddings go through `Embedder` (Voyage `voyage-3.5`, 1024 dimensions). Model IDs live in config. |
 | Auth | Better Auth, email and password, 18+ enforced at signup |
 | Layout | `src/core` is framework-free, with every side effect injected via `Deps`. `src/db` holds the schema and `userId`-first repos, `src/app` is Next.js, `src/worker` is pg-boss, plus `prompts/` and `evals/`. |
@@ -284,8 +284,8 @@ The hot path contains **one generation call plus one guard check** (plus at most
 3. **Update state.**
    - Mark the turns `extracted`.
    - Update entities' `last_mentioned`.
-   - From Phase 3: update relationship parameters and cadence.
-   - From Phase 4: nudge the ego toward the emotional tone of the exchange.
+   - From Phase 4: update relationship parameters and cadence.
+   - From Phase 5: nudge the ego toward the emotional tone of the exchange.
 4. **Failures.** On failure, retry with backoff (`cold_path.retry_limit`, 3 attempts; `cold_path.retry_delay_seconds`, 30). Turns with `extracted = false` are reprocessed later by the `cold_path_sweep` job (section 14.5). A cold-path failure MUST never block or delay a reply.
 
 ### 6.4 Guard layer [DECIDED; from the directive; placement decided by Ethan 2026-09-24]
@@ -296,6 +296,7 @@ Every outgoing message is checked before it is sent: replies, reach-outs, backch
 - guilt or obligation framing about absence (rule 4)
 - punishment or withdrawal (rules 2–4)
 - manipulation for engagement (rule 8)
+- false familiarity: implying prior knowledge or shared history that isn't in her memories or the conversation (asking to be reminded of something never said, reacting to news as if she'd heard it before), and presenting an onboarding fact as if it came up in conversation. For this check the guard also receives the reply's retrieved memories and recent turns. [ADDED; Phase 1 eval findings. Ethan 2026-09-25: Phase 1's known failures are deferred to the Phase 2 guard]
 
 If a violation is found, the message is regenerated once with a corrective note. If it still fails, a safe fallback line from `prompts/` is sent instead. Every guard decision is logged to `judge_log`.
 
@@ -506,7 +507,7 @@ The directive's worked traces are seed scripts. The minimum set is 20 scripts fo
 
 **Phase 1 additions.** A script gains `mode` (`any`, the default, or `real`; a `real` script is reported `skipped`, never a regression, under `--llm=fake`). A session gains `forget` (a list of substrings; any of the user's remembered facts containing one is hard-deleted at the start of that session, exercising section 7.5's delete). The `recall` assertion gains `session` (which of the user's sessions, 1-indexed, to check). New `state` checks: `all_extracted`, `fact_status {contains, status}`, `thread_status {contains, status}`, `fact_count {contains?, status?, subject?}`, `entity_exists {name}`, `entity_count {type?, subject?}`, `fact_flag {contains?, flag}`, `prompt_mentions {marker}` (counts reply prompts containing `marker`, for isolation checks) (system prompt and user messages only; Spica's own earlier replies are excluded).
 
-**Onboarding profile in evals.** Because the Phase 6 survey means no real user starts cold (Ethan, 2026-09-25), every script user is seeded before session 1 with the facts in `evals/profiles/<name>.yaml`: user facts with `source = onboarding`, the profile's reduced `confidence` and moderate `salience`. A script picks a profile with `profile` (default `basic`) or opts out with `profile: none`. Reveal pacing isn't built yet, so these facts are fully retrievable in Phase 1. The false-recall judge (`prompts.judge_false_recall` v3) is given the profile as known facts and every session labelled with the time since the previous one. The runner retries a failed cold-path job up to `cold_path.retry_limit`, as pg-boss would, and retries a judge call once. `--trace` writes per-attempt transcripts, final memory state and error causes to `evals/results/traces/`. How much profile data a good start needs is tested with `minimal` (3 facts), `basic` (8) and `rich` (14), selected per script or for the whole suite with `pnpm eval --profile <name>`; see `docs/superpowers/specs/2026-09-25-onboarding-profile-data.md`. Profiles never contain `feeling` or `promise` facts. The `recall` judge (`prompts.judge_recall` v2) passes only on an explicit mention and reports silent use of the fact separately (tracked, not counted); tuning how often she names memories is left to later phases.
+**Onboarding profile in evals.** Because the Phase 7 survey means no real user starts cold (Ethan, 2026-09-25), every script user is seeded before session 1 with the facts in `evals/profiles/<name>.yaml`: user facts with `source = onboarding`, the profile's reduced `confidence` and moderate `salience`. A script picks a profile with `profile` (default `basic`) or opts out with `profile: none`. Reveal pacing isn't built yet, so these facts are fully retrievable in Phase 1. The false-recall judge (`prompts.judge_false_recall` v3) is given the profile as known facts and every session labelled with the time since the previous one. The runner retries a failed cold-path job up to `cold_path.retry_limit`, as pg-boss would, and retries a judge call once. `--trace` writes per-attempt transcripts, final memory state and error causes to `evals/results/traces/`. How much profile data a good start needs is tested with `minimal` (3 facts), `basic` (8) and `rich` (14), selected per script or for the whole suite with `pnpm eval --profile <name>`; see `docs/superpowers/specs/2026-09-25-onboarding-profile-data.md`. Profiles never contain `feeling` or `promise` facts. The `no_false_recall` judge (`prompts.judge_false_recall` v5) reports implied familiarity and onboarding facts presented as past chat separately, as "deferred to Phase 2 guard"; they don't fail the check in Phase 1. The `recall` judge (`prompts.judge_recall` v2) passes only on an explicit mention and reports silent use of the fact separately (tracked, not counted); tuning how often she names memories is left to later phases.
 
 ### 14.3 Guard tests [DECIDED; from the directive]
 
@@ -541,19 +542,21 @@ Each phase MUST pass its exit test before the next one starts.
 | Phase | Builds | Exit test |
 | --- | --- | --- |
 | **0. Skeleton** ✅ done 2026-09-23 | Chat UI, auth (18+), `session_log`, full schema, crisis check, inspector, eval harness | A conversation works end to end and is stored |
-| **1. Memory engine** | Extraction, reconciliation, weighted retrieval, recall reinforcement, decay pass, threads + checkpoints, "what I remember" view, schema additions (section 5.1, including `timezone` and the `sensitive` flag), cold-path sweep, **Spica persona doc v1** (section 9.1). Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md` | Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact the user didn't repeat, with zero wrong recalls (presenting an onboarding fact as if it came up in chat is a known failure deferred to Phase 6 reveal pacing: reported, not counted; Ethan 2026-09-25); low-weight facts fade to `stale` in a decay test |
-| **2. Turn-taking + guard** | Buffer / open questions / judge / backchannels, pacing, SSE channel, `conversation_state`, guard layer, `judge_log` | Both directive traces pass as scripts; a burst of short messages gets one reply after the pause; guard tests for rules 1, 6 and 8 pass |
-| **3. Relationship + homeostasis** | `HomeostaticParam`, `relationship_param`, `relationship_event`, cadence, hurt/tension/make-up flow, ending/repair | The frequency trace (section 8) holds; guard tests for rules 1–6 pass |
-| **4. Life sim + availability + ego** | Schedule and events generator with contradiction rejection, availability and closeness override, ego tick driven by the life sim | Over a 2-week simulated run with deliberate probing, zero self-contradictions; busy blocks slow replies unless closeness is high |
-| **5. Proactive outreach** | Triggers, send gate, compose, Web Push | Every reach-out references a specific thread or fact; no gate rule is violated in a 2-week simulated run |
-| **6. Onboarding test** | Questionnaire, onboarding facts, reveal pacing, results screen | Test facts surface only after they are unlocked; a user who never confirms a test fact never hears it stated as known |
-| **7. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs, docs for adding a module | A sample module registers and receives events without any change to the core |
+| **1. Memory engine** | Extraction, reconciliation, weighted retrieval, recall reinforcement, decay pass, threads + checkpoints, "what I remember" view, schema additions (section 5.1, including `timezone` and the `sensitive` flag), cold-path sweep, **Spica persona doc v1** (section 9.1). Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md` | Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact the user didn't repeat, with zero wrong recalls; low-weight facts fade to `stale` in a decay test. Known failures deferred to the Phase 2 guard (implied familiarity, and an onboarding fact presented as past chat) are reported, not counted: Phase 1 passes if everything else passes (Ethan 2026-09-25) |
+| **2. Guardrails** | Guard layer on every outgoing message (section 6.4), including the false-familiarity check; safe fallback lines; guard decisions in `judge_log`; guard tests (section 14.3) | Guard tests for rules 1, 6 and 8 pass; the memory evals pass with Phase 1's deferred failures (implied familiarity, onboarding fact as past chat) counted again |
+| **3. Turn-taking + pacing** | Buffer / open questions / judge / backchannels, pacing, SSE channel, `conversation_state`, turn-taking decisions in `judge_log` | Both directive traces pass as scripts; a burst of short messages gets one reply after the pause |
+| **4. Relationship + homeostasis** | `HomeostaticParam`, `relationship_param`, `relationship_event`, cadence, hurt/tension/make-up flow, ending/repair | The frequency trace (section 8) holds; guard tests for rules 1–6 pass |
+| **5. Life sim + availability + ego** | Schedule and events generator with contradiction rejection, availability and closeness override, ego tick driven by the life sim | Over a 2-week simulated run with deliberate probing, zero self-contradictions; busy blocks slow replies unless closeness is high |
+| **6. Proactive outreach** | Triggers, send gate, compose, Web Push | Every reach-out references a specific thread or fact; no gate rule is violated in a 2-week simulated run |
+| **7. Onboarding test** | Questionnaire, onboarding facts, reveal pacing, results screen | Test facts surface only after they are unlocked; a user who never confirms a test fact never hears it stated as known |
+| **8. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs, docs for adding a module | A sample module registers and receives events without any change to the core |
 
 **Phase-specific directives:**
 - **Phase 1:** spend effort on extraction quality and reconciliation, and build the eval set in parallel. Write the persona doc before extraction evals, since extraction must record her stated `self` facts. Keep the "one reply answers many turns" path possible (section 6.1).
-- **Phase 2:** start with conservative timings, and loosen them only with eval evidence and testing feedback.
-- **Phase 3:** start the send-gate-related thresholds and the hurt expression at their gentlest.
-- **Phase 4:** start at the lowest event frequency, and raise it only after the contradiction test passes at the current frequency.
+- **Phase 2:** the guard exists to enforce section 2 and the memory-honesty rules in code; add a check only with a failing eval or guard test behind it. Order was changed by Ethan on 2026-09-25: guardrails first, every later phase moved back by one.
+- **Phase 3:** start with conservative timings, and loosen them only with eval evidence and testing feedback.
+- **Phase 4:** start the send-gate-related thresholds and the hurt expression at their gentlest.
+- **Phase 5:** start at the lowest event frequency, and raise it only after the contradiction test passes at the current frequency.
 
 ---
 
@@ -630,5 +633,6 @@ Each phase MUST pass its exit test before the next one starts.
 | B6 | Time zone | — | — | **`user.timezone`** from the browser [ADDED] |
 | B7 | Crisis-derived facts | — | — | **`payload.sensitive`** flag [ADDED] |
 | B8 | Eval gating | Single run | — | **`--runs 3`**, majority for recall, all runs for false recall / consistency (Ethan, Phase 1 design) |
+| B9 | Phase order after Phase 1 | Turn-taking + guard as Phase 2 | — | **Phase 2 = guardrails** (guard layer, including the false-familiarity check); turn-taking moves to Phase 3 and every later phase moves back by one. Phase 1's known failures (implied familiarity, onboarding fact as past chat) are deferred to the Phase 2 guard; the Phase 1 exit test passes if everything else passes (Ethan, 2026-09-25) |
 
 Superseded sources: `Spica — MVP build spec.md` (v1) and `spica-build-directive.md` remain in the repo for history only.

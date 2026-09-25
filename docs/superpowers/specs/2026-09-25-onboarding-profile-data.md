@@ -1,8 +1,8 @@
 # Onboarding profile data — testing phase
 
 Addendum to v2 §12 (onboarding) and §14.2 (onboarding profile in evals). Scopes
-what goes into `evals/profiles/*.yaml` while the Phase 6 survey doesn't exist
-yet. Ignores test UI/question content entirely — that's Phase 6.
+what goes into `evals/profiles/*.yaml` while the Phase 7 survey doesn't exist
+yet. Ignores test UI/question content entirely — that's Phase 7.
 
 ## 1. Profile data — what to capture
 
@@ -52,7 +52,7 @@ the schema:
   *in* the relationship, not information declared upfront
 - Seeded before session 1: `created_at`/`occurred_at` at seed time,
   `status = open`, `recall_count = 0`
-- **Reveal pacing is Phase 6, not built.** In Phase 1, onboarding facts are
+- **Reveal pacing is Phase 7, not built.** In Phase 1, onboarding facts are
   fully retrievable the moment they're seeded — same as any other fact.
 
 **What that means for Phase 1, concretely:** an onboarding fact and a
@@ -60,7 +60,7 @@ conversation fact go through the identical scoring formula
 (`sim × salience × recency`). The only differences today are the numbers a
 profile ships with and the `source` tag (kept for later filtering). There is
 no "unconfirmed" state and no code path that treats an onboarding fact
-differently once it's in the retrieval pool — that distinction is Phase 6's
+differently once it's in the retrieval pool — that distinction is Phase 7's
 job by design (§12) and should stay deferred; Phase 1 is retrieval mechanics,
 not reveal gating.
 
@@ -74,6 +74,6 @@ confirmation logic. It just explains why a profile fact "settling in" over
 the first few sessions is expected, not a bug.
 
 **Not to build yet:** a per-fact unconfirmed→confirmed status, or any gating
-logic. That's the actual content of Phase 6 reveal pacing. Adding it now
+logic. That's the actual content of Phase 7 reveal pacing. Adding it now
 would be a second half-built feature (CLAUDE.md: build only the current
 phase).

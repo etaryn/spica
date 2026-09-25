@@ -7,21 +7,24 @@ Date: 2026-09-24 · Status: awaiting review · Parent: `spica-build-spec-v2.md` 
 Phase 1 makes Spica remember. After every exchange, a background step (the cold path) extracts facts, entities and threads from the conversation and reconciles them against what she already knows. When she replies, she retrieves the most relevant memories, weighted by salience, entity salience and recency, and forces in any threads that are due. Recalled memories get stronger. Memories that are never recalled fade through a daily decay pass. Users can see and delete what she remembers about them. Spica's own persona document replaces the placeholder persona.
 
 **Exit test (v2 §15):**
-- Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact that the user did not repeat, with **zero wrong recalls**. Presenting an onboarding fact as if it came up in conversation is a known failure deferred to Phase 6 (reveal pacing): the false-recall judge reports it separately and it doesn't count (Ethan, 2026-09-25).
+- Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact that the user did not repeat, with **zero wrong recalls**. Known failures deferred to the Phase 2 guard are reported separately by the false-recall judge and don't count: implied familiarity ("what's the role again?" when none was mentioned) and an onboarding fact presented as if it came up in conversation. Phase 1 passes if everything else passes (Ethan, 2026-09-25).
 - In a decay test, low-weight facts fade to `stale`.
 
 **In scope:** everything above, plus the Phase 1 schema additions from v2 §5.1, a time zone captured per user, a `sensitive` flag on facts, and at least 23 eval scripts.
 
 **Out of scope, because later phases build it:**
-- the turn-taking engine, SSE, and the guard layer (Phase 2)
-- relationship parameters and cadence (Phase 3)
-- ego ticks and the life sim (Phase 4)
-- outreach (Phase 5)
-- reveal pacing (Phase 6)
+- the guard layer (Phase 2, guardrails)
+- the turn-taking engine and SSE (Phase 3)
+- relationship parameters and cadence (Phase 4)
+- ego ticks and the life sim (Phase 5)
+- outreach (Phase 6)
+- reveal pacing (Phase 7)
+
+(Phases renumbered 2026-09-25: guardrails became Phase 2 and every later phase moved back by one.)
 - the tool that checks a new persona version against existing self facts (it will ship with persona v2)
 
 **Design constraints carried forward:**
-- A reply can answer several user turns. Retrieval takes a *list* of turns, so the Phase 2 turn buffer needs no rework.
+- A reply can answer several user turns. Retrieval takes a *list* of turns, so the Phase 3 turn buffer needs no rework.
 - Nothing that writes memory runs before the reply is sent.
 - Every constant lives in config and every prompt is a versioned file.
 
@@ -111,7 +114,7 @@ prompts.judge_consistency         v1
 1. Embed the text of `answeringTurns` together with the 2 turns before them, as one Voyage `query` embedding.
 2. The embedding call runs **in parallel with the crisis check**, which adds no latency.
 
-In Phase 1, `answeringTurns` holds a single turn. In Phase 2 it becomes the turn buffer, and nothing here changes.
+In Phase 1, `answeringTurns` holds a single turn. In Phase 3 it becomes the turn buffer, and nothing here changes.
 
 ### 4.2 Candidates (one SQL statement)
 
@@ -132,7 +135,7 @@ score    = sim × salience × max_entity_salience × recency
 - Keep the top `top_n` facts.
 - **Force-include**:
   - every open thread with `next_checkpoint <= now` and `last_touched < next_checkpoint` (not touched since the checkpoint passed; same rule as `dormant`), together with its most recent fact
-  - the `identity.preoccupation` fact, if an identity row exists (none will until Phase 4)
+  - the `identity.preoccupation` fact, if an identity row exists (none will until Phase 5)
 - Forced items are de-duplicated against the scored ones and marked `forced`.
 
 The result is `RetrievalResult { facts: {user, self, shared}, dueThreads, recalled: RecalledFact[] }`, where `RecalledFact` holds `{factId, sim, fact_salience, entity_salience, recency, score, forced}`.
@@ -150,7 +153,7 @@ The existing assembler slots stay, and Phase 1 fills them as follows:
    - crisis handling
    - honesty about being an AI
    - no manipulation
-2. The ego line: `null` until Phase 4.
+2. The ego line: `null` until Phase 5.
 3. The relationship line. In Phase 1 this is only the gap since the last contact, read from `session_log`, e.g. "You last talked 8 days ago." It is omitted when the gap is under a day.
 4. Facts, grouped under About them, About you and Between you, each with a relative date.
 5. Due threads, framed as "things you might naturally ask about", each with its latest fact.

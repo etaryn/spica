@@ -19,7 +19,7 @@ const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), us
 const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main") });
 
 /** Assertion types defined by v2 §14.2 but implemented in later phases. */
-export const DEFERRED: Record<string, number> = { reach_out: 5 };
+export const DEFERRED: Record<string, number> = { reach_out: 6 };
 const DeferredAssertion = z.looseObject({ type: z.enum(["reach_out"]) });
 
 export const ScriptSchema = z.object({
@@ -36,7 +36,7 @@ export const ScriptSchema = z.object({
 export type Script = z.infer<typeof ScriptSchema>;
 
 /**
- * Stand-in for the Phase 6 onboarding survey (v2 §12): user facts with source "onboarding",
+ * Stand-in for the Phase 7 onboarding survey (v2 §12): user facts with source "onboarding",
  * reduced confidence and moderate salience. Reveal pacing isn't built yet, so they are fully retrievable.
  */
 export const ProfileSchema = z.object({

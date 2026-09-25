@@ -312,7 +312,7 @@ There is a single store (`fact`, `entity`, `thread`) for the user, Spica and oth
 ### 7.2 Weight dynamics [DECIDED]
 
 - Extraction assigns the initial salience. Emotionally charged facts (high |valence|) and repeated ones start and stay higher. A repeat is a reconcile duplicate, which bumps salience by `reconcile.duplicate_bump`.
-- **Recall reinforces weight.** Each inclusion in a prompt bumps salience by `retrieval.recall_bump` (0.03), capped at `retrieval.recall_cap` (0.95), and increments `recall_count`. Only unforced inclusions with similarity at least `retrieval.reinforce_min_sim` (0.5) count, so a fact dragged in by salience alone, a due thread or the preoccupation doesn't keep itself alive. [ADDED; final Phase 1 review 2026-09-25]
+- **Recall reinforces weight.** Each inclusion in a prompt bumps salience by `retrieval.recall_bump` (0.03), capped at `retrieval.recall_cap` (0.95), and increments `recall_count`. Only unforced inclusions with similarity at least `retrieval.reinforce_min_sim` (0.5) count, so a fact dragged in by salience alone, a due thread or the preoccupation doesn't keep itself alive. [DECIDED; Ethan confirmed 2026-09-25]
 - **Decay pass** (`decay_pass`, a `decay.cron`-scheduled pg-boss job over all users at once, not per-user batches; built in Phase 1 by Ethan's 2026-09-24 decision):
   - Facts untouched for `decay.grace_days` (3) since the later of `created_at` / `last_recalled_at` lose salience at a rate of `decay.rate` (0.08), inversely proportional to salience (so high-salience facts fade slower).
   - Below `decay.stale_floor` (0.05, config), set `status = stale`. The fact is excluded from retrieval but never deleted.
@@ -502,7 +502,7 @@ The directive's worked traces are seed scripts. The minimum set is 20 scripts fo
 - `recall` passes on a majority of runs
 - `no_false_recall`, `consistency` and `state` must pass every run
 
-`baseline.json` stores a pass rate per script, and `--compare` flags any drop. When the simulated clock advances N days, the harness runs the decay pass N times. [DECIDED; Ethan 2026-09-24, Phase 1 design]
+`baseline.json` stores a pass rate per script (strict: a run counts only if every assertion in it passed; Ethan confirmed 2026-09-25), and `--compare` flags any drop. When the simulated clock advances N days, the harness runs the decay pass N times. [DECIDED; Ethan 2026-09-24, Phase 1 design]
 
 **Phase 1 additions.** A script gains `mode` (`any`, the default, or `real`; a `real` script is reported `skipped`, never a regression, under `--llm=fake`). A session gains `forget` (a list of substrings; any of the user's remembered facts containing one is hard-deleted at the start of that session, exercising section 7.5's delete). The `recall` assertion gains `session` (which of the user's sessions, 1-indexed, to check). New `state` checks: `all_extracted`, `fact_status {contains, status}`, `thread_status {contains, status}`, `fact_count {contains?, status?, subject?}`, `entity_exists {name}`, `entity_count {type?, subject?}`, `fact_flag {contains?, flag}`, `prompt_mentions {marker}` (counts reply prompts containing `marker`, for isolation checks).
 

@@ -64,7 +64,7 @@ retrieval.top_n                   12
 retrieval.recency_half_life_days  30
 retrieval.recall_bump             0.03
 retrieval.recall_cap              0.95
-retrieval.reinforce_min_sim       0.5   [ADDED] unforced recalls below this similarity get a trace but no reinforcement
+retrieval.reinforce_min_sim       0.5   [DECIDED 2026-09-25] unforced recalls below this similarity get a trace but no reinforcement
 retrieval.embed_timeout_ms        2000
 retrieval.context_turns           2
 retrieval.max_due_threads         5
@@ -319,5 +319,5 @@ The existing 3 Phase 0 scripts stay.
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` all pass.
 - `pnpm eval --llm=fake --compare` shows no regressions.
 - `pnpm eval --llm=real --runs 3` passes all 26 scripts under the §10.1 rules. This needs `VOYAGE_API_KEY`.
-- Ethan has reviewed and edited `prompts/persona/v1.md`, or has explicitly accepted the draft for testing.
+- Ethan has reviewed and edited `prompts/persona/v1.md`, or has explicitly accepted the draft for testing. (Accepted for the test phase, 2026-09-25.)
 - v2 is updated with every new field, job and config key. `DECISIONS.md` has an entry for each uncovered choice. CLAUDE.md's current phase is advanced.

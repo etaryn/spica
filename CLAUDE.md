@@ -152,13 +152,13 @@ crisis skips it) → SSE → **cold path** (async).
 | 6. Onboarding test | Questionnaire, reveal pacing, results screen |
 | 7. Extension stubs | Event bus, module registration, social stubs |
 
-**Current phase: 1 (Memory engine), implemented; exit test pending the real
-eval run.** Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-The one permitted `pnpm eval --llm=real --runs 3` attempt errored on every
-script with a Voyage HTTP 429 (rate limit) before any assertion ran, so the
-exit test itself has not yet been exercised — see README's Checks section.
-Persona v1 (`prompts/persona/v1.md`) is Claude's draft, pending Ethan's
-review (v2 §9.1). Each phase's exit test is in v2 §15.
+**Current phase: 1 (Memory engine), implemented; exit test failing.**
+Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
+First real run (`pnpm eval --llm=real --runs 3`, 2026-09-25): 11/26 pass,
+13 fail (mostly `no_false_recall`, some `recall` and state checks), 2 error
+(intermittent empty reply text from the reply model). No real baseline yet.
+Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
+(v2 §9.1). Each phase's exit test is in v2 §15.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
 1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far

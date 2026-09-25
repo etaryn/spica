@@ -157,3 +157,21 @@ export async function ReachOutsTab({ db, userId }: { db: Db; userId: string }) {
     </table>
   );
 }
+
+export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
+  const rows = await r.listJudgeLog(db, userId);
+  if (!rows.length) return <Empty phase={2} />;
+  return (
+    <table className={styles.table}>
+      <thead><tr><th>at</th><th>kind</th><th>attempt</th><th>outcome</th><th>source</th><th>ms</th><th>prompt</th><th>output</th><th>input</th></tr></thead>
+      <tbody>
+        {rows.map((x) => (
+          <tr key={x.id}>
+            <td>{iso(x.created_at)}</td><td>{x.kind}</td><td>{x.attempt}</td><td>{x.outcome ?? "—"}</td><td>{x.source}</td>
+            <td>{x.latency_ms}</td><td>{x.prompt_version}</td><td>{json(x.output)}</td><td>{json(x.input)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}

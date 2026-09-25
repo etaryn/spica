@@ -72,6 +72,8 @@ export const threadStakes = pgEnum("thread_stakes", ["low", "med", "high"]);
 // Declaration order matters: `user` sorts before `companion` (transcript tie-break).
 export const sessionRole = pgEnum("session_role", ["user", "companion"]);
 export const sessionTrigger = pgEnum("session_trigger", ["reach_out"]);
+export const judgeKind = pgEnum("judge_kind", ["guard", "turn"]);
+export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable"]);
 
 const userRef = () => uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" });
 
@@ -240,3 +242,20 @@ export const reach_out_log = pgTable("reach_out_log", {
   turn_id: uuid("turn_id").references(() => session_log.id, { onDelete: "set null" }),
   created_at: ts("created_at").notNull(),
 }, (t) => [index("reach_out_log_user_created_idx").on(t.user_id, t.created_at)]);
+
+/** Every guard decision (Phase 2) and turn-taking judge decision (Phase 3), v2 §5.8. Never read by the chat loop. */
+export const judge_log = pgTable("judge_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: userRef(),
+  kind: judgeKind("kind").notNull(),
+  turn_id: uuid("turn_id").references(() => session_log.id, { onDelete: "cascade" }),
+  attempt: integer("attempt").notNull(),
+  input: jsonb("input").notNull(),
+  output: jsonb("output").notNull(),
+  outcome: guardOutcome("outcome"),
+  source: text("source").notNull(),
+  latency_ms: integer("latency_ms").notNull(),
+  model: text("model").notNull(),
+  prompt_version: text("prompt_version").notNull(),
+  created_at: ts("created_at").notNull(),
+}, (t) => [index("judge_log_user_created_idx").on(t.user_id, t.created_at)]);

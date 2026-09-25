@@ -39,10 +39,15 @@ async function seedEverything(userId: string) {
   });
   await db.insert(s.ego_tick).values({ user_id: userId, mood_valence: 0, mood_arousal: 0.5, energy: 0.5, reason: "test", created_at: T });
   await db.insert(s.reach_out_log).values({ user_id: userId, candidates: [], gate_results: {}, sent: false, created_at: T });
+  await db.insert(s.judge_log).values({
+    user_id: userId, kind: "guard", turn_id: turnId, attempt: 1, input: {}, output: {}, outcome: "passed",
+    source: "model", latency_ms: 1, model: "m", prompt_version: "guard@v1", created_at: T,
+  });
 }
 
 const domainTables = [
   s.fact, s.entity, s.thread, s.identity, s.relationship, s.session_log, s.retrieval_trace, s.ego_tick, s.reach_out_log,
+  s.judge_log,
 ] as const;
 
 describe("schema", () => {

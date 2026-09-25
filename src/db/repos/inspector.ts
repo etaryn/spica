@@ -2,7 +2,7 @@ import { and, arrayContains, desc, eq, getTableColumns, sql } from "drizzle-orm"
 import { z } from "zod";
 import type { Db } from "../client";
 import {
-  ego_tick, entity, fact, factStatus, factSubject, identity, reach_out_log, relationship, retrieval_trace, thread,
+  ego_tick, entity, fact, factStatus, factSubject, identity, judge_log, reach_out_log, relationship, retrieval_trace, thread,
 } from "../schema";
 
 export type FactFilters = {
@@ -66,3 +66,7 @@ export const listRetrievalTraces = (db: Db, userId: string) =>
 
 export const listReachOuts = (db: Db, userId: string) =>
   db.select().from(reach_out_log).where(eq(reach_out_log.user_id, userId)).orderBy(desc(reach_out_log.created_at)).limit(200);
+
+export const listJudgeLog = (db: Db, userId: string) =>
+  db.select().from(judge_log).where(eq(judge_log.user_id, userId))
+    .orderBy(desc(judge_log.created_at), desc(judge_log.attempt)).limit(200);

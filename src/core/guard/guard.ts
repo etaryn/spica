@@ -17,10 +17,14 @@ export type GuardInput = {
 export type Violation = { category: Category; claim: string };
 export type GuardVerdict = {
   ok: boolean; violations: Violation[]; source: "model" | "keyword_fallback";
+  /** The guard's brief note on its verdict (judge_log only); null when the model gave none (keyword fallback). */
+  reasoning: string | null;
   latencyMs: number; error: string | null; promptVersion: string;
 };
 
+/** `reasoning` comes first so structured output makes the model think before it labels. */
 export const GuardResultSchema = z.object({
+  reasoning: z.string(),
   violations: z.array(z.object({ category: z.enum(CATEGORIES), claim: z.string() })),
 });
 
@@ -68,14 +72,14 @@ export async function checkMessage(deps: Pick<Deps, "llm" | "config" | "clock">,
         system: loadPrompt(name, version), input: renderGuardInput(input), schema: GuardResultSchema,
         timeoutMs: config.guard.timeout_ms, maxTokens: config.models.guard_max_tokens,
       }), config.guard.timeout_ms);
-      return { ok: r.violations.length === 0, violations: r.violations, source: "model", latencyMs: elapsed(), error: null, promptVersion };
+      return { ok: r.violations.length === 0, violations: r.violations, reasoning: r.reasoning, source: "model", latencyMs: elapsed(), error: null, promptVersion };
     } catch (e) {
       error = errName(e);
     }
   }
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);
   return {
-    ok: hit === null, violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [],
+    ok: hit === null, violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [], reasoning: null,
     source: "keyword_fallback", latencyMs: elapsed(), error, promptVersion,
   };
 }

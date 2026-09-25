@@ -242,7 +242,7 @@ describe("handleUserMessage", () => {
     deps.llm.handlers.guard = (i) => {
       inputs.push(String(i));
       return messageToCheck(String(i)).includes("again")
-        ? { violations: [{ category: "false_familiarity", claim: "presumes the role" }] } : { violations: [] };
+        ? { reasoning: "presumes", violations: [{ category: "false_familiarity", claim: "presumes the role" }] } : { reasoning: "ok", violations: [] };
     };
     deps.llm.replies.push("what's the role again?", "congrats!! what's the role?");
     const r = await handleUserMessage(deps, u, msg("got the job!!"));
@@ -262,7 +262,7 @@ describe("handleUserMessage", () => {
   test("crisis turn uses the crisis rubric; a double harm flag sends the crisis fallback with the resources card", async () => {
     const deps = makeTestDeps();
     deps.llm.classify = () => ({ flag: true, category: "self_harm" });
-    deps.llm.handlers.guard_crisis = () => ({ violations: [{ category: "harm", claim: "minimises" }] });
+    deps.llm.handlers.guard_crisis = () => ({ reasoning: "minimises", violations: [{ category: "harm", claim: "minimises" }] });
     const u = await createTestUser();
     const input = msg("i don't want to be here anymore");
     const r = await handleUserMessage(deps, u, input);

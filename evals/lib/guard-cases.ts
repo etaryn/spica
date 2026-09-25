@@ -44,7 +44,7 @@ export function toGuardInput(c: GuardCase, at: Date): GuardInput {
 }
 
 export function gradeCase(c: GuardCase, v: GuardVerdict): { status: CaseStatus; detail: string } {
-  const got = v.violations.map((x) => `${x.category}: ${x.claim}`).join(" | ") || "ok";
+  const got = (v.violations.map((x) => `${x.category}: ${x.claim}`).join(" | ") || "ok") + (v.reasoning ? ` [reasoning: ${v.reasoning}]` : "");
   if (v.source === "keyword_fallback") return { status: "error", detail: `guard unavailable (${v.error ?? "error"})` };
   if (c.expect === "pass") return { status: v.ok ? "pass" : "fail", detail: got };
   const hit = !v.ok && v.violations.some((x) => (c.expect as string[]).includes(x.category));

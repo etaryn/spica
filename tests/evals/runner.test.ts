@@ -230,7 +230,7 @@ test("guard assertion reads judge_log outcomes", async () => {
 
   const alwaysThreat = () => {
     const llm = makeLlm();
-    llm.handlers.guard = () => ({ violations: [{ category: "threat", claim: "x" }] });
+    llm.handlers.guard = () => ({ reasoning: "x", violations: [{ category: "threat", claim: "x" }] });
     return llm;
   };
   const r2 = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: alwaysThreat, judge: false });

@@ -18,7 +18,7 @@ function scripted(deps: ReturnType<typeof makeTestDeps>) {
     if (m.includes("THREAT")) violations.push({ category: "threat", claim: "threat" });
     const presumes = (m.match(/PRESUME/g) ?? []).length;
     for (let i = 0; i < presumes; i++) violations.push({ category: "false_familiarity", claim: "presumes" });
-    return { violations };
+    return { reasoning: violations.length ? "flagged by marker" : "ok", violations };
   };
 }
 
@@ -46,7 +46,7 @@ describe("guardOutgoing", () => {
     expect(regen.mock.calls[0]![0]).toMatch(/acted as if you already knew/);
     const rows = (await listJudgeLogs(getTestDb(), u)).reverse();
     expect(rows.map((r) => [r.attempt, r.outcome])).toEqual([[1, null], [2, "regenerated"]]);
-    expect(rows[0]!.output).toEqual({ violations: [{ category: "false_familiarity", claim: "presumes" }] });
+    expect(rows[0]!.output).toEqual({ reasoning: "flagged by marker", violations: [{ category: "false_familiarity", claim: "presumes" }] });
   });
 
   test("safety twice → fallback line", async () => {
@@ -99,7 +99,7 @@ describe("guardOutgoing", () => {
 
   test("crisis kind uses the crisis fallback list", async () => {
     const deps = makeTestDeps();
-    deps.llm.handlers.guard_crisis = () => ({ violations: [{ category: "harm", claim: "minimises" }] });
+    deps.llm.handlers.guard_crisis = () => ({ reasoning: "minimises", violations: [{ category: "harm", claim: "minimises" }] });
     const u = await createTestUser();
     const r = await guardOutgoing(deps, args(u, "you'll be fine", async () => "cheer up", "crisis_reply"));
     expect(r).toEqual({ text: fallbackLine(deps.config, "crisis_reply", null), outcome: "fallback" });

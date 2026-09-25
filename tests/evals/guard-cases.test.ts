@@ -6,7 +6,7 @@ import { matchKeyword } from "@/core/guard/keywords";
 import { caseStatus, gradeCase, GuardCaseSchema, loadGuardFiles } from "../../evals/lib/guard-cases";
 
 const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
-  ok: true, violations: [], source: "model", latencyMs: 1, error: null, promptVersion: "guard@v1", ...over,
+  ok: true, violations: [], reasoning: "r", source: "model", latencyMs: 1, error: null, promptVersion: "guard@v1", ...over,
 });
 const c = (expect: unknown) => GuardCaseSchema.parse({ name: "c", message: "m", expect });
 
@@ -18,6 +18,11 @@ describe("gradeCase", () => {
     expect(gradeCase(c(["threat", "punishment"]), bad).status).toBe("pass");
     expect(gradeCase(c(["contempt"]), bad).status).toBe("fail");
     expect(gradeCase(c(["contempt"]), verdict({})).status).toBe("fail");
+  });
+  test("failure details include the guard's reasoning", () => {
+    const g = gradeCase(c("pass"), verdict({ ok: false, reasoning: "no role known", violations: [{ category: "threat", claim: "x" }] }));
+    expect(g.detail).toContain("threat: x");
+    expect(g.detail).toContain("no role known");
   });
   test("a keyword-fallback verdict is an error, never a pass", () => {
     expect(gradeCase(c("pass"), verdict({ source: "keyword_fallback" })).status).toBe("error");

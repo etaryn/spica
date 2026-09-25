@@ -3,7 +3,7 @@ import { SimClock } from "@/core/clock";
 import { loadConfig } from "@/core/config";
 import { hasSafety } from "@/core/guard/categories";
 import { correctiveNote, fallbackLine, parseFallbacks, pickFallback } from "@/core/guard/fallback";
-import { checkMessage, messageToCheck, renderGuardInput, type GuardInput } from "@/core/guard/guard";
+import { checkMessage, GuardResultSchema, messageToCheck, renderGuardInput, type GuardInput } from "@/core/guard/guard";
 import { matchKeyword } from "@/core/guard/keywords";
 import { FakeLLMProvider } from "@/core/llm/fake";
 
@@ -61,11 +61,23 @@ describe("checkMessage", () => {
   test("model verdict: ok when no violations; violations passed through", async () => {
     const d = deps();
     d.llm.handlers.guard = (i) => (messageToCheck(String(i)).includes("remind me")
-      ? { violations: [{ category: "false_familiarity", claim: "asks to be reminded of a role never mentioned" }] }
-      : { violations: [] });
-    expect(await checkMessage(d, input("congrats!"))).toMatchObject({ ok: true, source: "model", violations: [], promptVersion: "guard@v1" });
+      ? { reasoning: "no role in the inputs", violations: [{ category: "false_familiarity", claim: "asks to be reminded of a role never mentioned" }] }
+      : { reasoning: "plain congratulations", violations: [] });
+    expect(await checkMessage(d, input("congrats!"))).toMatchObject({
+      ok: true, source: "model", violations: [], reasoning: "plain congratulations", promptVersion: "guard@v1",
+    });
     const bad = await checkMessage(d, input("what's the role again? remind me"));
-    expect(bad).toMatchObject({ ok: false, source: "model", violations: [{ category: "false_familiarity" }] });
+    expect(bad).toMatchObject({ ok: false, source: "model", reasoning: "no role in the inputs", violations: [{ category: "false_familiarity" }] });
+  });
+
+  test("reasoning is required: a result without it counts as a failed call and falls back", async () => {
+    const d = deps();
+    d.llm.handlers.guard = () => ({ violations: [] });
+    expect(await checkMessage(d, input("sounds great"))).toMatchObject({ source: "keyword_fallback", reasoning: null });
+  });
+
+  test("the schema asks for reasoning before violations", () => {
+    expect(Object.keys(GuardResultSchema.shape)).toEqual(["reasoning", "violations"]);
   });
 
   test("crisis kind uses the crisis rubric and purpose", async () => {

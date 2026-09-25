@@ -63,7 +63,7 @@ async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: 
     kind: "guard", turn_id: a.turnId, attempt: i + 1,
     input: { ...a.input, text: c.text },
     output: c.verdict.source === "model"
-      ? { violations: c.verdict.violations }
+      ? { reasoning: c.verdict.reasoning, violations: c.verdict.violations }
       : { error: c.verdict.error, keyword_violations: c.verdict.violations },
     outcome: i === checked.length - 1 ? outcome : null,
     source: c.verdict.source, latency_ms: c.verdict.latencyMs,

@@ -116,3 +116,63 @@ test("judged assertions call the judge with an ordered transcript", async () => 
   const judgeInput = llm.structuredCalls.find((c) => c.purpose === "judge_recall")!.input;
   expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: \[7 days later\] b\)/);
 });
+
+test("each script user starts with the named onboarding profile (default basic); profile none opts out", async () => {
+  const { fact } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const profiles = { basic: { confidence: 0.6, salience: 0.5, facts: [
+    { kind: "trait" as const, content: "The user's name is Sam." },
+    { kind: "preference" as const, content: "The user drinks a lot of coffee." },
+  ] } };
+  const base = { sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "state", check: "turn_count", expect: 2 }] };
+  const seeded = await runScript(ScriptSchema.parse({ name: "p1", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  expect(seeded.status).toBe("pass");
+  const rows = await getTestDb().select().from(fact).where(eq(fact.source, "onboarding"));
+  expect(rows.map((r) => r.content).sort()).toEqual(["The user drinks a lot of coffee.", "The user's name is Sam."]);
+  for (const r of rows) {
+    expect(r.subject).toBe("user");
+    expect(r.confidence).toBeCloseTo(0.6, 5);
+    // Seeded at 0.5; one recall during the turn may add retrieval.recall_bump.
+    expect(r.salience).toBeGreaterThanOrEqual(0.5 - 1e-6);
+    expect(r.salience).toBeLessThanOrEqual(0.5 + config.retrieval.recall_bump + 1e-6);
+  }
+
+  await runScript(ScriptSchema.parse({ name: "p2", profile: "none", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  expect(await getTestDb().select().from(fact).where(eq(fact.source, "onboarding"))).toEqual([]);
+
+  const missing = await runScript(ScriptSchema.parse({ name: "p3", profile: "nope", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  expect(missing.status).toBe("error");
+  expect(missing.error).toMatch(/profile "nope"/);
+});
+
+test("the false-recall judge sees session timing and the onboarding profile as known facts", async () => {
+  const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
+  llm.handlers.judge_false_recall = () => ({ violations: [] });
+  const profiles = { basic: { confidence: 0.6, salience: 0.5, facts: [{ kind: "trait" as const, content: "The user's name is Sam." }] } };
+  const script = ScriptSchema.parse({
+    name: "jf",
+    sessions: [{ at: "day 0 09:00", turns: ["a"] }, { at: "+10d", turns: ["b"] }],
+    assertions: [{ type: "no_false_recall" }],
+  });
+  await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true, profiles });
+  const input = llm.structuredCalls.find((c) => c.purpose === "judge_false_recall")!.input;
+  expect(input).toMatch(/KNOWN FROM ONBOARDING:\n- The user's name is Sam\./);
+  expect(input).toMatch(/\[Session 1\]\nUser: a\nSpica: [^\n]*\n\n\[Session 2, 10 days later\]\nUser: b/);
+});
+
+test("a transient cold-path failure is retried like pg-boss would (up to cold_path.retry_limit)", async () => {
+  const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
+  let calls = 0;
+  llm.handlers.extract = () => {
+    calls += 1;
+    if (calls === 1) throw new Error("Failed to parse structured output");
+    return { facts: [], entities: [], threads: [] };
+  };
+  const script = ScriptSchema.parse({
+    name: "retry", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
+    assertions: [{ type: "state", check: "all_extracted", expect: true }],
+  });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: false });
+  expect(r.status).toBe("pass");
+  expect(calls).toBe(2);
+});

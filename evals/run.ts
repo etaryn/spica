@@ -12,7 +12,7 @@ import { createDb } from "@/db/client";
 import { runMigrations } from "@/db/migrate";
 import { aggregateRuns, findRegressions, toBaseline, type ScriptSummary } from "./lib/report";
 import { runScript } from "./lib/runner";
-import { loadScripts } from "./lib/script";
+import { loadProfiles, loadScripts } from "./lib/script";
 
 const { values: args } = parseArgs({
   options: {
@@ -53,11 +53,12 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const traceDir = path.join(root, "results", "traces", stamp);
 if (args.trace) mkdirSync(traceDir, { recursive: true });
 
+const profiles = loadProfiles(path.join(root, "profiles"));
 const summaries: ScriptSummary[] = [];
 for (const script of scripts) {
   const attempts = [];
   for (let k = 0; k < runs; k++) {
-    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, judge: real, embedder });
+    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, judge: real, embedder, profiles });
     if (args.trace) {
       writeFileSync(path.join(traceDir, `${script.name}-${k + 1}.json`),
         JSON.stringify({ status: attempt.status, error: attempt.error, assertions: attempt.assertions, meta: attempt.meta, ...attempt.trace }, null, 2));

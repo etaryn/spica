@@ -16,10 +16,15 @@ export async function judgeRecall(llm: LLMProvider, config: Config, a: { fact: s
   return { pass: v.mentioned && v.unprompted, detail: v.mentioned ? (v.unprompted ? v.quote ?? "" : "mentioned only after the user did") : "not mentioned" };
 }
 
-export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { userSaid: string[]; spicaSaid: string[] }) {
+export type TimedSession = { label: string; lines: Line[] };
+
+/** `known`: facts Spica legitimately has without being told in chat (the onboarding profile). */
+export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { known: string[]; sessions: TimedSession[] }) {
+  const known = a.known.length ? a.known.map((k) => `- ${k}`).join("\n") : "- (nothing)";
+  const convo = a.sessions.map((s) => `[${s.label}]\n${render(s.lines)}`).join("\n\n");
   const v = await llm.classifyJson({
     ...opts(config), purpose: "judge_false_recall", system: loadPrompt("judge/false-recall", config.prompts.judge_false_recall),
-    input: `USER SAID:\n${a.userSaid.map((t) => `- ${t}`).join("\n")}\n\nSPICA SAID:\n${a.spicaSaid.map((t) => `- ${t}`).join("\n")}`,
+    input: `KNOWN FROM ONBOARDING:\n${known}\n\nCONVERSATION:\n${convo}`,
     schema: z.object({ violations: z.array(z.object({ message: z.string(), claim: z.string() })) }),
   });
   return { pass: v.violations.length === 0, detail: v.violations.map((x) => x.claim).join(" | ") };

@@ -26,12 +26,36 @@ export const ScriptSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   description: z.string().optional(),
   mode: z.enum(["any", "real"]).default("any"),
+  /** Onboarding profile seeded for every user before session 1 (evals/profiles/<name>.yaml); "none" starts cold. */
+  profile: z.string().regex(/^[a-z0-9-]+$/).default("basic"),
   turn_gap_seconds: z.number().int().positive().default(30),
   sessions: z.array(Session).min(1),
   assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, DeferredAssertion])).min(1),
 });
 
 export type Script = z.infer<typeof ScriptSchema>;
+
+/**
+ * Stand-in for the Phase 6 onboarding survey (v2 §12): user facts with source "onboarding",
+ * reduced confidence and moderate salience. Reveal pacing isn't built yet, so they are fully retrievable.
+ */
+export const ProfileSchema = z.object({
+  confidence: z.number().min(0).max(1),
+  salience: z.number().min(0).max(1),
+  facts: z.array(z.object({
+    kind: z.enum(["event", "trait", "preference", "state", "opinion", "feeling", "promise"]),
+    content: z.string().min(1),
+  })).min(1),
+});
+export type Profile = z.infer<typeof ProfileSchema>;
+
+export function loadProfiles(dir: string): Record<string, Profile> {
+  const out: Record<string, Profile> = {};
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".yaml") || x.endsWith(".yml")).sort()) {
+    out[f.replace(/\.ya?ml$/, "")] = ProfileSchema.parse(parseYaml(readFileSync(path.join(dir, f), "utf8")));
+  }
+  return out;
+}
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;

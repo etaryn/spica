@@ -14,12 +14,12 @@ import { decayPass } from "@/core/memory/decay";
 import { RecordingQueue } from "@/core/queue";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
-import { forgetFact, listRememberedFacts } from "@/db/repos/facts";
+import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
 import { entity, fact, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
-import { judgeConsistency, judgeFalseRecall, judgeRecall, type Line } from "./judged";
+import { judgeConsistency, judgeFalseRecall, judgeRecall, type Line, type TimedSession } from "./judged";
 import { RecordingLLM } from "./recording-llm";
-import { DEFERRED, parseAt, type Script } from "./script";
+import { DEFERRED, parseAt, type Profile, type Script } from "./script";
 
 const DAY = 86_400_000;
 
@@ -57,7 +57,21 @@ async function memoryDump(db: Db, userIds: Record<string, string>): Promise<RunT
   return out;
 }
 
-export interface RunOptions { db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider; judge: boolean; embedder?: Embedder }
+export interface RunOptions {
+  db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider; judge: boolean; embedder?: Embedder;
+  /** Onboarding profiles by name; scripts default to "basic". Omitted = every user starts cold. */
+  profiles?: Record<string, Profile>;
+}
+
+async function seedProfile(deps: Deps, userId: string, profile: Profile, at: Date): Promise<void> {
+  const vectors = await deps.embedder.embed(profile.facts.map((f) => f.content), "document");
+  for (const [i, f] of profile.facts.entries()) {
+    await insertFact(deps.db, userId, {
+      subject: "user", kind: f.kind, content: f.content, embedding: vectors[i]!, created_at: at, status: "open",
+      salience: profile.salience, valence: 0, confidence: profile.confidence, source: "onboarding",
+    });
+  }
+}
 
 function userKeys(script: Script): string[] {
   const keys = new Set<string>(script.sessions.map((s) => s.user));
@@ -66,6 +80,41 @@ function userKeys(script: Script): string[] {
     if (a.type === "state" && typeof a.params.other === "string") keys.add(a.params.other);
   }
   return [...keys];
+}
+
+async function retrying<T>(retries: number, fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= retries) throw e;
+    }
+  }
+}
+
+function elapsedLabel(ms: number): string {
+  const hours = ms / 3_600_000;
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} later`;
+  if (hours >= 20) return plural(Math.round(hours / 24), "day");
+  if (hours >= 1) return plural(Math.round(hours), "hour");
+  return plural(Math.max(1, Math.round(ms / 60_000)), "minute");
+}
+
+/** One user's turns grouped by session, each labelled with the time since that user's previous session. */
+function timedSessions(turns: TurnResult[], starts: Date[]): TimedSession[] {
+  const out: TimedSession[] = [];
+  let prev: Date | null = null;
+  let current = -1;
+  for (const t of turns) {
+    if (t.session !== current) {
+      const start = starts[t.session - 1]!;
+      out.push({ label: `Session ${out.length + 1}${prev ? `, ${elapsedLabel(start.getTime() - prev.getTime())}` : ""}`, lines: [] });
+      prev = start;
+      current = t.session;
+    }
+    out[out.length - 1]!.lines.push({ role: "user", text: t.text }, { role: "companion", text: t.reply });
+  }
+  return out;
 }
 
 export async function runScript(script: Script, opts: RunOptions): Promise<ScriptResult> {
@@ -93,7 +142,15 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
 
   const results: Record<string, TurnResult[]> = {};
   const prompts: Record<string, string[]> = {};
+  const sessionStarts: Date[] = [];
+  let known: string[] = [];
   try {
+    if (opts.profiles && script.profile !== "none") {
+      const profile = opts.profiles?.[script.profile];
+      if (!profile) throw new Error(`profile "${script.profile}" not found in evals/profiles`);
+      known = profile.facts.map((f) => f.content);
+      for (const id of Object.values(userIds)) await seedProfile(deps, id, profile, first);
+    }
     let prevStart: Date | null = null;
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
@@ -108,6 +165,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
       clock.set(start);
       prevStart = start;
+      sessionStarts[i] = start;
       const userId = userIds[s.user]!;
       for (const needle of s.forget) {
         for (const f of await listRememberedFacts(db, userId)) {
@@ -119,7 +177,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         const r = await handleUserMessage(deps, userId, { clientMessageId: randomUUID(), text });
         (prompts[s.user] ??= []).push(...llm.prompts.slice(before));
         (results[s.user] ??= []).push({ session: i + 1, text, reply: r.text, crisisCard: r.crisisCard });
-        for (const job of queue.drain()) await handleColdPath(deps, job.data);
+        // pg-boss retries a failed cold_path job up to cold_path.retry_limit times; do the same here.
+        for (const job of queue.drain()) await retrying(config.cold_path.retry_limit, () => handleColdPath(deps, job.data));
         clock.advance(script.turn_gap_seconds * 1000);
       }
     }
@@ -152,14 +211,17 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
           assertions.push({ type: a.type, user: a.user, status: "skipped", detail: "needs --llm=real" });
           continue;
         }
-        const v = a.type === "recall"
-          ? await judgeRecall(baseLlm, config, { fact: a.fact, transcript: transcript(a.user, a.session) })
+        const selfFacts = a.type === "consistency"
+          ? (await db.select({ content: fact.content }).from(fact).where(and(
+              eq(fact.user_id, userIds[a.user]!), eq(fact.subject, "self"), notInArray(fact.status, ["superseded", "stale"]),
+            ))).map((r) => r.content)
+          : [];
+        // One retry: a judge call can transiently return no parsed output.
+        const v = await retrying(1, () => a.type === "recall"
+          ? judgeRecall(baseLlm, config, { fact: a.fact, transcript: transcript(a.user, a.session) })
           : a.type === "no_false_recall"
-            ? await judgeFalseRecall(baseLlm, config, {
-                userSaid: (results[a.user] ?? []).map((r) => r.text), spicaSaid: (results[a.user] ?? []).map((r) => r.reply) })
-            : await judgeConsistency(baseLlm, config, (await db.select({ content: fact.content }).from(fact).where(and(
-                eq(fact.user_id, userIds[a.user]!), eq(fact.subject, "self"), notInArray(fact.status, ["superseded", "stale"]),
-              ))).map((r) => r.content));
+            ? judgeFalseRecall(baseLlm, config, { known, sessions: timedSessions(results[a.user] ?? [], sessionStarts) })
+            : judgeConsistency(baseLlm, config, selfFacts));
         assertions.push({ type: a.type, user: a.user, status: v.pass ? "pass" : "fail", detail: v.detail || undefined });
       } else {
         assertions.push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });

@@ -97,7 +97,7 @@
     "extract": "v2",
     "reconcile": "v1",
     "judge_recall": "v1",
-    "judge_false_recall": "v2",
+    "judge_false_recall": "v3",
     "judge_consistency": "v1"
   },
   "queue": {

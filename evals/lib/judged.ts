@@ -11,9 +11,12 @@ export async function judgeRecall(llm: LLMProvider, config: Config, a: { fact: s
   const v = await llm.classifyJson({
     ...opts(config), purpose: "judge_recall", system: loadPrompt("judge/recall", config.prompts.judge_recall),
     input: `FACT: ${a.fact}\n\nTRANSCRIPT:\n${render(a.transcript)}`,
-    schema: z.object({ mentioned: z.boolean(), unprompted: z.boolean(), quote: z.string().nullable() }),
+    schema: z.object({ explicit: z.boolean(), implicit: z.boolean(), unprompted: z.boolean(), quote: z.string().nullable() }),
   });
-  return { pass: v.mentioned && v.unprompted, detail: v.mentioned ? (v.unprompted ? v.quote ?? "" : "mentioned only after the user did") : "not mentioned" };
+  // The exit test needs an explicit mention; acting on the fact silently is tracked but doesn't pass (Ethan, 2026-09-25).
+  if (!v.explicit && v.implicit && v.unprompted) return { pass: false, detail: `implicit use only (tracked, not counted): ${v.quote ?? ""}` };
+  if (!v.explicit) return { pass: false, detail: "not mentioned" };
+  return { pass: v.unprompted, detail: v.unprompted ? v.quote ?? "" : "mentioned only after the user did" };
 }
 
 export type TimedSession = { label: string; lines: Line[] };

@@ -103,7 +103,7 @@ test("+1d after a multi-turn session runs exactly one decay pass", async () => {
 
 test("judged assertions call the judge with an ordered transcript", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
-  llm.handlers.judge_recall = () => ({ mentioned: true, unprompted: true, quote: "q" });
+  llm.handlers.judge_recall = () => ({ explicit: true, implicit: false, unprompted: true, quote: "q" });
   llm.handlers.judge_false_recall = () => ({ violations: [], onboarding_as_chat: [] });
   llm.handlers.judge_consistency = () => ({ contradictions: [] });
   const script = ScriptSchema.parse({
@@ -187,4 +187,21 @@ test("onboarding facts presented as past chat are reported as deferred (Phase 6)
   llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "invented a brother" }], onboarding_as_chat: [] });
   const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
   expect(r2.assertions[0]).toMatchObject({ status: "fail", detail: "invented a brother" });
+});
+
+test("recall passes only on an explicit mention; silent use is tracked in the detail but doesn't pass", async () => {
+  const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
+  const script = ScriptSchema.parse({ name: "rc", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "recall", session: 1, fact: "x" }] });
+  const run = async (verdict: object, name: string) => {
+    llm.handlers.judge_recall = () => verdict;
+    return (await runScript({ ...script, name }, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true })).assertions[0];
+  };
+  expect(await run({ explicit: true, implicit: false, unprompted: true, quote: "since you're veggie" }, "rc1"))
+    .toMatchObject({ status: "pass", detail: "since you're veggie" });
+  expect(await run({ explicit: false, implicit: true, unprompted: true, quote: "vegetarian crowd or mixed?" }, "rc2"))
+    .toMatchObject({ status: "fail", detail: "implicit use only (tracked, not counted): vegetarian crowd or mixed?" });
+  expect(await run({ explicit: true, implicit: false, unprompted: false, quote: "q" }, "rc3"))
+    .toMatchObject({ status: "fail", detail: "mentioned only after the user did" });
+  expect(await run({ explicit: false, implicit: false, unprompted: false, quote: null }, "rc4"))
+    .toMatchObject({ status: "fail", detail: "not mentioned" });
 });

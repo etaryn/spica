@@ -96,7 +96,7 @@
     "persona": "v1",
     "extract": "v2",
     "reconcile": "v1",
-    "judge_recall": "v1",
+    "judge_recall": "v2",
     "judge_false_recall": "v4",
     "judge_consistency": "v1"
   },

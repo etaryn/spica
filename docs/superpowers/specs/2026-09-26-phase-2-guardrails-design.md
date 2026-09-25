@@ -38,7 +38,7 @@ New table `judge_log` (v2 §5.8), `user_id` → `user(id) ON DELETE CASCADE`:
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | uuid pk | |
-| `user_id` | text not null | |
+| `user_id` | uuid not null (`userRef()`) | |
 | `kind` | enum `judge_kind` (`guard`, `turn`) | `turn` is used from Phase 3 |
 | `turn_id` | uuid null | the user turn being answered (replies); null for messages without one |
 | `attempt` | int not null | 1 = first candidate, 2 = regeneration |

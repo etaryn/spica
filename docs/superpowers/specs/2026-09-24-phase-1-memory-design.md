@@ -1,6 +1,6 @@
 # Phase 1: Memory engine design
 
-Date: 2026-09-24 · Status: awaiting review · Parent: `spica-build-spec-v2.md` (§5, §6.2–6.3, §7, §9.1, §14.2, §15 Phase 1)
+Date: 2026-09-24 · Status: implemented; exit test passed 2026-09-25 (26/26 scripts, `--llm=real --runs 3`) · Parent: `spica-build-spec-v2.md` (§5, §6.2–6.3, §7, §9.1, §14.2, §15 Phase 1)
 
 ## 1. Goal and exit test
 

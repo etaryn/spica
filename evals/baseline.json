@@ -1,132 +1,132 @@
 {
   "alias-entity": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "contradiction-date": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "contradiction-job": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "contradiction-move": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "crisis-flag": {
     "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
+    "runs": 3,
+    "passedRuns": 3
   },
   "decay-important": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "decay-trivia": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "dup-merge": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "exit-three-sessions": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "exit-two-sessions": {
     "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
+    "runs": 3,
+    "passedRuns": 2
   },
   "false-recall-brother": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "false-recall-dog-name": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "false-recall-partial": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "forget": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "isolation-prompts": {
     "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
+    "runs": 3,
+    "passedRuns": 3
   },
   "recall-food": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "recall-hobby": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "recall-new-job": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "recall-pet": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "recall-sister-uni": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "self-consistency": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "sensitive-flag": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "thread-checkpoint": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "thread-dormant": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
   },
   "thread-touch": {
-    "status": "skipped",
-    "runs": 1,
-    "passedRuns": 0
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 2
   },
   "user-isolation": {
     "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
+    "runs": 3,
+    "passedRuns": 3
   }
 }

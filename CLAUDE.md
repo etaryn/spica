@@ -144,7 +144,7 @@ crisis skips it) → SSE → **cold path** (async).
 | Phase | Builds |
 |---|---|
 | 0. Skeleton ✅ | Chat UI, auth, session_log, full schema, crisis check, inspector, eval harness |
-| 1. Memory engine | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
+| 1. Memory engine ✅ | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
 | 2. Guardrails | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
 | 3. Turn-taking + pacing | Buffer / judge / backchannels / pacing, SSE |
 | 4. Relationship + homeostasis | HomeostaticParam, hurt / tension / make-up, ending / repair |
@@ -155,14 +155,15 @@ crisis skips it) → SSE → **cold path** (async).
 
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 
-**Current phase: 1 (Memory engine), implemented; exit test pending a real run.**
-Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-Known Phase 1 failures are reported but don't count, and Phase 1 passes if
-everything else passes: implied familiarity ("what's the role again?"),
+**Current phase: 2 (Guardrails), not started.** Phase 1 (Memory engine) done
+2026-09-25: `pnpm eval --llm=real --runs 3` passes 26/26 and is the real
+baseline in `evals/baseline.json`. Phase 1 design:
+`docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
+Phase 1's known failures are reported but don't count, and are Phase 2's
+first targets: implied familiarity ("what's the role again?"),
 invented specific details and onboarding facts presented as past chat are
 deferred to the Phase 2 guard; knowing a fact without naming it is deferred
 to later recall-style tuning. Misremembering what the user said still fails.
-No real baseline yet.
 Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 (v2 §9.1). Each phase's exit test is in v2 §15.
 

@@ -1,0 +1,71 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { parseArgs } from "node:util";
+import Anthropic from "@anthropic-ai/sdk";
+import { systemClock } from "@/core/clock";
+import { loadConfig, parseConfigOverrides } from "@/core/config";
+import { checkMessage } from "@/core/guard/guard";
+import { AnthropicProvider } from "@/core/llm/anthropic";
+import { caseStatus, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus } from "./lib/guard-cases";
+
+/** Guard fixture suite (spec §7.2): real guard model only; there is no fake mode. */
+const { values: args } = parseArgs({
+  options: {
+    runs: { type: "string", default: "3" },
+    only: { type: "string" },
+    compare: { type: "boolean", default: false },
+    "update-baseline": { type: "boolean", default: false },
+  },
+});
+const runs = Number(args.runs);
+if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer, got ${args.runs}`);
+if (!process.env.ANTHROPIC_API_KEY) throw new Error("pnpm eval:guard needs ANTHROPIC_API_KEY");
+
+const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
+const deps = { llm: new AnthropicProvider(new Anthropic(), config.models), config, clock: systemClock };
+const root = path.join(process.cwd(), "evals");
+const files = loadGuardFiles(path.join(root, "guard"));
+
+type Row = { file: string; name: string; status: "pass" | "fail"; passes: number; runs: number; details: string[] };
+const rows: Row[] = [];
+for (const f of files) {
+  for (const c of f.cases.filter((x) => !args.only || x.name === args.only || f.file === args.only)) {
+    const statuses: CaseStatus[] = [];
+    const details: string[] = [];
+    for (let k = 0; k < runs; k++) {
+      const g = gradeCase(c, await checkMessage(deps, toGuardInput(c, new Date())));
+      statuses.push(g.status);
+      if (g.status !== "pass") details.push(`${g.status}: ${g.detail}`);
+    }
+    const status = caseStatus(statuses, f.gate);
+    const passes = statuses.filter((s) => s === "pass").length;
+    rows.push({ file: f.file, name: c.name, status, passes, runs, details });
+    console.log(`${status.toUpperCase().padEnd(5)} ${f.file}/${c.name}  (${passes}/${runs})${details.length ? `  — ${details[0]}` : ""}`);
+  }
+}
+
+const failed = rows.filter((r) => r.status === "fail");
+console.log(`\n${rows.length - failed.length}/${rows.length} cases pass`);
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+mkdirSync(path.join(root, "results"), { recursive: true });
+writeFileSync(path.join(root, "results", `guard-${stamp}.json`), JSON.stringify({ model: config.models.guard, runs, rows }, null, 2));
+
+const baselinePath = path.join(root, "guard-baseline.json");
+if (args["update-baseline"]) {
+  const baseline = Object.fromEntries(rows.map((r) => [`${r.file}/${r.name}`, { status: r.status, runs: r.runs, passes: r.passes }]));
+  writeFileSync(baselinePath, JSON.stringify(baseline, null, 2) + "\n");
+  console.log(`baseline written: ${baselinePath}`);
+}
+let exitCode = failed.length ? 1 : 0;
+if (args.compare && existsSync(baselinePath)) {
+  const base = JSON.parse(readFileSync(baselinePath, "utf8")) as Record<string, { status: string; runs: number; passes: number }>;
+  const drops = rows.filter((r) => {
+    const b = base[`${r.file}/${r.name}`];
+    return b && b.status === "pass" && (r.status !== "pass" || r.passes / r.runs < b.passes / b.runs);
+  });
+  if (drops.length) {
+    console.error(`REGRESSIONS: ${drops.map((r) => `${r.file}/${r.name}`).join(", ")}`);
+    exitCode = 1;
+  }
+}
+process.exit(exitCode);

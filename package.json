@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "eval": "tsx --env-file-if-exists=.env evals/run.ts"
+    "eval": "tsx --env-file-if-exists=.env evals/run.ts",
+    "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

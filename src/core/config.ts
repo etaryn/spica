@@ -15,6 +15,7 @@ export const ConfigSchema = z.object({
     judge_max_tokens: z.number().int().positive(),
     structured_timeout_ms: z.number().int().positive(),
     reply_effort: z.enum(["low", "medium", "high"]),
+    reply_thinking: z.enum(["disabled", "adaptive"]),
     reply_timeout_ms: z.number().int().positive(),
     reply_max_retries: z.number().int().min(0),
   }),

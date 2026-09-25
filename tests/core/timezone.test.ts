@@ -14,3 +14,8 @@ test("formats in the user's zone with weekday; invalid timezone falls back to UT
   expect(formatLocal(d, "Mars/Olympus")).toMatch(/Mon.*09:00.*UTC/);
   expect(formatLocal(d, null)).toMatch(/UTC/);
 });
+
+test("uses an unambiguous ISO date (dd/mm vs mm/dd misreads turned 5 Jan into 5 May)", () => {
+  expect(formatLocal(new Date("2026-01-05T09:00:00Z"), "Europe/London")).toBe("Mon 2026-01-05 09:00 (Europe/London)");
+  expect(formatLocal(new Date("2026-01-05T02:30:00Z"), "America/New_York")).toBe("Sun 2026-01-04 21:30 (America/New_York)");
+});

@@ -21,8 +21,10 @@ export interface AssembleInput {
   egoLine: string | null;
   relationshipSummary: string | null;
   retrieval: RetrievalResult;
-  recentTurns: { role: "user" | "companion"; text: string }[];
+  recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
   now: Date;
+  /** Mark the first user message after a gap of at least this many hours ("[7 days later] …"). */
+  gapMarkerMinHours?: number;
 }
 
 const DAY = 86_400_000;
@@ -64,12 +66,22 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
 
   const firstUser = input.recentTurns.findIndex((t) => t.role === "user");
   const turns = firstUser === -1 ? [] : input.recentTurns.slice(firstUser);
-  const messages: ChatMessage[] = turns.map((t) => ({
-    role: t.role === "user" ? "user" : "assistant",
-    content: t.text,
-  }));
+  // The window can span days; without a marker the model carries on from the old moment.
+  const messages: ChatMessage[] = turns.map((t, i) => {
+    const prev = turns[i - 1];
+    const gapHours = prev?.created_at && t.created_at ? (t.created_at.getTime() - prev.created_at.getTime()) / 3_600_000 : 0;
+    const marked = t.role === "user" && input.gapMarkerMinHours !== undefined && gapHours >= input.gapMarkerMinHours;
+    return { role: t.role === "user" ? "user" : "assistant", content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text };
+  });
 
   return { system: slots.join("\n\n"), messages };
+}
+
+function elapsed(hours: number): string {
+  const days = Math.round(hours / 24);
+  if (days <= 1) return "1 day";
+  if (days < 14) return `${days} days`;
+  return `about ${Math.round(days / 7)} weeks`;
 }
 
 /** Phase 1 relationship line: time since the previous turn, omitted under `minHours` (v2 §6.2 slot 3). */

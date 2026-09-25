@@ -93,6 +93,7 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     relationshipSummary: gapLine(earlier.at(-1)?.created_at ?? null, userTurn.created_at, config.chat.gap_line_min_hours),
     retrieval,
     recentTurns: recent,
+    gapMarkerMinHours: config.chat.gap_line_min_hours,
     now: clock.now(),
   });
 

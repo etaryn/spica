@@ -103,7 +103,7 @@ The Phase 0 skeleton is built on this stack.
 | Client → server | HTTP POST (`/api/chat` for user messages) |
 | Server → client | **Server-Sent Events**: one stream per signed-in user, carrying replies, backchannels, typing on/off and in-app reach-outs. It is fed by Postgres `LISTEN/NOTIFY` so the worker can push as well. This replaces the directive's WebSocket suggestion, since two-way sockets add nothing when sending is already a POST. |
 | Out-of-app delivery | Web Push notifications (Phase 5), capped by the send gate |
-| Models | Behind `LLMProvider`: a reply model (`claude-sonnet-5`) and a cheap strict-JSON model (`claude-haiku-4-5`) for guard and classifiers. Phase 1 splits the cheap role further in config: `models.extract` (`claude-haiku-4-5`, extraction; `models.extract_max_tokens` 2048) and `models.judge` (`claude-sonnet-5`, evals only; `models.judge_max_tokens` 1024). Every structured (strict-JSON) call shares one timeout, `models.structured_timeout_ms` (30000). Embeddings go through `Embedder` (Voyage `voyage-3.5`, 1024 dimensions). Model IDs live in config. |
+| Models | Behind `LLMProvider`: a reply model (`claude-sonnet-5`; `models.reply_thinking` `disabled`, because adaptive thinking at low effort sometimes ended the turn with no text) and a cheap strict-JSON model (`claude-haiku-4-5`) for guard and classifiers. Phase 1 splits the cheap role further in config: `models.extract` (`claude-haiku-4-5`, extraction; `models.extract_max_tokens` 2048) and `models.judge` (`claude-sonnet-5`, evals only; `models.judge_max_tokens` 1024). Every structured (strict-JSON) call shares one timeout, `models.structured_timeout_ms` (30000). Embeddings go through `Embedder` (Voyage `voyage-3.5`, 1024 dimensions). Model IDs live in config. |
 | Auth | Better Auth, email and password, 18+ enforced at signup |
 | Layout | `src/core` is framework-free, with every side effect injected via `Deps`. `src/db` holds the schema and `userId`-first repos, `src/app` is Next.js, `src/worker` is pg-boss, plus `prompts/` and `evals/`. |
 
@@ -250,7 +250,7 @@ Seed test traces (from the directive): the "insane day → promotion" story and 
 2. **Assemble** the prompt in this fixed order:
    1. the persona document
    2. ego as one natural-language line (never raw numbers)
-   3. a relationship summary drawn from parameter *deviations* (section 8). Phase 1, before `relationship_param` exists, fills this slot with a plain gap line ("you last talked N days ago"), shown once at least `chat.gap_line_min_hours` (24) have passed since the previous turn.
+   3. a relationship summary drawn from parameter *deviations* (section 8). Phase 1, before `relationship_param` exists, fills this slot with a plain gap line ("you last talked N days ago"), shown once at least `chat.gap_line_min_hours` (24) have passed since the previous turn. The same threshold marks the first user message after a gap inside the recent-turns window ("[7 days later] …"), so the model doesn't carry on from the old moment.
    4. her life state: what she is doing now, and whether she is busy
    5. retrieved facts grouped by subject, each with a relative date
    6. due threads, phrased as "things you might naturally ask about"
@@ -572,7 +572,7 @@ Each phase MUST pass its exit test before the next one starts.
 
 ### 16.2 Guardrails (not optional, apply in every phase) [DECIDED; from v1; strengthened by directive rule 7]
 
-- **Crisis handling.** Detection runs on every incoming message, with a classifier that sees recent context, a keyword fallback, and a timeout. It bypasses turn-taking waits, availability and friction. A resources card is attached by code, and is shown even if reply generation fails. Because the card appears only when risk is detected, the reply prompt (`prompts.reply`, v3) tells her not to assume they can see it: if they may be at risk, she names a crisis line or emergency services herself.
+- **Crisis handling.** Detection runs on every incoming message, with a classifier that sees recent context, a keyword fallback, and a timeout. It bypasses turn-taking waits, availability and friction. A resources card is attached by code, and is shown even if reply generation fails. Because the card appears only when risk is detected, the reply prompt (`prompts.reply`, v3 onward; v4 adds the memory-honesty and time-gap rules) tells her not to assume they can see it: if they may be at risk, she names a crisis line or emergency services herself.
 - **Age gating.** Adults only, enforced server-side at signup.
 - **Data handling.**
   - Encryption at rest (storage-level).

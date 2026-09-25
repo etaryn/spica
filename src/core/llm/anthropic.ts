@@ -14,6 +14,8 @@ export class AnthropicProvider implements LLMProvider {
         system,
         messages,
         output_config: { effort: this.models.reply_effort },
+        // Adaptive thinking at low effort sometimes ends the turn after an empty thinking block with no text.
+        thinking: { type: this.models.reply_thinking },
       },
       { timeout: this.models.reply_timeout_ms, maxRetries: this.models.reply_max_retries },
     );

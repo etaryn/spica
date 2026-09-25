@@ -27,6 +27,16 @@ describe("AnthropicProvider.generateReply", () => {
     expect(options).toMatchObject({ timeout: 30000, maxRetries: 1 });
   });
 
+  test("reply thinking mode comes from config (disabled by default: adaptive at low effort can end on a thinking-only turn)", async () => {
+    const ok = { stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] };
+    const off = stubClient(ok);
+    await new AnthropicProvider(off.client, models).generateReply({ system: "s", messages: [] });
+    expect(off.create.mock.calls[0]![0]).toMatchObject({ thinking: { type: "disabled" } });
+    const on = stubClient(ok);
+    await new AnthropicProvider(on.client, { ...models, reply_thinking: "adaptive" }).generateReply({ system: "s", messages: [] });
+    expect(on.create.mock.calls[0]![0]).toMatchObject({ thinking: { type: "adaptive" } });
+  });
+
   test("throws on refusal or empty text", async () => {
     const refusal = stubClient({ stop_reason: "refusal", content: [] });
     await expect(new AnthropicProvider(refusal.client, models).generateReply({ system: "s", messages: [] })).rejects.toThrow(/refus/);

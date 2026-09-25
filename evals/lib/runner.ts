@@ -15,7 +15,7 @@ import { RecordingQueue } from "@/core/queue";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
 import { forgetFact, listRememberedFacts } from "@/db/repos/facts";
-import { fact } from "@/db/schema";
+import { entity, fact, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import { judgeConsistency, judgeFalseRecall, judgeRecall, type Line } from "./judged";
 import { RecordingLLM } from "./recording-llm";
@@ -27,7 +27,36 @@ export type AssertionResult = { type: string; check?: string; user?: string; sta
 export type ScriptResult = {
   name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string;
   meta: { decayPasses: number };
+  /** Local debugging dump (transcripts, final memory state, error causes); written only with `--trace`. */
+  trace?: RunTrace;
 };
+export type RunTrace = {
+  transcripts: Record<string, TurnResult[]>;
+  memory: Record<string, { facts: unknown[]; threads: unknown[]; entities: unknown[] }>;
+  errorChain?: string[];
+};
+
+function errorChain(e: unknown): string[] {
+  const out: string[] = [];
+  for (let cur = e, depth = 0; cur instanceof Error && depth < 5; cur = cur.cause, depth++) out.push(`${cur.name}: ${cur.message}`);
+  return out;
+}
+
+async function memoryDump(db: Db, userIds: Record<string, string>): Promise<RunTrace["memory"]> {
+  const out: RunTrace["memory"] = {};
+  for (const [key, id] of Object.entries(userIds)) {
+    out[key] = {
+      facts: await db.select({ subject: fact.subject, kind: fact.kind, content: fact.content, status: fact.status, salience: fact.salience,
+        created_at: fact.created_at, recall_count: fact.recall_count, thread_id: fact.thread_id, payload: fact.payload }).from(fact).where(eq(fact.user_id, id)),
+      threads: await db.select({ id: thread.id, title: thread.title, status: thread.status, stakes: thread.stakes, next_checkpoint: thread.next_checkpoint,
+        last_touched: thread.last_touched, opened_at: thread.opened_at }).from(thread).where(eq(thread.user_id, id)),
+      entities: await db.select({ name: entity.name, aliases: entity.aliases, subject: entity.subject, relation: entity.relation, salience: entity.salience })
+        .from(entity).where(eq(entity.user_id, id)),
+    };
+  }
+  return out;
+}
+
 export interface RunOptions { db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider; judge: boolean; embedder?: Embedder }
 
 function userKeys(script: Script): string[] {
@@ -95,7 +124,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
     }
   } catch (e) {
-    return { name: script.name, status: "error", assertions: [], error: (e as Error).message, meta };
+    const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), errorChain: errorChain(e) };
+    return { name: script.name, status: "error", assertions: [], error: (e as Error).message, meta, trace };
   }
 
   const transcript = (user: string, session?: number): Line[] =>
@@ -141,5 +171,5 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
 
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
-  return { name: script.name, status, assertions, meta };
+  return { name: script.name, status, assertions, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds) } };
 }

@@ -20,6 +20,7 @@ const { values: args } = parseArgs({
     runs: { type: "string" },
     compare: { type: "boolean", default: false },
     only: { type: "string" },
+    trace: { type: "boolean", default: false },
     "update-baseline": { type: "boolean", default: false },
   },
 });
@@ -48,10 +49,21 @@ await runMigrations(db);
 const scripts = loadScripts(path.join(root, "scripts")).filter((s) => !args.only || s.name === args.only);
 if (scripts.length === 0) throw new Error(args.only ? `no script named ${args.only}` : "no eval scripts found");
 
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+const traceDir = path.join(root, "results", "traces", stamp);
+if (args.trace) mkdirSync(traceDir, { recursive: true });
+
 const summaries: ScriptSummary[] = [];
 for (const script of scripts) {
   const attempts = [];
-  for (let k = 0; k < runs; k++) attempts.push(await runScript(script, { db, dbUrl, config, makeLlm, judge: real, embedder }));
+  for (let k = 0; k < runs; k++) {
+    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, judge: real, embedder });
+    if (args.trace) {
+      writeFileSync(path.join(traceDir, `${script.name}-${k + 1}.json`),
+        JSON.stringify({ status: attempt.status, error: attempt.error, assertions: attempt.assertions, meta: attempt.meta, ...attempt.trace }, null, 2));
+    }
+    attempts.push(attempt);
+  }
   const s = aggregateRuns(attempts);
   summaries.push(s);
   console.log(`${s.status.toUpperCase().padEnd(7)} ${s.name}  (${s.passedRuns}/${s.runs} runs)${s.errors.length ? `  (${s.errors[0]})` : ""}`);
@@ -62,7 +74,6 @@ for (const script of scripts) {
 await pool.end();
 
 mkdirSync(path.join(root, "results"), { recursive: true });
-const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 writeFileSync(path.join(root, "results", `${stamp}.json`), JSON.stringify({ llm: args.llm, runs, results: summaries }, null, 2));
 
 const baselinePath = path.join(root, "baseline.json");

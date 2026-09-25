@@ -9,6 +9,7 @@
     "structured_timeout_ms": 30000,
     "reply_max_tokens": 4096,
     "reply_effort": "low",
+    "reply_thinking": "disabled",
     "reply_timeout_ms": 30000,
     "reply_max_retries": 1
   },
@@ -90,13 +91,13 @@
     "min_password_length": 10
   },
   "prompts": {
-    "reply": "v3",
+    "reply": "v4",
     "crisis_classifier": "v2",
     "persona": "v1",
-    "extract": "v1",
+    "extract": "v2",
     "reconcile": "v1",
     "judge_recall": "v1",
-    "judge_false_recall": "v1",
+    "judge_false_recall": "v2",
     "judge_consistency": "v1"
   },
   "queue": {

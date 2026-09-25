@@ -101,3 +101,31 @@ describe("splitParts", () => {
     expect(splitParts("single", 4)).toEqual(["single"]);
   });
 });
+
+describe("time-gap markers in the message window", () => {
+  const at = (iso: string) => new Date(iso);
+  test("the first user message after a gap of at least gapMarkerMinHours carries an elapsed-time marker", () => {
+    const p = assemblePrompt({
+      ...base, gapMarkerMinHours: 24,
+      recentTurns: [
+        { role: "user", text: "long day", created_at: at("2026-01-05T09:00:00Z") },
+        { role: "companion", text: "oof", created_at: at("2026-01-05T09:00:05Z") },
+        { role: "user", text: "and another thing", created_at: at("2026-01-05T09:02:00Z") },
+        { role: "companion", text: "go on", created_at: at("2026-01-05T09:02:05Z") },
+        { role: "user", text: "back again", created_at: at("2026-01-12T09:00:00Z") },
+      ],
+    });
+    expect(p.messages.map((m) => m.content)).toEqual([
+      "long day", "oof", "and another thing", "go on", "[7 days later] back again",
+    ]);
+  });
+  test("no markers without created_at or below the threshold", () => {
+    const p = assemblePrompt({ ...base, gapMarkerMinHours: 24, recentTurns: [
+      { role: "user", text: "a", created_at: at("2026-01-05T09:00:00Z") },
+      { role: "companion", text: "b", created_at: at("2026-01-05T20:00:00Z") },
+      { role: "user", text: "c", created_at: at("2026-01-06T08:00:00Z") },
+      { role: "user", text: "d" },
+    ] });
+    expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "c", "d"]);
+  });
+});

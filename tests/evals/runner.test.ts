@@ -114,5 +114,5 @@ test("judged assertions call the judge with an ordered transcript", async () => 
   const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
   const judgeInput = llm.structuredCalls.find((c) => c.purpose === "judge_recall")!.input;
-  expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: b\)/);
+  expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: \[7 days later\] b\)/);
 });

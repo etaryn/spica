@@ -559,6 +559,37 @@ Each phase MUST pass its exit test before the next one starts.
 - **Phase 4:** start the send-gate-related thresholds and the hurt expression at their gentlest.
 - **Phase 5:** start at the lowest event frequency, and raise it only after the contradiction test passes at the current frequency.
 
+### 15.1 Carried into Phase 2 (from Phase 1, 2026-09-25)
+
+Phase 2 design starts from this list. Each item names its evidence and where it belongs; items marked *later* are recorded here so they aren't lost, not built in Phase 2.
+
+**Phase 2 guard: the deferred Phase 1 failures.** The Phase 2 exit test counts these again (section 15 table), so they are the guard's first targets. Examples come from the real eval traces (`pnpm eval --llm=real --trace`, `evals/results/traces/`).
+1. **Implied familiarity.** She acts as if she already knew something: "what's the role again, remind me?", "wait, it's actually happening?". Near-certain on job and interview openers with no memories; prompt rules, banned phrases, persona softening and higher effort all failed to remove it (Phase 1 probes). The false-familiarity check in section 6.4 is the fix.
+2. **Invented specific details.** Specifics nobody gave: a visit "in February", "the sloper or the heel hook?", a thesis "viva". Same check as item 1.
+3. **Onboarding facts presented as past chat.** "we talked about coffee last time" for a survey fact. Same check; reveal pacing (Phase 7) later decides when those facts may be used at all.
+4. **Guard inputs.** The false-familiarity check needs the reply's retrieved memories, the onboarding facts and the recent turns, not just the reply text (section 6.4).
+5. **Optional prompt-side help, measured in Phase 1.** A factual relationship line ("This is your first conversation with them") plus two neutral example exchanges brought first-contact confabulation to 0/15 on neutral topics, but not on the job/interview tic. Decide in Phase 2 design whether to ship it alongside the guard.
+
+**Memory quality found in Phase 1 (fit into Phase 2 if cheap, else a later phase).**
+
+6. **Extraction still turns Spica's words into user facts.** After a bare "hey", it stored "The user has continued using oat milk", taken from her question. That breaks `prompts/extract/v2`'s own rule. Candidate fixes: tighten the prompt, or drop user facts whose content only appears in Spica's turns.
+7. **Stale and forgotten facts stay reachable through the recent-turns window.** After 90 days she still asked about the oat milk, straight from the old transcript. Decide whether turns older than the gap marker should be summarised or trimmed. This is v2 §7.5's "the transcript stays" trade-off, now observed.
+8. **Late thread open/touch goes silent.** A thread opened or touched by a job that runs after its checkpoint gets `last_touched` = job time, so it is never due. Fix: exchange-time `opened_at`, and `GREATEST(last_touched, exchangeAt)` on touch.
+9. **Late `resolves` is unguarded.** Only `contradicts` checks whether the target is newer than the candidate.
+10. **Small code follow-ups:** `errorName` (`src/worker/jobs.ts`) loops forever on a cyclic `cause`; entity mentions that share a normalized name skip the alias upsert, so extra aliases aren't saved; blank entity names aren't filtered; the recall write-back's `recalledUpdated` test sits exactly on the `reinforce_min_sim` boundary.
+
+**Eval quality.**
+
+11. **Judge noise.** The consistency judge flagged "Spica has a pet named Pesto" against "watched a film with someone named Pesto"; the false-recall judge sometimes counts open questions ("what grade?") as invented detail. Both are absorbed by the majority rule in Phase 1; tighten the rubrics before Phase 2's exit test counts the deferred categories again.
+12. **Eval pass rate is strict per run** (Ethan, 2026-09-25) while script status uses majority; `--compare` can flag a pass-rate drop on a script that still passes. Revisit if it gets noisy.
+
+**Later phases (recorded, not Phase 2).**
+
+13. **Recall style** (*later*): she often uses a memory without naming it. Explicit mention is the eval's success signal, but less humanlike in the product. Tune how often she names memories (Ethan, 2026-09-25).
+14. **Onboarding-fact decay** (*Phase 7*): after ~90 days unused, even the user's name goes `stale` (section 12).
+15. **How much profile data a good start needs** (*before Phase 7*): the `minimal` / `basic` / `rich` profiles and `pnpm eval --profile <name>` are ready; not run yet.
+16. **Voyage rate limits** (*deploy*): `VoyageEmbedder` has no retry on HTTP 429. Now avoided by the key's tier; a burst beyond it silently loses memories once cold-path retries and sweeps are exhausted.
+
 ---
 
 ## 16. Open decisions and guardrails

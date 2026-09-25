@@ -159,8 +159,8 @@ Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back
 2026-09-25: `pnpm eval --llm=real --runs 3` passes 26/26 and is the real
 baseline in `evals/baseline.json`. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-Phase 1's known failures are reported but don't count, and are Phase 2's
-first targets: implied familiarity ("what's the role again?"),
+Phase 2 starts from v2 §15.1 ("Carried into Phase 2"). Phase 1's known
+failures are reported but don't count, and are Phase 2's first targets: implied familiarity ("what's the role again?"),
 invented specific details and onboarding facts presented as past chat are
 deferred to the Phase 2 guard; knowing a fact without naming it is deferred
 to later recall-style tuning. Misremembering what the user said still fails.

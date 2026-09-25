@@ -1,0 +1,9 @@
+name: first-contact-big-day
+description: 'invented event ("viva")'
+mode: real
+sessions:
+  - at: "day 0 22:00"
+    turns: ["big day tomorrow, wish me luck"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

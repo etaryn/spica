@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { parseAt, ScriptSchema } from "../../evals/lib/script";
+import path from "node:path";
+import { parseAt, ScriptSchema, loadScripts } from "../../evals/lib/script";
 
 describe("parseAt", () => {
   test("absolute day/time from a fixed base", () => {
@@ -65,4 +66,14 @@ describe("onboarding profiles", () => {
     expect(p.minimal!.facts.length).toBeLessThan(p.basic!.facts.length);
     expect(p.basic!.facts.length).toBeLessThan(p.rich!.facts.length);
   });
+});
+
+test("every eval script parses; Phase 2 scripts carry a guard assertion", () => {
+  const scripts = loadScripts(path.join(process.cwd(), "evals", "scripts"));
+  for (const n of ["first-contact-job", "first-contact-interview", "first-contact-move", "first-contact-climbing", "first-contact-visit",
+    "first-contact-big-day", "onboarding-coffee", "onboarding-music", "second-week-job", "absence-return"]) {
+    const s = scripts.find((x) => x.name === n);
+    expect(s, n).toBeDefined();
+    expect(s!.assertions.some((a) => a.type === "guard"), n).toBe(true);
+  }
 });

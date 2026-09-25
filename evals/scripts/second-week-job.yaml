@@ -1,0 +1,11 @@
+name: second-week-job
+description: a remembered job, no invented specifics
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["starting at a new place on monday, bit nervous"]
+  - at: "+7d"
+    turns: ["first week done!"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

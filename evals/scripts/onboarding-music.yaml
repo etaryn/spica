@@ -1,0 +1,9 @@
+name: onboarding-music
+description: onboarding fact (indie music) not presented as past chat
+mode: real
+sessions:
+  - at: "day 0 19:30"
+    turns: ["found a new band I'm obsessed with"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

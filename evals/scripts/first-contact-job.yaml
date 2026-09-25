@@ -1,0 +1,9 @@
+name: first-contact-job
+description: Phase 1 trace — "what's the role again?" on a first-contact job opener (implied familiarity).
+mode: real
+sessions:
+  - at: "day 0 18:00"
+    turns: ["got the job!!!"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

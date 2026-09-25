@@ -1,0 +1,9 @@
+name: first-contact-interview
+description: interview opener with no memories
+mode: real
+sessions:
+  - at: "day 0 21:00"
+    turns: ["interview tomorrow, kinda nervous"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

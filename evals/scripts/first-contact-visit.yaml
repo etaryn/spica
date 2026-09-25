@@ -1,0 +1,9 @@
+name: first-contact-visit
+description: invented month for a visit
+mode: real
+sessions:
+  - at: "day 0 12:00"
+    turns: ["my sister's coming to visit!"]
+assertions:
+  - { type: no_false_recall }
+  - { type: guard, outcome_not: [fallback] }

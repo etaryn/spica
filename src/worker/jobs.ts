@@ -8,7 +8,11 @@ import { DECAY_QUEUE, SWEEP_QUEUE } from "@/core/queue";
  */
 export function errorName(e: unknown): string {
   let err = e;
-  while (err instanceof Error && err.cause instanceof Error) err = err.cause;
+  const seen = new Set<unknown>([err]);
+  while (err instanceof Error && err.cause instanceof Error && !seen.has(err.cause)) {
+    err = err.cause;
+    seen.add(err);
+  }
   return err instanceof Error ? err.constructor.name : "UnknownError";
 }
 

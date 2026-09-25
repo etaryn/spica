@@ -190,4 +190,20 @@ describe("applyExtraction", () => {
     expect(out.inserted).toBe(1);
     expect((await facts.getFact(db(), u, target.id))!.status).toBe("open");
   });
+
+  test("#10 mentions sharing a name merge their aliases; blank names are dropped", async () => {
+    const { u, input } = await setup();
+    const out = await applyExtraction(db(), config, input({
+      entities: [
+        { name: "Mia", aliases: ["my sis"], type: "person", subject: "user", relation: "sister" },
+        { name: " mia ", aliases: ["Mimi"], type: "other", subject: "user", relation: null },
+        { name: "   ", aliases: [], type: "other", subject: "user", relation: null },
+      ],
+      facts: [{ fact: f("Mia called.", { entity_names: ["Mia", " "] }), embedding: vec(), decision: { relation: "new", targetId: null } }],
+    }));
+    expect(out.entitiesCreated).toBe(1);
+    const mia = await findEntityByName(db(), u, "user", "Mimi");
+    expect(mia?.aliases.sort()).toEqual(["Mimi", "my sis"]);
+    expect(mia?.type).toBe("person");
+  });
 });

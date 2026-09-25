@@ -46,6 +46,16 @@ test("scrubErrors keeps LockBusyError a thrown failure (so pg-boss retries) and 
   expect(ran).toBe(1);
 });
 
+test("errorName terminates on a cyclic cause chain", () => {
+  class AErr extends Error {}
+  class BErr extends Error {}
+  const a = new AErr("a");
+  const b = new BErr("b");
+  a.cause = b;
+  b.cause = a;
+  expect(errorName(a)).toBe("BErr");
+});
+
 test("ensureSystemQueues gives the decay queue no retries, even if it already existed with some", async () => {
   await boss.start();
   started = true;

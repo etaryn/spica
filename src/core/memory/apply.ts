@@ -22,6 +22,21 @@ export type ApplyOutcome = {
 const entityKey = (subject: "user" | "self", name: string) => `${subject}|${normalizeName(name)}`;
 const entitySubject = (s: ExtractedFact["subject"]): "user" | "self" => (s === "self" ? "self" : "user");
 
+/** Blank names dropped; mentions with the same subject + normalized name merged, so no alias is lost (§15.1 #10). */
+function mergeMentions(ms: ExtractedEntity[]): ExtractedEntity[] {
+  const byKey = new Map<string, ExtractedEntity>();
+  for (const m of ms) {
+    if (!normalizeName(m.name)) continue;
+    const aliases = m.aliases.filter((a) => normalizeName(a));
+    const k = entityKey(m.subject, m.name);
+    const prev = byKey.get(k);
+    byKey.set(k, prev
+      ? { ...prev, aliases: [...new Set([...prev.aliases, ...aliases])], relation: prev.relation ?? m.relation, type: prev.type === "other" ? m.type : prev.type }
+      : { ...m, aliases });
+  }
+  return [...byKey.values()];
+}
+
 /** Cold-path writes (v2 §6.3 steps 5–7). Call inside the job's transaction; every id the model supplied is ownership-checked. */
 export async function applyExtraction(db: Db, config: Config, input: ApplyInput): Promise<ApplyOutcome> {
   const { userId, now } = input;
@@ -32,13 +47,14 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
   const known = () => new Set(mentions.flatMap((m) => [m.name, ...m.aliases].map((n) => entityKey(m.subject, n))));
   for (const p of input.facts) {
     for (const name of p.fact.entity_names) {
+      if (!normalizeName(name)) continue;
       const subject = entitySubject(p.fact.subject);
       if (!known().has(entityKey(subject, name))) mentions.push({ name, aliases: [], type: "other", subject, relation: null });
     }
   }
   const entityIds = new Map<string, string>();
   const entOpts = { newSalience: config.extraction.new_entity_salience, bump: config.extraction.entity_bump, cap: config.retrieval.recall_cap };
-  for (const m of mentions) {
+  for (const m of mergeMentions(mentions)) {
     const existing = entityIds.get(entityKey(m.subject, m.name));
     const { id, created } = existing ? { id: existing, created: false } : await upsertEntityMention(db, userId, m, now, entOpts);
     if (created) out.entitiesCreated += 1;

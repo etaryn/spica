@@ -100,7 +100,7 @@ test("atomic: a failure mid-write (after facts/entities/recall write-back) leave
     `);
     await expect(handleColdPath(deps, {
       ...job,
-      recalled: [{ factId: recalledFact[0]!.id, sim: 0.5, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }],
+      recalled: [{ factId: recalledFact[0]!.id, sim: 0.6, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }],
     })).rejects.toThrow();
 
     const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
@@ -143,7 +143,7 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
     status: "open", salience: 0.5, valence: 0, confidence: 1, source: "turn",
   }).returning();
   const { job } = await exchange(u, "Biscuit is all I have right now, i want to end it", "i'm here", 1, true);
-  const out = await handleColdPath(deps, { ...job, recalled: [{ factId: recalledFact[0]!.id, sim: 0.5, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }] });
+  const out = await handleColdPath(deps, { ...job, recalled: [{ factId: recalledFact[0]!.id, sim: 0.6, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }] });
   expect(out.applied!.recalledUpdated).toBe(1);
   const input = deps.llm.structuredCalls.find((c) => c.purpose === "extract")!.input;
   expect(input.indexOf("earlier chat")).toBeLessThan(input.indexOf("New exchange"));

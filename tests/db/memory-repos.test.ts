@@ -5,7 +5,7 @@ import { findEntityByName, upsertEntityMention } from "@/db/repos/entities";
 import * as facts from "@/db/repos/facts";
 import * as threads from "@/db/repos/threads";
 import * as s from "@/db/schema";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -135,6 +135,17 @@ describe("facts", () => {
     await fact(u, "hers", ax(3), { subject: "self" });
     await fact(u, "gone", ax(4), { status: "stale" });
     expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual(["newer", "older"]);
+  });
+
+  test("listOnboardingFacts: only this user's live onboarding facts", async () => {
+    const u = await createTestUser();
+    const other = await createTestUser();
+    const base = { subject: "user" as const, kind: "preference" as const, embedding: vec(), created_at: new Date("2026-01-01T00:00:00Z"), salience: 0.5, valence: 0, confidence: 0.6 };
+    await facts.insertFact(getTestDb(), u, { ...base, content: "Drinks a lot of coffee.", status: "open", source: "onboarding" });
+    await facts.insertFact(getTestDb(), u, { ...base, content: "Old stale survey fact.", status: "stale", source: "onboarding" });
+    await facts.insertFact(getTestDb(), u, { ...base, content: "Said in chat.", status: "open", source: "turn" });
+    await facts.insertFact(getTestDb(), other, { ...base, content: "Someone else's survey fact.", status: "open", source: "onboarding" });
+    expect(await facts.listOnboardingFacts(getTestDb(), u)).toEqual(["Drinks a lot of coffee."]);
   });
 });
 

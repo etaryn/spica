@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { handleUserMessage } from "@/core/chat/handle-user-message";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
+import { fallbackLine } from "@/core/guard/fallback";
+import { messageToCheck } from "@/core/guard/guard";
 import { insertFact } from "@/db/repos/facts";
+import { listJudgeLogs } from "@/db/repos/judge-log";
 import { listTurns } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
@@ -226,5 +229,67 @@ describe("handleUserMessage", () => {
     deps.clock.advance(60_000);
     await handleUserMessage(deps, u, { ...msg("hi again"), timezone: "Europe/London" });
     expect(await getTimezone(getTestDb(), u)).toBe("Europe/London");
+  });
+
+  test("guard sees the user message, memories and onboarding facts; a flagged reply is regenerated and stored", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await insertFact(getTestDb(), u, {
+      subject: "user", kind: "preference", content: "The user drinks a lot of coffee.", embedding: vec(),
+      created_at: new Date("2026-01-01T00:00:00Z"), status: "open", salience: 0.5, valence: 0, confidence: 0.6, source: "onboarding",
+    });
+    const inputs: string[] = [];
+    deps.llm.handlers.guard = (i) => {
+      inputs.push(String(i));
+      return messageToCheck(String(i)).includes("again")
+        ? { violations: [{ category: "false_familiarity", claim: "presumes the role" }] } : { violations: [] };
+    };
+    deps.llm.replies.push("what's the role again?", "congrats!! what's the role?");
+    const r = await handleUserMessage(deps, u, msg("got the job!!"));
+
+    expect(r.text).toBe("congrats!! what's the role?");
+    expect(inputs[0]).toMatch(/User: got the job!!/);
+    expect(inputs[0]).toMatch(/drinks a lot of coffee/);
+    expect(deps.llm.calls[1]!.system).toMatch(/stopped before it was sent/);
+    const turns = await listTurns(getTestDb(), u);
+    expect(turns[1]!.text).toBe("congrats!! what's the role?");
+    const job = deps.queue.jobs[0]!.data as { replyTurnId: string };
+    expect(job.replyTurnId).toBe(turns[1]!.id);
+    const logs = (await listJudgeLogs(getTestDb(), u)).reverse();
+    expect(logs.map((l) => [l.attempt, l.outcome, l.turn_id])).toEqual([[1, null, turns[0]!.id], [2, "regenerated", turns[0]!.id]]);
+  });
+
+  test("crisis turn uses the crisis rubric; a double harm flag sends the crisis fallback with the resources card", async () => {
+    const deps = makeTestDeps();
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    deps.llm.handlers.guard_crisis = () => ({ violations: [{ category: "harm", claim: "minimises" }] });
+    const u = await createTestUser();
+    const input = msg("i don't want to be here anymore");
+    const r = await handleUserMessage(deps, u, input);
+    expect(deps.llm.structuredCalls.some((c) => c.purpose === "guard")).toBe(false);
+    expect(r.text).toBe(fallbackLine(deps.config, "crisis_reply", input.clientMessageId));
+    expect(r.crisisCard).not.toBeNull();
+  });
+
+  test("crisis turn with the guard down still replies with the resources card", async () => {
+    const deps = makeTestDeps();
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    deps.llm.handlers.guard_crisis = () => { throw new Error("overloaded"); };
+    deps.llm.replies.push("I'm here with you. Are you safe right now?");
+    const u = await createTestUser();
+    const r = await handleUserMessage(deps, u, msg("i want to end it"));
+    expect(r.text).toBe("I'm here with you. Are you safe right now?");
+    expect(r.crisisCard).not.toBeNull();
+    expect((await listJudgeLogs(getTestDb(), u))[0]!.outcome).toBe("guard_unavailable");
+  });
+
+  test("retrying an answered message makes no new guard calls", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const input = msg("hello");
+    await handleUserMessage(deps, u, input);
+    const guardCalls = deps.llm.structuredCalls.filter((c) => c.purpose === "guard").length;
+    await handleUserMessage(deps, u, input);
+    expect(deps.llm.structuredCalls.filter((c) => c.purpose === "guard").length).toBe(guardCalls);
   });
 });

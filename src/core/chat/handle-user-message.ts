@@ -1,22 +1,32 @@
 import { randomUUID } from "node:crypto";
+import { listOnboardingFacts } from "@/db/repos/facts";
 import { setTimezone } from "@/db/repos/users";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import type { CrisisCard } from "../config";
 import type { Deps } from "../deps";
 import { ConflictError, InputError, isUniqueViolation, ReplyFailedError } from "../errors";
+import { guardOutgoing } from "../guard/outgoing";
 import { retrieve } from "../memory/retrieve";
 import { loadPrompt } from "../prompts";
 import { COLD_PATH_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
-import { assemblePrompt, gapLine } from "./assemble";
+import { assemblePrompt, gapLine, type RetrievalResult } from "./assemble";
 import { splitParts } from "./parts";
 import { resolveSessionId } from "./session";
 
 export type UserMessageInput = { clientMessageId: string; text: string; timezone?: string };
 export type ReplyResult = { turnId: string; text: string; parts: string[]; crisisCard: CrisisCard | null };
+
+/** What the reply's prompt contained, for the guard's honesty check (spec §4.2). */
+function guardFacts(r: RetrievalResult): { subject: string; content: string }[] {
+  return [
+    ...(["user", "self", "shared"] as const).flatMap((s) => r.facts[s].map((f) => ({ subject: s, content: f.content }))),
+    ...r.dueThreads.map((t) => ({ subject: "thread", content: t.detail ? `${t.title} (latest: ${t.detail})` : t.title })),
+  ];
+}
 
 function toResult(companion: Turn, deps: Deps): ReplyResult {
   return {
@@ -79,6 +89,12 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   // Crisis check starts now and runs alongside retrieval and generation (it never rejects).
   const crisis = checkCrisis(deps, userTurn.text, earlier);
 
+  // Guard input (best-effort): an outage here only weakens the honesty check.
+  const onboarding = listOnboardingFacts(db, userId).catch((e) => {
+    log.error("onboarding facts unavailable", { userId, error: String((e as Error)?.name ?? "Error") });
+    return [] as string[];
+  });
+
   // 2. Retrieve: read-only; recalled ids go to the cold path (v2 §6.2).
   const retrieval = await retrieve(deps, userId, {
     answering: [userTurn],
@@ -97,7 +113,7 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     now: clock.now(),
   });
 
-  // 4. Generate
+  // 4. Generate, alongside the crisis check.
   const [reply, safety] = await Promise.allSettled([llm.generateReply(prompt), crisis]);
   const flag = safety.status === "fulfilled" ? safety.value : null;
   if (reply.status === "rejected") {
@@ -105,14 +121,26 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     throw new ReplyFailedError("reply generation failed", crisisCardFor(flag, config), { cause: reply.reason });
   }
 
-  // 5. Send + log
+  // 5. Guard (v2 §6.4): one check, at most one regeneration; on the crisis path only harm is checked.
+  const guarded = await guardOutgoing(deps, {
+    userId, turnId: userTurn.id, first: reply.value,
+    regenerate: (note) => llm.generateReply({ system: `${prompt.system}\n\n${note}`, messages: prompt.messages }),
+    input: {
+      kind: flag?.flagged ? "crisis_reply" : "reply",
+      recentTurns: recent.slice(-config.guard.recent_turns).map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      recalledFacts: guardFacts(retrieval),
+      onboardingFacts: await onboarding,
+    },
+  });
+
+  // 6. Send + log (the sent text, so a rejected candidate never becomes a memory).
   let companion: Turn;
   try {
     companion = await sessionLog.insertTurn(db, userId, {
       id: randomUUID(),
       session_id: userTurn.session_id,
       role: "companion",
-      text: reply.value.trim(),
+      text: guarded.text,
       created_at: clock.now(),
       reply_to: userTurn.id,
       safety_flag: flag,

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { RecalledFact } from "@/core/memory/types";
 import type { Db } from "../client";
@@ -132,6 +132,15 @@ export async function listRememberedFacts(db: Db, userId: string) {
     .from(fact)
     .where(and(eq(fact.user_id, userId), eq(fact.subject, "user"), eq(fact.scope, "private"), notInArray(fact.status, [...INACTIVE])))
     .orderBy(desc(fact.created_at));
+}
+
+/** Onboarding facts the guard may treat as known (spec §5). Superseded and stale ones are excluded. */
+export async function listOnboardingFacts(db: Db, userId: string): Promise<string[]> {
+  const rows = await db.select({ content: fact.content }).from(fact).where(and(
+    eq(fact.user_id, userId), eq(fact.source, "onboarding"), eq(fact.scope, "private"),
+    notInArray(fact.status, ["superseded", "stale"]),
+  )).orderBy(asc(fact.created_at));
+  return rows.map((r) => r.content);
 }
 
 /**

@@ -10,13 +10,17 @@ const Session = z.object({
   turns: z.array(z.string().min(1)).min(1),
 });
 
+/** A failing assertion with `known_failure` is reported with that reason instead of failing (decided deferrals only). */
+const knownFailure = z.string().min(1).optional();
 const StateAssertion = z.object({
   type: z.literal("state"), check: z.string(), user: z.string().default("main"),
-  params: z.record(z.string(), z.unknown()).default({}), expect: z.unknown(),
+  params: z.record(z.string(), z.unknown()).default({}), expect: z.unknown(), known_failure: knownFailure,
 });
-const RecallAssertion = z.object({ type: z.literal("recall"), session: z.number().int().min(1), fact: z.string().min(1), user: z.string().default("main") });
-const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), user: z.string().default("main") });
-const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main") });
+const RecallAssertion = z.object({
+  type: z.literal("recall"), session: z.number().int().min(1), fact: z.string().min(1), user: z.string().default("main"), known_failure: knownFailure,
+});
+const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), user: z.string().default("main"), known_failure: knownFailure });
+const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main"), known_failure: knownFailure });
 
 /** Assertion types defined by v2 §14.2 but implemented in later phases. */
 export const DEFERRED: Record<string, number> = { reach_out: 6 };

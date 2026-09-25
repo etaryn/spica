@@ -104,7 +104,7 @@ test("+1d after a multi-turn session runs exactly one decay pass", async () => {
 test("judged assertions call the judge with an ordered transcript", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   llm.handlers.judge_recall = () => ({ explicit: true, implicit: false, unprompted: true, quote: "q" });
-  llm.handlers.judge_false_recall = () => ({ violations: [], implied_familiarity: [], onboarding_as_chat: [] });
+  llm.handlers.judge_false_recall = () => ({ violations: [], implied_familiarity: [], invented_detail: [], onboarding_as_chat: [] });
   llm.handlers.judge_consistency = () => ({ contradictions: [] });
   const script = ScriptSchema.parse({
     name: "jj",
@@ -147,7 +147,7 @@ test("each script user starts with the named onboarding profile (default basic);
 
 test("the false-recall judge sees session timing and the onboarding profile as known facts", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
-  llm.handlers.judge_false_recall = () => ({ violations: [], implied_familiarity: [], onboarding_as_chat: [] });
+  llm.handlers.judge_false_recall = () => ({ violations: [], implied_familiarity: [], invented_detail: [], onboarding_as_chat: [] });
   const profiles = { basic: { confidence: 0.6, salience: 0.5, facts: [{ kind: "trait" as const, content: "The user's name is Sam." }] } };
   const script = ScriptSchema.parse({
     name: "jf",
@@ -182,16 +182,17 @@ test("implied familiarity and onboarding facts as past chat are deferred to the 
   llm.handlers.judge_false_recall = () => ({
     violations: [],
     implied_familiarity: [{ message: "m", claim: "what's the role again, remind me" }],
+    invented_detail: [{ message: "m", claim: "was it the sloper?" }],
     onboarding_as_chat: [{ message: "m", claim: "we talked about coffee last time" }],
   });
   const script = ScriptSchema.parse({ name: "jd", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] });
   const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
   expect(r.assertions[0]).toMatchObject({
     status: "pass",
-    detail: "deferred to Phase 2 guard (implied familiarity): what's the role again, remind me || deferred to Phase 2 guard (onboarding fact as past chat): we talked about coffee last time",
+    detail: "deferred to Phase 2 guard (implied familiarity): what's the role again, remind me || deferred to Phase 2 guard (invented detail): was it the sloper? || deferred to Phase 2 guard (onboarding fact as past chat): we talked about coffee last time",
   });
 
-  llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "invented a brother" }], implied_familiarity: [], onboarding_as_chat: [] });
+  llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "invented a brother" }], implied_familiarity: [], invented_detail: [], onboarding_as_chat: [] });
   const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
   expect(r2.assertions[0]).toMatchObject({ status: "fail", detail: "invented a brother" });
 });
@@ -211,4 +212,18 @@ test("recall passes only on an explicit mention; silent use is tracked in the de
     .toMatchObject({ status: "fail", detail: "mentioned only after the user did" });
   expect(await run({ explicit: false, implicit: false, unprompted: false, quote: null }, "rc4"))
     .toMatchObject({ status: "fail", detail: "not mentioned" });
+});
+
+test("an assertion marked known_failure is reported, not failed, when it fails", async () => {
+  const script = ScriptSchema.parse({
+    name: "kf", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
+    assertions: [
+      { type: "state", check: "turn_count", expect: 99, known_failure: "recall style tuned in a later phase" },
+      { type: "state", check: "turn_count", expect: 2, known_failure: "unused" },
+    ],
+  });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  expect(r.status).toBe("pass");
+  expect(r.assertions[0]).toMatchObject({ status: "pass", detail: "known failure (recall style tuned in a later phase): expected 99, got 2" });
+  expect(r.assertions[1]).toMatchObject({ status: "pass" });
 });

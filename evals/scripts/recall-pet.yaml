@@ -6,5 +6,5 @@ sessions:
   - at: "+7d"
     turns: ["vet appointment today, he's been limping a bit"]
 assertions:
-  - { type: recall, session: 2, fact: "the user's dog is called Biscuit" }
+  - { type: recall, session: 2, fact: "the user's dog is called Biscuit", known_failure: "recall style (naming the fact) is tuned in a later phase; Ethan 2026-09-25" }
   - { type: no_false_recall }

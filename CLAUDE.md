@@ -157,10 +157,12 @@ Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back
 
 **Current phase: 1 (Memory engine), implemented; exit test pending a real run.**
 Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-Known Phase 1 failures (implied familiarity such as "what's the role again?",
-and onboarding facts presented as past chat) are deferred to the Phase 2
-guard: the eval reports them but they don't count, and Phase 1 passes if
-everything else passes. No real baseline yet.
+Known Phase 1 failures are reported but don't count, and Phase 1 passes if
+everything else passes: implied familiarity ("what's the role again?"),
+invented specific details and onboarding facts presented as past chat are
+deferred to the Phase 2 guard; knowing a fact without naming it is deferred
+to later recall-style tuning. Misremembering what the user said still fails.
+No real baseline yet.
 Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 (v2 §9.1). Each phase's exit test is in v2 §15.
 

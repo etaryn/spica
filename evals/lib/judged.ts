@@ -31,6 +31,7 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
     schema: z.object({
       violations: z.array(z.object({ message: z.string(), claim: z.string() })),
       implied_familiarity: z.array(z.object({ message: z.string(), claim: z.string() })),
+      invented_detail: z.array(z.object({ message: z.string(), claim: z.string() })),
       onboarding_as_chat: z.array(z.object({ message: z.string(), claim: z.string() })),
     }),
   });
@@ -40,6 +41,7 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
   const detail = [
     v.violations.map((x) => x.claim).join(" | "),
     deferred("implied familiarity", v.implied_familiarity),
+    deferred("invented detail", v.invented_detail),
     deferred("onboarding fact as past chat", v.onboarding_as_chat),
   ].filter(Boolean).join(" || ");
   return { pass: v.violations.length === 0, detail };

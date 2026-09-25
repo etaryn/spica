@@ -231,6 +231,13 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     }
   }
 
+  // Decided deferrals: a failing assertion marked known_failure is reported, not failed.
+  script.assertions.forEach((a, i) => {
+    const reason = "known_failure" in a ? a.known_failure : undefined;
+    const r = assertions[i];
+    if (reason && r && r.status === "fail") assertions[i] = { ...r, status: "pass", detail: `known failure (${reason}): ${r.detail ?? ""}` };
+  });
+
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
   return { name: script.name, status, assertions, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds) } };

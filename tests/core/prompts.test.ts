@@ -22,3 +22,12 @@ test("rejects path traversal and reports missing prompts", () => {
   expect(() => loadPrompt("../package", "v1")).toThrow(/invalid/);
   expect(() => loadPrompt("reply", "v999")).toThrow(/prompts[\\/]reply[\\/]v999\.md/);
 });
+
+test("loads the guard prompts", () => {
+  const c = loadConfig();
+  expect(loadPrompt("guard", c.prompts.guard)).toMatch(/false_familiarity/);
+  expect(loadPrompt("guard", c.prompts.guard)).toMatch(/contempt/);
+  expect(loadPrompt("guard/crisis", c.prompts.guard_crisis)).toMatch(/harm/);
+  expect(loadPrompt("guard/corrective", c.prompts.guard_corrective)).toContain("{{violations}}");
+  expect(loadPrompt("guard/fallback", c.prompts.guard_fallback)).toMatch(/## reply[\s\S]*## crisis_reply/);
+});

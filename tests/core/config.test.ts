@@ -47,6 +47,11 @@ test("phase 1 config groups load with defaults", () => {
   expect(c.prompts.persona).toBe("v1");
 });
 
+test("guard config: recent_turns must include the current message", () => {
+  expect(loadConfig().guard.recent_turns).toBeGreaterThanOrEqual(1);
+  expect(() => loadConfig({ guard: { recent_turns: 0 } })).toThrow();
+});
+
 test("isUniqueViolation finds wrapped pg errors", () => {
   expect(isUniqueViolation({ code: "23505" })).toBe(true);
   expect(isUniqueViolation(new Error("x", { cause: { code: "23505" } }))).toBe(true);

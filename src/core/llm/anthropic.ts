@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Config } from "../config";
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "./types";
+import type { ClassifyRequest, LLMProvider, ReplyRequest, StructuredModel } from "./types";
 
 export class AnthropicProvider implements LLMProvider {
   constructor(private readonly client: Anthropic, private readonly models: Config["models"]) {}
@@ -26,7 +26,10 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async classifyJson<T>({ system, input, schema, timeoutMs, maxTokens, model = "cheap" }: ClassifyRequest<T>): Promise<T> {
-    const modelId = { cheap: this.models.cheap, extract: this.models.extract, judge: this.models.judge }[model];
+    const ids: Record<StructuredModel, string> = {
+      cheap: this.models.cheap, extract: this.models.extract, judge: this.models.judge, guard: this.models.guard,
+    };
+    const modelId = ids[model];
     const res = await this.client.messages.parse(
       {
         model: modelId,

@@ -16,6 +16,9 @@ export class FakeLLMProvider implements LLMProvider {
   handlers: Record<string, Handler> = {
     extract: () => ({ facts: [], entities: [], threads: [] }),
     reconcile: () => ({ relation: "new", target_fact_id: null }),
+    // The guard passes everything by default so fake-mode scripts exercise the mechanics, not the rubric.
+    guard: () => ({ violations: [] }),
+    guard_crisis: () => ({ violations: [] }),
   };
 
   constructor(opts: { classify?: Handler } = {}) {

@@ -6,6 +6,8 @@
     "extract_max_tokens": 2048,
     "judge": "claude-sonnet-5",
     "judge_max_tokens": 2048,
+    "guard": "claude-haiku-4-5",
+    "guard_max_tokens": 1024,
     "structured_timeout_ms": 30000,
     "reply_max_tokens": 4096,
     "reply_effort": "low",
@@ -26,7 +28,8 @@
     "max_parts": 4,
     "history_page_size": 50,
     "max_message_chars": 4000,
-    "gap_line_min_hours": 24
+    "gap_line_min_hours": 24,
+    "relationship_line": true
   },
   "retrieval": {
     "candidate_pool": 200,
@@ -90,6 +93,22 @@
     "min_age": 18,
     "min_password_length": 10
   },
+  "guard": {
+    "timeout_ms": 4000,
+    "retry_limit": 1,
+    "log_timeout_ms": 2000,
+    "recent_turns": 8,
+    "fallback_keywords": [
+      "i'll leave you if",
+      "i'm done with you",
+      "don't talk to me",
+      "you'll regret",
+      "you owe me",
+      "after everything i've done",
+      "you left me alone",
+      "you never talk to me anymore"
+    ]
+  },
   "prompts": {
     "reply": "v4",
     "crisis_classifier": "v2",
@@ -98,7 +117,11 @@
     "reconcile": "v1",
     "judge_recall": "v3",
     "judge_false_recall": "v6",
-    "judge_consistency": "v1"
+    "judge_consistency": "v1",
+    "guard": "v1",
+    "guard_crisis": "v1",
+    "guard_corrective": "v1",
+    "guard_fallback": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000

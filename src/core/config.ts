@@ -10,9 +10,11 @@ export const ConfigSchema = z.object({
     cheap: z.string().min(1),
     extract: z.string().min(1),
     judge: z.string().min(1),
+    guard: z.string().min(1),
     reply_max_tokens: z.number().int().positive(),
     extract_max_tokens: z.number().int().positive(),
     judge_max_tokens: z.number().int().positive(),
+    guard_max_tokens: z.number().int().positive(),
     structured_timeout_ms: z.number().int().positive(),
     reply_effort: z.enum(["low", "medium", "high"]),
     reply_thinking: z.enum(["disabled", "adaptive"]),
@@ -31,6 +33,7 @@ export const ConfigSchema = z.object({
     history_page_size: z.number().int().positive(),
     max_message_chars: z.number().int().positive(),
     gap_line_min_hours: z.number().min(0),
+    relationship_line: z.boolean(),
   }),
   safety: z.object({
     classifier_timeout_ms: z.number().int().positive(),
@@ -41,6 +44,14 @@ export const ConfigSchema = z.object({
   }),
   queue: z.object({ enqueue_timeout_ms: z.number().int().positive() }),
   auth: z.object({ min_age: z.number().int().positive(), min_password_length: z.number().int().min(8) }),
+  guard: z.object({
+    timeout_ms: z.number().int().positive(),
+    retry_limit: z.number().int().min(0),
+    log_timeout_ms: z.number().int().positive(),
+    /** Includes the message being answered, so never 0. */
+    recent_turns: z.number().int().min(1),
+    fallback_keywords: z.array(z.string().min(1)).min(1),
+  }),
   retrieval: z.object({
     candidate_pool: z.number().int().positive(),
     top_n: z.number().int().positive(),
@@ -89,6 +100,10 @@ export const ConfigSchema = z.object({
     judge_recall: z.string().regex(/^v\d+$/),
     judge_false_recall: z.string().regex(/^v\d+$/),
     judge_consistency: z.string().regex(/^v\d+$/),
+    guard: z.string().regex(/^v\d+$/),
+    guard_crisis: z.string().regex(/^v\d+$/),
+    guard_corrective: z.string().regex(/^v\d+$/),
+    guard_fallback: z.string().regex(/^v\d+$/),
   }),
 });
 

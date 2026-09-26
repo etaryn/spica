@@ -116,7 +116,7 @@
     "extract": "v2",
     "reconcile": "v1",
     "judge_recall": "v3",
-    "judge_false_recall": "v7",
+    "judge_false_recall": "v8",
     "judge_consistency": "v2",
     "guard": "v1",
     "guard_crisis": "v1",

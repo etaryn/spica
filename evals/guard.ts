@@ -6,7 +6,7 @@ import { systemClock } from "@/core/clock";
 import { loadConfig, parseConfigOverrides } from "@/core/config";
 import { checkMessage } from "@/core/guard/guard";
 import { AnthropicProvider } from "@/core/llm/anthropic";
-import { caseResult, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus } from "./lib/guard-cases";
+import { caseResult, findGuardRegressions, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus, type GuardBaselineEntry } from "./lib/guard-cases";
 
 /** Guard fixture suite (spec §7.2): real guard model only; there is no fake mode. */
 const { values: args } = parseArgs({
@@ -26,7 +26,7 @@ const deps = { llm: new AnthropicProvider(new Anthropic(), config.models), confi
 const root = path.join(process.cwd(), "evals");
 const files = loadGuardFiles(path.join(root, "guard"));
 
-type Row = { file: string; name: string; status: "pass" | "fail" | "known_failure"; passes: number; runs: number; details: string[] };
+type Row = { file: string; name: string; status: "pass" | "fail" | "known_failure"; passes: number; runs: number; details: string[]; knownFailure: string | null };
 const rows: Row[] = [];
 for (const f of files) {
   for (const c of f.cases.filter((x) => !args.only || x.name === args.only || f.file === args.only)) {
@@ -39,7 +39,7 @@ for (const f of files) {
     }
     const { status, reason } = caseResult(c, statuses, f.gate);
     const passes = statuses.filter((s) => s === "pass").length;
-    rows.push({ file: f.file, name: c.name, status, passes, runs, details });
+    rows.push({ file: f.file, name: c.name, status, passes, runs, details, knownFailure: c.known_failure ?? null });
     const label = status === "known_failure" ? `KNOWN` : status.toUpperCase();
     const known = reason ? `  [known failure (${reason})]` : "";
     console.log(`${label.padEnd(5)} ${f.file}/${c.name}  (${passes}/${runs})${known}${details.length ? `  — ${details[0]}` : ""}`);
@@ -61,11 +61,8 @@ if (args["update-baseline"]) {
 }
 let exitCode = failed.length ? 1 : 0;
 if (args.compare && existsSync(baselinePath)) {
-  const base = JSON.parse(readFileSync(baselinePath, "utf8")) as Record<string, { status: string; runs: number; passes: number }>;
-  const drops = rows.filter((r) => {
-    const b = base[`${r.file}/${r.name}`];
-    return b && b.status === "pass" && (r.status !== "pass" || r.passes / r.runs < b.passes / b.runs);
-  });
+  const base = JSON.parse(readFileSync(baselinePath, "utf8")) as Record<string, GuardBaselineEntry>;
+  const drops = findGuardRegressions(rows, base);
   if (drops.length) {
     console.error(`REGRESSIONS: ${drops.map((r) => `${r.file}/${r.name}`).join(", ")}`);
     exitCode = 1;

@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import type { GuardVerdict } from "@/core/guard/guard";
 import { matchKeyword } from "@/core/guard/keywords";
-import { caseResult, caseStatus, gradeCase, GuardCaseSchema, loadGuardFiles } from "../../evals/lib/guard-cases";
+import { caseResult, caseStatus, findGuardRegressions, gradeCase, GuardCaseSchema, loadGuardFiles, type GuardBaselineEntry, type GuardRunRow } from "../../evals/lib/guard-cases";
 
 const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
   ok: true, violations: [], reasoning: "r", source: "model", latencyMs: 1, error: null, promptVersion: "guard@v1", ...over,
@@ -59,6 +59,40 @@ describe("caseResult (known_failure)", () => {
     expect(caseStatus(["pass", "fail", "pass"], "majority")).toBe("pass");
     expect(caseStatus(["pass", "error", "pass"], "majority")).toBe("pass");
     expect(caseStatus(["pass", "error", "error"], "majority")).toBe("fail");
+  });
+});
+
+describe("findGuardRegressions", () => {
+  const row = (over: Partial<GuardRunRow>): GuardRunRow => ({
+    file: "rule1-threats", name: "n", status: "pass", passes: 3, runs: 3, knownFailure: null, ...over,
+  });
+  const baseline = (over: Partial<GuardBaselineEntry> = {}): Record<string, GuardBaselineEntry> => ({
+    "rule1-threats/n": { status: "pass", runs: 3, passes: 3, ...over },
+  });
+
+  test("a known_failure case that misfires against a passing baseline is not a regression", () => {
+    const rows = [row({ status: "known_failure", passes: 2, knownFailure: "documented 1-in-3 misfire" })];
+    expect(findGuardRegressions(rows, baseline())).toEqual([]);
+  });
+
+  test("a normal case that drops against a passing baseline is a regression", () => {
+    const rows = [row({ status: "fail", passes: 1 })];
+    expect(findGuardRegressions(rows, baseline())).toEqual(rows);
+  });
+
+  test("a normal case with a lower pass rate but still 'pass' status is still a regression", () => {
+    const rows = [row({ status: "pass", passes: 2 })];
+    expect(findGuardRegressions(rows, baseline())).toEqual(rows);
+  });
+
+  test("no baseline entry, or a baseline entry that wasn't passing, is never a regression", () => {
+    expect(findGuardRegressions([row({ file: "new-file" })], baseline())).toEqual([]);
+    expect(findGuardRegressions([row({ status: "fail", passes: 0 })], baseline({ status: "fail" }))).toEqual([]);
+  });
+
+  test("a known_failure case that still passes fully is not a regression either", () => {
+    const rows = [row({ status: "pass", passes: 3, knownFailure: "documented 1-in-3 misfire" })];
+    expect(findGuardRegressions(rows, baseline())).toEqual([]);
   });
 });
 

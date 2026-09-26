@@ -72,3 +72,19 @@ export function caseResult(c: GuardCase, statuses: CaseStatus[], gate: "every" |
   if (s === "fail" && c.known_failure) return { status: "known_failure", reason: c.known_failure };
   return { status: s, reason: null };
 }
+
+export type GuardRunRow = { file: string; name: string; status: "pass" | "fail" | "known_failure"; passes: number; runs: number; knownFailure: string | null };
+export type GuardBaselineEntry = { status: string; runs: number; passes: number };
+
+/**
+ * Rows that dropped against the baseline. A row never counts as a regression when its case carries
+ * `known_failure` (the case's own field, not only its current-run status) — a case decided as a known,
+ * documented misfire isn't a new failure just because it fires on this particular run.
+ */
+export function findGuardRegressions(rows: GuardRunRow[], baseline: Record<string, GuardBaselineEntry>): GuardRunRow[] {
+  return rows.filter((r) => {
+    if (r.knownFailure) return false;
+    const b = baseline[`${r.file}/${r.name}`];
+    return b != null && b.status === "pass" && (r.status !== "pass" || r.passes / r.runs < b.passes / b.runs);
+  });
+}

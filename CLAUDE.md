@@ -66,7 +66,7 @@ everything, including pg-boss jobs), POST for sending messages, **SSE**
 (fed by Postgres LISTEN/NOTIFY) for everything the server pushes, Web Push
 later. Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
 `claude-haiku-4-5` for extraction, the guard and classifiers; judges use
-`claude-sonnet-5` (`models.judge`).
+`claude-haiku-4-5` (`models.judge`; Sonnet 5 through Phase 2).
 Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
 
 Message flow: receive → crisis check → **turn-taking engine** (buffer, open

@@ -64,12 +64,12 @@ describe("AnthropicProvider.classifyJson", () => {
 describe("structured model roles", () => {
   test("model: extract / judge pick the configured model; default is cheap", async () => {
     const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
-    const p = new AnthropicProvider(client, models);
+    const p = new AnthropicProvider(client, { ...models, cheap: "m-cheap", extract: "m-extract", judge: "m-judge" });
     const schema = z.object({ ok: z.boolean() });
     await p.classifyJson({ purpose: "x", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
     await p.classifyJson({ purpose: "x", model: "extract", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
     await p.classifyJson({ purpose: "x", model: "judge", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
-    expect(parse.mock.calls.map((c) => c[0].model)).toEqual(["claude-haiku-4-5", "claude-haiku-4-5", "claude-sonnet-5"]);
+    expect(parse.mock.calls.map((c) => c[0].model)).toEqual(["m-cheap", "m-extract", "m-judge"]);
   });
 });
 

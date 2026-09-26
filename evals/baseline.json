@@ -1,4 +1,9 @@
 {
+  "absence-return": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
   "alias-entity": {
     "status": "pass",
     "runs": 3,
@@ -7,7 +12,7 @@
   "contradiction-date": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 3
+    "passedRuns": 2
   },
   "contradiction-job": {
     "status": "pass",
@@ -37,7 +42,7 @@
   "dup-merge": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 3
+    "passedRuns": 2
   },
   "exit-three-sessions": {
     "status": "pass",
@@ -62,6 +67,36 @@
   "false-recall-partial": {
     "status": "pass",
     "runs": 3,
+    "passedRuns": 2
+  },
+  "first-contact-big-day": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
+  "first-contact-climbing": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 2
+  },
+  "first-contact-interview": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
+  "first-contact-job": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
+  "first-contact-move": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
+  "first-contact-visit": {
+    "status": "pass",
+    "runs": 3,
     "passedRuns": 3
   },
   "forget": {
@@ -74,6 +109,16 @@
     "runs": 3,
     "passedRuns": 3
   },
+  "onboarding-coffee": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
+  "onboarding-music": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 3
+  },
   "recall-food": {
     "status": "pass",
     "runs": 3,
@@ -82,12 +127,12 @@
   "recall-hobby": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 3
+    "passedRuns": 2
   },
   "recall-new-job": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 3
+    "passedRuns": 2
   },
   "recall-pet": {
     "status": "pass",
@@ -95,6 +140,11 @@
     "passedRuns": 3
   },
   "recall-sister-uni": {
+    "status": "pass",
+    "runs": 3,
+    "passedRuns": 2
+  },
+  "second-week-job": {
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
@@ -112,7 +162,7 @@
   "thread-checkpoint": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 3
+    "passedRuns": 2
   },
   "thread-dormant": {
     "status": "pass",
@@ -122,7 +172,7 @@
   "thread-touch": {
     "status": "pass",
     "runs": 3,
-    "passedRuns": 2
+    "passedRuns": 3
   },
   "user-isolation": {
     "status": "pass",

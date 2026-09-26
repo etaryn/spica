@@ -48,8 +48,6 @@ export const ConfigSchema = z.object({
     timeout_ms: z.number().int().positive(),
     retry_limit: z.number().int().min(0),
     log_timeout_ms: z.number().int().positive(),
-    /** Includes the message being answered, so never 0. */
-    recent_turns: z.number().int().min(1),
     fallback_keywords: z.array(z.string().min(1)).min(1),
   }),
   retrieval: z.object({

@@ -97,7 +97,6 @@
     "timeout_ms": 4000,
     "retry_limit": 1,
     "log_timeout_ms": 2000,
-    "recent_turns": 8,
     "fallback_keywords": [
       "i'll leave you if",
       "i'm done with you",

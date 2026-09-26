@@ -21,10 +21,10 @@ export type UserMessageInput = { clientMessageId: string; text: string; timezone
 export type ReplyResult = { turnId: string; text: string; parts: string[]; crisisCard: CrisisCard | null };
 
 /** What the reply's prompt contained, for the guard's honesty check (spec §4.2). */
-function guardFacts(r: RetrievalResult): { subject: string; content: string }[] {
+function guardFacts(r: RetrievalResult): { id: string; subject: string; content: string }[] {
   return [
-    ...(["user", "self", "shared"] as const).flatMap((s) => r.facts[s].map((f) => ({ subject: s, content: f.content }))),
-    ...r.dueThreads.map((t) => ({ subject: "thread", content: t.detail ? `${t.title} (latest: ${t.detail})` : t.title })),
+    ...(["user", "self", "shared"] as const).flatMap((s) => r.facts[s].map((f) => ({ id: f.id, subject: s, content: f.content }))),
+    ...r.dueThreads.map((t) => ({ id: t.id, subject: "thread", content: t.detail ? `${t.title} (latest: ${t.detail})` : t.title })),
   ];
 }
 
@@ -92,8 +92,22 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
   // Guard input (best-effort): an outage here only weakens the honesty check.
   const onboarding = listOnboardingFacts(db, userId).catch((e) => {
     log.error("onboarding facts unavailable", { userId, error: String((e as Error)?.name ?? "Error") });
-    return [] as string[];
+    return [] as { id: string; content: string }[];
   });
+
+  // Relationship line (spec §6), best-effort: started alongside retrieval, not after it.
+  const relLinePromise: Promise<string | null> = config.chat.relationship_line
+    ? (async () => {
+        try {
+          const tz = await getTimezone(db, userId);
+          const stats = await sessionLog.userTurnStats(db, userId, userTurn.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
+          return relationshipLine(stats, clock.now());
+        } catch (e) {
+          log.error("relationship line unavailable", { userId, error: String((e as Error)?.name ?? "Error") });
+          return null;
+        }
+      })()
+    : Promise.resolve(null);
 
   // 2. Retrieve: read-only; recalled ids go to the cold path (v2 §6.2).
   const retrieval = await retrieve(deps, userId, {
@@ -102,17 +116,7 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     now: clock.now(),
   });
 
-  // Relationship line (spec §6), best-effort.
-  let relLine: string | null = null;
-  if (config.chat.relationship_line) {
-    try {
-      const tz = await getTimezone(db, userId);
-      const stats = await sessionLog.userTurnStats(db, userId, userTurn.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
-      relLine = relationshipLine(stats, clock.now());
-    } catch (e) {
-      log.error("relationship line unavailable", { userId, error: String((e as Error)?.name ?? "Error") });
-    }
-  }
+  const relLine = await relLinePromise;
 
   // 3. Assemble
   const prompt = assemblePrompt({
@@ -140,7 +144,7 @@ export async function handleUserMessage(deps: Deps, userId: string, input: UserM
     regenerate: (note) => llm.generateReply({ system: `${prompt.system}\n\n${note}`, messages: prompt.messages }),
     input: {
       kind: flag?.flagged ? "crisis_reply" : "reply",
-      recentTurns: recent.slice(-config.guard.recent_turns).map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
       recalledFacts: guardFacts(retrieval),
       onboardingFacts: await onboarding,
     },

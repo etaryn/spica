@@ -257,6 +257,23 @@ describe("handleUserMessage", () => {
     expect(job.replyTurnId).toBe(turns[1]!.id);
     const logs = (await listJudgeLogs(getTestDb(), u)).reverse();
     expect(logs.map((l) => [l.attempt, l.outcome, l.turn_id])).toEqual([[1, null, turns[0]!.id], [2, "regenerated", turns[0]!.id]]);
+    // judge_log.input never stores fact content (v2 §5.8): ids + subject only, even though the guard call itself saw it.
+    expect(JSON.stringify(logs.map((l) => l.input))).not.toContain("drinks a lot of coffee");
+  });
+
+  test("guard sees the reply's full turn window, not just a short tail (fix: guard.recent_turns removed)", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    let lastGuardInput = "";
+    deps.llm.handlers.guard = (i) => { lastGuardInput = String(i); return { reasoning: "ok", violations: [] }; };
+    // 9 earlier exchanges (18 earlier turns, well past the old cap of 8) before the final message.
+    for (let i = 0; i < 9; i++) {
+      await handleUserMessage(deps, u, msg(`early message ${i}`));
+      deps.clock.advance(60_000);
+    }
+    await handleUserMessage(deps, u, msg("final message"));
+    expect(lastGuardInput).toMatch(/User: early message 0\b/);
+    expect(lastGuardInput).toMatch(/User: final message/);
   });
 
   test("crisis turn uses the crisis rubric; a double harm flag sends the crisis fallback with the resources card", async () => {
@@ -269,6 +286,10 @@ describe("handleUserMessage", () => {
     expect(deps.llm.structuredCalls.some((c) => c.purpose === "guard")).toBe(false);
     expect(r.text).toBe(fallbackLine(deps.config, "crisis_reply", input.clientMessageId));
     expect(r.crisisCard).not.toBeNull();
+    const [, companion] = await listTurns(getTestDb(), u);
+    expect(companion!.text).toBe(fallbackLine(deps.config, "crisis_reply", input.clientMessageId));
+    const logs = await listJudgeLogs(getTestDb(), u);
+    expect(logs.at(0)!.outcome).toBe("fallback");
   });
 
   test("crisis turn with the guard down still replies with the resources card", async () => {

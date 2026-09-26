@@ -145,7 +145,7 @@ crisis skips it) → SSE → **cold path** (async).
 |---|---|
 | 0. Skeleton ✅ | Chat UI, auth, session_log, full schema, crisis check, inspector, eval harness |
 | 1. Memory engine ✅ | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
-| 2. Guardrails | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
+| 2. Guardrails ✅ | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
 | 3. Turn-taking + pacing | Buffer / judge / backchannels / pacing, SSE |
 | 4. Relationship + homeostasis | HomeostaticParam, hurt / tension / make-up, ending / repair |
 | 5. Life sim + availability + ego | Schedule / events, availability override, ego driven by life sim |
@@ -155,15 +155,15 @@ crisis skips it) → SSE → **cold path** (async).
 
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 
-**Current phase: 2 (Guardrails), not started.** Phase 1 (Memory engine) done
-2026-09-25: `pnpm eval --llm=real --runs 3` passes 26/26 and is the real
-baseline in `evals/baseline.json`. Phase 1 design:
+**Current phase: 3 (Turn-taking + pacing), not started.** Phase 2
+(Guardrails) done 2026-09-26: `pnpm eval:guard --runs 3` passes 49/49
+(`evals/guard-baseline.json`) and `pnpm eval --llm=real --runs 3` passes
+36/36 with `prompts.judge_false_recall` v8 (`evals/baseline.json`), folding
+Phase 1's guard-deferred failures back into the gate. Phase 2 design:
+`docs/superpowers/specs/2026-09-26-phase-2-guardrails-design.md`.
+Phase 1 (Memory engine) done 2026-09-25: `pnpm eval --llm=real --runs 3`
+passed 26/26 at the time. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-Phase 2 starts from v2 §15.1 ("Carried into Phase 2"). Phase 1's known
-failures are reported but don't count, and are Phase 2's first targets: implied familiarity ("what's the role again?"),
-invented specific details and onboarding facts presented as past chat are
-deferred to the Phase 2 guard; knowing a fact without naming it is deferred
-to later recall-style tuning. Misremembering what the user said still fails.
 Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 (v2 §9.1). Each phase's exit test is in v2 §15.
 

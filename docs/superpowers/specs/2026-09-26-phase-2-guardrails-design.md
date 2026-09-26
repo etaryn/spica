@@ -1,6 +1,6 @@
 # Phase 2: Guardrails design
 
-Date: 2026-09-26 · Status: design, awaiting Ethan's review · Parent: `spica-build-spec-v2.md` (§2, §6.2, §6.4, §5.8, §14.2–14.3, §15 Phase 2, §15.1)
+Date: 2026-09-26 · Status: implemented; exit test passed 2026-09-26 · Parent: `spica-build-spec-v2.md` (§2, §6.2, §6.4, §5.8, §14.2–14.3, §15 Phase 2, §15.1)
 
 ## 1. Goal and exit test
 
@@ -188,7 +188,7 @@ Behind `chat.relationship_line` (default true). `prompts/reply/v5` is v4 plus on
 
 - `prompts/judge/false-recall/v7`: implied familiarity, invented detail and onboarding-as-chat are violations again (one `violations` list with a `category` per item, so the report still names the kind). Open questions and hedged guesses stay explicitly allowed (§15.1 #11).
 - `prompts/judge/consistency/v2`: a fact about someone Spica knows is not a fact about Spica ("watched a film with Pesto" ≠ "Spica's pet is Pesto") (§15.1 #11).
-- New assertion `{ type: guard, outcome_not?: [...], max_count?: {outcome: N} }`, read from `judge_log`, e.g. "no fallback lines sent". It is a guardrail check: it must pass every run.
+- New assertion `{ type: guard, outcome_not?: [...], max?: {outcome: N} }`, read from `judge_log`, e.g. "no fallback lines sent". It is a guardrail check: it must pass every run.
 - The Phase 1 "deferred to Phase 2 guard" reporting is removed.
 - New scripts (+10, v2 §14.2): first-contact job opener, first-contact interview, onboarding-fact first use, and similar, from the Phase 1 traces; each asserts `no_false_recall` and `guard { outcome_not: [fallback] }`.
 

@@ -13,6 +13,7 @@ import { runMigrations } from "@/db/migrate";
 import { aggregateRuns, findRegressions, toBaseline, type ScriptSummary } from "./lib/report";
 import { runScript } from "./lib/runner";
 import { loadProfiles, loadScripts } from "./lib/script";
+import { UsageTally } from "./lib/usage";
 
 const { values: args } = parseArgs({
   options: {
@@ -32,8 +33,9 @@ assertDisposableDatabase(dbUrl);
 
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
 if (args.llm !== "real" && args.llm !== "fake") throw new Error(`--llm must be fake or real, got ${args.llm}`);
+const usage = new UsageTally();
 const makeLlm = args.llm === "real"
-  ? () => new AnthropicProvider(new Anthropic(), config.models)
+  ? () => new AnthropicProvider(new Anthropic(), config.models, usage.record)
   : () => new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
 
 const real = args.llm === "real";
@@ -50,7 +52,7 @@ await runMigrations(db);
 // `--profile <name>` runs the suite with one onboarding profile (the "how much profile data" experiment);
 // scripts that opt out with `profile: none` stay cold.
 const scripts = loadScripts(path.join(root, "scripts"))
-  .filter((s) => !args.only || s.name === args.only)
+  .filter((s) => !args.only || args.only.split(",").includes(s.name))
   .map((s) => (args.profile && s.profile !== "none" ? { ...s, profile: args.profile } : s));
 if (scripts.length === 0) throw new Error(args.only ? `no script named ${args.only}` : "no eval scripts found");
 
@@ -78,9 +80,10 @@ for (const script of scripts) {
   }
 }
 await pool.end();
+for (const line of usage.format()) console.log(line);
 
 mkdirSync(path.join(root, "results"), { recursive: true });
-writeFileSync(path.join(root, "results", `${stamp}.json`), JSON.stringify({ llm: args.llm, runs, results: summaries }, null, 2));
+writeFileSync(path.join(root, "results", `${stamp}.json`), JSON.stringify({ llm: args.llm, runs, results: summaries, usage: usage.summary() }, null, 2));
 
 const baselinePath = path.join(root, "baseline.json");
 if (args["update-baseline"]) {

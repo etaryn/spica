@@ -73,6 +73,51 @@ describe("structured model roles", () => {
   });
 });
 
+describe("judge effort and thinking", () => {
+  test("judge calls carry judge_effort and judge_thinking; other structured calls carry neither", async () => {
+    const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
+    const p = new AnthropicProvider(client, { ...models, judge_effort: "low", judge_thinking: "disabled" });
+    const schema = z.object({ ok: z.boolean() });
+    await p.classifyJson({ purpose: "x", model: "judge", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
+    await p.classifyJson({ purpose: "x", model: "guard", system: "s", input: "i", schema, timeoutMs: 1, maxTokens: 1 });
+    const [judge, guard] = parse.mock.calls.map((c) => c[0]);
+    expect(judge).toMatchObject({ output_config: { effort: "low" }, thinking: { type: "disabled" } });
+    expect(judge.output_config.format).toBeDefined();
+    expect(guard.output_config).not.toHaveProperty("effort");
+    expect(guard).not.toHaveProperty("thinking");
+  });
+
+  test("a null effort sends none, so Haiku can serve the reply or judge role", async () => {
+    const reply = stubClient({ stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] });
+    await new AnthropicProvider(reply.client, { ...models, reply_effort: null }).generateReply({ system: "s", messages: [] });
+    expect(reply.create.mock.calls[0]![0]).not.toHaveProperty("output_config");
+    const judge = stubClient(undefined, { parsed_output: { ok: true } });
+    await new AnthropicProvider(judge.client, { ...models, judge_effort: null })
+      .classifyJson({ purpose: "x", model: "judge", system: "s", input: "i", schema: z.object({ ok: z.boolean() }), timeoutMs: 1, maxTokens: 1 });
+    expect(judge.parse.mock.calls[0]![0].output_config).not.toHaveProperty("effort");
+  });
+});
+
+describe("usage sink", () => {
+  const usage = { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: null, cache_creation_input_tokens: 5 };
+
+  test("reports every completed call with its purpose and model, including a refused reply", async () => {
+    const onUsage = vi.fn();
+    const reply = stubClient({ stop_reason: "end_turn", usage, content: [{ type: "text", text: "hi" }] });
+    await new AnthropicProvider(reply.client, models, onUsage).generateReply({ system: "s", messages: [] });
+    const refused = stubClient({ stop_reason: "refusal", usage, content: [] });
+    await expect(new AnthropicProvider(refused.client, models, onUsage).generateReply({ system: "s", messages: [] })).rejects.toThrow();
+    const structured = stubClient(undefined, { usage, parsed_output: { ok: true } });
+    await new AnthropicProvider(structured.client, models, onUsage)
+      .classifyJson({ purpose: "extract", model: "extract", system: "s", input: "i", schema: z.object({ ok: z.boolean() }), timeoutMs: 1, maxTokens: 1 });
+    expect(onUsage.mock.calls.map((c) => c[0])).toEqual([
+      { purpose: "reply", model: "claude-sonnet-5", input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 5 },
+      { purpose: "reply", model: "claude-sonnet-5", input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 5 },
+      { purpose: "extract", model: "claude-haiku-4-5", input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 5 },
+    ]);
+  });
+});
+
 describe("FakeLLMProvider handlers", () => {
   test("routes by purpose; crisis falls back to classify; unknown purpose throws", async () => {
     const f = new FakeLLMProvider({ classify: () => ({ flag: true, category: "self_harm" }) });

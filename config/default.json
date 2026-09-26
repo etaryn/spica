@@ -6,6 +6,8 @@
     "extract_max_tokens": 2048,
     "judge": "claude-sonnet-5",
     "judge_max_tokens": 2048,
+    "judge_effort": "high",
+    "judge_thinking": "adaptive",
     "guard": "claude-haiku-4-5",
     "guard_max_tokens": 1024,
     "structured_timeout_ms": 30000,

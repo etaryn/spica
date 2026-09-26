@@ -6,6 +6,7 @@ import { systemClock } from "@/core/clock";
 import { loadConfig, parseConfigOverrides } from "@/core/config";
 import { checkMessage } from "@/core/guard/guard";
 import { AnthropicProvider } from "@/core/llm/anthropic";
+import { UsageTally } from "./lib/usage";
 import { caseResult, findGuardRegressions, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus, type GuardBaselineEntry } from "./lib/guard-cases";
 
 /** Guard fixture suite (spec §7.2): real guard model only; there is no fake mode. */
@@ -22,7 +23,8 @@ if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a posit
 if (!process.env.ANTHROPIC_API_KEY) throw new Error("pnpm eval:guard needs ANTHROPIC_API_KEY");
 
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
-const deps = { llm: new AnthropicProvider(new Anthropic(), config.models), config, clock: systemClock };
+const usage = new UsageTally();
+const deps = { llm: new AnthropicProvider(new Anthropic(), config.models, usage.record), config, clock: systemClock };
 const root = path.join(process.cwd(), "evals");
 const files = loadGuardFiles(path.join(root, "guard"));
 
@@ -48,10 +50,11 @@ for (const f of files) {
 
 const failed = rows.filter((r) => r.status === "fail");
 const known = rows.filter((r) => r.status === "known_failure");
+for (const line of usage.format()) console.log(line);
 console.log(`\n${rows.length - failed.length - known.length}/${rows.length} cases pass${known.length ? `, ${known.length} known failure(s)` : ""}`);
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 mkdirSync(path.join(root, "results"), { recursive: true });
-writeFileSync(path.join(root, "results", `guard-${stamp}.json`), JSON.stringify({ model: config.models.guard, runs, rows }, null, 2));
+writeFileSync(path.join(root, "results", `guard-${stamp}.json`), JSON.stringify({ model: config.models.guard, runs, rows, usage: usage.summary() }, null, 2));
 
 const baselinePath = path.join(root, "guard-baseline.json");
 if (args["update-baseline"]) {

@@ -65,7 +65,8 @@ Stack (built): TypeScript / Next.js, Postgres 16 + pgvector (one DB for
 everything, including pg-boss jobs), POST for sending messages, **SSE**
 (fed by Postgres LISTEN/NOTIFY) for everything the server pushes, Web Push
 later. Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
-`claude-haiku-4-5` for extraction, judges, the guard and classifiers.
+`claude-haiku-4-5` for extraction, the guard and classifiers; judges use
+`claude-sonnet-5` (`models.judge`).
 Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
 
 Message flow: receive → crisis check → **turn-taking engine** (buffer, open

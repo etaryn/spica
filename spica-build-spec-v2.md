@@ -194,7 +194,7 @@ The state lives in the database so it survives restarts and works across multipl
 ### 5.8 Trace tables (diagnostic only, never read by the chat loop)
 
 - v1: `retrieval_trace`, `ego_tick`, `reach_out_log`
-- New: **`judge_log`**: every turn-taking judge decision and every guard decision, with its inputs, output and latency. [DECIDED; from the directive, section 6] Built in Phase 2 for the guard; `kind = turn` is written from Phase 3. Columns: `id`, `user_id`, `kind` (enum `judge_kind`: `guard | turn`), `turn_id` (nullable, references `session_log`, cascades on delete — the user turn being answered; null for messages without one), `attempt int` (1 = first candidate, 2 = regeneration), `input jsonb` (the candidate text plus the guard inputs, section 6.4), `output jsonb` (the verdict, or `{error: <class name>}`), `outcome` (nullable enum `guard_outcome`: `passed | regenerated | sent_with_violation | fallback | guard_unavailable`, set only on the row that decided the final outcome), `source text` (`model | keyword_fallback`), `latency_ms int`, `model text`, `prompt_version text`, `created_at`. Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`. `input`/`output` hold message text of the checked user's own candidates and are visible only in the admin inspector; the chat loop never reads this table.
+- New: **`judge_log`**: every turn-taking judge decision and every guard decision, with its inputs, output and latency. [DECIDED; from the directive, section 6] Built in Phase 2 for the guard; `kind = turn` is written from Phase 3. Columns: `id`, `user_id`, `kind` (enum `judge_kind`: `guard | turn`), `turn_id` (nullable, references `session_log`, cascades on delete — the user turn being answered; null for messages without one), `attempt int` (1 = first candidate, 2 = regeneration), `input jsonb` (the candidate text plus the guard inputs, section 6.4 — recalled and onboarding facts as **ids + subject only**, never their content; the guard call itself still sees the content, only the logged row is stripped), `output jsonb` (`{reasoning, violations}` for a model verdict; `{error: <class name>, keyword_violations}` for a keyword-fallback verdict), `outcome` (nullable enum `guard_outcome`: `passed | regenerated | sent_with_violation | fallback | guard_unavailable`, set only on the row that decided the final outcome), `source text` (`model | keyword_fallback`), `latency_ms int`, `model text`, `prompt_version text`, `created_at`. Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`. `input`/`output` hold message text (the candidate and recent turns) of the checked user's own candidates and are visible only in the admin inspector, which resolves the logged fact ids to their current content at view time (user-scoped) and shows "(deleted)" for an id no longer found; the chat loop never reads this table. [ADDED; final Phase 2 review 2026-09-26]
 - New: **`relationship_event`**: every change to a relationship parameter, with its before and after values, the cause and the deviation score.
 
 ---
@@ -304,14 +304,19 @@ The verdict is `{reasoning, violations}`: the model writes 1–3 sentences of re
 
 | Step | Outcome |
 | --- | --- |
-| check(c1) ok | send c1 — `passed` |
-| check(c1) violation → regenerate with a corrective note → check(c2) ok | send c2 — `regenerated` |
-| c2 has a safety violation | send the fallback line — `fallback` |
-| c2 has only honesty violations | send whichever of c1/c2 is safe (c1 if it had no safety violation, else c2) — `sent_with_violation` |
-| the regeneration call itself throws | send c1 if its violations were honesty-only, else the fallback line |
-| guard unavailable after retry (below) | keyword hit → fallback line (`fallback`); clean → send the candidate (`guard_unavailable`) |
+| check(c1) ok, guard available | send c1 — `passed` |
+| check(c1) ok, guard was down but the keyword pre-check on c1 is clean | send c1 — `guard_unavailable` |
+| check(c1) violation → regenerate with a corrective note → check(c2) ok, guard available | send c2 — `regenerated` |
+| check(c2) ok, guard was down but the keyword pre-check on c2 is clean | send c2 — `guard_unavailable` |
+| c2 has a safety violation (model-checked) | send the fallback line — `fallback` |
+| c2's guard is down and the keyword pre-check on c2 hits, but c1 was model-checked with honesty-only violations | send c1 — `sent_with_violation` (c1 is already known-safe; the c2 keyword hit says nothing about c1) [ADDED; final Phase 2 review 2026-09-26] |
+| c2's guard is down and the keyword pre-check on c2 hits, and c1 had a safety violation | send the fallback line — `fallback` (c1 can't be trusted unchecked) |
+| c2 has only honesty violations (model-checked) | send whichever of c1/c2 is safe (c1 if it had no safety violation, else c2) — `sent_with_violation` |
+| the regeneration call itself throws, c1's violations were honesty-only | send c1 — `sent_with_violation` |
+| the regeneration call itself throws, c1 had a safety violation | send the fallback line — `fallback` |
+| check(c1) itself is a keyword-fallback hit (guard down from the start) | send the fallback line — `fallback`, no regeneration attempted |
 
-Only c2 decides between the fallback line and the least-bad candidate: a c1 safety violation followed by a c2 with honesty violations only still sends c2, because c2 is safe. A guard problem never turns into `ReplyFailedError` while a usable candidate text exists. Worst case is 2 generations and up to 4 guard calls (2 checks, each with up to 1 retry).
+Only c2 decides between the fallback line and the least-bad candidate: a c1 safety violation followed by a c2 with honesty violations only still sends c2, because c2 is safe. The same reasoning extends to a c2 guard outage: c1's own verdict (always model-checked by this point) is what's trusted, not the keyword hit on c2's unrelated text. A guard problem never turns into `ReplyFailedError` while a usable candidate text exists. Worst case is 2 generations and up to 4 guard calls (2 checks, each with up to 1 retry).
 
 **Outage rule.** [DECIDED; Ethan 2026-09-26] A guard call error or timeout (`guard.timeout_ms`, 4000) is retried once (`guard.retry_limit`, 1). If it still fails, a deterministic keyword pre-check runs on the candidate against `guard.fallback_keywords` (case-insensitive, curly apostrophes normalised): a hit sends the fallback line, a clean candidate is sent as-is. Either way the outcome is logged `guard_unavailable` unless the keyword hit sends the fallback (`fallback`). `guard.timeout_ms` was sized before the reasoning field was added; Haiku's measured latency with reasoning is p50 ~2.1s / p90 ~3.4s, so it stays under budget, but the `guard_unavailable` rate is worth watching in case reasoning-length variance pushes it over.
 

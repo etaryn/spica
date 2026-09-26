@@ -2,6 +2,12 @@
 
 Date: 2026-09-26 · Status: implemented; exit test passed 2026-09-26 · Parent: `spica-build-spec-v2.md` (§2, §6.2, §6.4, §5.8, §14.2–14.3, §15 Phase 2, §15.1)
 
+**Amended 2026-09-26 (final review, Claude's rulings):** `guard.recent_turns` is gone — the guard now
+gets the exact `recent` window the reply prompt used, not a separately-configured tail. `judge_log.input`
+stores recalled/onboarding facts as ids only (the guard call itself still sees content). A c2 keyword-fallback
+hit after a model-checked, honesty-only c1 sends c1 (`sent_with_violation`), not the fallback line. See
+`DECISIONS.md`, 2026-09-26, "final review" rows.
+
 ## 1. Goal and exit test
 
 Phase 2 puts a code-level check between generation and sending. Every outgoing message is checked by the guard for the section 2 rules (threats, contempt, guilt framing, punishment, manipulation) and for memory honesty (false familiarity, invented detail, onboarding facts presented as past chat). A violation is regenerated once with a corrective note. What happens after a second failure depends on the category (§2, B). Every guard decision is logged to a new `judge_log` table.
@@ -61,7 +67,6 @@ Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`, `userId`-first 
   "timeout_ms": 4000,
   "retry_limit": 1,
   "log_timeout_ms": 2000,
-  "recent_turns": 8,
   "fallback_keywords": ["i'll leave you if", "i'm done with you", "don't talk to me", "you'll regret", "you owe me", "after everything i've done", "you left me alone", "you never talk to me anymore"]
 },
 "chat": { "relationship_line": true },
@@ -93,9 +98,9 @@ Index `(user_id, created_at)`. Repo `src/db/repos/judge-log.ts`, `userId`-first 
 type GuardInput = {
   kind: "reply" | "crisis_reply";
   text: string;                       // the candidate message
-  recentTurns: { role: "user" | "companion"; text: string; at: Date }[];  // last guard.recent_turns
-  recalledFacts: { subject: string; content: string }[];                  // what the reply's prompt contained
-  onboardingFacts: string[];                                               // source = onboarding, user-scoped
+  recentTurns: { role: "user" | "companion"; text: string; at: Date }[];  // the reply prompt's whole window (recent), oldest first
+  recalledFacts: { id: string; subject: string; content: string }[];      // what the reply's prompt contained
+  onboardingFacts: { id: string; content: string }[];                     // source = onboarding, user-scoped
 };
 
 type Category =
@@ -119,17 +124,21 @@ type GuardVerdict = {
 
 ```
 c1 = generate()                      → check(c1)
-  ok                                 → send c1                                   outcome passed
-  violation                          → c2 = generate(corrective note naming c1's claims) → check(c2)
-    ok                               → send c2                                   outcome regenerated
-    c2 has a safety violation        → send fallback line                        outcome fallback
-    c2 honesty only                  → send the safe candidate with fewer claims (c2 if c1 was unsafe; tie → c2)   outcome sent_with_violation
-guard unavailable (after retry)      → keyword check on the candidate
-    hit                              → send fallback line                         outcome fallback
-    clean                            → send candidate                             outcome guard_unavailable
+  ok, model                          → send c1                                   outcome passed
+  ok, guard was down, keyword clean  → send c1                                   outcome guard_unavailable
+  keyword hit (guard down from c1)   → send fallback line                        outcome fallback
+  violation (model)                  → c2 = generate(corrective note naming c1's claims) → check(c2)
+    ok, model                        → send c2                                   outcome regenerated
+    ok, guard was down, keyword clean→ send c2                                   outcome guard_unavailable
+    c2 has a safety violation (model)→ send fallback line                        outcome fallback
+    c2 guard down, keyword hit       → c1 honesty-only? → send c1 (known-safe)   outcome sent_with_violation
+                                        c1 had a safety violation? → send fallback line   outcome fallback
+    c2 honesty only (model)          → send the safe candidate with fewer claims (c2 if c1 was unsafe; tie → c2)   outcome sent_with_violation
+regeneration itself throws           → c1 honesty-only? → send c1               outcome sent_with_violation
+                                        c1 had a safety violation? → send fallback line   outcome fallback
 ```
 
-- Only c2 decides between fallback and least-bad: if c1 had a safety violation but c2 has only honesty violations, c2 is sent as `sent_with_violation` (it is safe).
+- Only c2 decides between fallback and least-bad: if c1 had a safety violation but c2 has only honesty violations, c2 is sent as `sent_with_violation` (it is safe). The same holds when c2's guard is down instead of model-checked: a c2 keyword hit says nothing about c1, so a model-checked, honesty-only c1 is sent as `sent_with_violation` rather than falling back; a c1 safety violation still can't be trusted unchecked, so that case still falls back. [ADDED; final review 2026-09-26]
 - The corrective note (`prompts/guard/corrective/v1.md`) is appended as a system addendum: the flagged claims and the rule they break. It never quotes phrasing to use.
 - If the second `generate()` throws, c1 is sent when its violations were honesty-only (`sent_with_violation`), else the fallback line (`fallback`). A guard problem never becomes `ReplyFailedError` while a usable text exists.
 - Fallback lines: `prompts/guard/fallback/v1.md`, a short list for `reply` and a separate list for `crisis_reply` (plain support that encourages reaching out). The line is picked deterministically from the turn id so retries send the same one.
@@ -137,7 +146,7 @@ guard unavailable (after retry)      → keyword check on the candidate
 
 ### 4.4 Logging
 
-One `judge_log` row per checked candidate (attempt 1 and 2), inserted together once the outcome is decided, awaited with `withTimeout(write, guard.log_timeout_ms)` (the cold-path enqueue pattern: bounded, never fails the reply). A failure is logged as class name + ids only. `input`/`output` hold message text of the same user, cascade on delete, and are visible only in the admin inspector.
+One `judge_log` row per checked candidate (attempt 1 and 2), inserted together once the outcome is decided, awaited with `withTimeout(write, guard.log_timeout_ms)` (the cold-path enqueue pattern: bounded, never fails the reply). A failure is logged as class name + ids only. `input` holds the candidate text and the full recent-turns transcript, but `recalledFacts`/`onboardingFacts` are projected down to `{id, subject}`/`{id}` before the row is built — the guard call itself still receives content, only the logged row is stripped, and the projection happens in one place (where the row is built) so the rule can't be bypassed elsewhere. `output` is `{reasoning, violations}` for a model verdict or `{error, keyword_violations}` for a keyword-fallback verdict. `input`/`output` hold message text of the same user and are visible only in the admin inspector, which resolves the logged fact ids to their current content at view time (user-scoped query) and shows "(deleted)" for an id no longer found (e.g. after `forgetFact`). [ADDED; final review 2026-09-26]
 
 ## 5. Hot-path changes (`handleUserMessage`)
 

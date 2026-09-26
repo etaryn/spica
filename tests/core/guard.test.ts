@@ -11,7 +11,8 @@ const config = loadConfig();
 const deps = () => ({ llm: new FakeLLMProvider(), config, clock: new SimClock(new Date("2026-01-05T09:00:00Z")) });
 const input = (text: string, over: Partial<GuardInput> = {}): GuardInput => ({
   kind: "reply", text, recentTurns: [{ role: "user", text: "got the job!!", at: new Date("2026-01-05T09:00:00Z") }],
-  recalledFacts: [{ subject: "self", content: "Spica has a cat called Pesto." }], onboardingFacts: ["The user drinks a lot of coffee."], ...over,
+  recalledFacts: [{ id: "fact-1", subject: "self", content: "Spica has a cat called Pesto." }],
+  onboardingFacts: [{ id: "onb-1", content: "The user drinks a lot of coffee." }], ...over,
 });
 
 describe("matchKeyword", () => {

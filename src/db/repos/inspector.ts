@@ -1,4 +1,4 @@
-import { and, arrayContains, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../client";
 import {
@@ -70,3 +70,16 @@ export const listReachOuts = (db: Db, userId: string) =>
 export const listJudgeLog = (db: Db, userId: string) =>
   db.select().from(judge_log).where(eq(judge_log.user_id, userId))
     .orderBy(desc(judge_log.created_at), desc(judge_log.attempt)).limit(200);
+
+/**
+ * View-time resolution of the fact ids `judge_log.input` holds (v2 §5.8: the log never stores fact
+ * content). User-scoped, so a deleted or foreign id never resolves. Missing ids mean the fact was
+ * hard-deleted since (`forgetFact`) — the caller shows "(deleted)".
+ */
+export async function resolveFactContents(db: Db, userId: string, ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids)];
+  if (!unique.length) return new Map();
+  const rows = await db.select({ id: fact.id, content: fact.content }).from(fact)
+    .where(and(eq(fact.user_id, userId), inArray(fact.id, unique)));
+  return new Map(rows.map((r) => [r.id, r.content]));
+}

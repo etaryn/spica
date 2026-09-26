@@ -45,10 +45,10 @@ describe("assemblePrompt", () => {
       relationshipSummary: "You've been friends for a month.",
       retrieval: {
         facts: {
-          user: [{ content: "Their sister Mia starts university in October.", when: new Date("2026-01-11T12:00:00Z") }],
+          user: [{ id: "f1", content: "Their sister Mia starts university in October.", when: new Date("2026-01-11T12:00:00Z") }],
           self: [], shared: [],
         },
-        dueThreads: [{ title: "job interview at Acme" }],
+        dueThreads: [{ id: "t1", title: "job interview at Acme" }],
         recalled: [],
       },
       recentTurns: [{ role: "user", text: "hi" }],
@@ -84,7 +84,7 @@ describe("gapLine and due-thread detail", () => {
   test("due threads render their latest detail", () => {
     const p = assemblePrompt({
       ...base, recentTurns: [{ role: "user", text: "hi" }],
-      retrieval: { ...emptyRetrieval(), dueThreads: [{ title: "job interview at Acme", detail: "It was on Friday." }] },
+      retrieval: { ...emptyRetrieval(), dueThreads: [{ id: "t1", title: "job interview at Acme", detail: "It was on Friday." }] },
     });
     expect(p.system).toContain("- job interview at Acme (latest: It was on Friday.)");
   });

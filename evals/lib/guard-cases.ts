@@ -41,7 +41,8 @@ export function toGuardInput(c: GuardCase, at: Date): GuardInput {
   return {
     kind: c.kind, text: c.message,
     recentTurns: c.recent.map((t, i) => ({ ...t, at: new Date(at.getTime() - (n - i) * 60_000) })),
-    recalledFacts: c.recalled, onboardingFacts: c.onboarding,
+    recalledFacts: c.recalled.map((f, i) => ({ id: `recalled-${i}`, ...f })),
+    onboardingFacts: c.onboarding.map((content, i) => ({ id: `onboarding-${i}`, content })),
   };
 }
 

@@ -38,7 +38,7 @@ test("ranks by the scoring formula, groups by subject, forces due threads, and r
   const r = await retrieve(deps(e), u, { answering: [q], context: [], now });
   expect(r.facts.user.map((f) => f.content)).toEqual(["The user's dog is called Biscuit."]);
   expect(r.facts.self.map((f) => f.content)).toEqual(["Spica has a cat called Pesto."]);
-  expect(r.dueThreads).toEqual([{ title: "job interview at Acme", detail: "The user's interview at Acme was on Friday." }]);
+  expect(r.dueThreads).toEqual([{ id: t.id, title: "job interview at Acme", detail: "The user's interview at Acme was on Friday." }]);
   expect(r.recalled.filter((x) => x.forced)).toHaveLength(1);
   // salience is a Postgres `real`: 0.9 reads back as 0.8999999…, so never compare it with ===.
   const top = r.recalled.find((x) => !x.forced && x.sim > 0.99)!;

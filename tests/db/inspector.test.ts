@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { listFacts, parseFactFilters } from "@/db/repos/inspector";
+import { forgetFact, insertFact } from "@/db/repos/facts";
+import { listFacts, listJudgeLog, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
+import { insertJudgeLogs } from "@/db/repos/judge-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
@@ -31,4 +33,30 @@ test("listFacts filters by subject, sorts, and is user-scoped", async () => {
 test("parseFactFilters ignores invalid values", () => {
   expect(parseFactFilters({ subject: "bogus", status: "open", entityId: "x", sort: "weird" }))
     .toEqual({ subject: undefined, status: "open", entityId: undefined, threadId: undefined, sort: "recency" });
+});
+
+test("resolveFactContents: user-scoped and view-time; a forgotten fact's judge_log row survives but resolves to nothing", async () => {
+  const a = await createTestUser("a");
+  const b = await createTestUser("b");
+  const f = await insertFact(getTestDb(), a, {
+    subject: "user", kind: "trait", content: "The user's dog is called Biscuit.", embedding: vec(),
+    created_at: new Date("2026-01-01T00:00:00Z"), status: "open", salience: 0.5, valence: 0, confidence: 0.9, source: "turn",
+  });
+  await insertJudgeLogs(getTestDb(), a, [{
+    kind: "guard", turn_id: null, attempt: 1,
+    input: { recalledFacts: [{ id: f.id, subject: "user" }], onboardingFacts: [], text: "hi" },
+    output: { violations: [] }, outcome: "passed", source: "model", latency_ms: 5,
+    model: "claude-haiku-4-5", prompt_version: "guard@v1", created_at: new Date("2026-01-05T00:00:00Z"),
+  }]);
+
+  expect(await resolveFactContents(getTestDb(), a, [f.id])).toEqual(new Map([[f.id, "The user's dog is called Biscuit."]]));
+  // Another user's query never resolves this user's fact, even with the right id.
+  expect(await resolveFactContents(getTestDb(), b, [f.id])).toEqual(new Map());
+
+  expect(await forgetFact(getTestDb(), a, f.id)).toBe(true);
+
+  // The judge_log row is untouched by the delete (no FK to fact); the resolver just can't find the id any more.
+  const rows = await listJudgeLog(getTestDb(), a);
+  expect(rows).toHaveLength(1);
+  expect(await resolveFactContents(getTestDb(), a, [f.id])).toEqual(new Map());
 });

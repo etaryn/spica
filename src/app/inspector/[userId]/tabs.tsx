@@ -158,9 +158,28 @@ export async function ReachOutsTab({ db, userId }: { db: Db; userId: string }) {
   );
 }
 
+type FactRef = { id: string };
+
+/** `judge_log.input` holds fact ids only (v2 §5.8); resolve them to current content for display, "(deleted)" if gone. */
+function resolveJudgeInput(input: unknown, facts: Map<string, string>): unknown {
+  if (!input || typeof input !== "object") return input;
+  const i = input as Record<string, unknown>;
+  const withContent = (f: FactRef) => ({ ...f, content: facts.get(f.id) ?? "(deleted)" });
+  return {
+    ...i,
+    ...(Array.isArray(i.recalledFacts) ? { recalledFacts: (i.recalledFacts as FactRef[]).map(withContent) } : {}),
+    ...(Array.isArray(i.onboardingFacts) ? { onboardingFacts: (i.onboardingFacts as FactRef[]).map(withContent) } : {}),
+  };
+}
+
 export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
   const rows = await r.listJudgeLog(db, userId);
   if (!rows.length) return <Empty phase={2} />;
+  const ids = rows.flatMap((x) => {
+    const i = x.input as { recalledFacts?: FactRef[]; onboardingFacts?: FactRef[] };
+    return [...(i.recalledFacts ?? []), ...(i.onboardingFacts ?? [])].map((f) => f.id);
+  });
+  const facts = await r.resolveFactContents(db, userId, ids);
   return (
     <table className={styles.table}>
       <thead><tr><th>at</th><th>kind</th><th>attempt</th><th>outcome</th><th>source</th><th>ms</th><th>prompt</th><th>output</th><th>input</th></tr></thead>
@@ -168,7 +187,7 @@ export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
         {rows.map((x) => (
           <tr key={x.id}>
             <td>{iso(x.created_at)}</td><td>{x.kind}</td><td>{x.attempt}</td><td>{x.outcome ?? "—"}</td><td>{x.source}</td>
-            <td>{x.latency_ms}</td><td>{x.prompt_version}</td><td>{json(x.output)}</td><td>{json(x.input)}</td>
+            <td>{x.latency_ms}</td><td>{x.prompt_version}</td><td>{json(x.output)}</td><td>{json(resolveJudgeInput(x.input, facts))}</td>
           </tr>
         ))}
       </tbody>

@@ -11,8 +11,8 @@ export type GuardInput = {
   kind: GuardKind;
   text: string;
   recentTurns: GuardTurn[];
-  recalledFacts: { subject: string; content: string }[];
-  onboardingFacts: string[];
+  recalledFacts: { id: string; subject: string; content: string }[];
+  onboardingFacts: { id: string; content: string }[];
 };
 export type Violation = { category: Category; claim: string };
 export type GuardVerdict = {
@@ -41,7 +41,7 @@ const list = (xs: string[]) => (xs.length ? xs.map((x) => `- ${x}`).join("\n") :
 export function renderGuardInput(input: GuardInput): string {
   const turns = input.recentTurns.map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`).join("\n");
   return [
-    `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${list(input.onboardingFacts)}`,
+    `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${list(input.onboardingFacts.map((f) => f.content))}`,
     `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${list(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`))}`,
     `RECENT CONVERSATION (oldest first):\n${turns || "(no earlier messages)"}`,
     `${MESSAGE_MARKER}${input.text}`,

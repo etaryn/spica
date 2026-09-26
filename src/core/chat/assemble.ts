@@ -1,8 +1,8 @@
 import type { ChatMessage } from "../llm/types";
 import type { RecalledFact } from "../memory/types";
 
-export type RetrievedFact = { content: string; when: Date };
-export type DueThread = { title: string; detail?: string | null };
+export type RetrievedFact = { id: string; content: string; when: Date };
+export type DueThread = { id: string; title: string; detail?: string | null };
 
 export interface RetrievalResult {
   facts: { user: RetrievedFact[]; self: RetrievedFact[]; shared: RetrievedFact[] };

@@ -145,7 +145,7 @@ describe("facts", () => {
     await facts.insertFact(getTestDb(), u, { ...base, content: "Old stale survey fact.", status: "stale", source: "onboarding" });
     await facts.insertFact(getTestDb(), u, { ...base, content: "Said in chat.", status: "open", source: "turn" });
     await facts.insertFact(getTestDb(), other, { ...base, content: "Someone else's survey fact.", status: "open", source: "onboarding" });
-    expect(await facts.listOnboardingFacts(getTestDb(), u)).toEqual(["Drinks a lot of coffee."]);
+    expect((await facts.listOnboardingFacts(getTestDb(), u)).map((f) => f.content)).toEqual(["Drinks a lot of coffee."]);
   });
 });
 

@@ -33,7 +33,7 @@ export async function retrieve(
   }
   for (const s of scored) {
     seen.add(s.id);
-    result.facts[s.subject].push({ content: s.content, when: s.occurred_at ?? s.created_at });
+    result.facts[s.subject].push({ id: s.id, content: s.content, when: s.occurred_at ?? s.created_at });
     result.recalled.push({
       factId: s.id, sim: s.sim, fact_salience: s.salience, entity_salience: s.entity_salience,
       recency: s.recency, score: s.score, forced: false,
@@ -42,7 +42,7 @@ export async function retrieve(
 
   try {
     for (const t of await dueThreads(db, userId, input.now, config.retrieval.max_due_threads)) {
-      result.dueThreads.push({ title: t.title, detail: t.content });
+      result.dueThreads.push({ id: t.id, title: t.title, detail: t.content });
       if (t.fact_id && !seen.has(t.fact_id)) {
         seen.add(t.fact_id);
         result.recalled.push({ factId: t.fact_id, sim: 0, fact_salience: t.salience ?? 0, entity_salience: 1, recency: 1, score: 0, forced: true });
@@ -51,7 +51,7 @@ export async function retrieve(
     const pre = await getPreoccupationFact(db, userId);
     if (pre && !seen.has(pre.id)) {
       seen.add(pre.id);
-      result.facts.self.push({ content: pre.content, when: pre.occurred_at ?? pre.created_at });
+      result.facts.self.push({ id: pre.id, content: pre.content, when: pre.occurred_at ?? pre.created_at });
       result.recalled.push({ factId: pre.id, sim: 0, fact_salience: pre.salience, entity_salience: 1, recency: 1, score: 0, forced: true });
     }
   } catch (e) {

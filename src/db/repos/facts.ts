@@ -135,12 +135,11 @@ export async function listRememberedFacts(db: Db, userId: string) {
 }
 
 /** Onboarding facts the guard may treat as known (spec §5). Superseded and stale ones are excluded. */
-export async function listOnboardingFacts(db: Db, userId: string): Promise<string[]> {
-  const rows = await db.select({ content: fact.content }).from(fact).where(and(
+export async function listOnboardingFacts(db: Db, userId: string): Promise<{ id: string; content: string }[]> {
+  return db.select({ id: fact.id, content: fact.content }).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.source, "onboarding"), eq(fact.scope, "private"),
     notInArray(fact.status, ["superseded", "stale"]),
   )).orderBy(asc(fact.created_at));
-  return rows.map((r) => r.content);
 }
 
 /**

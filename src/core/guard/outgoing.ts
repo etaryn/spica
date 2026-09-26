@@ -50,10 +50,31 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
   }
   const v2 = await check(c2);
   if (v2.ok) return decide(c2, v2.source === "model" ? "regenerated" : "guard_unavailable");
-  if (v2.source === "keyword_fallback" || hasSafety(v2.violations)) return decide(fallback(), "fallback");
+  if (v2.source === "keyword_fallback") {
+    // c2's guard is down; the keyword hit only speaks to c2. c1 was model-checked (v1 is never
+    // keyword_fallback here) — if it was honesty-only it's known-safe, so send it instead of the
+    // fallback line. A c1 safety violation still can't be trusted unchecked: fall back as before.
+    return hasSafety(v1.violations) ? decide(fallback(), "fallback") : decide(c1, "sent_with_violation");
+  }
+  if (hasSafety(v2.violations)) return decide(fallback(), "fallback");
   // c2 is safe but still has honesty violations.
   if (hasSafety(v1.violations)) return decide(c2, "sent_with_violation");
   return decide(v1.violations.length < v2.violations.length ? c1 : c2, "sent_with_violation");
+}
+
+/**
+ * `input` never stores fact content (v2 §5.8): recalled and onboarding facts go in as id + subject only.
+ * The guard call itself still receives the content (`a.input`, unprojected); only the log row is stripped,
+ * and only here, so the no-fact-content rule has one place to hold.
+ */
+function logInput(input: OutgoingArgs["input"], text: string) {
+  return {
+    kind: input.kind,
+    recentTurns: input.recentTurns,
+    recalledFacts: input.recalledFacts.map((f) => ({ id: f.id, subject: f.subject })),
+    onboardingFacts: input.onboardingFacts.map((f) => ({ id: f.id })),
+    text,
+  };
 }
 
 /** One row per checked candidate, outcome on the last. Bounded and best-effort: never fails the reply. */
@@ -61,7 +82,7 @@ async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: 
   const at = deps.clock.now();
   const rows: NewJudgeLog[] = checked.map((c, i) => ({
     kind: "guard", turn_id: a.turnId, attempt: i + 1,
-    input: { ...a.input, text: c.text },
+    input: logInput(a.input, c.text),
     output: c.verdict.source === "model"
       ? { reasoning: c.verdict.reasoning, violations: c.verdict.violations }
       : { error: c.verdict.error, keyword_violations: c.verdict.violations },

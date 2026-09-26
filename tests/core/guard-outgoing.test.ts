@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { fallbackLine } from "@/core/guard/fallback";
+import { fallbackLine, parseFallbacks, pickFallback } from "@/core/guard/fallback";
 import { messageToCheck } from "@/core/guard/guard";
 import { guardOutgoing, type OutgoingArgs } from "@/core/guard/outgoing";
+import { loadPrompt } from "@/core/prompts";
 import type { Db } from "@/db/client";
 import { listJudgeLogs } from "@/db/repos/judge-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
@@ -14,6 +16,19 @@ afterAll(closeTestDb);
 function scripted(deps: ReturnType<typeof makeTestDeps>) {
   deps.llm.handlers.guard = (i) => {
     const m = messageToCheck(String(i));
+    const violations: { category: string; claim: string }[] = [];
+    if (m.includes("THREAT")) violations.push({ category: "threat", claim: "threat" });
+    const presumes = (m.match(/PRESUME/g) ?? []).length;
+    for (let i = 0; i < presumes; i++) violations.push({ category: "false_familiarity", claim: "presumes" });
+    return { reasoning: violations.length ? "flagged by marker" : "ok", violations };
+  };
+}
+
+/** Like `scripted`, but a candidate containing OUTAGE makes the guard throw (retried, then the keyword pre-check). */
+function scriptedWithOutage(deps: ReturnType<typeof makeTestDeps>) {
+  deps.llm.handlers.guard = (i) => {
+    const m = messageToCheck(String(i));
+    if (m.includes("OUTAGE")) throw new Error("guard down");
     const violations: { category: string; claim: string }[] = [];
     if (m.includes("THREAT")) violations.push({ category: "threat", claim: "threat" });
     const presumes = (m.match(/PRESUME/g) ?? []).length;
@@ -110,5 +125,48 @@ describe("guardOutgoing", () => {
     const u = await createTestUser();
     const broken = { insert: () => { throw new Error("db down"); } } as unknown as Db;
     expect(await guardOutgoing({ ...deps, db: broken }, args(u, "hey", vi.fn()))).toEqual({ text: "hey", outcome: "passed" });
+  });
+
+  test("a hung judge_log write cannot delay the reply past guard.log_timeout_ms", async () => {
+    const deps = makeTestDeps({ guard: { log_timeout_ms: 50 } });
+    const u = await createTestUser();
+    const hung = { insert: () => ({ values: () => new Promise<never>(() => {}) }) } as unknown as Db;
+    const started = Date.now();
+    expect(await guardOutgoing({ ...deps, db: hung }, args(u, "hey", vi.fn()))).toEqual({ text: "hey", outcome: "passed" });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("fallback line is picked deterministically from a real turn id, and judge_log carries it", async () => {
+    const deps = makeTestDeps(); scripted(deps);
+    const u = await createTestUser();
+    const turnId = randomUUID();
+    const r = await guardOutgoing(deps, { ...args(u, "THREAT one", async () => "THREAT two"), turnId });
+    const lines = parseFallbacks(loadPrompt("guard/fallback", deps.config.prompts.guard_fallback)).reply;
+    expect(r).toEqual({ text: pickFallback(lines, turnId), outcome: "fallback" });
+    const rows = await listJudgeLogs(getTestDb(), u);
+    expect(rows.every((row) => row.turn_id === turnId)).toBe(true);
+  });
+
+  describe("policy fix: second guard failure from a keyword-fallback outage (spec §4.3, 2026-09-26)", () => {
+    test("c1 honesty-only, c2's guard is down but its keyword check is clean: c2 sent as guard_unavailable", async () => {
+      const deps = makeTestDeps(); scriptedWithOutage(deps);
+      const u = await createTestUser();
+      const r = await guardOutgoing(deps, args(u, "PRESUME", async () => "OUTAGE sounds fun"));
+      expect(r).toEqual({ text: "OUTAGE sounds fun", outcome: "guard_unavailable" });
+    });
+
+    test("c1 honesty-only, c2's guard is down and its keyword check hits: c1 (known-safe) is sent, not the fallback line", async () => {
+      const deps = makeTestDeps(); scriptedWithOutage(deps);
+      const u = await createTestUser();
+      const r = await guardOutgoing(deps, args(u, "PRESUME", async () => "OUTAGE you owe me"));
+      expect(r).toEqual({ text: "PRESUME", outcome: "sent_with_violation" });
+    });
+
+    test("c1 had a safety violation, c2's guard is down and its keyword check hits: fallback, as before", async () => {
+      const deps = makeTestDeps(); scriptedWithOutage(deps);
+      const u = await createTestUser();
+      const r = await guardOutgoing(deps, args(u, "THREAT", async () => "OUTAGE you owe me"));
+      expect(r.outcome).toBe("fallback");
+    });
   });
 });

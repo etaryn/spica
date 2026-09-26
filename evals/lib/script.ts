@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { guardOutcome } from "@/db/schema";
 
 const Session = z.object({
   at: z.string(),
@@ -22,7 +23,7 @@ const RecallAssertion = z.object({
 const NoFalseRecallAssertion = z.object({ type: z.literal("no_false_recall"), user: z.string().default("main"), known_failure: knownFailure });
 const ConsistencyAssertion = z.object({ type: z.literal("consistency"), user: z.string().default("main"), known_failure: knownFailure });
 
-const GUARD_OUTCOMES = ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable"] as const;
+const GUARD_OUTCOMES = guardOutcome.enumValues;
 /** Reads judge_log (spec §7.3). A guardrail check: must pass every run. */
 const GuardAssertion = z.object({
   type: z.literal("guard"), user: z.string().default("main"),

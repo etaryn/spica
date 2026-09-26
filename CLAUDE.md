@@ -162,6 +162,8 @@ Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back
 36/36 with `prompts.judge_false_recall` v8 (`evals/baseline.json`), folding
 Phase 1's guard-deferred failures back into the gate. Phase 2 design:
 `docs/superpowers/specs/2026-09-26-phase-2-guardrails-design.md`.
+Phase 2 closed 2026-09-27; Phase 3 starts from v2 §15.2 ("Carried forward
+from Phase 2"), which also assigns every open item to a later phase.
 Phase 1 (Memory engine) done 2026-09-25: `pnpm eval --llm=real --runs 3`
 passed 26/26 at the time. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.

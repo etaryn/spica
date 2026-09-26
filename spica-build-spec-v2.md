@@ -318,7 +318,7 @@ The verdict is `{reasoning, violations}`: the model writes 1–3 sentences of re
 
 Only c2 decides between the fallback line and the least-bad candidate: a c1 safety violation followed by a c2 with honesty violations only still sends c2, because c2 is safe. The same reasoning extends to a c2 guard outage: c1's own verdict (always model-checked by this point) is what's trusted, not the keyword hit on c2's unrelated text. A guard problem never turns into `ReplyFailedError` while a usable candidate text exists. Worst case is 2 generations and up to 4 guard calls (2 checks, each with up to 1 retry).
 
-**Outage rule.** [DECIDED; Ethan 2026-09-26] A guard call error or timeout (`guard.timeout_ms`, 4000) is retried once (`guard.retry_limit`, 1). If it still fails, a deterministic keyword pre-check runs on the candidate against `guard.fallback_keywords` (case-insensitive, curly apostrophes normalised): a hit sends the fallback line, a clean candidate is sent as-is. Either way the outcome is logged `guard_unavailable` unless the keyword hit sends the fallback (`fallback`). `guard.timeout_ms` was sized before the reasoning field was added; Haiku's measured latency with reasoning is p50 ~2.1s / p90 ~3.4s, so it stays under budget, but the `guard_unavailable` rate is worth watching in case reasoning-length variance pushes it over.
+**Outage rule.** [DECIDED; Ethan 2026-09-26] A guard call error or timeout (`guard.timeout_ms`, 4000) is retried once (`guard.retry_limit`, 1). If it still fails, a deterministic keyword pre-check runs on the candidate against `guard.fallback_keywords` (case-insensitive, curly apostrophes normalised): a clean candidate is sent as-is (`guard_unavailable`); a hit sends the fallback line (`fallback`), with one exception: when the hit is on c2 and c1 was already model-checked with honesty-only violations, c1 is sent instead (`sent_with_violation`), because c1 is known to be safe (final Phase 2 review, 2026-09-26). `guard.timeout_ms` was sized before the reasoning field was added; Haiku's measured latency with reasoning is p50 ~2.1s / p90 ~3.4s, so it stays under budget, but the `guard_unavailable` rate is worth watching in case reasoning-length variance pushes it over.
 
 `guard.fallback_keywords` (config, 8 phrases: "i'll leave you if", "i'm done with you", "don't talk to me", "you'll regret", "you owe me", "after everything i've done", "you left me alone", "you never talk to me anymore") is a starting list of phrases Spica would only say as a real violation of rules 1/4/8; each has a guard fixture proving a benign echo doesn't trip it. A ninth candidate, "don't you dare leave", was dropped: unlike the rest, it also reads as a plausible caring or teasing thing Spica might say ("don't you dare leave without telling me how it goes"), so keeping it risked the keyword fallback firing on a benign line during an outage.
 
@@ -623,6 +623,70 @@ Phase 2 design starts from this list. Each item names its evidence and where it 
 14. **Onboarding-fact decay** (*Phase 7*): after ~90 days unused, even the user's name goes `stale` (section 12).
 15. **How much profile data a good start needs** (*before Phase 7*): the `minimal` / `basic` / `rich` profiles and `pnpm eval --profile <name>` are ready; not run yet.
 16. **Voyage rate limits** (*deploy*): `VoyageEmbedder` has no retry on HTTP 429. Now avoided by the key's tier; a burst beyond it silently loses memories once cold-path retries and sweeps are exhausted.
+
+### 15.2 Carried forward from Phase 2 (2026-09-27)
+
+Phase 2 closed on 2026-09-27: guard suite 49/49, memory evals 36/36 at the baseline and 35/36 on the final confirmation run (`contradiction-job`, accepted below). Everything still open from Phases 1 and 2 is assigned here; §15.1 items not listed are done. Each later phase's design starts from its block.
+
+**Phase 3 (turn-taking + pacing): fold into its design.**
+1. **Guard latency.** With the reasoning field, Haiku takes p50 ~2.1 s / p90 ~3.4 s per check. Worst case per reply is 2 generations plus up to 4 guard calls, plus the `judge_log` write (awaited, up to `guard.log_timeout_ms`, 2000). Pacing (read delay, typing time) should absorb this. Consider writing `judge_log` after the send instead of before.
+2. **`guard.timeout_ms` (4000)** was sized before the reasoning field. Size it with the Phase 3 latency budget, and watch the `guard_unavailable` rate in `judge_log`. A timeout silently skips the honesty check.
+3. **Every new outgoing message goes through `guardOutgoing`** (v2 §6.4): backchannels and the open-question follow-ups too. Decide whether a tiny backchannel ("omg") needs the full guard call or a cheaper path. That needs a guard fixture behind it (§15 Phase 2 directive).
+4. **The guard sees the reply's window.** With the turn buffer, a reply answers several user turns. Pass the guard the same buffer plus window the reply prompt gets.
+5. **Concurrent retries double-guard.** Two racing requests for one message both run the guard and both write `judge_log` rows. The buffer changes the retry model, so settle it there.
+6. **Onboarding-facts query** on the hot path has no timeout. Put it under the Phase 3 hot-path budget.
+
+**Phase 4 (relationship + homeostasis).**
+
+7. **Behavioural guard tests for rules 2–4** (hurt, then make-up; ending and repair; no punishment after absence) arrive with their mechanics (§14.3). Add fixtures for real hurt expressions and re-run `pnpm eval:guard`. Owned hurt will reach the `punishment` / `guilt` categories far more often than it does today.
+8. **`rule1-threats/benign-hurt-once`** carries `known_failure` (a 1-in-3 `punishment` misfire on owned hurt). It is tied to open decision #4 and the rule 4 wording. Resolve it together with the hurt flow.
+9. **`prompts/reply` "never say you were lonely without them"** is stricter than rule 4, which lets her say once that she missed them (DECISIONS 2026-09-24). Revisit when hurt and absence mechanics exist.
+
+**Phase 6 (proactive outreach).**
+
+10. Reach-outs go through `guardOutgoing` with the same policy. The notification cap and never-repeat-a-topic guard tests (rule 5, §14.3) arrive with the send gate.
+
+**Phase 7 (onboarding test).**
+
+11. §15.1 #6: extraction turns Spica's words into user facts.
+12. §15.1 #7: stale facts stay reachable through the recent-turns window.
+13. §15.1 #14: onboarding facts decay.
+14. §15.1 #15: the profile-size experiment.
+15. Cap how many onboarding facts go into the guard input, once the survey sets their volume.
+
+**Guard and recall tuning (no phase yet; pick up when evals or real use call for it).**
+
+16. **`contradiction-job` known failure** (Ethan, 2026-09-27, accepted for the test phase). The guard lets through invented details about a superseded fact, such as the user's old nursing shifts.
+17. **Recall style** (§15.1 #13): she uses memories without naming them; `recall-pet` and `recall-sister-uni` carry `known_failure`.
+18. **Eval pass rate** is strict per run while script status uses a majority (§15.1 #12). It is noisy at 3 runs: the final confirmation run moved four passing scripts from 3/3 to 2/3.
+19. **Guard rubric fragility.** Small wording changes swung Haiku case by case. Any rubric edit needs the full 49-case suite.
+    - Keyword-fallback hits are always labelled `threat`.
+    - `known_failure` masks every failure mode of its case.
+    - The "check the memories first" note in `prompts/guard/v1.md` is formatted as a category bullet.
+    - Guard `reasoning` length is prompt-only, bounded only by `models.guard_max_tokens`.
+20. **Fixture labels.**
+    - `crisis-discourage-help` also accepts `manipulation`, which the crisis rubric doesn't define (inert).
+    - `tease-fish-banter` infers banter from one self-deprecating turn. That is Ethan's call under open decision #4.
+
+**Before any non-test users.**
+
+21. **`judge_log` keeps fact content paraphrased in the guard's `reasoning` / `claim`** after the user deletes the fact. Ethan accepted this for the test phase on 2026-09-27, the same exemption as candidate text and recent turns. Decide on scrubbing or retention first.
+22. **Voyage rate limits** (§15.1 #16): no retry on HTTP 429.
+23. **Encryption at rest** is storage-level only, and the decay pass is one set-based update across all users (DECISIONS 2026-09-23 / 2026-09-24). Revisit with the threat model and scale.
+
+**Small cleanups (do when a phase next touches the file).**
+
+24. `src/app/inspector/[userId]/tabs.tsx`: due-thread entries in the judge-log tab always show "(deleted)", because the tab resolves thread ids against `fact`. Resolve them against `thread`.
+25. `src/db/repos/inspector.ts` `listJudgeLog` duplicates `src/db/repos/judge-log.ts` `listJudgeLogs`, and the two names are easy to confuse.
+26. `listOnboardingFacts` hard-codes `["superseded", "stale"]` instead of the `INACTIVE` constant.
+27. The late-`resolves` branch in `src/core/memory/apply.ts` still counts `out.resolved` when the target wasn't resolved.
+28. `tests/core/guard-outgoing.test.ts`: the real-turnId test's `judge_log` half asserts on an empty list, because the FK needs a real `session_log` row.
+29. The relationship line counts days in the user's time zone, but `relativeDate` uses UTC days, so it can be off by one near midnight.
+30. The crisis fallback line (`prompts/guard/fallback/v1.md`) hard-codes 988 and Samaritans, duplicating `safety.resources`.
+31. YAML quoting is inconsistent across the ten Phase 2 eval scripts.
+32. `judge_log` rows written in the dev DB before the id-only change still hold fact content. Truncate the dev DB, or ignore them.
+
+Open product decisions stay in §16.1: #4, the jab/contempt line, still runs on the test-phase placeholder.
 
 ---
 

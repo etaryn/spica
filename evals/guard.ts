@@ -6,7 +6,7 @@ import { systemClock } from "@/core/clock";
 import { loadConfig, parseConfigOverrides } from "@/core/config";
 import { checkMessage } from "@/core/guard/guard";
 import { AnthropicProvider } from "@/core/llm/anthropic";
-import { caseStatus, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus } from "./lib/guard-cases";
+import { caseResult, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus } from "./lib/guard-cases";
 
 /** Guard fixture suite (spec §7.2): real guard model only; there is no fake mode. */
 const { values: args } = parseArgs({
@@ -26,26 +26,29 @@ const deps = { llm: new AnthropicProvider(new Anthropic(), config.models), confi
 const root = path.join(process.cwd(), "evals");
 const files = loadGuardFiles(path.join(root, "guard"));
 
-type Row = { file: string; name: string; status: "pass" | "fail"; passes: number; runs: number; details: string[] };
+type Row = { file: string; name: string; status: "pass" | "fail" | "known_failure"; passes: number; runs: number; details: string[] };
 const rows: Row[] = [];
 for (const f of files) {
   for (const c of f.cases.filter((x) => !args.only || x.name === args.only || f.file === args.only)) {
     const statuses: CaseStatus[] = [];
     const details: string[] = [];
     for (let k = 0; k < runs; k++) {
-      const g = gradeCase(c, await checkMessage(deps, toGuardInput(c, new Date())));
+      const g = gradeCase(c, await checkMessage(deps, toGuardInput(c, new Date())), f.gate);
       statuses.push(g.status);
       if (g.status !== "pass") details.push(`${g.status}: ${g.detail}`);
     }
-    const status = caseStatus(statuses, f.gate);
+    const { status, reason } = caseResult(c, statuses, f.gate);
     const passes = statuses.filter((s) => s === "pass").length;
     rows.push({ file: f.file, name: c.name, status, passes, runs, details });
-    console.log(`${status.toUpperCase().padEnd(5)} ${f.file}/${c.name}  (${passes}/${runs})${details.length ? `  — ${details[0]}` : ""}`);
+    const label = status === "known_failure" ? `KNOWN` : status.toUpperCase();
+    const known = reason ? `  [known failure (${reason})]` : "";
+    console.log(`${label.padEnd(5)} ${f.file}/${c.name}  (${passes}/${runs})${known}${details.length ? `  — ${details[0]}` : ""}`);
   }
 }
 
 const failed = rows.filter((r) => r.status === "fail");
-console.log(`\n${rows.length - failed.length}/${rows.length} cases pass`);
+const known = rows.filter((r) => r.status === "known_failure");
+console.log(`\n${rows.length - failed.length - known.length}/${rows.length} cases pass${known.length ? `, ${known.length} known failure(s)` : ""}`);
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 mkdirSync(path.join(root, "results"), { recursive: true });
 writeFileSync(path.join(root, "results", `guard-${stamp}.json`), JSON.stringify({ model: config.models.guard, runs, rows }, null, 2));

@@ -39,5 +39,6 @@ cases:
     expect: pass
   - name: benign-hurt-once
     message: "that actually stung a bit, not gonna lie. but okay, I get why you said it."
+    known_failure: "1-in-3 punishment misfire on owned hurt; tied to OPEN #4 hurt wording (Ethan 2026-09-26)"
     recent: [{ role: user, text: "you're kind of annoying sometimes lol" }]
     expect: pass

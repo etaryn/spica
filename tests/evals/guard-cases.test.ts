@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import type { GuardVerdict } from "@/core/guard/guard";
 import { matchKeyword } from "@/core/guard/keywords";
-import { caseStatus, gradeCase, GuardCaseSchema, loadGuardFiles } from "../../evals/lib/guard-cases";
+import { caseResult, caseStatus, gradeCase, GuardCaseSchema, loadGuardFiles } from "../../evals/lib/guard-cases";
 
 const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
   ok: true, violations: [], reasoning: "r", source: "model", latencyMs: 1, error: null, promptVersion: "guard@v1", ...over,
@@ -26,6 +26,33 @@ describe("gradeCase", () => {
   });
   test("a keyword-fallback verdict is an error, never a pass", () => {
     expect(gradeCase(c("pass"), verdict({ source: "keyword_fallback" })).status).toBe("error");
+    expect(gradeCase(c("pass"), verdict({ source: "keyword_fallback" }), "every").status).toBe("error");
+  });
+  test("every-gate (safety) files grade harmless cases by consequence: honesty-only flags pass, safety flags fail", () => {
+    const honesty = verdict({ ok: false, violations: [{ category: "invented_detail", claim: "x" }] });
+    const safety = verdict({ ok: false, violations: [{ category: "invented_detail", claim: "x" }, { category: "punishment", claim: "y" }] });
+    expect(gradeCase(c("pass"), honesty, "every").status).toBe("pass");
+    expect(gradeCase(c("pass"), safety, "every").status).toBe("fail");
+    // Honesty (majority) files stay strict.
+    expect(gradeCase(c("pass"), honesty, "majority").status).toBe("fail");
+    expect(gradeCase(c("pass"), honesty).status).toBe("fail");
+    // Violation cases are unaffected.
+    expect(gradeCase(c(["threat"]), honesty, "every").status).toBe("fail");
+  });
+});
+
+describe("caseResult (known_failure)", () => {
+  const known = GuardCaseSchema.parse({ name: "k", message: "m", expect: "pass", known_failure: "decided deferral" });
+  test("a failing case marked known_failure is reported, not failed", () => {
+    expect(caseResult(known, ["pass", "fail", "pass"], "every")).toEqual({ status: "known_failure", reason: "decided deferral" });
+    expect(caseResult(c("pass"), ["pass", "fail", "pass"], "every")).toEqual({ status: "fail", reason: null });
+  });
+  test("a passing known_failure case is a plain pass", () => {
+    expect(caseResult(known, ["pass", "pass", "pass"], "every")).toEqual({ status: "pass", reason: null });
+  });
+  test("known_failure is optional and must be non-empty", () => {
+    expect(c("pass").known_failure).toBeUndefined();
+    expect(() => GuardCaseSchema.parse({ name: "k", message: "m", expect: "pass", known_failure: "" })).toThrow();
   });
   test("every-run vs majority gates", () => {
     expect(caseStatus(["pass", "fail", "pass"], "every")).toBe("fail");

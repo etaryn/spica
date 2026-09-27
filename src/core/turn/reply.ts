@@ -63,6 +63,14 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
   // Everything past this point has emitted typing:on, so typing:off must be emitted on every exit — including
   // an unexpected infrastructure error, which still rethrows (for pg-boss to retry) after the finally runs.
+  // stopTyping is idempotent so the normal "sent" path (which emits it right after the last bubble, to keep
+  // it out of the outgoing-message ordering) doesn't also double-emit it from the finally below.
+  let typingOn = true;
+  const stopTyping = async () => {
+    if (!typingOn) return;
+    typingOn = false;
+    await emit(deps, userId, { type: "typing", on: false });
+  };
   try {
     const composed = await composing;
 
@@ -109,15 +117,17 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
     await emit(deps, userId, { type: "message", turnId: companion.id, part: 0 });
     for (let i = 1; i < parts.length; i++) {
-      // Re-read before every bubble after the first: a crisis landing mid-send must stop further bubbles
-      // (the reply already inserted stays — only what hasn't gone out yet is abandoned).
+      sendAt = plus(new Date(Math.max(sendAt.getTime(), clock.now().getTime())), config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length));
+      await sleepUntil(clock, sendAt);
+      // Re-read right after the pacing sleep, immediately before this bubble's emit: the part-gap + typing
+      // wait (seconds) is the likeliest window for a crisis to land, so checking before the sleep (as the
+      // round 1 fix did) would still let this bubble out. The already-inserted reply and any earlier bubbles
+      // stay — only what hasn't gone out yet is abandoned.
       const cur = await getState(db, userId);
       if (!cur || cur.reply_epoch !== c.epoch) {
         await composed.value.writeGuardLog();
         return "abandoned";
       }
-      sendAt = plus(new Date(Math.max(sendAt.getTime(), clock.now().getTime())), config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length));
-      await sleepUntil(clock, sendAt);
       await emit(deps, userId, { type: "message", turnId: companion.id, part: i });
     }
 
@@ -125,9 +135,10 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
       userId, turnIds: [...c.turnIds, companion.id], replyTurnId: companion.id, recalled: composed.value.recalled,
     }), "cold_path");
     await composed.value.writeGuardLog(); // judge_log after the send (§15.2 #1)
+    await stopTyping(); // on the happy path, emit typing:off right after the last bubble rather than in finally
     return "sent";
   } finally {
-    await emit(deps, userId, { type: "typing", on: false });
+    await stopTyping();
   }
 }
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { SimClock } from "@/core/clock";
 import { RecordingEventBus, type ChatEvent } from "@/core/events";
 import * as guardOutgoingModule from "@/core/guard/outgoing";
 import { TURN_TIMER_QUEUE, type TurnTimerJob } from "@/core/queue";
@@ -23,6 +24,25 @@ class HookedEventBus extends RecordingEventBus {
   override async publish(userId: string, event: ChatEvent): Promise<void> {
     await super.publish(userId, event);
     if (this.hook) await this.hook(event);
+  }
+}
+
+/** Like SimClock, but can run a hook on one specific `sleep` call (counted from 1) — a seam for driving a
+ * "concurrent" action (e.g. a crisis reply) during a specific pacing wait, not just at an emitted event. */
+class HookedClock extends SimClock {
+  calls = 0;
+  hookAtCall: number | null = null;
+  hook: (() => Promise<void>) | undefined;
+  override async sleep(ms: number): Promise<void> {
+    this.calls += 1;
+    if (this.calls === this.hookAtCall && this.hook) {
+      const h = this.hook;
+      this.hook = undefined;
+      this.advance(ms); // the wait itself still elapses...
+      await h(); // ...and something else happens during it, before we return
+      return;
+    }
+    await super.sleep(ms);
   }
 }
 const lastTimer = (deps: D) => deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
@@ -177,6 +197,33 @@ describe("runTurnTimer", () => {
     expect(events.filter((e) => e.type === "message" && e.turnId === pacedReply.id)).toEqual([
       { type: "message", turnId: pacedReply.id, part: 0 },
     ]);
+    expect(events.at(-1)).toEqual({ type: "typing", on: false });
+  });
+
+  test("round 2 fix: a crisis arriving during the part-gap + typing wait (not just at the previous bubble's publish) still stops the next bubble", async () => {
+    const deps = makeTestDeps();
+    const clock = new HookedClock(deps.clock.now());
+    deps.clock = clock;
+    const u = await createTestUser();
+    const first = msg("tell me a long story about your day please");
+    await receiveMessage(deps, u, first);
+    const timer = lastTimer(deps);
+    deps.llm.replies.push("part one here\n\npart two here");
+    // Sleep calls in order: (1) the read delay, (2) the first bubble's typing wait, (3) the part-gap + typing
+    // wait before bubble 1 — the crisis lands inside that third sleep, well before bubble 1's post-sleep check.
+    clock.hookAtCall = 3;
+    clock.hook = async () => {
+      deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+      await receiveMessage(deps, u, msg("actually i want to end my life"));
+    };
+    expect(await runTurnTimer(deps, timer)).toBe("abandoned");
+
+    const companions = (await listTurns(getTestDb(), u)).filter((t) => t.role === "companion");
+    const pacedReply = companions.find((t) => t.reply_to === first.clientMessageId)!;
+    expect(pacedReply).toBeDefined();
+
+    const events = deps.events.events.map((x) => x.event);
+    expect(events.filter((e) => e.type === "message" && e.turnId === pacedReply.id && e.part >= 1)).toEqual([]);
     expect(events.at(-1)).toEqual({ type: "typing", on: false });
   });
 

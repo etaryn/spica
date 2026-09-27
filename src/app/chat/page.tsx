@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { splitParts } from "@/core/chat/parts";
-import { crisisCardFor } from "@/core/safety/crisis";
+import { toHistoryMessage } from "@/app/api/chat/history/handler";
 import { recentTurns } from "@/db/repos/session-log";
 import { getDeps } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
@@ -11,13 +10,10 @@ export default async function ChatPage() {
   const user = await requireUser();
   const { db, config } = getDeps();
   const turns = await recentTurns(db, user.id, config.chat.history_page_size);
-  const initial: UiMessage[] = turns.map((t) => ({
-    id: t.id,
-    role: t.role,
-    parts: t.role === "companion" ? splitParts(t.text, config.chat.max_parts) : [t.text],
-    crisisCard: crisisCardFor(t.safety_flag, config),
-    status: "sent",
-  }));
+  const initial: UiMessage[] = turns.map((t) => {
+    const { trigger: _trigger, ...h } = toHistoryMessage(t, config);
+    return { ...h, status: "sent" as const };
+  });
   return (
     <div className={styles.shell}>
       <header className={styles.header}>

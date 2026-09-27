@@ -158,6 +158,24 @@ export async function ReachOutsTab({ db, userId }: { db: Db; userId: string }) {
   );
 }
 
+export async function TurnStateTab({ db, userId }: { db: Db; userId: string }) {
+  const s = await r.getConversationState(db, userId);
+  if (!s) return <Empty phase={3} />;
+  return (
+    <table className={styles.table}>
+      <tbody>
+        <tr><th>buffer</th><td>{json(s.buffer_turn_ids)}</td></tr>
+        <tr><th>open questions</th><td>{json(s.open_questions)}</td></tr>
+        <tr><th>wait until</th><td>{s.wait_until ? iso(s.wait_until) : "—"}</td></tr>
+        <tr><th>version</th><td>{s.buffer_version}</td></tr>
+        <tr><th>in flight</th><td>{json(s.inflight_turn_ids)} {s.inflight_since ? `since ${iso(s.inflight_since)}` : ""}</td></tr>
+        <tr><th>reply epoch</th><td>{s.reply_epoch}</td></tr>
+        <tr><th>last backchannel</th><td>{s.last_backchannel_at ? iso(s.last_backchannel_at) : "—"}</td></tr>
+      </tbody>
+    </table>
+  );
+}
+
 type FactRef = { id: string };
 
 /** `judge_log.input` holds fact ids only (v2 §5.8); resolve them to current content for display, "(deleted)" if gone. */

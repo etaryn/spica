@@ -2,6 +2,7 @@ import { SimClock } from "@/core/clock";
 import { loadConfig } from "@/core/config";
 import type { Deps } from "@/core/deps";
 import { FakeEmbedder } from "@/core/embed/fake";
+import { RecordingEventBus } from "@/core/events";
 import { FakeLLMProvider } from "@/core/llm/fake";
 import { silentLogger } from "@/core/log";
 import { RecordingQueue } from "@/core/queue";
@@ -17,5 +18,6 @@ export function makeTestDeps(configOverrides: unknown = {}) {
     queue: new RecordingQueue(),
     config,
     log: silentLogger,
+    events: new RecordingEventBus(),
   } satisfies Deps;
 }

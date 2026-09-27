@@ -10,6 +10,7 @@ import { consoleLogger } from "@/core/log";
 import { createDb } from "@/db/client";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import type { Env } from "./env";
+import { PgEventBus } from "./pg-event-bus";
 
 /** Production wiring shared by the Next.js server and the worker. */
 export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
@@ -35,6 +36,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     }),
     config,
     log: consoleLogger,
+    events: new PgEventBus(db, config.events.channel),
   };
   return { deps, boss };
 }

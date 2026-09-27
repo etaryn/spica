@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { Db } from "../client";
 import { session_log } from "../schema";
 import { one, toDateOrNull } from "./util";
@@ -50,6 +50,18 @@ export async function turnsUpTo(db: Db, userId: string, anchor: Turn, limit: num
   const ordered = rows.reverse();
   const i = ordered.findIndex((t) => t.id === anchor.id);
   return i === -1 ? [anchor] : ordered.slice(0, i + 1).slice(-limit);
+}
+
+/** Turns after `afterId` (exclusive), oldest first, for SSE catch-up. Unknown id → the latest `limit` turns. */
+export async function turnsAfter(db: Db, userId: string, afterId: string, limit: number): Promise<Turn[]> {
+  const anchor = await getTurn(db, userId, afterId);
+  if (!anchor) return recentTurns(db, userId, limit);
+  const rows = await db.select().from(session_log)
+    .where(and(eq(session_log.user_id, userId), gte(session_log.created_at, anchor.created_at)))
+    .orderBy(asc(session_log.created_at), asc(session_log.role))
+    .limit(limit + 20);
+  const i = rows.findIndex((t) => t.id === anchor.id);
+  return rows.slice(i + 1).slice(0, limit);
 }
 
 export async function listTurns(db: Db, userId: string): Promise<Turn[]> {

@@ -8,6 +8,7 @@ import type { Config } from "@/core/config";
 import type { Deps } from "@/core/deps";
 import { FakeEmbedder } from "@/core/embed/fake";
 import type { Embedder } from "@/core/embed/types";
+import { RecordingEventBus } from "@/core/events";
 import type { LLMProvider } from "@/core/llm/types";
 import { silentLogger } from "@/core/log";
 import { decayPass } from "@/core/memory/decay";
@@ -134,6 +135,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const deps: Deps = {
     db, clock, config, queue, log: silentLogger, llm,
     embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
+    events: new RecordingEventBus(),
   };
 
   const userIds: Record<string, string> = {};

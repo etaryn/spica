@@ -33,3 +33,16 @@ test("re-enqueues old unextracted exchanges, bumps attempts, skips fresh/extract
   const [row] = await getTestDb().select().from(s.session_log).where(eq(s.session_log.id, due.ct.id));
   expect(row!.extract_attempts).toBe(1);
 });
+
+test("an exchange that answered several buffered turns is swept with all of them", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const db = getTestDb();
+  const S = randomUUID();
+  const t0 = new Date("2026-01-01T09:00:00Z");
+  const a = await insertTurn(db, u, { id: randomUUID(), session_id: S, role: "user", text: "one", created_at: t0 });
+  const b = await insertTurn(db, u, { id: randomUUID(), session_id: S, role: "user", text: "two", created_at: new Date(t0.getTime() + 2000) });
+  const c = await insertTurn(db, u, { id: randomUUID(), session_id: S, role: "companion", text: "reply", created_at: new Date(t0.getTime() + 9000), reply_to: b.id });
+  await sweepUnextracted(deps, new Date(t0.getTime() + 3_600_000));
+  expect(deps.queue.jobs).toEqual([{ name: "cold_path", data: { userId: u, turnIds: [a.id, b.id, c.id], replyTurnId: c.id, recalled: [] } }]);
+});

@@ -2,7 +2,7 @@ import { PgBoss } from "pg-boss";
 import { afterAll, expect, test } from "vitest";
 import { LockBusyError } from "@/core/cold-path";
 import type { Logger } from "@/core/log";
-import { DECAY_QUEUE } from "@/core/queue";
+import { DECAY_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
 import { ensureSystemQueues, errorName, scrubErrors } from "@/worker/jobs";
 import { testDbUrl } from "../helpers/db";
 
@@ -63,4 +63,11 @@ test("ensureSystemQueues gives the decay queue no retries, even if it already ex
   await boss.updateQueue(DECAY_QUEUE, { retryLimit: 3 });
   await ensureSystemQueues(boss);
   expect(await boss.getQueue(DECAY_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("ensureSystemQueues creates the turn_sweep queue", async () => {
+  await boss.start();
+  started = true;
+  await ensureSystemQueues(boss);
+  expect(await boss.getQueue(TURN_SWEEP_QUEUE)).toBeTruthy();
 });

@@ -9,7 +9,7 @@ export async function sweepUnextracted(deps: Pick<Deps, "db" | "queue" | "config
   const rows = await adminFindUnextractedExchanges(db, olderThan, config.cold_path.max_sweep_attempts, config.cold_path.sweep_batch);
   await adminBumpExtractAttempts(db, rows.map((r) => r.replyTurnId));
   for (const r of rows) {
-    await queue.enqueue(COLD_PATH_QUEUE, { userId: r.userId, turnIds: [r.userTurnId, r.replyTurnId], replyTurnId: r.replyTurnId, recalled: [] });
+    await queue.enqueue(COLD_PATH_QUEUE, { userId: r.userId, turnIds: [...r.userTurnIds, r.replyTurnId], replyTurnId: r.replyTurnId, recalled: [] });
   }
   if (rows.length > 0) log.info("cold_path sweep enqueued", { count: rows.length });
   return rows.length;

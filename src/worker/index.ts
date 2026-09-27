@@ -1,7 +1,12 @@
 import { handleColdPath } from "@/core/cold-path";
 import { decayPass } from "@/core/memory/decay";
 import { sweepUnextracted } from "@/core/memory/sweep";
-import { COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, SWEEP_QUEUE } from "@/core/queue";
+import {
+  type BackchannelJob, COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, SWEEP_QUEUE,
+  TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE, TURN_TIMER_QUEUE, type TurnTimerJob,
+} from "@/core/queue";
+import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
+import { sweepTurns } from "@/core/turn/sweep";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import { buildRuntime } from "@/runtime/deps";
 import { readEnv } from "@/runtime/env";
@@ -20,8 +25,18 @@ await boss.work(DECAY_QUEUE, scrubErrors(DECAY_QUEUE, deps.log, async () => { aw
 await boss.schedule(SWEEP_QUEUE, deps.config.cold_path.sweep_cron);
 await boss.schedule(DECAY_QUEUE, deps.config.decay.cron);
 
+const turnWork = { localConcurrency: deps.config.turn.worker_concurrency, pollingIntervalSeconds: 0.5 };
+await boss.work<TurnTimerJob>(TURN_TIMER_QUEUE, turnWork, scrubErrors(TURN_TIMER_QUEUE, deps.log, async (jobs) => {
+  for (const job of jobs) await runTurnTimer(deps, job.data);
+}));
+await boss.work<BackchannelJob>(TURN_BACKCHANNEL_QUEUE, turnWork, scrubErrors(TURN_BACKCHANNEL_QUEUE, deps.log, async (jobs) => {
+  for (const job of jobs) await runBackchannel(deps, job.data);
+}));
+await boss.work(TURN_SWEEP_QUEUE, scrubErrors(TURN_SWEEP_QUEUE, deps.log, async () => { await sweepTurns(deps, deps.clock.now()); }));
+await boss.schedule(TURN_SWEEP_QUEUE, deps.config.turn.sweep_cron);
+
 await sweepUnextracted(deps, deps.clock.now()); // pick up anything left from before this start
-deps.log.info("worker started", { queues: [COLD_PATH_QUEUE, SWEEP_QUEUE, DECAY_QUEUE] });
+deps.log.info("worker started", { queues: [COLD_PATH_QUEUE, SWEEP_QUEUE, DECAY_QUEUE, TURN_TIMER_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE] });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {

@@ -1,6 +1,6 @@
 import type { PgBoss } from "pg-boss";
 import type { Logger } from "@/core/log";
-import { DECAY_QUEUE, SWEEP_QUEUE } from "@/core/queue";
+import { DECAY_QUEUE, SWEEP_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
 
 /**
  * The class name of the innermost cause (drizzle wraps pg's DatabaseError in DrizzleQueryError).
@@ -41,4 +41,5 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
   await boss.createQueue(SWEEP_QUEUE);
   await boss.createQueue(DECAY_QUEUE, { retryLimit: 0 });
   await boss.updateQueue(DECAY_QUEUE, { retryLimit: 0 });
+  await boss.createQueue(TURN_SWEEP_QUEUE);
 }

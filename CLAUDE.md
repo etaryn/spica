@@ -23,8 +23,12 @@ this summary compresses.
 - An uncovered choice gets the simplest option that keeps the fact store the
   single source of truth, plus a one-line entry in `DECISIONS.md`.
 - Never add a second persistent store for memory-like data.
-- Definition of done: compiles, tests pass, eval harness shows no
-  regression, and every new field, job or config key is added back into v2.
+- **Test phase: functionality over accuracy** (Ethan, 2026-09-27): get the
+  full pipeline working before polishing output. Quality is reviewed by
+  hand when needed and logged in the tuning backlog (v2 §15.3), fixed
+  together once the prototype is complete.
+- Definition of done: compiles, tests pass, the phase's exit test passes,
+  and every new field, job or config key is added back into v2.
 
 ## Product
 Spica is a **best friend**, unapologetically standalone, meant to feel
@@ -169,11 +173,13 @@ passed 26/26 at the time. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
 Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 (v2 §9.1). Each phase's exit test is in v2 §15.
-**Prototyping bar (Ethan, 2026-09-27):** from Phase 3 on, an exit test
-passes at ≥ 95%, except safety (guard safety files, crisis), which must pass
-in full. Non-safety leaks are accepted and marked `known_failure`; bugfix
-after the full prototype pipeline exists, since later phases change earlier
-decisions. Judge leniency is checked with `pnpm eval:judge`.
+**Exit tests from Phase 3 on (v2 §15):** only the phase's own functionality,
+with deterministic assertions. Exit runs call the real API only for the
+phase's own LLM processes; the reply model is always faked, the guard is off
+(guard suite only at the Phase 4 and 6 exits), and other fakes are agreed
+per phase with Ethan. Quality is never an exit criterion: on-demand review
+runs log every input and output for manual analysis. The app keeps Sonnet 5
+replies and the guard.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
 1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far

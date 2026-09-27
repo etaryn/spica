@@ -10,13 +10,16 @@ then she replies once to the whole buffer, paced like a person (read delay, typi
 the reply arrives over SSE. Crisis bypasses all of it.
 
 **Exit test (v2 §15):** both directive traces pass as eval scripts (the pizza trace in its revised form, §2),
-and a burst of short messages gets one reply after the pause. Concretely: `pnpm eval --llm=real --runs 3`
-passes all 46 scripts (36 existing + 10 new, §9.3), `pnpm eval:guard --runs 3` passes with the new backchannel
-fixtures, and the chat client is exercised end to end in a browser.
+and a burst of short messages gets one reply after the pause. Under the test-phase rule (v2 §15, Ethan
+2026-09-27), concretely: the ten new turn scripts (§9.3) pass their deterministic `turn` assertions in an exit
+run with the Phase 3 profile (§9.6), `pnpm test` and `pnpm eval --llm=fake --compare` pass, and the chat client
+is exercised end to end in a browser. What the replies say is not part of the exit test: `reply_about` is a
+review annotation (§9.3), and the guard is off in exit runs.
 
 **In scope:** `conversation_state`, the turn judge, the `turn_timer` / `turn_backchannel` jobs, pacing, the SSE
 channel (LISTEN/NOTIFY), the client rewrite to async delivery, open questions in the reply prompt, backchannels
-through `guardOutgoing`, `judge_log` `kind = turn`, the `turn` eval assertion and scripts, §15.2 #1–6, and an
+through `guardOutgoing`, `judge_log` `kind = turn`, the `turn` eval assertion and scripts, the eval harness's
+per-purpose exit profile and review mode (§9.6), §15.2 #1–6, and an
 availability hook that is a no-op until Phase 5.
 
 **Out of scope:** availability messages and real availability stretching (Phase 5; the `availability` trigger
@@ -306,7 +309,7 @@ time order (then drains the cold-path queue, as today). `startAfter` uses the in
 max_reply_delay_s?: n, known_failure?}`, read from `session_log` (deterministic). `reply_covers` lists, per reply,
 the 1-based user-turn indexes it answered (derived from `reply_to` and the previous reply). A guardrail check:
 must pass every run. Judged variant `reply_about {session, reply, about, not_about?}` (prompt
-`prompts/judge-turn/v1.md` on `models.judge`), majority of runs.
+`prompts/judge-turn/v1.md` on `models.judge`): a review annotation only (v2 §15), never part of the exit test.
 
 Ten new scripts (v2 §14.2 minimum +10):
 
@@ -327,8 +330,9 @@ Ten new scripts (v2 §14.2 minimum +10):
 
 `evals/guard/backchannel.yaml` (gate `every`): ~10 short reactions ("huh", "wait what", "no way", "omg", "oh
 no", …) with plausible recent turns, all `expect: pass` under the **full** model guard, 3/3 — this is the
-evidence that the keyword-only path is sufficient for a few-word reaction (§15.2 #3). A unit test checks the
-keyword path drops a backchannel containing a fallback keyword.
+evidence that the keyword-only path is sufficient for a few-word reaction (§15.2 #3). Written in Phase 3; since
+the guard is off in exit runs until the full prototype (v2 §15), it first runs with the Phase 4 guard suite. A unit
+test checks the keyword path drops a backchannel containing a fallback keyword (free, part of `pnpm test`).
 
 ### 9.5 Unit and integration tests (Vitest, real Postgres, fake LLM)
 
@@ -343,6 +347,24 @@ keyword path drops a backchannel containing a fallback keyword.
   payloads, heartbeat, catch-up endpoint.
 - guard: `backchannel` kind keyword path; `judge_log` written after send.
 
+### 9.6 Exit profile and review mode [ADDED; profile needs Ethan's approval]
+
+**Exit profile (Phase 3).** Only the turn judge (`models.turn_judge`, Haiku) calls the real API. Faked: the
+reply model (a fixed short reply), extraction and reconcile (no-op), the crisis classifier (keyword check;
+`crisis-bypass` uses a keyword phrase), embeddings (off, so retrieval degrades to forced items), and the full
+guard (off; backchannels still take the free keyword path). Scripts: the ten new ones, `--runs 3`. Mechanics
+scripts (`crisis-bypass`, `retry-idempotent`, `max-wait-cap`, `backchannel-rate-limit`, `silent-style`) must
+pass every run; the scripts whose grouping depends on the judge's reading of the messages (`insane-day-promotion`,
+`cook-pizza-grouped`, `cook-pizza-late`, `burst-short`, `open-question-carried`) pass on a majority. Estimated
+cost: about 150 turn-judge calls, roughly $0.20.
+
+**Harness support.** A run takes a profile mapping each call purpose (`reply`, `extract`, `reconcile`, `crisis`,
+`guard`, `turn_judge`, embeddings) to `real` or `fake`, as a CLI flag or a script's `config:`; the fake side
+reuses `FakeLLMProvider`'s purpose handlers. `--review` runs real models with no pass/fail and writes one
+markdown file per run: per script, the inputs (turns with timing, profile) and every output (replies with
+`reply_to`, turn-judge verdicts and waits, backchannels, stored facts, guard verdicts and reasoning).
+`--annotate` adds `models.judge` notes (`reply_about`, the memory judges) beside the outputs; off by default.
+
 ## 10. Spec upkeep (definition of done)
 
 Fold back into v2: §5.6 (trigger values in use), §5.7 (the ADDED columns), §6.1 (grouping window,
@@ -356,8 +378,9 @@ append-and-follow-up, the revised pizza trace, fallback cues, crisis mid-buffer)
 ## 11. Definition of done (Phase 3)
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm test` pass.
-- `pnpm eval --llm=fake --compare` shows no regression; `pnpm eval --llm=real --runs 3` passes 46/46 (known
-  failures as recorded); `pnpm eval:guard --runs 3` passes the full suite including `backchannel.yaml`.
+- `pnpm eval --llm=fake --compare` shows no regression (all 46 scripts, free).
+- The exit run with the Phase 3 profile (§9.6) passes the ten turn scripts' `turn` assertions.
+- `--review` and the per-purpose profile work (§9.6); no review run is required for the exit.
 - A manual browser session: a burst gets one paced reply with typing dots; a backchannel appears mid-story; a
   reload mid-reply loses nothing; a crisis message gets an immediate reply and the card.
 - v2 and `DECISIONS.md` updated (§10).

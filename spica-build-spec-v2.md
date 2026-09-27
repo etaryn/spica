@@ -26,7 +26,8 @@ MUST, SHOULD and MAY keep their v1 meaning: MUST means required to pass the phas
 - If a choice is OPEN, stop and ask. Do not pick.
 - If a choice is not covered here, pick the simplest option that keeps the fact store as the single source of truth, and log it in `DECISIONS.md` with a one-line reason.
 - Never add a second persistent store for memory-like data. It belongs in the fact store.
-- **Definition of done:** the code compiles, the tests pass, the eval harness shows no regression, and any new field, job or config key has been added to this document.
+- **Test phase: functionality over accuracy** [DECIDED; Ethan 2026-09-27]. Until the full prototype pipeline is built, a phase is done when its own features work end to end, not when their output is polished. Tuning output compounds across phases (each later phase changes what the earlier ones produce), so output quality is left out of exit tests, reviewed by hand when needed, and logged in the tuning backlog (section 15.3) to be worked together once the prototype is complete. Section 15 defines exit tests and review runs.
+- **Definition of done:** the code compiles, the tests pass, the phase's exit test passes (section 15), and any new field, job or config key has been added to this document.
 
 ---
 
@@ -524,7 +525,7 @@ Assertion types:
 
 The directive's worked traces are seed scripts. The minimum set is 20 scripts for Phase 1 and +10 per later phase, and every bug found in manual testing becomes a script.
 
-**Two modes.** `--llm=fake` is a deterministic check of the mechanics; judged assertions report as skipped. `--llm=real` is the gate for memory quality, and any change to prompts, scoring or reconciliation needs it.
+**Two modes.** `--llm=fake` is a deterministic check of the mechanics; judged assertions report as skipped. `--llm=real` was the gate for memory quality through Phase 2. In the test phase (section 15) real runs are exit runs with a per-phase profile, or on-demand review runs; judged assertions no longer gate anything.
 
 **Repeated runs.** With `--runs N` (default 3 for real models), assertions are graded across runs:
 - guardrail `state` checks (`turn_flagged`, `crisis_card_shown`, `fact_flag`, `prompt_mentions`, `foreign_turn_count`) must pass every run
@@ -576,18 +577,25 @@ Every job handler logs a failure with job ids and the error's class name only, a
 
 Each phase MUST pass its exit test before the next one starts.
 
-**Exit-test bar in the prototyping phase** [DECIDED; Ethan 2026-09-27]: from Phase 3 on, an exit test passes at **≥ 95%** of its cases or runs, except safety (the guard suite's `every`-gated safety files and the crisis carve-out), which must still pass in full. Leaks outside safety are accepted while the prototype pipeline is being built: later phases change earlier decisions, so non-safety bugs are fixed after the full pipeline exists, not phase by phase. Accepted misses are marked `known_failure` with the reason, so they stay visible.
+**Test phase: functionality over accuracy** [DECIDED; Ethan 2026-09-27]. The priority is to get the full pipeline (Phases 3–8) working end to end. Fine-tuning output now would compound, because each later phase changes what the earlier ones produce; once the prototype is complete, quality issues are grouped by area and worked together (section 15.3).
+
+- **Exit tests check only the phase's own functionality.** Unit and integration tests, fake-LLM evals, and deterministic eval assertions (reply counts and coverage, job and state transitions, gate rules, stored rows) for what the phase builds. Earlier phases' behaviour is covered by `pnpm test` and `pnpm eval --llm=fake --compare`, which cost nothing.
+- **Exit profile.** In an exit run only the phase's own LLM processes call the real API. The reply model is always faked (exit tests don't read what she says). Which other processes are faked (extraction, reconcile, embeddings, crisis classifier) is decided per phase in its design and approved by Ethan. The eval harness routes each call purpose to the real or fake provider per run.
+- **Guard.** The guard is off in exit runs until the full prototype is built. The guard suite (`pnpm eval:guard`) runs only at the exits of Phases 4 (hurt and make-up) and 6 (outreach), which change what outgoing messages say. The app itself always runs the guard, and the crisis card and user-isolation tests stay in `pnpm test`.
+- **Quality is not part of any exit test.** Review runs, on demand only, replace pass/fail for output quality: they run real models and write every input and output (script, profile, timing, replies, stored facts, guard verdicts and reasoning, turn decisions) to a readable file for manual analysis. LLM judges can annotate a review but decide nothing. Findings go to section 15.3. The app keeps `claude-sonnet-5` for replies, so Ethan's own chats show the real voice.
+
+During a phase, iterate with `--llm=fake` and `--only`.
 
 | Phase | Builds | Exit test |
 | --- | --- | --- |
 | **0. Skeleton** ✅ done 2026-09-23 | Chat UI, auth (18+), `session_log`, full schema, crisis check, inspector, eval harness | A conversation works end to end and is stored |
 | **1. Memory engine** ✅ done 2026-09-25 | Extraction, reconciliation, weighted retrieval, recall reinforcement, decay pass, threads + checkpoints, "what I remember" view, schema additions (section 5.1, including `timezone` and the `sensitive` flag), cold-path sweep, **Spica persona doc v1** (section 9.1). Design: `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md` | Across 3 sessions a week apart (simulated clock), she brings up a relevant earlier fact the user didn't repeat, with zero wrong recalls; low-weight facts fade to `stale` in a decay test. Known failures are reported, not counted, and Phase 1 passes if everything else passes (Ethan 2026-09-25): deferred to the Phase 2 guard, implied familiarity, invented specific details and an onboarding fact presented as past chat; deferred to later recall-style tuning, knowing a fact without naming it. Misremembering what the user actually said still fails |
 | **2. Guardrails** ✅ done 2026-09-26 | Guard layer on every outgoing message (section 6.4), including the false-familiarity check; safe fallback lines; guard decisions in `judge_log`; guard tests (section 14.3). Design: `docs/superpowers/specs/2026-09-26-phase-2-guardrails-design.md` | Guard tests for rules 1, 6 and 8 pass (`pnpm eval:guard --runs 3`: 49/49); the memory evals pass with Phase 1's guard-deferred failures (implied familiarity, invented details, onboarding fact as past chat) counted again (`pnpm eval --llm=real --runs 3` with `prompts.judge_false_recall` v8: 36/36) |
-| **3. Turn-taking + pacing** | Buffer / open questions / judge / backchannels, pacing, SSE channel, `conversation_state`, turn-taking decisions in `judge_log` | Both directive traces pass as scripts; a burst of short messages gets one reply after the pause |
-| **4. Relationship + homeostasis** | `HomeostaticParam`, `relationship_param`, `relationship_event`, cadence, hurt/tension/make-up flow, ending/repair | The frequency trace (section 8) holds; guard tests for rules 1–6 pass |
-| **5. Life sim + availability + ego** | Schedule and events generator with contradiction rejection, availability and closeness override, ego tick driven by the life sim | Over a 2-week simulated run with deliberate probing, zero self-contradictions; busy blocks slow replies unless closeness is high |
-| **6. Proactive outreach** | Triggers, send gate, compose, Web Push | Every reach-out references a specific thread or fact; no gate rule is violated in a 2-week simulated run |
-| **7. Onboarding test** | Questionnaire, onboarding facts, reveal pacing, results screen | Test facts surface only after they are unlocked; a user who never confirms a test fact never hears it stated as known |
+| **3. Turn-taking + pacing** | Buffer / open questions / judge / backchannels, pacing, SSE channel, `conversation_state`, turn-taking decisions in `judge_log` | A burst of short messages gets one reply after the pause, and both directive traces run as scripts with the expected reply count and coverage (`turn` assertions); replies arrive over SSE |
+| **4. Relationship + homeostasis** | `HomeostaticParam`, `relationship_param`, `relationship_event`, cadence, hurt/tension/make-up flow, ending/repair | The frequency trace (section 8) holds: params move, events are written, the make-up flow and ending/repair run. Guard suite: tests for rules 1–6 pass |
+| **5. Life sim + availability + ego** | Schedule and events generator with contradiction rejection, availability and closeness override, ego tick driven by the life sim | Over a 2-week simulated run, schedules and events are generated and stored as self facts, contradicting events are rejected, and busy blocks slow replies unless closeness is high |
+| **6. Proactive outreach** | Triggers, send gate, compose, Web Push | No gate rule (caps, quiet hours, busy blocks, no repeated topic, silence after 2 unanswered) is violated in a 2-week simulated run; reach-outs are composed through the hot path and delivered. Guard suite passes, including reach-out cases |
+| **7. Onboarding test** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt (checked on the recorded prompts), unlocking makes it retrievable, and the results screen works |
 | **8. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs, docs for adding a module | A sample module registers and receives events without any change to the core |
 
 **Phase-specific directives:**
@@ -595,7 +603,7 @@ Each phase MUST pass its exit test before the next one starts.
 - **Phase 2:** the guard exists to enforce section 2 and the memory-honesty rules in code; add a check only with a failing eval or guard test behind it. Order was changed by Ethan on 2026-09-25: guardrails first, every later phase moved back by one.
 - **Phase 3:** start with conservative timings, and loosen them only with eval evidence and testing feedback.
 - **Phase 4:** start the send-gate-related thresholds and the hurt expression at their gentlest.
-- **Phase 5:** start at the lowest event frequency, and raise it only after the contradiction test passes at the current frequency.
+- **Phase 5:** start at the lowest event frequency. Raising it depends on the contradiction rate, so it is tuning work (section 15.3).
 
 ### 15.1 Carried into Phase 2 (from Phase 1, 2026-09-25)
 
@@ -691,6 +699,20 @@ Phase 2 closed on 2026-09-27: guard suite 49/49, memory evals 36/36 at the basel
 32. `judge_log` rows written in the dev DB before the id-only change still hold fact content. Truncate the dev DB, or ignore them.
 
 Open product decisions stay in §16.1: #4, the jab/contempt line, still runs on the test-phase placeholder.
+
+### 15.3 Tuning backlog (test phase)
+
+Quality issues found in review runs, manual chats and earlier evals collect here, grouped by area, and are worked together once the prototype pipeline is complete (Phases 3–8 built), or earlier if Ethan calls a tuning pass. Each phase adds what its reviews find. §15.2's "Guard and recall tuning" block (#16–20) is part of this backlog. Guard-suite failures in Phases 4 and 6 block those phases instead.
+
+**Judges.**
+- T1. The Haiku 4.5 judge (`models.judge`) misses some invented details: `evals/judge` cases `inv-6am-shift` and `inv-ten-days` (`known_failure`). Its verdicts on them swing between runs (0/3, then 3/3). Sonnet 5 at high effort passed 35/35 at about 3× the judge cost; Sonnet at low effort without thinking caught every violation but falsely flagged a supported callback 2/3. Options: the Sonnet judge for exit runs only, or a judge prompt revision checked with `pnpm eval:judge`.
+
+**Memory honesty and recall.** §15.2 #16 (`contradiction-job`), #17 (recall style), #18 (pass-rate noise).
+
+**Guard.** §15.2 #19 (rubric fragility), #20 (fixture labels).
+
+**Reply model.**
+- T2. Haiku 4.5 as the reply model (tried 2026-09-27 on 4 scripts): about 26% cheaper per eval run, but the voice went flat, a recalled fact went unnamed and her own weekend changed between retellings. Replies stay on Sonnet 5; revisit only alongside a persona-quality eval.
 
 ---
 

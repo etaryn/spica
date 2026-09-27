@@ -18,6 +18,7 @@ test("cue verdict: trailing cues, ellipses and one-word messages are incomplete;
   expect(cueVerdict(["hmm"], [], cues).complete).toBe(false);
   expect(cueVerdict(["turns out it was a promotion lol"], [], cues).complete).toBe(true);
   expect(cueVerdict(["what should I cook tonight?"], ["old?"], cues)).toEqual({ complete: true, open_questions: ["old?", "what should I cook tonight?"], backchannel: null });
+  expect(cueVerdict(["I passed"], [], cues).complete).toBe(true);
 });
 
 test("renderJudgeInput shows context, open questions and the buffer with gaps", () => {
@@ -34,7 +35,7 @@ test("renderJudgeInput shows context, open questions and the buffer with gaps", 
 
 test("fake judge (default handler) applies the cue check to the rendered buffer", async () => {
   const deps = makeTestDeps();
-  const v = await judgeTurn(deps, { context: [], buffer: [{ text: "and then", at: t0 }], openQuestions: [] });
+  const v = await judgeTurn(deps, { context: [], buffer: [{ text: "my boss called me in and", at: t0 }], openQuestions: [] });
   expect(v).toMatchObject({ complete: false, backchannel: null, source: "model" });
 });
 

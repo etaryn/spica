@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { HistoryMessage } from "@/app/api/chat/history/handler";
 import styles from "./chat.module.css";
-import { applyPart, markFailed, mergeHistory, type UiMessage } from "./merge";
+import { applyPart, catchUpAnchor, markFailed, mergeHistory, type UiMessage } from "./merge";
 
 export type { UiMessage };
 
@@ -12,9 +12,9 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const lastIdRef = useRef<string | null>(initial.at(-1)?.id ?? null);
+  const messagesRef = useRef<UiMessage[]>(initial);
 
-  useEffect(() => { lastIdRef.current = messages.filter((m) => m.status === "sent").at(-1)?.id ?? lastIdRef.current; }, [messages]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, typing]);
 
   // One stream per tab: replies, backchannels and typing arrive here (v2 §4). On every (re)connect, catch up from history.
@@ -28,7 +28,10 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
       es = new EventSource("/api/events");
       es.addEventListener("open", async () => {
         backoff = RECONNECT_MIN_MS;
-        const after = lastIdRef.current;
+        // Anchor just before any still-filling reply, not on the last "sent" bubble: a companion
+        // message is marked sent on its first part, so anchoring there would strand its later parts
+        // after a mid-reply reconnect (round 1 fix).
+        const after = catchUpAnchor(messagesRef.current);
         const res = await fetch(`/api/chat/history${after ? `?after=${after}` : ""}`).catch(() => null);
         if (res?.ok) {
           const body = (await res.json()) as { messages: HistoryMessage[] };
@@ -99,24 +102,27 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
     <>
       <main className={styles.log} aria-live="polite">
         {messages.length === 0 && <p className={styles.empty}>Say hi. This is the start of your conversation.</p>}
-        {messages.map((m) => (
-          <div key={m.id} className={m.role === "user" ? styles.rowUser : styles.rowCompanion}>
-            {m.parts.map((p, i) => (
-              <p key={i} className={m.role === "user" ? styles.bubbleUser : styles.bubbleCompanion}>{p}</p>
-            ))}
-            {m.status === "failed" && (
-              <button className={styles.retry} onClick={() => deliver(m.id, m.parts[0] ?? "")}>
-                Not delivered · retry
-              </button>
-            )}
-            {m.crisisCard && (
-              <aside className={styles.crisis} role="note">
-                <strong>{m.crisisCard.title}</strong>
-                <ul>{m.crisisCard.lines.map((l) => <li key={l}>{l}</li>)}</ul>
-              </aside>
-            )}
-          </div>
-        ))}
+        {messages.map((m) => {
+          const bubbleClass = m.role === "user" ? styles.bubbleUser : m.trigger === "backchannel" ? styles.bubbleBackchannel : styles.bubbleCompanion;
+          return (
+            <div key={m.id} className={m.role === "user" ? styles.rowUser : styles.rowCompanion}>
+              {m.parts.map((p, i) => (
+                <p key={i} className={bubbleClass}>{p}</p>
+              ))}
+              {m.status === "failed" && (
+                <button className={styles.retry} onClick={() => deliver(m.id, m.parts[0] ?? "")}>
+                  Not delivered · retry
+                </button>
+              )}
+              {m.crisisCard && (
+                <aside className={styles.crisis} role="note">
+                  <strong>{m.crisisCard.title}</strong>
+                  <ul>{m.crisisCard.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+                </aside>
+              )}
+            </div>
+          );
+        })}
         {typing && <p className={styles.typing} aria-label="typing">•••</p>}
         <div ref={endRef} />
       </main>

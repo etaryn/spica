@@ -10,6 +10,7 @@
 .bubbleUser, .bubbleCompanion { margin: 0; padding: 9px 14px; border-radius: var(--radius); line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .bubbleUser { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .bubbleCompanion { background: var(--bubble-companion); }
+.bubbleBackchannel { background: color-mix(in srgb, var(--bubble-companion) 65%, transparent); color: var(--muted); padding: 5px 12px; font-size: 13px; }
 .retry { background: none; border: none; color: var(--danger); font-size: 13px; cursor: pointer; padding: 0; }
 .crisis { border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; font-size: 14px; max-width: 100%; }
 .crisis ul { margin: 6px 0 0; padding-left: 18px; }

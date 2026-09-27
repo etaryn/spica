@@ -5,15 +5,14 @@ import { getDeps } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
 import { ChatClient, type UiMessage } from "./chat-client";
 import styles from "./chat.module.css";
+import { mergeHistory } from "./merge";
 
 export default async function ChatPage() {
   const user = await requireUser();
   const { db, config } = getDeps();
   const turns = await recentTurns(db, user.id, config.chat.history_page_size);
-  const initial: UiMessage[] = turns.map((t) => {
-    const { trigger: _trigger, ...h } = toHistoryMessage(t, config);
-    return { ...h, status: "sent" as const };
-  });
+  // mergeHistory([], ...) gives the same shape (status, of, trigger) history catch-up produces on the client.
+  const initial: UiMessage[] = mergeHistory([], turns.map((t) => toHistoryMessage(t, config)));
   return (
     <div className={styles.shell}>
       <header className={styles.header}>

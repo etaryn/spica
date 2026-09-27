@@ -60,11 +60,18 @@ describe("commit", () => {
 
 describe("finish / restore / giveUp / crisis", () => {
   const inflight = empty({ inflight_turn_ids: ["a"], inflight_since: at(5), buffer_version: 3, reply_epoch: 0 });
-  test("finish clears inflight when the epoch is unchanged", () => {
-    expect(T.finish(inflight, { epoch: 0, now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: true });
+  test("finish clears inflight when the epoch is unchanged and the turns match", () => {
+    expect(T.finish(inflight, { epoch: 0, turnIds: ["a"], now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: true });
+  });
+  test("finish is order-independent on which turns it's clearing", () => {
+    expect(T.finish({ ...inflight, inflight_turn_ids: ["b", "a"] }, { epoch: 0, turnIds: ["a", "b"], now: at(9) }).result).toBe(true);
   });
   test("finish reports abandonment after a crisis bumped the epoch", () => {
-    expect(T.finish({ ...inflight, reply_epoch: 1, inflight_turn_ids: [] }, { epoch: 0, now: at(9) }).result).toBe(false);
+    expect(T.finish({ ...inflight, reply_epoch: 1, inflight_turn_ids: [] }, { epoch: 0, turnIds: ["a"], now: at(9) }).result).toBe(false);
+  });
+  test("finish reports abandonment (and leaves inflight alone) when the inflight snapshot no longer matches — someone else's commit already owns the slot", () => {
+    const r = T.finish({ ...inflight, inflight_turn_ids: ["b"] }, { epoch: 0, turnIds: ["a"], now: at(9) });
+    expect(r).toEqual({ patch: null, result: false });
   });
   test("restore puts the turns back in front of newer buffered turns and bumps the version", () => {
     const r = T.restore({ ...inflight, buffer_turn_ids: ["b"], buffer_started_at: at(7) }, { epoch: 0, turnIds: ["a"], now: at(9), retryAt: at(14) });
@@ -74,11 +81,11 @@ describe("finish / restore / giveUp / crisis", () => {
   test("restore after a crisis is abandoned (the crisis reply covered the turns)", () => {
     expect(T.restore({ ...inflight, reply_epoch: 1 }, { epoch: 0, turnIds: ["a"], now: at(9), retryAt: at(14) }).result).toEqual({ kind: "abandoned" });
   });
-  test("giveUp clears inflight when the epoch is unchanged", () => {
-    expect(T.giveUp(inflight, { epoch: 0, now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: undefined });
+  test("giveUp clears inflight when the epoch is unchanged, reporting true", () => {
+    expect(T.giveUp(inflight, { epoch: 0, now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: true });
   });
-  test("giveUp is a no-op after a crisis bumped the epoch", () => {
-    expect(T.giveUp({ ...inflight, reply_epoch: 1 }, { epoch: 0, now: at(9) })).toEqual({ patch: null, result: undefined });
+  test("giveUp is a no-op after a crisis bumped the epoch, reporting false", () => {
+    expect(T.giveUp({ ...inflight, reply_epoch: 1 }, { epoch: 0, now: at(9) })).toEqual({ patch: null, result: false });
   });
   test("crisis snapshots inflight + buffer + the turn, clears both and bumps version and epoch", () => {
     const s = { ...inflight, buffer_turn_ids: ["b"] };

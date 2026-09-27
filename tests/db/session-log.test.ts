@@ -58,6 +58,16 @@ test("reply_to is unique", async () => {
   await expect(turn(u, "companion", "r2", at(0), { reply_to: t1.id })).rejects.toThrow();
 });
 
+test("insertReplyIfAbsent reports a reply_to collision as null instead of throwing", async () => {
+  const u = await createTestUser();
+  const t1 = await turn(u, "user", "one", at(0));
+  const r1 = await log.insertReplyIfAbsent(getTestDb(), u, { id: randomUUID(), session_id: t1.session_id, role: "companion", text: "r1", created_at: at(1), reply_to: t1.id });
+  expect(r1?.text).toBe("r1");
+  const r2 = await log.insertReplyIfAbsent(getTestDb(), u, { id: randomUUID(), session_id: t1.session_id, role: "companion", text: "r2", created_at: at(2), reply_to: t1.id });
+  expect(r2).toBeNull();
+  expect((await log.getReplyTo(getTestDb(), u, t1.id))?.text).toBe("r1");
+});
+
 test("every read is scoped by user", async () => {
   const a = await createTestUser("a");
   const b = await createTestUser("b");

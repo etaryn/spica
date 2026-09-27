@@ -10,6 +10,19 @@ export async function insertTurn(db: Db, userId: string, row: NewTurn): Promise<
   return one(await db.insert(session_log).values({ ...row, user_id: userId }).returning());
 }
 
+/**
+ * Like `insertTurn`, but a `reply_to` collision (`session_log_reply_to_uq`) is reported as `null` instead of
+ * thrown. A plain unique-violation throw would abort the enclosing transaction (turning the caller's next
+ * statement, e.g. the `conversation_state` patch, into "current transaction is aborted"), so a concurrent
+ * duplicate reply must be handled with `ON CONFLICT ... DO NOTHING` rather than try/catch.
+ */
+export async function insertReplyIfAbsent(db: Db, userId: string, row: NewTurn): Promise<Turn | null> {
+  const rows = await db.insert(session_log).values({ ...row, user_id: userId })
+    .onConflictDoNothing({ target: session_log.reply_to })
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function getTurn(db: Db, userId: string, id: string): Promise<Turn | null> {
   const rows = await db.select().from(session_log)
     .where(and(eq(session_log.user_id, userId), eq(session_log.id, id))).limit(1);

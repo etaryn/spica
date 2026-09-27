@@ -9,6 +9,14 @@ export type Step<R> = { patch: StatePatch | null; result: R };
 
 const uniq = (ids: string[]) => [...new Set(ids)];
 
+/** Order-independent set equality, for checking an inflight snapshot still matches what a caller expects. */
+function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((v, i) => v === sb[i]);
+}
+
 /** No state change: the turn is already accounted for elsewhere (in flight, or answered under the lock). */
 export function skip(s: ConvState, now: Date) {
   return {
@@ -51,9 +59,15 @@ export function commit(s: ConvState, a: { version: number; now: Date }): Step<Co
   };
 }
 
-/** Just before the paced reply is inserted: false when a crisis reply went out meanwhile (design §5.2 step 4). */
-export function finish(s: ConvState, a: { epoch: number; now: Date }): Step<boolean> {
+/**
+ * Just before the paced reply is inserted: false when a crisis reply went out meanwhile (design §5.2 step 4),
+ * or when the inflight snapshot no longer matches the turns this call is responsible for (someone else's
+ * commit already occupies the slot) — either way, inflight is left untouched rather than cleared out from
+ * under whoever does own it.
+ */
+export function finish(s: ConvState, a: { epoch: number; turnIds: string[]; now: Date }): Step<boolean> {
   if (s.reply_epoch !== a.epoch) return { patch: null, result: false };
+  if (!sameIds(s.inflight_turn_ids, a.turnIds)) return { patch: null, result: false };
   return { patch: { inflight_turn_ids: [], inflight_since: null, updated_at: a.now }, result: true };
 }
 
@@ -69,10 +83,14 @@ export function restore(s: ConvState, a: { epoch: number; turnIds: string[]; now
   };
 }
 
-/** After `turn.retry_limit` failures: the turns stay unanswered and unbuffered; a client retry re-buffers them. */
-export function giveUp(s: ConvState, a: { epoch: number; now: Date }): Step<void> {
-  if (s.reply_epoch !== a.epoch) return { patch: null, result: undefined };
-  return { patch: { inflight_turn_ids: [], inflight_since: null, updated_at: a.now }, result: undefined };
+/**
+ * After `turn.retry_limit` failures: the turns stay unanswered and unbuffered; a client retry re-buffers them.
+ * Returns false (no patch) when a crisis bumped the epoch meanwhile — the crisis reply already covers these
+ * turns, so the caller must not also report `reply_failed` for them.
+ */
+export function giveUp(s: ConvState, a: { epoch: number; now: Date }): Step<boolean> {
+  if (s.reply_epoch !== a.epoch) return { patch: null, result: false };
+  return { patch: { inflight_turn_ids: [], inflight_since: null, updated_at: a.now }, result: true };
 }
 
 export function crisis(s: ConvState, a: { turnId: string; now: Date }): Step<{ turnIds: string[] }> {

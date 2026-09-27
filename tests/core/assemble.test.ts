@@ -130,6 +130,13 @@ describe("time-gap markers in the message window", () => {
   });
 });
 
+test("open questions fill their own slot after due threads, only when present", () => {
+  const base = { valuesDoc: "V", egoLine: null, relationshipSummary: null, retrieval: emptyRetrieval(), recentTurns: [{ role: "user" as const, text: "hi" }], now: new Date() };
+  expect(assemblePrompt(base).system).not.toMatch(/haven't answered/);
+  const s = assemblePrompt({ ...base, openQuestions: ["what should I cook tonight?"] }).system;
+  expect(s).toContain("## They asked and you haven't answered yet\n- what should I cook tonight?");
+});
+
 test("relationshipLine: first conversation, same day, then days and first-contact date", () => {
   const now = new Date("2026-01-20T09:00:00Z");
   expect(relationshipLine({ sessions: 1, days: 1, first: now }, now)).toBe("This is your first conversation with them.");

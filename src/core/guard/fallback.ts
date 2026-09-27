@@ -1,12 +1,13 @@
 import type { Config } from "../config";
 import { loadPrompt } from "../prompts";
 import { CATEGORY_LABEL } from "./categories";
-import type { GuardKind, Violation } from "./guard";
+import type { Violation } from "./guard";
 
-const KINDS: GuardKind[] = ["reply", "crisis_reply"];
+type FallbackKind = "reply" | "crisis_reply";
+const KINDS: FallbackKind[] = ["reply", "crisis_reply"];
 
 /** `## reply` / `## crisis_reply` sections of `- line` items. */
-export function parseFallbacks(md: string): Record<GuardKind, string[]> {
+export function parseFallbacks(md: string): Record<FallbackKind, string[]> {
   const out: Record<string, string[]> = {};
   let cur: string | null = null;
   for (const raw of md.split(/\r?\n/)) {
@@ -17,7 +18,7 @@ export function parseFallbacks(md: string): Record<GuardKind, string[]> {
     if (cur && item) out[cur]!.push(item[1]!.trim());
   }
   for (const k of KINDS) if (!out[k]?.length) throw new Error(`fallback prompt has no "${k}" lines`);
-  return out as Record<GuardKind, string[]>;
+  return out as Record<FallbackKind, string[]>;
 }
 
 /** Same seed, same line: a retried message sends the same fallback. */
@@ -27,7 +28,7 @@ export function pickFallback(lines: string[], seed: string | null): string {
   return lines[h % lines.length]!;
 }
 
-export function fallbackLine(config: Config, kind: GuardKind, seed: string | null): string {
+export function fallbackLine(config: Config, kind: FallbackKind, seed: string | null): string {
   return pickFallback(parseFallbacks(loadPrompt("guard/fallback", config.prompts.guard_fallback))[kind], seed);
 }
 

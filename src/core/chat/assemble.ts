@@ -25,6 +25,8 @@ export interface AssembleInput {
   now: Date;
   /** Mark the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
+  /** The user's unanswered questions (v2 §6.2 slot 7). */
+  openQuestions?: string[];
 }
 
 const DAY = 86_400_000;
@@ -61,6 +63,9 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     memory.length ? `## What you remember\n${memory.join("\n\n")}` : null,
     retrieval.dueThreads.length
       ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}${t.detail ? ` (latest: ${t.detail})` : ""}`).join("\n")}`
+      : null,
+    input.openQuestions?.length
+      ? `## They asked and you haven't answered yet\n${input.openQuestions.map((q) => `- ${q}`).join("\n")}`
       : null,
   ].filter((s): s is string => s !== null);
 

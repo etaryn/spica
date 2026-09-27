@@ -5,7 +5,7 @@ import { withTimeout } from "../timeout";
 import { CATEGORIES, type Category } from "./categories";
 import { matchKeyword } from "./keywords";
 
-export type GuardKind = "reply" | "crisis_reply";
+export type GuardKind = "reply" | "crisis_reply" | "backchannel";
 export type GuardTurn = { role: "user" | "companion"; text: string; at: Date };
 export type GuardInput = {
   kind: GuardKind;

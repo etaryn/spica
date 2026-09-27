@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { composeReply } from "@/core/chat/compose-reply";
 import { ReplyFailedError } from "@/core/errors";
@@ -81,5 +82,48 @@ describe("composeReply", () => {
     const turns = [await userTurn(deps, u, "hey")];
     const r = await composeReply({ ...deps, onboardingFacts: () => new Promise(() => {}) } as never, u, { turns, openQuestions: [], flag: null });
     expect(r.text.length).toBeGreaterThan(0);
+  });
+
+  test("user B's prompts never contain user A's facts", async () => {
+    const deps = makeTestDeps();
+    const a = await createTestUser("a");
+    const b = await createTestUser("b");
+    await insertFact(getTestDb(), a, {
+      subject: "user", kind: "trait", content: "Alice's cat is called Biscuit.", embedding: vec(),
+      created_at: new Date("2026-01-01T09:00:00Z"), status: "open", salience: 1, valence: 0, confidence: 1, source: "turn",
+    });
+    const turns = [await userTurn(deps, b, "what's a good cat name")];
+    await composeReply(deps, b, { turns, openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("Biscuit");
+  });
+
+  test("an embedder failure still produces a reply", async () => {
+    const base = makeTestDeps();
+    const deps = { ...base, embedder: { dimensions: 1024, embed: async () => { throw new Error("voyage down"); } } };
+    const u = await createTestUser();
+    const turns = [await userTurn(base, u, "hi")];
+    await expect(composeReply(deps as never, u, { turns, openQuestions: [], flag: null })).resolves.toMatchObject({ parts: expect.any(Array) });
+  });
+
+  test("relationship line: first conversation, then days talked", async () => {
+    // Distinct session ids per call, as `receiveTurn` would assign after a multi-day gap (composeReply itself
+    // only reads userTurnStats, so the session split is set up directly rather than through the receive layer).
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const first = [await insertTurn(getTestDb(), u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "hi", created_at: deps.clock.now() })];
+    await composeReply(deps, u, { turns: first, openQuestions: [], flag: null });
+    expect(deps.llm.calls[0]!.system).toMatch(/## You and them\nThis is your first conversation with them\./);
+    deps.clock.advance(3 * 86_400_000);
+    const second = [await insertTurn(getTestDb(), u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "back again", created_at: deps.clock.now() })];
+    await composeReply(deps, u, { turns: second, openQuestions: [], flag: null });
+    expect(deps.llm.calls[1]!.system).toMatch(/You first talked 3 days ago, and have talked on 2 different days\. You last talked 3 days ago\./);
+  });
+
+  test("relationship line can be switched off", async () => {
+    const deps = makeTestDeps({ chat: { relationship_line: false } });
+    const u = await createTestUser();
+    const turns = [await userTurn(deps, u, "hi")];
+    await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(deps.llm.calls[0]!.system).not.toMatch(/## You and them/);
   });
 });

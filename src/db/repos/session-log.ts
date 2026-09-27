@@ -92,6 +92,15 @@ export async function markExtracted(db: Db, userId: string, ids: string[]): Prom
   await db.update(session_log).set({ extracted: true }).where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }
 
+/** True when a reply exists whose `reply_to` turn is at or after `turn`: a buffered reply answers every earlier turn (v2 §5.6). */
+export async function isAnswered(db: Db, userId: string, turn: Turn): Promise<boolean> {
+  const res = await db.execute(sql`
+    SELECT 1 FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
+    WHERE c.user_id = ${userId} AND c.role = 'companion' AND u.created_at >= ${turn.created_at.toISOString()}::timestamptz
+    LIMIT 1`);
+  return res.rows.length > 0;
+}
+
 /** How long and how often they've talked, for the relationship line (spec §6). `tz` must be a valid IANA zone. */
 export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: string): Promise<{ sessions: number; days: number; first: Date | null }> {
   const res = await db.execute(sql`

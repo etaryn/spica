@@ -22,14 +22,24 @@ test("400 on malformed body", async () => {
   expect((await h(post({ clientMessageId: randomUUID(), text: "   " }))).status).toBe(400);
 });
 
-test("200 returns the reply", async () => {
+test("202 accepts a normal message; the reply arrives later over SSE", async () => {
   const u = await createTestUser();
   const deps = makeTestDeps();
-  deps.llm.replies.push("yo");
   const h = createChatHandler({ getUserId: async () => u, getDeps: () => deps });
-  const res = await h(post({ clientMessageId: randomUUID(), text: "hi" }));
+  const res = await h(post({ clientMessageId: randomUUID(), text: "hi there friend" }));
+  expect(res.status).toBe(202);
+  expect(await res.json()).toEqual({ status: "accepted" });
+});
+
+test("200 returns a crisis reply immediately, with the card", async () => {
+  const u = await createTestUser();
+  const deps = makeTestDeps();
+  deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+  deps.llm.replies.push("I'm here with you.");
+  const h = createChatHandler({ getUserId: async () => u, getDeps: () => deps });
+  const res = await h(post({ clientMessageId: randomUUID(), text: "i want to end my life" }));
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({ parts: ["yo"], crisisCard: null });
+  expect(await res.json()).toMatchObject({ status: "replied", parts: ["I'm here with you."], crisisCard: { title: expect.any(String) } });
 });
 
 test("503 carries crisisCard when the reply fails on a flagged message", async () => {
@@ -58,6 +68,6 @@ test("409 on another user's message id", async () => {
 test("timezone is accepted in the body", async () => {
   const u = await createTestUser();
   const h = createChatHandler({ getUserId: async () => u, getDeps: () => makeTestDeps() });
-  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: "Europe/London" }))).status).toBe(200);
+  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: "Europe/London" }))).status).toBe(202);
   expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: 42 }))).status).toBe(400);
 });

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { handleUserMessage } from "@/core/chat/handle-user-message";
 import type { Deps } from "@/core/deps";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
+import { receiveMessage } from "@/core/turn/receive-message";
 
 const Body = z.object({ clientMessageId: z.uuid(), text: z.string(), timezone: z.string().max(64).optional() });
 
@@ -14,7 +14,8 @@ export function createChatHandler(opts: { getUserId(req: Request): Promise<strin
     if (!parsed.success) return Response.json({ error: "invalid_body" }, { status: 400 });
 
     try {
-      return Response.json(await handleUserMessage(opts.getDeps(), userId, parsed.data));
+      const r = await receiveMessage(opts.getDeps(), userId, parsed.data);
+      return r.status === "accepted" ? Response.json(r, { status: 202 }) : Response.json(r, { status: 200 });
     } catch (e) {
       if (e instanceof InputError) return Response.json({ error: "invalid_message", message: e.message }, { status: 400 });
       if (e instanceof ConflictError) return Response.json({ error: "conflict" }, { status: 409 });

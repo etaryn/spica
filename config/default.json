@@ -139,7 +139,8 @@
     "worker_concurrency": 10,
     "job_expire_seconds": 180,
     "sweep_cron": "* * * * *",
-    "sweep_grace_ms": 60000
+    "sweep_grace_ms": 60000,
+    "sweep_batch": 500
   },
   "prompts": {
     "reply": "v5",

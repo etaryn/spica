@@ -83,6 +83,7 @@ export const ConfigSchema = z.object({
     job_expire_seconds: z.number().int().positive(),
     sweep_cron: z.string().min(1),
     sweep_grace_ms: z.number().int().min(0),
+    sweep_batch: z.number().int().positive(),
   }).refine((t) => t.read_delay_min_ms <= t.read_delay_max_ms, "turn.read_delay_min_ms must be <= read_delay_max_ms"),
   retrieval: z.object({
     candidate_pool: z.number().int().positive(),

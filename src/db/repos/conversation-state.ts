@@ -25,7 +25,7 @@ export async function updateState(tx: Db, userId: string, patch: StatePatch): Pr
 }
 
 /** System job, unscoped by design: users whose buffer is overdue or whose in-flight reply looks stuck (design §5.6). */
-export async function adminFindStuckConversations(db: Db, overdueBefore: Date, inflightBefore: Date, limit = 500): Promise<string[]> {
+export async function adminFindStuckConversations(db: Db, overdueBefore: Date, inflightBefore: Date, limit: number): Promise<string[]> {
   const res = await db.execute(sql`
     SELECT user_id FROM conversation_state
     WHERE (cardinality(buffer_turn_ids) > 0 AND (wait_until IS NULL OR wait_until < ${overdueBefore.toISOString()}::timestamptz))

@@ -61,6 +61,12 @@ describe("finish / restore / giveUp / crisis", () => {
   test("restore after a crisis is abandoned (the crisis reply covered the turns)", () => {
     expect(T.restore({ ...inflight, reply_epoch: 1 }, { epoch: 0, turnIds: ["a"], now: at(9), retryAt: at(14) }).result).toEqual({ kind: "abandoned" });
   });
+  test("giveUp clears inflight when the epoch is unchanged", () => {
+    expect(T.giveUp(inflight, { epoch: 0, now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: undefined });
+  });
+  test("giveUp is a no-op after a crisis bumped the epoch", () => {
+    expect(T.giveUp({ ...inflight, reply_epoch: 1 }, { epoch: 0, now: at(9) })).toEqual({ patch: null, result: undefined });
+  });
   test("crisis snapshots inflight + buffer + the turn, clears both and bumps version and epoch", () => {
     const s = { ...inflight, buffer_turn_ids: ["b"] };
     const r = T.crisis(s, { turnId: "c", now: at(10) });

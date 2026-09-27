@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { loadConfig } from "@/core/config";
 import { mutateState } from "@/core/turn/state";
 import * as T from "@/core/turn/transitions";
 import { adminFindStuckConversations, getState } from "@/db/repos/conversation-state";
@@ -8,6 +9,7 @@ beforeEach(resetDb);
 afterAll(closeTestDb);
 const now = new Date("2026-01-05T09:00:00Z");
 const ID = "00000000-0000-4000-8000-000000000001";
+const sweepBatch = loadConfig().turn.sweep_batch;
 
 test("mutateState creates the row, applies the patch, and is user-scoped", async () => {
   const db = getTestDb();
@@ -31,6 +33,6 @@ test("adminFindStuckConversations finds overdue buffers and stuck in-flight repl
   const db = getTestDb();
   const u = await createTestUser();
   await mutateState(db, u, now, (s) => T.append(s, { turnId: ID, now, windowMs: 1000, maxWaitMs: 40000, openQuestions: [] }));
-  expect(await adminFindStuckConversations(db, now, now)).toEqual([]);
-  expect(await adminFindStuckConversations(db, new Date(now.getTime() + 120_000), now)).toEqual([u]);
+  expect(await adminFindStuckConversations(db, now, now, sweepBatch)).toEqual([]);
+  expect(await adminFindStuckConversations(db, new Date(now.getTime() + 120_000), now, sweepBatch)).toEqual([u]);
 });

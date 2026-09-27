@@ -347,7 +347,7 @@ test checks the keyword path drops a backchannel containing a fallback keyword (
   payloads, heartbeat, catch-up endpoint.
 - guard: `backchannel` kind keyword path; `judge_log` written after send.
 
-### 9.6 Exit profile and review mode [ADDED; profile needs Ethan's approval]
+### 9.6 Exit profile and review mode [ADDED; profile approved by Ethan 2026-09-27]
 
 **Exit profile (Phase 3).** Only the turn judge (`models.turn_judge`, Haiku) calls the real API. Faked: the
 reply model (a fixed short reply), extraction and reconcile (no-op), the crisis classifier (keyword check;
@@ -355,12 +355,13 @@ reply model (a fixed short reply), extraction and reconcile (no-op), the crisis 
 guard (off; backchannels still take the free keyword path). Scripts: the ten new ones, `--runs 3`. Mechanics
 scripts (`crisis-bypass`, `retry-idempotent`, `max-wait-cap`, `backchannel-rate-limit`, `silent-style`) must
 pass every run; the scripts whose grouping depends on the judge's reading of the messages (`insane-day-promotion`,
-`cook-pizza-grouped`, `cook-pizza-late`, `burst-short`, `open-question-carried`) pass on a majority. Estimated
+`cook-pizza-grouped`, `cook-pizza-late`, `burst-short`, `open-question-carried`) pass on a majority (`gate: majority`
+on their `turn` assertion). Estimated
 cost: about 150 turn-judge calls, roughly $0.20.
 
 **Harness support.** A run takes a profile mapping each call purpose (`reply`, `extract`, `reconcile`, `crisis`,
 `guard`, `turn_judge`, embeddings) to `real` or `fake`, as a CLI flag or a script's `config:`; the fake side
-reuses `FakeLLMProvider`'s purpose handlers. `--review` runs real models with no pass/fail and writes one
+reuses `FakeLLMProvider`'s purpose handlers (CLI: `--real <purposes>`; `--llm=real` means all). `--review` runs real models with no pass/fail and writes one
 markdown file per run: per script, the inputs (turns with timing, profile) and every output (replies with
 `reply_to`, turn-judge verdicts and waits, backchannels, stored facts, guard verdicts and reasoning).
 `--annotate` adds `models.judge` notes (`reply_about`, the memory judges) beside the outputs; off by default.

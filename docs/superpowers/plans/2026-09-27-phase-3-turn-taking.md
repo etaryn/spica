@@ -23,7 +23,7 @@
 - Drizzle property names for domain tables are snake_case spec names.
 - Test setup lines that run raw SQL use `sql.raw(...)` with `import { sql } from "drizzle-orm";` (add the import wherever a test below uses it).
 - Next.js here is newer than training data: before writing a route handler, read `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route.md` (the "Streaming" section shows the `ReadableStream` → `new Response(stream)` pattern used below).
-- Test phase (v2 §15): functional and safety checks block; LLM-judged quality is reported, never blocks. Iterate with `pnpm eval --llm=fake` and `--only`; real suites run once at the phase exit (Task 13).
+- Test phase (v2 §15): the exit test checks only Phase 3's own functionality with deterministic assertions. In the exit run only the turn judge is real; the reply is fake and the guard is off (design §9.6, approved by Ethan). LLM-judged checks are review annotations, never pass/fail. Iterate with `pnpm eval --llm=fake` and `--only`; the one real exit run is in Task 13.
 - Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm db:generate` (writes a migration from `src/db/schema.ts`), `pnpm eval --llm=fake --compare`. Tests need `pnpm db:up` running.
 - Commit messages end with:
   ```
@@ -65,11 +65,11 @@
 - `src/app/api/chat/history/handler.ts` and `route.ts`: catch-up.
 - `src/app/chat/merge.ts`: pure client message-list merging.
 - `prompts/turn-judge/v1.md`, `prompts/reply/v6.md`, `prompts/judge/turn/v1.md`.
-- `evals/lib/turn-check.ts`, `evals/lib/scheduler.ts`, ten `evals/scripts/*.yaml`, `evals/guard/backchannel.yaml`.
+- `evals/lib/turn-check.ts`, `evals/lib/scheduler.ts`, `evals/lib/routing-llm.ts`, `evals/lib/review.ts`, ten `evals/scripts/*.yaml`, `evals/guard/backchannel.yaml`.
 - Tests: `tests/core/turn-transitions.test.ts`, `tests/core/turn-pacing.test.ts`, `tests/core/turn-judge.test.ts`, `tests/core/compose-reply.test.ts`, `tests/core/receive-message.test.ts`, `tests/core/turn-reply.test.ts`, `tests/core/turn-sweep.test.ts`, `tests/db/conversation-state.test.ts`, `tests/runtime/events.test.ts`, `tests/app/events-handler.test.ts`, `tests/app/chat-merge.test.ts`, `tests/evals/turn-check.test.ts`.
 
 **Modify**
-- `src/core/clock.ts` (`sleep`), `src/core/queue.ts` (typed job map + `startAfter`), `src/queue/pg-boss-queue.ts`, `src/core/deps.ts` (`events`), `src/core/config.ts` + `config/default.json`, `src/core/llm/types.ts` + `anthropic.ts` + `fake.ts` (`turn_judge` model), `src/core/guard/guard.ts` + `outgoing.ts` (backchannel kind, deferred log), `src/core/chat/assemble.ts` (open-questions slot), `src/db/schema.ts` (+ migration), `src/db/repos/session-log.ts`, `src/db/repos/cold-path-admin.ts` + `src/core/memory/sweep.ts` (multi-turn exchanges), `src/runtime/deps.ts`, `src/worker/index.ts`, `src/worker/jobs.ts`, `src/app/api/chat/handler.ts`, `src/app/chat/chat-client.tsx`, `src/app/chat/page.tsx`, `src/app/inspector/[userId]/page.tsx` + `tabs.tsx`, `src/db/repos/inspector.ts`, `evals/lib/runner.ts`, `evals/lib/script.ts`, `evals/lib/checks.ts`, `evals/lib/judged.ts`, `evals/lib/report.ts`, `evals/run.ts`, `evals/guard.ts`, `evals/judge.ts`, `tests/helpers/deps.ts`.
+- `src/core/clock.ts` (`sleep`), `src/core/queue.ts` (typed job map + `startAfter`), `src/queue/pg-boss-queue.ts`, `src/core/deps.ts` (`events`), `src/core/config.ts` + `config/default.json`, `src/core/llm/types.ts` + `anthropic.ts` + `fake.ts` (`turn_judge` model), `src/core/guard/guard.ts` + `outgoing.ts` (backchannel kind, deferred log), `src/core/chat/assemble.ts` (open-questions slot), `src/db/schema.ts` (+ migration), `src/db/repos/session-log.ts`, `src/db/repos/cold-path-admin.ts` + `src/core/memory/sweep.ts` (multi-turn exchanges), `src/runtime/deps.ts`, `src/worker/index.ts`, `src/worker/jobs.ts`, `src/app/api/chat/handler.ts`, `src/app/chat/chat-client.tsx`, `src/app/chat/page.tsx`, `src/app/inspector/[userId]/page.tsx` + `tabs.tsx`, `src/db/repos/inspector.ts`, `evals/lib/runner.ts`, `evals/lib/script.ts`, `evals/lib/checks.ts`, `evals/lib/judged.ts`, `evals/lib/report.ts`, `evals/run.ts`, `tests/helpers/deps.ts`.
 - **Delete** (Task 7): `src/core/chat/handle-user-message.ts`, `tests/core/handle-user-message.test.ts` (its tests are ported in Tasks 5 and 7).
 
 ---
@@ -3320,21 +3320,31 @@ git commit -m "feat(turn): chat client over SSE with history catch-up; turn-taki
 
 ---
 
-### Task 11: Eval harness: simulated turn scheduling, timed turns, `turn` / `reply_about`, blocking vs quality
+### Task 11: Eval harness: simulated turn scheduling, timed turns, `turn` assertion, per-purpose exit profile, review mode
+
+Test-phase rule (v2 §15, design §9.6, Ethan 2026-09-27): exit tests check only Phase 3's own functionality with deterministic assertions. In an exit run only the phase's own LLM calls are real (Phase 3: the turn judge); the reply is always fake and the guard is off. LLM-judged checks are never pass/fail: they become optional **annotations** in on-demand **review runs**, which log every input and output for manual analysis.
 
 **Files:**
-- Create: `evals/lib/scheduler.ts`, `evals/lib/turn-check.ts`, `prompts/judge/turn/v1.md`, `tests/evals/turn-check.test.ts`
-- Modify: `evals/lib/script.ts`, `evals/lib/runner.ts`, `evals/lib/checks.ts`, `evals/lib/judged.ts`, `evals/lib/report.ts`, `evals/run.ts`, `evals/guard.ts`, `evals/judge.ts`, `src/core/config.ts` + `config/default.json` (`prompts.judge_turn`), `tests/evals/runner.test.ts`, `tests/evals/script.test.ts`, `tests/evals/report.test.ts`
+- Create: `evals/lib/scheduler.ts`, `evals/lib/turn-check.ts`, `evals/lib/routing-llm.ts`, `evals/lib/review.ts`, `prompts/judge/turn/v1.md`, `tests/evals/turn-check.test.ts`, `tests/evals/routing-llm.test.ts`, `tests/evals/review.test.ts`
+- Modify: `evals/lib/script.ts`, `evals/lib/runner.ts`, `evals/lib/checks.ts`, `evals/lib/judged.ts`, `evals/lib/report.ts`, `evals/run.ts`, `src/core/config.ts` + `config/default.json` (`prompts.judge_turn`), `tests/evals/runner.test.ts`, `tests/evals/script.test.ts`, `tests/evals/report.test.ts`
 
 **Interfaces:**
-- Consumes: `receiveMessage`, `runTurnTimer`, `runBackchannel`, `handleColdPath`, `RecordingQueue.drain`, `SimClock`, `listTurns`.
+- Consumes: `receiveMessage`, `runTurnTimer`, `runBackchannel`, `handleColdPath`, `RecordingQueue.drain`, `SimClock`, `listTurns`, `listJudgeLogs` (`src/db/repos/judge-log.ts`), `FakeLLMProvider` (purpose handlers, including Task 4's `turn_judge` cue check).
 - Produces:
   - Script: a session turn is `string | { text: string; after_s: number }`; script-level `config?: Record<string, unknown>` (deep-merged over the run config).
-  - Assertions: `{ type: "turn", session: number, user?, replies?: number, backchannels?: { min?: number; max?: number }, reply_covers?: number[][], max_reply_delay_s?: number, known_failure? }` (blocking, every run); `{ type: "reply_about", session: number, reply: number, about: string, not_about?: string, user?, known_failure? }` (quality, majority).
+  - Assertion `{ type: "turn", session: number, user?, replies?: number, backchannels?: { min?: number; max?: number }, reply_covers?: number[][], max_reply_delay_s?: number, gate?: "every" | "majority", known_failure? }`: deterministic. `gate` defaults to `every`; `majority` is for scripts whose grouping depends on how the real turn judge reads the messages (design §9.6).
+  - Script entry `{ type: "reply_about", session: number, reply: number, about: string, not_about?: string, user?, known_failure? }`: an **annotation**, like the existing judged types (`recall`, `no_false_recall`, `consistency`). Run only with `--annotate`, stored in `ScriptResult.annotations`, never in `assertions`, never affecting status or exit code.
+  - `RunOptions`: `judge: boolean` is replaced by `real: boolean` (this run makes real calls, so `mode: real` scripts may run) and `annotate: boolean` (run judged annotations).
+  - `ScriptResult.annotations: { type: string; user: string; verdict: "yes" | "no" | "n/a"; detail?: string }[]`. `RunTrace` gains `turns` (every `session_log` row per user: session, `created_at`, role, trigger, text, `reply_to`) and `decisions` (every `judge_log` row per user: kind, turn id, source, outcome, output).
   - `runDueJobs(deps, queue, clock, until: Date): Promise<void>` and `runAllJobs(deps, queue, clock): Promise<void>` in `evals/lib/scheduler.ts`.
   - `checkTurn(turns: Turn[], range: { start: Date; end: Date }, a: TurnAssertion): { ok: boolean; detail?: string }` in `evals/lib/turn-check.ts`.
   - `judgeReplyAbout(llm, config, { transcript: Line[]; reply: string; about: string; not_about?: string }): Promise<{ pass: boolean; detail: string }>` in `evals/lib/judged.ts`.
-  - `QUALITY_TYPES = new Set(["recall", "no_false_recall", "consistency", "reply_about"])`; `ScriptSummary.blocking: "pass" | "fail" | "skipped" | "error"`; `AssertionSummary.quality: boolean`.
+  - `RoutingLLM` in `evals/lib/routing-llm.ts`: `new RoutingLLM(real: LLMProvider, fake: LLMProvider, realPurposes: ReadonlySet<string>)`. `generateReply` goes to `real` only if `"reply"` is listed; `classifyJson` only if `req.purpose` is listed.
+  - `renderReview(runs: { script: string; attempt: number; result: ScriptResult }[], meta: { stamp: string; real: string[]; annotate: boolean }): string` in `evals/lib/review.ts` (markdown).
+  - CLI (`evals/run.ts`):
+    - `--real <purposes>`: a comma list of `reply`, `crisis`, `extract`, `reconcile`, `guard`, `guard_crisis`, `turn_judge`, `embed`. Everything unlisted is fake; `--llm=real` means all of them.
+    - `--annotate`: adds the `judge_*` purposes as real and runs annotations.
+    - `--review`: writes `evals/results/review-<stamp>.md`. No pass/fail; exit 0 unless the run crashes.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3365,10 +3375,59 @@ test("counts replies and backchannels, derives coverage from reply_to, checks re
 });
 ```
 
+Create `tests/evals/routing-llm.test.ts`:
+
+```ts
+import { expect, test } from "vitest";
+import { z } from "zod";
+import { FakeLLMProvider } from "@/core/llm/fake";
+import { RoutingLLM } from "../../evals/lib/routing-llm";
+
+test("routes the reply and each structured purpose to real or fake", async () => {
+  const real = new FakeLLMProvider(), fake = new FakeLLMProvider();
+  real.replies.push("REAL");
+  real.handlers.turn_judge = () => ({ which: "real" });
+  fake.handlers.turn_judge = () => ({ which: "fake" });
+  const schema = z.object({ which: z.string() });
+  const onlyJudge = new RoutingLLM(real, fake, new Set(["turn_judge"]));
+  expect(await onlyJudge.generateReply({ system: "", messages: [{ role: "user", content: "hi" }] })).toBe("(fake reply to: hi)");
+  expect(await onlyJudge.classifyJson({ purpose: "turn_judge", system: "", input: "", schema, timeoutMs: 1, maxTokens: 1 })).toEqual({ which: "real" });
+  expect(await onlyJudge.classifyJson({ purpose: "extract", system: "", input: "", schema: z.any(), timeoutMs: 1, maxTokens: 1 }))
+    .toEqual({ facts: [], entities: [], threads: [] });
+  expect(await new RoutingLLM(real, fake, new Set(["reply"])).generateReply({ system: "", messages: [] })).toBe("REAL");
+});
+```
+
+Create `tests/evals/review.test.ts`:
+
+```ts
+import { expect, test } from "vitest";
+import { renderReview } from "../../evals/lib/review";
+
+test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
+  const md = renderReview([{ script: "burst-short", attempt: 1, result: {
+    name: "burst-short", status: "pass", meta: { decayPasses: 0 }, assertions: [],
+    annotations: [{ type: "reply_about", user: "main", verdict: "yes", detail: "mentions the driving test" }],
+    trace: {
+      transcripts: {}, memory: { main: [{ subject: "user", kind: "event", content: "The user passed their driving test.", status: "active" }] },
+      turns: { main: [
+        { session: 1, created_at: at(0), role: "user", trigger: null, text: "omg", reply_to: null, id: "u1" },
+        { session: 1, created_at: at(20), role: "companion", trigger: null, text: "WAIT. first try??", reply_to: "u1", id: "r1" },
+      ] },
+      decisions: { main: [{ kind: "turn", turn_id: "u1", source: "model", outcome: null, output: { complete: true, wait_ms: 4000, reasoning: "short but done" } }] },
+    },
+  } }], { stamp: "s", real: ["turn_judge"], annotate: true });
+  for (const text of ["burst-short", "omg", "WAIT. first try??", "short but done", "passed their driving test", "mentions the driving test", "turn_judge"]) expect(md).toContain(text);
+});
+```
+
+(Adjust the literal shapes to the real `ScriptResult` / `RunTrace` / memory-dump types once written; the assertions on the rendered text are the point.)
+
 Add to `tests/evals/script.test.ts`:
 
 ```ts
-test("turns may be timed objects; scripts may override config; turn and reply_about assertions parse", () => {
+test("turns may be timed objects; scripts may override config; turn and reply_about entries parse", () => {
   const s = ScriptSchema.parse({
     name: "x", config: { turn: { backchannel_style: "silent" } },
     sessions: [{ at: "day 0 09:00", turns: ["hi", { text: "and then", after_s: 2 }] }],
@@ -3381,7 +3440,7 @@ test("turns may be timed objects; scripts may override config; turn and reply_ab
 });
 ```
 
-Add to `tests/evals/runner.test.ts`:
+Add to `tests/evals/runner.test.ts`, and replace every `judge: false` in the file's `runScript` options with `real: false, annotate: false`:
 
 ```ts
 test("a burst gets one reply after the pause; spaced messages each get their own (fake mode)", async () => {
@@ -3393,20 +3452,24 @@ test("a burst gets one reply after the pause; spaced messages each get their own
   const r = await runScript(script, opts());
   expect(r.status).toBe("pass");
 });
-```
 
-(`opts()` is the file's existing helper that builds `RunOptions` for fake mode; use whatever it is called there.)
-
-Add to `tests/evals/report.test.ts`:
-
-```ts
-test("quality assertions never make the blocking status fail", () => {
-  const run = (quality: "pass" | "fail", fn: "pass" | "fail") => ({ name: "s", status: "fail" as const, meta: { decayPasses: 0 },
-    assertions: [{ type: "recall", status: quality }, { type: "turn", status: fn }] });
-  expect(aggregateRuns([run("fail", "pass"), run("fail", "pass"), run("fail", "pass")]).blocking).toBe("pass");
-  expect(aggregateRuns([run("pass", "fail"), run("pass", "pass"), run("pass", "pass")]).blocking).toBe("fail"); // turn is every-run
+test("judged entries are annotations: never in assertions, run only with annotate", async () => {
+  const script = ScriptSchema.parse({ name: "j", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
+    assertions: [{ type: "no_false_recall" }, { type: "state", check: "turn_count", params: { role: "user" }, expect: 1 }] });
+  const off = await runScript(script, opts());
+  expect(off.assertions.map((a) => a.type)).toEqual(["state"]);
+  expect(off.annotations).toEqual([]);
+  const llm = new FakeLLMProvider();
+  llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "c", category: "invented_detail" }] });
+  const on = await runScript(script, { ...opts(), makeLlm: () => llm, annotate: true });
+  expect(on.status).toBe("pass"); // a "no" annotation never fails the script
+  expect(on.annotations[0]).toMatchObject({ type: "no_false_recall", verdict: "no" });
 });
 ```
+
+`opts()` is the file's existing helper that builds `RunOptions` for fake mode; use whatever it is called there. The existing test "judged assertions skipped without judge" and the recall-judge detail tests (around line 211) move to the annotation shape: assert on `annotations`, not `assertions`.
+
+In `tests/evals/report.test.ts`, add a case that a `turn` assertion is every-run by default (one failing run of three fails the script) and majority with `gate: "majority"` (one failing run of three still passes).
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -3428,17 +3491,19 @@ const Session = z.object({
 ```
 
 ```ts
-/** Reads session_log (design §9.3). Deterministic, a functional check: must pass every run. */
+/** Reads session_log (design §9.3). Deterministic, a functional check: every run unless `gate: majority`. */
 export const TurnAssertion = z.object({
   type: z.literal("turn"), session: z.number().int().min(1), user: z.string().default("main"),
   replies: z.number().int().min(0).optional(),
   backchannels: z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() }).optional(),
   reply_covers: z.array(z.array(z.number().int().min(1))).optional(),
   max_reply_delay_s: z.number().positive().optional(),
+  /** `majority` for judge-dependent grouping (design §9.6); mechanics scripts keep the default, every run. */
+  gate: z.enum(["every", "majority"]).optional(),
   known_failure: knownFailure,
 });
 export type TurnAssertion = z.infer<typeof TurnAssertion>;
-/** LLM-judged (quality, majority of runs): does reply N of session S address `about` and not `not_about`? */
+/** LLM-judged review annotation (never a pass/fail, v2 §15): does reply N of session S address `about` and not `not_about`? */
 const ReplyAboutAssertion = z.object({
   type: z.literal("reply_about"), session: z.number().int().min(1), reply: z.number().int().min(1), user: z.string().default("main"),
   about: z.string().min(1), not_about: z.string().min(1).optional(), known_failure: knownFailure,
@@ -3550,14 +3615,14 @@ In `evals/lib/runner.ts`:
         const r = checkTurn(await listTurns(db, userIds[a.user]!), range, a);
         assertions.push({ type: "turn", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
       } else if (a.type === "reply_about") {
-        if (!opts.judge) { assertions.push({ type: a.type, user: a.user, status: "skipped", detail: "needs --llm=real" }); continue; }
+        if (!opts.annotate) continue; // annotation only (v2 §15): never an assertion
         const sessionLines = transcript(a.user, a.session);
         // Reply N counts full replies only (reply_to set), not backchannels.
         const full = (await listTurns(db, userIds[a.user]!)).filter((t) => t.role === "companion" && t.reply_to && sessionOf(t.created_at) === a.session);
         const target = full[a.reply - 1];
-        if (!target) { assertions.push({ type: a.type, user: a.user, status: "fail", detail: `no reply ${a.reply} in session ${a.session}` }); continue; }
+        if (!target) { annotations.push({ type: a.type, user: a.user, verdict: "n/a", detail: `no reply ${a.reply} in session ${a.session}` }); continue; }
         const v = await retrying(1, () => judgeReplyAbout(baseLlm, config, { transcript: sessionLines, reply: target.text, about: a.about, not_about: a.not_about }));
-        assertions.push({ type: a.type, user: a.user, status: v.pass ? "pass" : "fail", detail: v.detail || undefined });
+        annotations.push({ type: a.type, user: a.user, verdict: v.pass ? "yes" : "no", detail: v.detail || undefined });
 ```
 
   (`sessionOf` is hoisted out of the per-user loop below so the assertion code can use it.)
@@ -3602,6 +3667,10 @@ export function checkTurn(all: Turn[], range: { start: Date; end: Date }, a: Tur
 }
 ```
 
+- Judged types (`recall`, `no_false_recall`, `consistency`, `reply_about`) never push to `assertions`. When `opts.annotate` is false they aren't run. When it's true they run as before (one retry) and push `{ type, user, verdict, detail }` to `annotations`: `verdict` is `yes` when the judge's `pass` is true, `no` otherwise, and a `known_failure` reason goes in front of `detail`. `ScriptResult` always has `annotations` (empty by default).
+- `mode: real` scripts are skipped unless `opts.real` (replacing the old `!opts.judge` check).
+- The trace always carries `turns` (from `listTurns`, with `session` from `sessionOf`) and `decisions` (from `listJudgeLogs`, oldest first), per user. Collect them after the last session, and in the error path as far as possible.
+
 - [ ] **Step 6: `reply_about` judge and prompt**
 
 `config/default.json` `prompts`: `"judge_turn": "v1"`; `src/core/config.ts`: `judge_turn: z.string().regex(/^v\d+$/),`.
@@ -3633,36 +3702,66 @@ export async function judgeReplyAbout(llm: LLMProvider, config: Config, a: { tra
 }
 ```
 
-- [ ] **Step 7: Report and exit codes**
+- [ ] **Step 7: Per-purpose routing**
 
-`evals/lib/report.ts`:
-- `export const QUALITY_TYPES = new Set(["recall", "no_false_recall", "consistency", "reply_about"]);`
-- `everyRun` also true for `a0.type === "turn"`.
-- `AssertionSummary` gains `quality: boolean` (`QUALITY_TYPES.has(a0.type)`).
-- `ScriptSummary` gains `blocking`: computed like `status` but over non-quality assertions only (`"error"` if the script errored).
-- `toBaseline` also stores `blocking`; `findRegressions` compares `blocking` when both sides have it, else `status` (old baselines).
-
-`evals/run.ts`: exit code 1 only when `summaries.some((s) => s.blocking === "fail" || s.blocking === "error")` (or blocking regressions with `--compare`). Print a final block:
+Create `evals/lib/routing-llm.ts`:
 
 ```ts
-const qualityMisses = summaries.flatMap((s) => s.assertions.filter((a) => a.quality && a.status === "fail").map((a) => `${s.name}: ${a.type} ${a.passes}/${a.runs}${a.detail ? ` — ${a.detail}` : ""}`));
-console.log(`\nblocking: ${summaries.filter((s) => s.blocking === "pass").length}/${summaries.length} scripts pass`);
-if (qualityMisses.length) console.log(`quality misses (reported, not blocking; log them in v2 §15.3):\n  ${qualityMisses.join("\n  ")}`);
+import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
+
+/**
+ * Exit profiles (v2 §15, design §9.6): a call goes to the real provider only when its purpose is listed, so an
+ * exit run pays only for the phase's own LLM processes. The reply's purpose is "reply".
+ */
+export class RoutingLLM implements LLMProvider {
+  constructor(private readonly real: LLMProvider, private readonly fake: LLMProvider, private readonly realPurposes: ReadonlySet<string>) {}
+  generateReply(req: ReplyRequest): Promise<string> {
+    return (this.realPurposes.has("reply") ? this.real : this.fake).generateReply(req);
+  }
+  classifyJson<T>(req: ClassifyRequest<T>): Promise<T> {
+    return (this.realPurposes.has(req.purpose) ? this.real : this.fake).classifyJson(req);
+  }
+}
 ```
 
-`evals/guard.ts`: `failed` for the exit code counts only cases in files whose `gate` is `every` (safety); `majority` (honesty) failures are printed under "quality misses" and don't set the exit code.
-`evals/judge.ts`: exit code is 0 unless a run crashed (the whole judge suite is quality); print failures under "quality misses".
+`evals/run.ts`:
+- New options: `real: { type: "string" }`, `annotate: { type: "boolean", default: false }`, `review: { type: "boolean", default: false }`. `--profile` stays the onboarding-profile flag.
+- `const ALL = ["reply", "crisis", "extract", "reconcile", "guard", "guard_crisis", "turn_judge", "embed"];` and `const JUDGES = ["judge_recall", "judge_false_recall", "judge_consistency", "judge_turn"];`
+- `realPurposes = new Set([...(args.llm === "real" ? ALL : (args.real?.split(",") ?? [])), ...(args.annotate ? JUDGES : [])])`. Reject unknown names with an error that lists `ALL`.
+- `makeLlm`: when `realPurposes` is empty, the existing fake provider. Otherwise `new RoutingLLM(new AnthropicProvider(new Anthropic(), config.models, usage.record), fakeProvider(), realPurposes)`, where `fakeProvider()` is the existing fake: keyword crisis classifier, and default handlers that make the guard pass everything (that is what "guard off" means in an exit run).
+- `embedder` only when `realPurposes.has("embed")` (needs `VOYAGE_API_KEY`); otherwise none, so retrieval degrades to forced items. `ANTHROPIC_API_KEY` is needed when any other purpose is real.
+- `runScript` options: `real: realPurposes.size > 0`, `annotate: args.annotate`.
+- `runs` defaults to 3 when anything is real, else 1 (as today).
+- Print the active profile first, e.g. `real: turn_judge | fake: reply, crisis, extract, reconcile, guard, guard_crisis, embed`.
+- Print annotations after each script's result line (`  note: reply_about yes — …`); they are never counted.
+- `--review`: collect `{ script, attempt, result }` for every attempt, write `evals/results/review-<stamp>.md` with `renderReview`, print its path, skip `--compare` / `--update-baseline`, and exit 0 unless a script errored.
 
-- [ ] **Step 8: Run tests and the fake suite**
+- [ ] **Step 8: Review writer**
+
+Create `evals/lib/review.ts`. `renderReview` returns markdown:
+- A header: stamp, real purposes, whether annotated, and a line saying the file is for manual analysis, not pass/fail.
+- Per script and attempt: the script's description and onboarding profile, then per user and session a chronological list:
+  - user turns with their time offset (`+6s`);
+  - backchannels, marked as such;
+  - replies, with the user-turn indexes they cover (from `reply_to`);
+  - each `judge_log` decision under the turn it belongs to: for the turn judge, complete, wait, backchannel, reasoning and source; for the guard, outcome, violations and reasoning.
+- Then the final facts (subject, kind, content, status) and the annotations.
+- Deterministic `turn` / `state` results under a "checks" heading as ✓ / ✗ with their detail. They are facts about the run, not a judgement of quality.
+
+- [ ] **Step 9: Report**
+
+`evals/lib/report.ts`: `everyRun` is also true for `a0.type === "turn"` unless that assertion's `gate` is `majority` (carry `gate` through the assertion result so `aggregateRuns` can see it). Nothing else changes: status and exit codes come from deterministic assertions only, because judged types no longer produce assertions.
+
+- [ ] **Step 10: Run tests and the fake suite**
 
 Run: `pnpm test && pnpm typecheck && pnpm lint && pnpm eval --llm=fake --compare`
-Expected: PASS and no blocking regressions against `evals/baseline.json` (the 36 existing scripts use 30 s gaps, longer than every wait window, so each message still gets its own reply). If one fails because the fake cue judge marked a one-word first message ("hey") incomplete and `max_wait`/pacing pushed its reply past the next message, raise that script's `turn_gap_seconds` rather than weakening the check, and note it in the commit message.
+Expected: PASS and no regressions against `evals/baseline.json`. The 36 existing scripts use 30 s gaps, longer than every wait window, so each message still gets its own reply; their judged entries were already skipped in fake mode. If one fails because the fake cue judge marked a one-word first message ("hey") incomplete and `max_wait`/pacing pushed its reply past the next message, raise that script's `turn_gap_seconds` rather than weakening the check, and note it in the commit message.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
 git add evals prompts/judge/turn src/core/config.ts config/default.json tests/evals
-git commit -m "feat(evals): simulated turn scheduling, timed turns, turn and reply_about assertions, blocking vs quality"
+git commit -m "feat(evals): simulated turn scheduling, timed turns, turn assertion, per-purpose exit profile, review mode"
 ```
 
 ---
@@ -3698,6 +3797,8 @@ Run: `pnpm test tests/evals/runner.test.ts` → FAIL, implement, → PASS.
 
 - [ ] **Step 2: Write the ten scripts**
 
+The `turn` and `state` entries are the exit test. The `reply_about` entries are review annotations (Task 11): they run only with `--annotate` and never affect the result.
+
 `evals/scripts/insane-day-promotion.yaml`:
 
 ```yaml
@@ -3714,7 +3815,7 @@ sessions:
       - { text: "and I thought I was getting fired", after_s: 5 }
       - { text: "turns out it was a promotion lol", after_s: 8 }
 assertions:
-  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2, 3, 4]], backchannels: { max: 1 } }
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2, 3, 4]], backchannels: { max: 1 }, gate: majority }
   - { type: reply_about, session: 1, reply: 1, about: "the user getting a promotion", not_about: "treats it as if the user was actually fired" }
 ```
 
@@ -3732,7 +3833,7 @@ sessions:
       - "what should I cook tonight?"
       - { text: "nvm I'll just order pizza", after_s: 2 }
 assertions:
-  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2]] }
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2]], gate: majority }
   - { type: reply_about, session: 1, reply: 1, about: "the user ordering pizza", not_about: "suggests dishes or recipes for the user to cook" }
 ```
 
@@ -3750,7 +3851,7 @@ sessions:
       - "what should I cook tonight?"
       - { text: "nvm I'll just order pizza", after_s: 90 }
 assertions:
-  - { type: turn, session: 1, replies: 2, reply_covers: [[1], [2]] }
+  - { type: turn, session: 1, replies: 2, reply_covers: [[1], [2]], gate: majority }
   - { type: reply_about, session: 1, reply: 1, about: "what the user could cook tonight" }
   - { type: reply_about, session: 1, reply: 2, about: "the user ordering pizza instead" }
 ```
@@ -3770,7 +3871,7 @@ sessions:
       - { text: "my driving test", after_s: 1 }
       - { text: "first try!!", after_s: 2 }
 assertions:
-  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2, 3, 4, 5]], max_reply_delay_s: 30 }
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2, 3, 4, 5]], max_reply_delay_s: 30, gate: majority }
   - { type: reply_about, session: 1, reply: 1, about: "the user passing their driving test" }
 ```
 
@@ -3886,7 +3987,7 @@ sessions:
       - "do you think I should take the job in Leeds?"
       - { text: "anyway my sister's visiting this weekend", after_s: 3 }
 assertions:
-  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2]] }
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2]], gate: majority }
   - { type: reply_about, session: 1, reply: 1, about: "whether the user should take the job in Leeds" }
 ```
 
@@ -3898,6 +3999,8 @@ Create `evals/guard/backchannel.yaml`:
 # §15.2 #3 / design §9.4: a few-word backchannel can't carry a threat, contempt or an invented detail, so the
 # production path checks it with the keyword list only. These cases prove the full model guard agrees: every
 # realistic backchannel passes, 3/3. A new failure here means the keyword-only shortcut needs revisiting.
+# The guard is off in exit runs until the full prototype (v2 §15), so this file first runs with the Phase 4
+# guard suite; Phase 3 only writes it.
 gate: every
 cases:
   - name: bc-huh
@@ -3942,12 +4045,12 @@ cases:
     expect: pass
 ```
 
-These go through `checkMessage` with `kind: reply` (the fixture default), i.e. the full model rubric. If the fixture schema requires `kind`, add `kind: reply` to each case. The keyword-hit half is already covered by the Task 5 unit test.
+These go through `checkMessage` with `kind: reply` (the fixture default), i.e. the full model rubric. If the fixture schema requires `kind`, add `kind: reply` to each case. The keyword-hit half is already covered by the Task 5 unit test. Don't run `pnpm eval:guard` in Phase 3: `pnpm test tests/evals/guard-cases.test.ts` (free) checks the file parses and that no fallback keyword appears in a `pass` case.
 
 - [ ] **Step 4: Fake-mode run**
 
 Run: `pnpm eval --llm=fake --only insane-day-promotion,cook-pizza-grouped,cook-pizza-late,burst-short,max-wait-cap,crisis-bypass,retry-idempotent,backchannel-rate-limit,silent-style,open-question-carried`
-Expected: every `turn` and `state` assertion passes; `reply_about` is `skipped` (needs `--llm=real`). Known fake-mode caveat: the cue judge never emits backchannels, so `backchannels: {max: …}` is trivially true in fake mode; real mode exercises it. `pnpm test tests/evals/guard-cases.test.ts` still passes (no fallback keyword appears in a `pass` case).
+Expected: every `turn` and `state` assertion passes; `reply_about` entries aren't run (annotations, only with `--annotate`). Known fake-mode caveat: the cue judge never emits backchannels, so `backchannels: {max: …}` is trivially true in fake mode; real mode exercises it. `pnpm test tests/evals/guard-cases.test.ts` still passes (no fallback keyword appears in a `pass` case).
 
 - [ ] **Step 5: Commit**
 
@@ -3958,25 +4061,28 @@ git commit -m "test(evals): Phase 3 turn-taking scripts and backchannel guard fi
 
 ---
 
-### Task 13: Phase exit: spec fold-back, real suites, browser check
+### Task 13: Phase exit: exit run, browser check, spec fold-back
 
 **Files:**
-- Modify: `spica-build-spec-v2.md`, `DECISIONS.md`, `CLAUDE.md`, `docs/superpowers/specs/2026-09-27-phase-3-turn-taking-design.md` (status line), `evals/baseline.json`, `evals/guard-baseline.json`
+- Modify: `spica-build-spec-v2.md`, `DECISIONS.md`, `CLAUDE.md`, `docs/superpowers/specs/2026-09-27-phase-3-turn-taking-design.md` (status line)
 
-- [ ] **Step 1: Real suites (once)**
+The exit test covers only Phase 3's own functionality (v2 §15, design §9.6, profile approved by Ethan 2026-09-27). The reply is fake and the guard is off. No full real-model suite, no guard suite, no judge suite, and no baseline updates this phase.
 
-Run: `pnpm eval --llm=real --runs 3 --trace`
-Expected: blocking 46/46 (functional + safety). Every quality miss is printed under "quality misses".
+- [ ] **Step 1: Exit run (the Phase 3 profile)**
 
-Run: `pnpm eval:guard --runs 3`
-Expected: every `every`-gated file passes in full, including `backchannel.yaml`; honesty misses are reported only.
+Run:
 
-Run: `pnpm eval:judge --runs 3`
-Expected: runs; misses reported.
+```bash
+pnpm eval --real turn_judge --runs 3 --only insane-day-promotion,cook-pizza-grouped,cook-pizza-late,burst-short,max-wait-cap,crisis-bypass,retry-idempotent,backchannel-rate-limit,silent-style,open-question-carried
+```
 
-For every quality miss: add `known_failure: <reason>` to that assertion or fixture case, and add a line to v2 §15.3 (tuning backlog) under the right area, naming the script and what went wrong (from the trace). Do not edit prompts to chase quality (v2 §15 test-phase rule). A **blocking** failure is a bug: fix it with a failing test first (superpowers:systematic-debugging), then re-run only the affected scripts with `--only`.
+Expected: every `turn` and `state` assertion passes: every run for the mechanics scripts (`crisis-bypass`, `retry-idempotent`, `max-wait-cap`, `backchannel-rate-limit`, `silent-style`), a majority for the judge-dependent ones (`insane-day-promotion`, `cook-pizza-grouped`, `cook-pizza-late`, `burst-short`, `open-question-carried`). The judge-dependent scripts carry `gate: majority` on their `turn` assertion (Task 12); never add it to a mechanics script. The usage table should show only `turn_judge` calls, about 150 in all (roughly $0.20).
 
-Then: `pnpm eval --llm=real --runs 3 --update-baseline` and `pnpm eval:guard --runs 3 --update-baseline` once everything blocking passes.
+A failure is a bug in Phase 3's own mechanics or in the turn judge's basic use of its inputs. Fix it with a failing test first (superpowers:systematic-debugging), then re-run only the affected scripts with `--only`. Don't tune prompts for nicer output: if the judge groups sensibly but a reply reads badly, that's review material for v2 §15.3, not an exit failure.
+
+Also run: `pnpm eval --llm=fake --compare` (all 46 scripts, free). Expected: no regressions.
+
+Optional, only if Ethan asks for one: a review run, e.g. `pnpm eval --llm=real --review --annotate --runs 1 --only <scripts>`. It writes `evals/results/review-<stamp>.md` for manual analysis. Anything Ethan flags from it goes to v2 §15.3.
 
 - [ ] **Step 2: Manual browser session**
 
@@ -3987,7 +4093,7 @@ Run `pnpm db:up && pnpm db:migrate`, then `pnpm dev` and `pnpm worker` in two te
 4. Stop the worker, send a message, start the worker → the reply still arrives (sweep within ~1 min).
 5. A crisis message → an immediate reply and the resources card, even mid-story.
 6. The inspector's Turn-taking tab and Judge log tab show `turn` rows.
-Record anything off in v2 §15.3 (quality) or fix it (functional/safety).
+Record anything that reads badly in v2 §15.3; fix anything that doesn't work (functional).
 
 - [ ] **Step 3: Spec fold-back (design §10)**
 
@@ -3998,8 +4104,8 @@ Update `spica-build-spec-v2.md`:
 - §6.2: `composeReply`, open-questions slot, `prompts.reply` v6.
 - §6.4: backchannel kind (keyword-only, drop on hit), `judge_log` written after the send, `guard.timeout_ms` 6000.
 - §4 table: `models.turn_judge`, `EventBus` / `PgEventBus` / `EventHub`, `/api/events`, `/api/chat/history`, `202` from `/api/chat`.
-- §14.1: Turn-taking inspector tab. §14.2: timed turns, script `config:`, `repeat_previous_id`, `turn` and `reply_about` assertions, `QUALITY_TYPES`, blocking vs quality exit codes. §14.3: `backchannel.yaml`. §14.5: `turn_timer`, `turn_backchannel`, `turn_sweep`, and the multi-turn cold-path sweep.
-- §15: Phase 3 ✅ with the date and results; §15.2 #1–6 marked done; §15.3 gets the Phase 3 quality misses.
+- §14.1: Turn-taking inspector tab. §14.2: timed turns, script `config:`, `repeat_previous_id`, the `turn` assertion, judged entries as annotations (`reply_about` and the memory judges, `--annotate`), `--real <purposes>` exit profiles (`RoutingLLM`), `--review` output. §14.3: `backchannel.yaml` (written; first run with the Phase 4 guard suite). §14.5: `turn_timer`, `turn_backchannel`, `turn_sweep`, and the multi-turn cold-path sweep.
+- §15: Phase 3 ✅ with the date and the exit-run result (per-script run counts, turn-judge call count and cost); §15.2 #1–6 marked done; §15.3 gets anything Ethan flagged from review runs or the browser session.
 - §18: row **B10**: "Pizza trace: grouped within `turn.settle_ms` → one reply to the takeback; with a gap → answer, then follow up (append-and-follow-up). Ethan, 2026-09-27."
 
 `DECISIONS.md`: one row each for Ethan's decisions (append-and-follow-up, grouping window / B10, judge-written backchannels with keyword-only guard, worker-driven durable timers) and every [ADDED] item (the six `conversation_state` columns, `reply_epoch` crisis abandonment, in-flight recheck instead of an advisory lock, keyword-only drop-on-hit backchannel guard, `guard.timeout_ms` 6000, `judge_log` after send, one-word messages count as incomplete in the cue fallback, deterministic pacing jitter from the turn id, `isAnswered` semantics for retries).
@@ -4014,7 +4120,7 @@ Run: `pnpm typecheck && pnpm lint && pnpm test && pnpm eval --llm=fake --compare
 Expected: PASS.
 
 ```bash
-git add spica-build-spec-v2.md DECISIONS.md CLAUDE.md docs/superpowers/specs/2026-09-27-phase-3-turn-taking-design.md evals/baseline.json evals/guard-baseline.json evals/scripts evals/guard
+git add spica-build-spec-v2.md DECISIONS.md CLAUDE.md docs/superpowers/specs/2026-09-27-phase-3-turn-taking-design.md evals/scripts evals/guard
 git commit -m "docs(spec): Phase 3 turn-taking + pacing done; fold design back into v2"
 ```
 

@@ -13,6 +13,8 @@ export class FakeLLMProvider implements LLMProvider {
   structuredCalls: { purpose: string; input: string }[] = [];
   failReplies = 0;
   replyDelayMs = 0;
+  /** Test seam: runs inside generateReply, to simulate things happening while a reply is being written. */
+  replyHook: (() => Promise<void>) | undefined = undefined;
   classify: Handler = () => ({ flag: false, category: "none" });
   /** Structured-call handlers by purpose. Defaults keep the cold path a no-op in fake mode. */
   handlers: Record<string, Handler> = {
@@ -30,6 +32,7 @@ export class FakeLLMProvider implements LLMProvider {
   }
 
   async generateReply(req: ReplyRequest): Promise<string> {
+    if (this.replyHook) await this.replyHook();
     this.calls.push(req);
     if (this.replyDelayMs > 0) await new Promise((r) => setTimeout(r, this.replyDelayMs));
     if (this.failReplies > 0) {

@@ -56,6 +56,37 @@ test("streams typing and message events; message text is read from session_log f
   ]);
 });
 
+test("onReset closes the stream so EventSource reconnects and the client re-catches-up", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  let reset: (() => void) | undefined;
+  const h = createEventsHandler({
+    getUserId: async () => u,
+    getDeps: () => deps,
+    subscribe: (_u, _fn, onReset) => { reset = onReset; return () => {}; },
+  });
+  const res = await h(new Request("http://x/api/events"));
+  const reader = res.body!.getReader();
+  await reader.read(); // the initial ": connected" comment
+  expect(reset).toBeDefined();
+  reset!();
+  const { done } = await reader.read();
+  expect(done).toBe(true);
+});
+
+test("a rejecting ready() returns 503 before the stream opens", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const h = createEventsHandler({
+    getUserId: async () => u,
+    getDeps: () => deps,
+    subscribe: () => () => {},
+    ready: async () => { throw new Error("event hub unavailable"); },
+  });
+  const res = await h(new Request("http://x/api/events"));
+  expect(res.status).toBe(503);
+});
+
 test("history returns turns after the given id, user-scoped", async () => {
   const deps = makeTestDeps();
   const [u, other] = [await createTestUser("u"), await createTestUser("o")];

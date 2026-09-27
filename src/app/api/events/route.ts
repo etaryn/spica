@@ -6,5 +6,6 @@ import { createEventsHandler } from "./handler";
 export const GET = createEventsHandler({
   getUserId: async (req) => (await auth.api.getSession({ headers: req.headers }))?.user.id ?? null,
   getDeps,
-  subscribe: (userId, fn) => getEventHub().subscribe(userId, fn),
+  subscribe: (userId, fn, onReset) => getEventHub().subscribe(userId, fn, onReset),
+  ready: () => getEventHub().ready(),
 });

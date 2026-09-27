@@ -24,6 +24,25 @@ test("recentTurns returns the last N oldest-first, user before companion on ties
   expect(recent.map((t) => t.text)).toEqual(["reply one", "two", "reply two"]);
 });
 
+test("turnsAfter is deterministic on ties and falls back to the latest page for an unknown id", async () => {
+  const u = await createTestUser();
+  const sid = randomUUID();
+  const same = at(0);
+  // Three turns share one created_at (and role); only `id` breaks the tie, so the ORDER BY id
+  // tiebreaker (and the exact WHERE it enables) must be exercised, not just lucky insert order.
+  const ids = [randomUUID(), randomUUID(), randomUUID()].sort();
+  await turn(u, "user", "a", same, { id: ids[0]!, session_id: sid });
+  await turn(u, "user", "b", same, { id: ids[1]!, session_id: sid });
+  await turn(u, "user", "c", same, { id: ids[2]!, session_id: sid });
+
+  const after = await log.turnsAfter(getTestDb(), u, ids[0]!, 10);
+  expect(after.map((t) => t.id)).toEqual([ids[1], ids[2]]);
+
+  // A well-formed uuid that isn't a real turn id falls back to the latest page (recentTurns).
+  const fallback = await log.turnsAfter(getTestDb(), u, randomUUID(), 10);
+  expect(fallback.map((t) => t.id).sort()).toEqual([...ids].sort());
+});
+
 test("getReplyTo and lastUserTurn", async () => {
   const u = await createTestUser();
   const t1 = await turn(u, "user", "one", at(0));

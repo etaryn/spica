@@ -37,6 +37,30 @@ test("malformed notifications are ignored", async () => {
   expect(got).toEqual([]);
 });
 
+test("onReset fires when the LISTEN connection is lost, and the hub reconnects and delivers again", async () => {
+  const events: ChatEvent[] = [];
+  let resets = 0;
+  const off = hub.subscribe("user-reset", (e) => events.push(e), () => { resets += 1; });
+  await hub.ready();
+
+  // Simulate the connection being dropped from outside (e.g. a DB failover) by terminating the
+  // hub's own LISTEN backend, rather than reaching into the hub's private client.
+  await getTestDb().execute(sql.raw(
+    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ILIKE 'LISTEN spica_events_test%' AND pid <> pg_backend_pid()`,
+  ));
+  await vi.waitFor(() => expect(resets).toBeGreaterThanOrEqual(1), { timeout: 5000 });
+
+  // ready() now returns the already-scheduled backoff retry; awaiting it directly confirms
+  // subscribe/ready join the pending timer instead of racing a second connect.
+  await hub.ready();
+
+  const bus = new PgEventBus(getTestDb(), "spica_events_test");
+  await bus.publish("user-reset", { type: "typing", on: true });
+  await vi.waitFor(() => expect(events).toHaveLength(1), { timeout: 3000 });
+  expect(resets).toBe(1);
+  off();
+}, 20000);
+
 test("emit never rejects when the bus fails", async () => {
   const bus = new RecordingEventBus();
   bus.publish = async () => { throw new Error("down"); };

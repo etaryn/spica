@@ -1,5 +1,13 @@
 import type { PgBoss } from "pg-boss";
-import { COLD_PATH_QUEUE, type ColdPathJob, type JobQueue } from "@/core/queue";
+import {
+  COLD_PATH_QUEUE,
+  type EnqueueOptions,
+  type JobMap,
+  type JobName,
+  type JobQueue,
+  TURN_BACKCHANNEL_QUEUE,
+  TURN_TIMER_QUEUE,
+} from "@/core/queue";
 
 /** pg-boss lives in the same Postgres database: the spec's one-database rule holds. */
 export class PgBossQueue implements JobQueue {
@@ -7,7 +15,11 @@ export class PgBossQueue implements JobQueue {
 
   constructor(
     private readonly boss: PgBoss,
-    private readonly opts: { retryLimit: number; retryDelaySeconds: number } = { retryLimit: 3, retryDelaySeconds: 30 },
+    private readonly opts: { retryLimit: number; retryDelaySeconds: number; turnExpireSeconds: number } = {
+      retryLimit: 3,
+      retryDelaySeconds: 30,
+      turnExpireSeconds: 180,
+    },
   ) {}
 
   start(): Promise<void> {
@@ -20,6 +32,15 @@ export class PgBossQueue implements JobQueue {
       const policy = { retryLimit: this.opts.retryLimit, retryDelay: this.opts.retryDelaySeconds, retryBackoff: true };
       await this.boss.createQueue(COLD_PATH_QUEUE, policy);
       await this.boss.updateQueue(COLD_PATH_QUEUE, policy);
+
+      // Turn jobs: a timer may be retried (a stale or duplicate one is a no-op thanks to the version check);
+      // a backchannel never is (a late "huh" is worse than none). Design §5.2, §5.5.
+      const turn = { retryLimit: 2, retryDelay: 1, expireInSeconds: this.opts.turnExpireSeconds };
+      await this.boss.createQueue(TURN_TIMER_QUEUE, turn);
+      await this.boss.updateQueue(TURN_TIMER_QUEUE, turn);
+      const bc = { retryLimit: 0, expireInSeconds: this.opts.turnExpireSeconds };
+      await this.boss.createQueue(TURN_BACKCHANNEL_QUEUE, bc);
+      await this.boss.updateQueue(TURN_BACKCHANNEL_QUEUE, bc);
     })().catch((e) => {
       this.ready = null; // allow a later retry
       throw e;
@@ -27,9 +48,9 @@ export class PgBossQueue implements JobQueue {
     return this.ready;
   }
 
-  async enqueue(name: typeof COLD_PATH_QUEUE, data: ColdPathJob): Promise<void> {
+  async enqueue<N extends JobName>(name: N, data: JobMap[N], opts: EnqueueOptions = {}): Promise<void> {
     await this.start();
-    await this.boss.send(name, data);
+    await this.boss.send(name, data, opts.startAfter ? { startAfter: opts.startAfter } : {});
   }
 
   async stop(): Promise<void> {

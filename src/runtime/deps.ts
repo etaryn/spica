@@ -28,7 +28,11 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     clock: systemClock,
     llm: new AnthropicProvider(new Anthropic(), config.models),
     embedder,
-    queue: new PgBossQueue(boss, { retryLimit: config.cold_path.retry_limit, retryDelaySeconds: config.cold_path.retry_delay_seconds }),
+    queue: new PgBossQueue(boss, {
+      retryLimit: config.cold_path.retry_limit,
+      retryDelaySeconds: config.cold_path.retry_delay_seconds,
+      turnExpireSeconds: config.turn.job_expire_seconds,
+    }),
     config,
     log: consoleLogger,
   };

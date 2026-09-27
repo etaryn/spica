@@ -4,6 +4,7 @@ import { handleUserMessage } from "@/core/chat/handle-user-message";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
 import { fallbackLine } from "@/core/guard/fallback";
 import { messageToCheck } from "@/core/guard/guard";
+import { COLD_PATH_QUEUE } from "@/core/queue";
 import { insertFact } from "@/db/repos/facts";
 import { listJudgeLogs } from "@/db/repos/judge-log";
 import { listTurns } from "@/db/repos/session-log";
@@ -198,8 +199,9 @@ describe("handleUserMessage", () => {
     const system = deps.llm.calls.at(-1)!.system;
     expect(system).toContain("The user's dog is called Biscuit.");
     expect(system).toContain("You last talked 8 days ago.");
-    const job = deps.queue.jobs.at(-1)!.data;
-    expect(job.recalled!.length).toBeGreaterThan(0);
+    const last = deps.queue.jobs.at(-1)!;
+    if (last.name !== COLD_PATH_QUEUE) throw new Error("expected a cold_path job");
+    expect(last.data.recalled!.length).toBeGreaterThan(0);
   });
 
   test("user B's prompts never contain user A's facts", async () => {

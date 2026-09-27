@@ -53,6 +53,37 @@ export const ConfigSchema = z.object({
     log_timeout_ms: z.number().int().positive(),
     fallback_keywords: z.array(z.string().min(1)).min(1),
   }),
+  hot_path: z.object({ db_timeout_ms: z.number().int().positive() }),
+  events: z.object({ channel: z.string().regex(/^[a-z_][a-z0-9_]*$/), heartbeat_ms: z.number().int().positive() }),
+  turn: z.object({
+    settle_ms: z.number().int().min(0),
+    wait_ms: z.number().int().min(0),
+    short_message_chars: z.number().int().min(0),
+    short_wait_bonus_ms: z.number().int().min(0),
+    max_wait_ms: z.number().int().positive(),
+    read_delay_min_ms: z.number().int().min(0),
+    read_delay_max_ms: z.number().int().min(0),
+    read_delay_chars_for_max: z.number().int().positive(),
+    typing_ms_per_char: z.number().min(0),
+    typing_max_ms: z.number().int().min(0),
+    part_gap_ms: z.number().int().min(0),
+    backchannel_style: z.enum(["judge", "signals", "silent"]),
+    backchannel_min_interval_ms: z.number().int().min(0),
+    backchannel_max_words: z.number().int().positive(),
+    backchannel_read_delay_ms: z.number().int().min(0),
+    signals_probability: unit,
+    max_open_questions: z.number().int().min(0),
+    incomplete_cues: z.array(z.string().min(1)),
+    judge_timeout_ms: z.number().int().positive(),
+    judge_context_turns: z.number().int().min(0),
+    retry_limit: z.number().int().min(0),
+    retry_delay_ms: z.number().int().min(0),
+    inflight_recheck_ms: z.number().int().positive(),
+    worker_concurrency: z.number().int().positive(),
+    job_expire_seconds: z.number().int().positive(),
+    sweep_cron: z.string().min(1),
+    sweep_grace_ms: z.number().int().min(0),
+  }).refine((t) => t.read_delay_min_ms <= t.read_delay_max_ms, "turn.read_delay_min_ms must be <= read_delay_max_ms"),
   retrieval: z.object({
     candidate_pool: z.number().int().positive(),
     top_n: z.number().int().positive(),
@@ -110,6 +141,7 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type CrisisCard = z.infer<typeof CrisisCardSchema>;
+export type TurnConfig = Config["turn"];
 
 /** The dimension baked into the `fact.embedding` column. Changing it needs a migration + re-embed. */
 export const EMBEDDING_DIMENSIONS: number = defaults.embedding.dimensions;

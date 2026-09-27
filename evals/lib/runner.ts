@@ -11,7 +11,7 @@ import type { Embedder } from "@/core/embed/types";
 import type { LLMProvider } from "@/core/llm/types";
 import { silentLogger } from "@/core/log";
 import { decayPass } from "@/core/memory/decay";
-import { RecordingQueue } from "@/core/queue";
+import { COLD_PATH_QUEUE, RecordingQueue } from "@/core/queue";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
 import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
@@ -179,7 +179,9 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         (prompts[s.user] ??= []).push(...llm.prompts.slice(before));
         (results[s.user] ??= []).push({ session: i + 1, text, reply: r.text, crisisCard: r.crisisCard });
         // pg-boss retries a failed cold_path job up to cold_path.retry_limit times; do the same here.
-        for (const job of queue.drain()) await retrying(config.cold_path.retry_limit, () => handleColdPath(deps, job.data));
+        for (const job of queue.drain((j) => j.name === COLD_PATH_QUEUE)) {
+          if (job.name === COLD_PATH_QUEUE) await retrying(config.cold_path.retry_limit, () => handleColdPath(deps, job.data));
+        }
         clock.advance(script.turn_gap_seconds * 1000);
       }
     }

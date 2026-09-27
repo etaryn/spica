@@ -280,6 +280,15 @@ test("judged entries are annotations: never in assertions, run only with annotat
   expect(on.annotations[0]).toMatchObject({ type: "no_false_recall", verdict: "no" });
 });
 
+test("repeat_previous_id re-posts the same message: one user turn, one judge call", async () => {
+  const script = ScriptSchema.parse({
+    name: "retry", profile: "none",
+    sessions: [{ at: "day 0 09:00", turns: ["hello there friend", { text: "hello there friend", after_s: 1, repeat_previous_id: true }] }],
+    assertions: [{ type: "turn", session: 1, replies: 1, reply_covers: [[1]] }, { type: "state", check: "turn_count", params: { role: "user" }, expect: 1 }],
+  });
+  expect((await runScript(script, opts())).status).toBe("pass");
+});
+
 test("known_failure applies to the right assertion when annotations sit between assertions", async () => {
   const script = ScriptSchema.parse({ name: "kf2", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [

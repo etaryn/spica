@@ -4,8 +4,12 @@ import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import { guardOutcome } from "@/db/schema";
 
-/** A turn sent `after_s` seconds after the previous one (a plain string waits `turn_gap_seconds`). */
-const TimedTurn = z.object({ text: z.string().min(1), after_s: z.number().min(0) });
+/**
+ * A turn sent `after_s` seconds after the previous one (a plain string waits `turn_gap_seconds`).
+ * `repeat_previous_id` re-POSTs the previous turn's `clientMessageId` with the same text (a client retry):
+ * one user turn, one judge decision.
+ */
+const TimedTurn = z.object({ text: z.string().min(1), after_s: z.number().min(0), repeat_previous_id: z.boolean().default(false) });
 const Session = z.object({
   at: z.string(),
   user: z.string().regex(/^[a-z0-9_-]+$/).default("main"),

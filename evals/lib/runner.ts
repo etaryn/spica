@@ -216,6 +216,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       for (const id of Object.values(userIds)) await seedProfile(deps, id, profile, first);
     }
     let prevStart: Date | null = null;
+    let lastId = "";
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
@@ -244,8 +245,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         if (k > 0) at += (typeof raw === "string" ? script.turn_gap_seconds : raw.after_s) * 1000;
         await recording(s.user, () => runDueJobs(deps, queue, clock, new Date(at)));
         if (clock.now().getTime() < at) clock.set(new Date(at));
+        // A client retry (design: repeat_previous_id) re-POSTs the previous turn's id with the same text.
+        const id = typeof raw !== "string" && raw.repeat_previous_id ? lastId : randomUUID();
+        lastId = id;
         // Replies are read back from session_log after the session.
-        await recording(s.user, () => receiveMessage(deps, userId, { clientMessageId: randomUUID(), text }));
+        await recording(s.user, () => receiveMessage(deps, userId, { clientMessageId: id, text }));
       }
       // End of session: every pending reply lands (design §9.2).
       await recording(s.user, () => runAllJobs(deps, queue, clock));

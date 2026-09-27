@@ -1,0 +1,11 @@
+name: retry-idempotent
+description: A client retry of the same message (same clientMessageId) is one user turn, one judge decision, one reply.
+profile: none
+sessions:
+  - at: "day 0 10:00"
+    turns:
+      - "morning! slept terribly"
+      - { text: "morning! slept terribly", after_s: 1, repeat_previous_id: true }
+assertions:
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1]] }
+  - { type: state, check: turn_count, params: { role: user }, expect: 1 }

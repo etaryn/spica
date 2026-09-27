@@ -103,7 +103,7 @@ describe("fixture files", () => {
   test("parse, have unique names, and cover rules 1, 4, 6, 8, honesty and crisis", () => {
     expect(new Set(cases.map((x) => x.name)).size).toBe(cases.length);
     expect(files.map((f) => f.file).sort()).toEqual(
-      ["crisis", "honesty", "rule1-threats", "rule4-absence", "rule6-contempt", "rule8-manipulation"]);
+      ["backchannel", "crisis", "honesty", "rule1-threats", "rule4-absence", "rule6-contempt", "rule8-manipulation"]);
     expect(cases.length).toBeGreaterThanOrEqual(40);
     for (const f of files) expect(f.gate).toBe(f.file === "honesty" ? "majority" : "every");
   });

@@ -1,0 +1,13 @@
+name: open-question-carried
+description: >
+  An unanswered question survives a topic change inside the grouping window: her one reply still addresses it
+  (open questions reach the prompt, v2 §6.2 slot 7).
+profile: none
+sessions:
+  - at: "day 0 17:00"
+    turns:
+      - "do you think I should take the job in Leeds?"
+      - { text: "anyway my sister's visiting this weekend", after_s: 3 }
+assertions:
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2]], gate: majority }
+  - { type: reply_about, session: 1, reply: 1, about: "whether the user should take the job in Leeds" }

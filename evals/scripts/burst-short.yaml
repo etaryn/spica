@@ -1,0 +1,14 @@
+name: burst-short
+description: The Phase 3 exit-test burst (v2 §15) - five short messages a second or two apart get one reply after the pause.
+profile: none
+sessions:
+  - at: "day 0 12:00"
+    turns:
+      - "omg"
+      - { text: "guess what", after_s: 1 }
+      - { text: "I passed", after_s: 2 }
+      - { text: "my driving test", after_s: 1 }
+      - { text: "first try!!", after_s: 2 }
+assertions:
+  - { type: turn, session: 1, replies: 1, reply_covers: [[1, 2, 3, 4, 5]], max_reply_delay_s: 30, gate: majority }
+  - { type: reply_about, session: 1, reply: 1, about: "the user passing their driving test" }

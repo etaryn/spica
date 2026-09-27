@@ -87,5 +87,5 @@ test("turns may be timed objects; scripts may override config; turn and reply_ab
       { type: "reply_about", session: 1, reply: 1, about: "pizza", not_about: "recipes" },
     ],
   });
-  expect(s.sessions[0]!.turns[1]).toEqual({ text: "and then", after_s: 2 });
+  expect(s.sessions[0]!.turns[1]).toEqual({ text: "and then", after_s: 2, repeat_previous_id: false });
 });

@@ -1,0 +1,16 @@
+name: max-wait-cap
+description: A user who keeps trailing off still gets a reply once turn.max_wait_ms (40 s) runs out, not never.
+profile: none
+sessions:
+  - at: "day 0 20:00"
+    turns:
+      - "so I was thinking and"
+      - { text: "the thing with my flatmate and", after_s: 10 }
+      - { text: "the bins and", after_s: 10 }
+      - { text: "the dishes and", after_s: 10 }
+      - { text: "honestly the whole kitchen and", after_s: 10 }
+      - { text: "I don't know where to start and", after_s: 10 }
+      - { text: "yeah", after_s: 10 }
+assertions:
+  - { type: turn, session: 1, max_reply_delay_s: 60 }
+  - { type: state, check: companion_replies_nonempty, expect: true }

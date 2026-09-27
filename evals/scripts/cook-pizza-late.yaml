@@ -1,0 +1,14 @@
+name: cook-pizza-late
+description: >
+  Directive trace 2, revised (design §2): with a real gap she answers the cooking question first, then reacts to
+  the pizza (append-and-follow-up).
+profile: none
+sessions:
+  - at: "day 0 18:30"
+    turns:
+      - "what should I cook tonight?"
+      - { text: "nvm I'll just order pizza", after_s: 90 }
+assertions:
+  - { type: turn, session: 1, replies: 2, reply_covers: [[1], [2]], gate: majority }
+  - { type: reply_about, session: 1, reply: 1, about: "what the user could cook tonight" }
+  - { type: reply_about, session: 1, reply: 2, about: "the user ordering pizza instead" }

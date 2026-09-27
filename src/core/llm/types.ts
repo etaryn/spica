@@ -9,7 +9,7 @@ export interface ReplyRequest {
 }
 
 /** Which configured model a structured call uses (config `models.<role>`). */
-export type StructuredModel = "cheap" | "extract" | "judge" | "guard";
+export type StructuredModel = "cheap" | "extract" | "judge" | "guard" | "turn_judge";
 
 export interface ClassifyRequest<T> {
   /** What the call is for ("crisis", "extract", "reconcile", "judge_recall", …); fakes route on it. */

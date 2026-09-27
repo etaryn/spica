@@ -1,3 +1,5 @@
+import defaults from "../../../config/default.json";
+import { fakeTurnJudge } from "../turn/judge";
 import type { ClassifyRequest, LLMProvider, ReplyRequest } from "./types";
 
 export { keywordClassifier } from "../safety/keywords";
@@ -19,6 +21,8 @@ export class FakeLLMProvider implements LLMProvider {
     // The guard passes everything by default so fake-mode scripts exercise the mechanics, not the rubric.
     guard: () => ({ reasoning: "ok", violations: [] }),
     guard_crisis: () => ({ reasoning: "ok", violations: [] }),
+    // The deterministic cue check stands in for the turn judge in tests and --llm=fake evals (design §4.2).
+    turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
   };
 
   constructor(opts: { classify?: Handler } = {}) {

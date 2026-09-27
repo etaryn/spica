@@ -10,6 +10,8 @@
     "judge_thinking": "disabled",
     "guard": "claude-haiku-4-5",
     "guard_max_tokens": 1024,
+    "turn_judge": "claude-haiku-4-5",
+    "turn_judge_max_tokens": 512,
     "structured_timeout_ms": 30000,
     "reply_max_tokens": 4096,
     "reply_effort": "low",
@@ -154,7 +156,8 @@
     "guard": "v1",
     "guard_crisis": "v1",
     "guard_corrective": "v1",
-    "guard_fallback": "v1"
+    "guard_fallback": "v1",
+    "turn_judge": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000

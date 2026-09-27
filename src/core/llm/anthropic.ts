@@ -33,6 +33,7 @@ export class AnthropicProvider implements LLMProvider {
   async classifyJson<T>({ purpose, system, input, schema, timeoutMs, maxTokens, model = "cheap" }: ClassifyRequest<T>): Promise<T> {
     const ids: Record<StructuredModel, string> = {
       cheap: this.models.cheap, extract: this.models.extract, judge: this.models.judge, guard: this.models.guard,
+      turn_judge: this.models.turn_judge,
     };
     const modelId = ids[model];
     // Only the judge takes effort/thinking settings; a null effort sends none (Haiku rejects it).

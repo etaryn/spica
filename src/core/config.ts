@@ -11,10 +11,12 @@ export const ConfigSchema = z.object({
     extract: z.string().min(1),
     judge: z.string().min(1),
     guard: z.string().min(1),
+    turn_judge: z.string().min(1),
     reply_max_tokens: z.number().int().positive(),
     extract_max_tokens: z.number().int().positive(),
     judge_max_tokens: z.number().int().positive(),
     guard_max_tokens: z.number().int().positive(),
+    turn_judge_max_tokens: z.number().int().positive(),
     structured_timeout_ms: z.number().int().positive(),
     // null: send no `effort` (Haiku 4.5 rejects it).
     reply_effort: z.enum(["low", "medium", "high"]).nullable(),
@@ -137,6 +139,7 @@ export const ConfigSchema = z.object({
     guard_crisis: z.string().regex(/^v\d+$/),
     guard_corrective: z.string().regex(/^v\d+$/),
     guard_fallback: z.string().regex(/^v\d+$/),
+    turn_judge: z.string().regex(/^v\d+$/),
   }),
 });
 

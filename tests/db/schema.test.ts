@@ -43,11 +43,12 @@ async function seedEverything(userId: string) {
     user_id: userId, kind: "guard", turn_id: turnId, attempt: 1, input: {}, output: {}, outcome: "passed",
     source: "model", latency_ms: 1, model: "m", prompt_version: "guard@v1", created_at: T,
   });
+  await db.insert(s.conversation_state).values({ user_id: userId, updated_at: T });
 }
 
 const domainTables = [
   s.fact, s.entity, s.thread, s.identity, s.relationship, s.session_log, s.retrieval_trace, s.ego_tick, s.reach_out_log,
-  s.judge_log,
+  s.judge_log, s.conversation_state,
 ] as const;
 
 describe("schema", () => {

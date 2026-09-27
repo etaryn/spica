@@ -71,7 +71,7 @@ export const threadStatus = pgEnum("thread_status", ["open", "resolved", "dorman
 export const threadStakes = pgEnum("thread_stakes", ["low", "med", "high"]);
 // Declaration order matters: `user` sorts before `companion` (transcript tie-break).
 export const sessionRole = pgEnum("session_role", ["user", "companion"]);
-export const sessionTrigger = pgEnum("session_trigger", ["reach_out"]);
+export const sessionTrigger = pgEnum("session_trigger", ["reach_out", "backchannel", "availability"]);
 export const judgeKind = pgEnum("judge_kind", ["guard", "turn"]);
 export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable"]);
 
@@ -204,6 +204,25 @@ export const session_log = pgTable("session_log", {
   index("session_log_unextracted_idx").on(t.user_id).where(sql`${t.extracted} = false`),
   uniqueIndex("session_log_reply_to_uq").on(t.reply_to),
 ]);
+
+export type OpenQuestion = { turn_id: string; text: string };
+
+// ---------- Turn-taking (v2 §5.7; design §3.1) ----------
+
+export const conversation_state = pgTable("conversation_state", {
+  user_id: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  buffer_turn_ids: uuid("buffer_turn_ids").array().notNull().default(emptyUuidArray),
+  open_questions: jsonb("open_questions").$type<OpenQuestion[]>().notNull().default(sql`'[]'::jsonb`),
+  wait_until: ts("wait_until"),
+  last_backchannel_at: ts("last_backchannel_at"),
+  buffer_version: integer("buffer_version").notNull().default(0),
+  buffer_started_at: ts("buffer_started_at"),
+  backchannel_sent: boolean("backchannel_sent").notNull().default(false),
+  inflight_turn_ids: uuid("inflight_turn_ids").array().notNull().default(emptyUuidArray),
+  inflight_since: ts("inflight_since"),
+  reply_epoch: integer("reply_epoch").notNull().default(0),
+  updated_at: ts("updated_at").notNull(),
+}, (t) => [index("conversation_state_wait_idx").on(t.wait_until)]);
 
 // ---------- Inspector trace tables (design §4.3.2) — diagnostic only, never read by the chat loop ----------
 

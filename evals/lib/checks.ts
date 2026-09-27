@@ -3,9 +3,13 @@ import type { Db } from "@/db/client";
 import { listTurns } from "@/db/repos/session-log";
 import { entity, fact, thread } from "@/db/schema";
 import type { CrisisCard } from "@/core/config";
-import type { Script } from "./script";
+import { turnText, type Script } from "./script";
 
-export type TurnResult = { session: number; text: string; reply: string; crisisCard: CrisisCard | null };
+/**
+ * One user turn: `reply` is the reply whose `reply_to` is this turn (null when a later reply covers it), and
+ * `crisisCard` / `coveredBy` come from the reply that covers it (the first reply at or after it, v2 §5.6).
+ */
+export type TurnResult = { session: number; text: string; reply: string | null; crisisCard: CrisisCard | null; coveredBy: string | null };
 
 export interface CheckContext {
   db: Db;
@@ -18,21 +22,26 @@ export interface CheckContext {
 
 export type StateCheck = (ctx: CheckContext, params: Record<string, unknown>) => Promise<unknown>;
 
-const scriptedTurns = (script: Script, key: string) => script.sessions.filter((s) => s.user === key).flatMap((s) => s.turns);
+const scriptedTurns = (script: Script, key: string) => script.sessions.filter((s) => s.user === key).flatMap((s) => s.turns.map(turnText));
 
 export const stateChecks: Record<string, StateCheck> = {
+  /** Backchannels are left out unless `include_backchannels` is true. */
   turn_count: async (ctx, p) =>
-    (await listTurns(ctx.db, ctx.userId)).filter((t) => !p.role || t.role === p.role).length,
+    (await listTurns(ctx.db, ctx.userId))
+      .filter((t) => (!p.role || t.role === p.role) && (p.include_backchannels === true || t.trigger !== "backchannel")).length,
 
   session_count: async (ctx) => new Set((await listTurns(ctx.db, ctx.userId)).map((t) => t.session_id)).size,
 
   all_unextracted: async (ctx) => (await listTurns(ctx.db, ctx.userId)).every((t) => !t.extracted),
 
+  /** Every user turn is covered by a full reply (`isAnswered` semantics), and every full reply is non-empty. */
   companion_replies_nonempty: async (ctx) => {
     const turns = await listTurns(ctx.db, ctx.userId);
-    const users = turns.filter((t) => t.role === "user");
-    const replies = turns.filter((t) => t.role === "companion");
-    return replies.length === users.length && replies.every((t) => t.text.trim().length > 0);
+    const replies = turns.filter((t) => t.role === "companion" && t.trigger === null);
+    const answered = new Set(replies.flatMap((r) => (r.reply_to ? [r.reply_to] : [])));
+    const anchors = turns.filter((t) => answered.has(t.id));
+    const covered = turns.filter((t) => t.role === "user").every((u) => anchors.some((a) => a.created_at >= u.created_at));
+    return covered && replies.every((t) => t.text.trim().length > 0);
   },
 
   user_turns_match_script: async (ctx) => {
@@ -44,7 +53,8 @@ export const stateChecks: Record<string, StateCheck> = {
   safety_flagged_count: async (ctx) =>
     (await listTurns(ctx.db, ctx.userId)).filter((t) => t.safety_flag?.flagged).length,
 
-  crisis_card_count: async (ctx) => ctx.results.filter((r) => r.crisisCard !== null).length,
+  /** Distinct replies that carried the card (a reply covering several turns counts once). */
+  crisis_card_count: async (ctx) => new Set(ctx.results.filter((r) => r.crisisCard !== null).map((r) => r.coveredBy)).size,
 
   /** Was the reply to this specific user turn flagged? Extra cautious flags elsewhere don't matter. */
   turn_flagged: async (ctx, p) => {

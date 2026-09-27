@@ -54,6 +54,17 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
   };
 }
 
+/** `reply_about` annotation (design §9.3): does the reply respond to `about`, and not do `not_about`? */
+export async function judgeReplyAbout(llm: LLMProvider, config: Config, a: { transcript: Line[]; reply: string; about: string; not_about?: string }) {
+  const v = await llm.classifyJson({
+    ...opts(config), purpose: "judge_turn", system: loadPrompt("judge/turn", config.prompts.judge_turn),
+    input: `TRANSCRIPT:\n${render(a.transcript)}\n\nREPLY:\n${a.reply}\n\nABOUT: ${a.about}${a.not_about ? `\nNOT_ABOUT: ${a.not_about}` : ""}`,
+    schema: z.object({ reasoning: z.string(), about: z.boolean(), not_about: z.boolean() }),
+  });
+  const pass = v.about && !(a.not_about && v.not_about);
+  return { pass, detail: pass ? "" : `${!v.about ? `doesn't address "${a.about}"` : `does "${a.not_about}"`}: ${v.reasoning}` };
+}
+
 export async function judgeConsistency(llm: LLMProvider, config: Config, selfFacts: string[]) {
   if (selfFacts.length < 2) return { pass: true, detail: "fewer than 2 self facts" };
   const v = await llm.classifyJson({

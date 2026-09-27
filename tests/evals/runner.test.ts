@@ -2,19 +2,17 @@ import { afterAll, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { FakeLLMProvider, keywordClassifier } from "@/core/llm/fake";
 import { messageToJudge } from "@/core/safety/crisis";
-import { runScript } from "../../evals/lib/runner";
+import { runScript, type RunOptions } from "../../evals/lib/runner";
 import { ScriptSchema } from "../../evals/lib/script";
 import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";
 
 afterAll(closeTestDb);
 const config = loadConfig();
 const makeLlm = () => new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
+/** Fake-mode run options: no real calls, no annotations. */
+const opts = (): RunOptions => ({ db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
 
-// Phase 3 Task 7: runScript() now calls receiveMessage, which only buffers and never replies synchronously
-// (v2 §6.1). Tests below that depend on a companion reply landing in the same turn are skipped until Task 8
-// (the turn_timer job that actually generates the reply) and Task 11 (which rewrites this loop to drain it).
-// Task 11: needs async reply drain
-test.skip("runs a two-session script and evaluates state assertions", async () => {
+test("runs a two-session script and evaluates state assertions", async () => {
   const script = ScriptSchema.parse({
     name: "t",
     sessions: [{ at: "day 0 09:00", turns: ["a", "b"] }, { at: "+7d", turns: ["c"] }],
@@ -25,19 +23,20 @@ test.skip("runs a two-session script and evaluates state assertions", async () =
       { type: "recall", session: 2, fact: "x" },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("pass");
-  expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass", "skipped"]);
+  // The judged recall entry is an annotation now (v2 §15): not in assertions, and not run without annotate.
+  expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
+  expect(r.annotations).toEqual([]);
 });
 
-// Task 11: needs async reply drain
-test.skip("a wrong expectation fails with a readable detail", async () => {
+test("a wrong expectation fails with a readable detail", async () => {
   const script = ScriptSchema.parse({
     name: "t2",
     sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [{ type: "state", check: "turn_count", expect: 99 }],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("fail");
   expect(r.assertions[0]!.detail).toMatch(/expected 99, got 2/);
 });
@@ -53,7 +52,7 @@ test("turn_flagged / crisis_card_shown check one specific turn, tolerating extra
       { type: "state", check: "turn_flagged", params: { turn: "not in the script" }, expect: true },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: cautious, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: cautious, real: false, annotate: false });
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "error"]);
   expect(r.assertions[2]!.detail).toMatch(/not in the script/);
 });
@@ -64,22 +63,21 @@ test("unknown check is an error, not a pass", async () => {
     sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [{ type: "state", check: "nope", expect: 1 }],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("fail");
   expect(r.assertions[0]!.status).toBe("error");
 });
 
-// Task 11: needs async reply drain
-test.skip("real-mode scripts are skipped without --llm=real; judged assertions skipped without judge", async () => {
+test("real-mode scripts are skipped without real calls; judged entries are not run without annotate", async () => {
   const realOnly = ScriptSchema.parse({ name: "r", mode: "real", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] });
-  expect((await runScript(realOnly, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false })).status).toBe("skipped");
+  expect((await runScript(realOnly, opts())).status).toBe("skipped");
   const judged = ScriptSchema.parse({ name: "j", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }, { type: "state", check: "turn_count", expect: 2 }] });
-  const r = await runScript(judged, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
-  expect(r.assertions.map((a) => a.status)).toEqual(["skipped", "pass"]);
+  const r = await runScript(judged, opts());
+  expect(r.assertions.map((a) => [a.type, a.status])).toEqual([["state", "pass"]]);
+  expect(r.annotations).toEqual([]);
 });
 
-// Task 11: needs async reply drain
-test.skip("advancing the clock by N days runs N decay passes; prompt_mentions sees only this user's prompts", async () => {
+test("advancing the clock by N days runs N decay passes; prompt_mentions sees only this user's prompts", async () => {
   const script = ScriptSchema.parse({
     name: "d",
     sessions: [
@@ -92,25 +90,23 @@ test.skip("advancing the clock by N days runs N decay passes; prompt_mentions se
       { type: "state", user: "alice", check: "all_extracted", expect: true },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.meta.decayPasses).toBe(10);
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
 });
 
-// Task 11: needs async reply drain
-test.skip("+1d after a multi-turn session runs exactly one decay pass", async () => {
+test("+1d after a multi-turn session runs exactly one decay pass", async () => {
   const script = ScriptSchema.parse({
     name: "d1",
     sessions: [{ at: "day 0 09:00", turns: ["a", "b", "c"] }, { at: "+1d", turns: ["d"] }],
     assertions: [{ type: "state", check: "turn_count", expect: 8 }],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("pass");
   expect(r.meta.decayPasses).toBe(1);
 });
 
-// Task 11: needs async reply drain
-test.skip("judged assertions call the judge with an ordered transcript", async () => {
+test("judged annotations call the judge with an ordered transcript", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   llm.handlers.judge_recall = () => ({ explicit: true, implicit: false, unprompted: true, quote: "q" });
   llm.handlers.judge_false_recall = () => ({ violations: [] });
@@ -120,14 +116,14 @@ test.skip("judged assertions call the judge with an ordered transcript", async (
     sessions: [{ at: "day 0 09:00", turns: ["a"] }, { at: "+7d", turns: ["b"] }],
     assertions: [{ type: "recall", session: 2, fact: "x" }, { type: "no_false_recall" }, { type: "consistency" }],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
-  expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: true });
+  expect(r.assertions).toEqual([]);
+  expect(r.annotations.map((a) => [a.type, a.verdict])).toEqual([["recall", "yes"], ["no_false_recall", "yes"], ["consistency", "yes"]]);
   const judgeInput = llm.structuredCalls.find((c) => c.purpose === "judge_recall")!.input;
   expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: \[7 days later\] b\)/);
 });
 
-// Task 11: needs async reply drain
-test.skip("each script user starts with the named onboarding profile (default basic); profile none opts out", async () => {
+test("each script user starts with the named onboarding profile (default basic); profile none opts out", async () => {
   const { fact } = await import("@/db/schema");
   const { eq } = await import("drizzle-orm");
   const profiles = { basic: { confidence: 0.6, salience: 0.5, facts: [
@@ -135,7 +131,7 @@ test.skip("each script user starts with the named onboarding profile (default ba
     { kind: "preference" as const, content: "The user drinks a lot of coffee." },
   ] } };
   const base = { sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "state", check: "turn_count", expect: 2 }] };
-  const seeded = await runScript(ScriptSchema.parse({ name: "p1", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  const seeded = await runScript(ScriptSchema.parse({ name: "p1", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false, profiles });
   expect(seeded.status).toBe("pass");
   const rows = await getTestDb().select().from(fact).where(eq(fact.source, "onboarding"));
   expect(rows.map((r) => r.content).sort()).toEqual(["The user drinks a lot of coffee.", "The user's name is Sam."]);
@@ -147,10 +143,10 @@ test.skip("each script user starts with the named onboarding profile (default ba
     expect(r.salience).toBeLessThanOrEqual(0.5 + config.retrieval.recall_bump + 1e-6);
   }
 
-  await runScript(ScriptSchema.parse({ name: "p2", profile: "none", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  await runScript(ScriptSchema.parse({ name: "p2", profile: "none", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false, profiles });
   expect(await getTestDb().select().from(fact).where(eq(fact.source, "onboarding"))).toEqual([]);
 
-  const missing = await runScript(ScriptSchema.parse({ name: "p3", profile: "nope", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false, profiles });
+  const missing = await runScript(ScriptSchema.parse({ name: "p3", profile: "nope", ...base }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false, profiles });
   expect(missing.status).toBe("error");
   expect(missing.error).toMatch(/profile "nope"/);
 });
@@ -164,14 +160,13 @@ test("the false-recall judge sees session timing and the onboarding profile as k
     sessions: [{ at: "day 0 09:00", turns: ["a"] }, { at: "+10d", turns: ["b"] }],
     assertions: [{ type: "no_false_recall" }],
   });
-  await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true, profiles });
+  await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: true, profiles });
   const input = llm.structuredCalls.find((c) => c.purpose === "judge_false_recall")!.input;
   expect(input).toMatch(/KNOWN FROM ONBOARDING:\n- The user's name is Sam\./);
   expect(input).toMatch(/\[Session 1\]\nUser: a\nSpica: [^\n]*\n\n\[Session 2, 10 days later\]\nUser: b/);
 });
 
-// Task 11: needs async reply drain
-test.skip("a transient cold-path failure is retried like pg-boss would (up to cold_path.retry_limit)", async () => {
+test("a transient cold-path failure is retried like pg-boss would (up to cold_path.retry_limit)", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   let calls = 0;
   llm.handlers.extract = () => {
@@ -183,7 +178,7 @@ test.skip("a transient cold-path failure is retried like pg-boss would (up to co
     name: "retry", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [{ type: "state", check: "all_extracted", expect: true }],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: false });
   expect(r.status).toBe("pass");
   expect(calls).toBe(2);
 });
@@ -198,15 +193,15 @@ test("false-recall v7: implied familiarity, invented detail and onboarding-as-ch
     ],
   });
   const script = ScriptSchema.parse({ name: "jd", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
-  expect(r.assertions[0]).toMatchObject({
-    status: "fail",
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: true });
+  expect(r.annotations[0]).toMatchObject({
+    verdict: "no",
     detail: "implied_familiarity: what's the role again, remind me | invented_detail: was it the sloper? | onboarding_as_chat: we talked about coffee last time",
   });
 
   llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "invented a brother", category: "misremembering" }] });
-  const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true });
-  expect(r2.assertions[0]).toMatchObject({ status: "fail", detail: "misremembering: invented a brother" });
+  const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: true });
+  expect(r2.annotations[0]).toMatchObject({ verdict: "no", detail: "misremembering: invented a brother" });
 });
 
 test("recall passes on an explicit mention; silent use is a known failure (reported, not failing); a miss fails", async () => {
@@ -214,20 +209,19 @@ test("recall passes on an explicit mention; silent use is a known failure (repor
   const script = ScriptSchema.parse({ name: "rc", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "recall", session: 1, fact: "x" }] });
   const run = async (verdict: object, name: string) => {
     llm.handlers.judge_recall = () => verdict;
-    return (await runScript({ ...script, name }, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, judge: true })).assertions[0];
+    return (await runScript({ ...script, name }, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: () => llm, real: false, annotate: true })).annotations[0];
   };
   expect(await run({ explicit: true, implicit: false, unprompted: true, quote: "since you're veggie" }, "rc1"))
-    .toMatchObject({ status: "pass", detail: "since you're veggie" });
+    .toMatchObject({ verdict: "yes", detail: "since you're veggie" });
   expect(await run({ explicit: false, implicit: true, unprompted: true, quote: "vegetarian crowd or mixed?" }, "rc2"))
-    .toMatchObject({ status: "pass", detail: "known failure (recall style, tuned in a later phase): implicit use only: vegetarian crowd or mixed?" });
+    .toMatchObject({ verdict: "yes", detail: "known failure (recall style, tuned in a later phase): implicit use only: vegetarian crowd or mixed?" });
   expect(await run({ explicit: true, implicit: false, unprompted: false, quote: "q" }, "rc3"))
-    .toMatchObject({ status: "fail", detail: "mentioned only after the user did" });
+    .toMatchObject({ verdict: "no", detail: "mentioned only after the user did" });
   expect(await run({ explicit: false, implicit: false, unprompted: false, quote: null }, "rc4"))
-    .toMatchObject({ status: "fail", detail: "not mentioned" });
+    .toMatchObject({ verdict: "no", detail: "not mentioned" });
 });
 
-// Task 11: needs async reply drain
-test.skip("guard assertion reads judge_log outcomes", async () => {
+test("guard assertion reads judge_log outcomes", async () => {
   const script = ScriptSchema.parse({
     name: "tg",
     sessions: [{ at: "day 0 09:00", turns: ["a", "b"] }],
@@ -236,7 +230,7 @@ test.skip("guard assertion reads judge_log outcomes", async () => {
       { type: "guard", max: { passed: 1 } },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "fail"]);
   expect(r.assertions[1]!.detail).toMatch(/"passed":2/);
 
@@ -245,12 +239,11 @@ test.skip("guard assertion reads judge_log outcomes", async () => {
     llm.handlers.guard = () => ({ reasoning: "x", violations: [{ category: "threat", claim: "x" }] });
     return llm;
   };
-  const r2 = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: alwaysThreat, judge: false });
+  const r2 = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: alwaysThreat, real: false, annotate: false });
   expect(r2.assertions[0]!.status).toBe("fail");
 });
 
-// Task 11: needs async reply drain
-test.skip("an assertion marked known_failure is reported, not failed, when it fails", async () => {
+test("an assertion marked known_failure is reported, not failed, when it fails", async () => {
   const script = ScriptSchema.parse({
     name: "kf", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [
@@ -258,8 +251,42 @@ test.skip("an assertion marked known_failure is reported, not failed, when it fa
       { type: "state", check: "turn_count", expect: 2, known_failure: "unused" },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("pass");
   expect(r.assertions[0]).toMatchObject({ status: "pass", detail: "known failure (recall style tuned in a later phase): expected 99, got 2" });
   expect(r.assertions[1]).toMatchObject({ status: "pass" });
+});
+
+test("a burst gets one reply after the pause; spaced messages each get their own (fake mode)", async () => {
+  const script = ScriptSchema.parse({
+    name: "burst", profile: "none",
+    sessions: [{ at: "day 0 09:00", turns: ["ok so", { text: "today was insane", after_s: 1 }, { text: "my boss called me in", after_s: 2 }, { text: "turns out it was a promotion lol", after_s: 2 }, { text: "anyway how are you doing today", after_s: 120 }] }],
+    assertions: [{ type: "turn", session: 1, replies: 2, reply_covers: [[1, 2, 3, 4], [5]] }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("pass");
+});
+
+test("judged entries are annotations: never in assertions, run only with annotate", async () => {
+  const script = ScriptSchema.parse({ name: "j", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
+    assertions: [{ type: "no_false_recall" }, { type: "state", check: "turn_count", params: { role: "user" }, expect: 1 }] });
+  const off = await runScript(script, opts());
+  expect(off.assertions.map((a) => a.type)).toEqual(["state"]);
+  expect(off.annotations).toEqual([]);
+  const llm = new FakeLLMProvider();
+  llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "c", category: "invented_detail" }] });
+  const on = await runScript(script, { ...opts(), makeLlm: () => llm, annotate: true });
+  expect(on.status).toBe("pass"); // a "no" annotation never fails the script
+  expect(on.annotations[0]).toMatchObject({ type: "no_false_recall", verdict: "no" });
+});
+
+test("known_failure applies to the right assertion when annotations sit between assertions", async () => {
+  const script = ScriptSchema.parse({ name: "kf2", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
+    assertions: [
+      { type: "no_false_recall" },
+      { type: "state", check: "turn_count", expect: 99, known_failure: "deferred" },
+    ] });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("pass");
+  expect(r.assertions[0]).toMatchObject({ status: "pass", detail: "known failure (deferred): expected 99, got 2" });
 });

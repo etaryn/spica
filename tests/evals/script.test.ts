@@ -77,3 +77,15 @@ test("every eval script parses; Phase 2 scripts carry a guard assertion", () => 
     expect(s!.assertions.some((a) => a.type === "guard"), n).toBe(true);
   }
 });
+
+test("turns may be timed objects; scripts may override config; turn and reply_about entries parse", () => {
+  const s = ScriptSchema.parse({
+    name: "x", config: { turn: { backchannel_style: "silent" } },
+    sessions: [{ at: "day 0 09:00", turns: ["hi", { text: "and then", after_s: 2 }] }],
+    assertions: [
+      { type: "turn", session: 1, replies: 1, reply_covers: [[1, 2]] },
+      { type: "reply_about", session: 1, reply: 1, about: "pizza", not_about: "recipes" },
+    ],
+  });
+  expect(s.sessions[0]!.turns[1]).toEqual({ text: "and then", after_s: 2 });
+});

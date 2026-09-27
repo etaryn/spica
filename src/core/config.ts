@@ -136,6 +136,7 @@ export const ConfigSchema = z.object({
     judge_recall: z.string().regex(/^v\d+$/),
     judge_false_recall: z.string().regex(/^v\d+$/),
     judge_consistency: z.string().regex(/^v\d+$/),
+    judge_turn: z.string().regex(/^v\d+$/),
     guard: z.string().regex(/^v\d+$/),
     guard_crisis: z.string().regex(/^v\d+$/),
     guard_corrective: z.string().regex(/^v\d+$/),
@@ -155,7 +156,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function deepMerge(base: unknown, over: unknown): unknown {
+/** Recursive merge of plain objects; `over` wins, arrays and scalars are replaced whole. */
+export function deepMerge(base: unknown, over: unknown): unknown {
   if (!isPlainObject(base) || !isPlainObject(over)) return over === undefined ? base : over;
   const out: Record<string, unknown> = { ...base };
   for (const [k, v] of Object.entries(over)) out[k] = deepMerge(base[k], v);

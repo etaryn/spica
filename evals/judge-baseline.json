@@ -1,0 +1,177 @@
+{
+  "consistency/pet-name-clash": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "consistency/alone-vs-friend": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "consistency/hometown-clash": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "consistency/pet-in-activity": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "consistency/used-to": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "consistency/different-days": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/inv-design-role": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/inv-6am-shift": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/inv-sloper": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/inv-ten-days": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/inv-viva": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/mis-february": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/mis-not-a-morning-person": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/mis-panic-spiral": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/mis-wrong-dog-name": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/fam-role-again": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/fam-bread-place": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/fam-job-hunting-ages": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/onb-coffee-last-time": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-role-question": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-design-role-supported": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 2
+  },
+  "false-recall/ok-generic-move-question": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-own-life": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-hedged": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-onboarding-used-plainly": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-time-supported": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "false-recall/ok-correct-recall": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/explicit-by-name": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/explicit-interview-question": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/explicit-veggie-question": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/explicit-person-by-name": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/after-user": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/implicit-veggie-dishes": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/not-mentioned": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  },
+  "recall/not-mentioned-generic-question": {
+    "status": "pass",
+    "runs": 3,
+    "passes": 3
+  }
+}

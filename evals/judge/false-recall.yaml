@@ -1,0 +1,199 @@
+# no_false_recall judge (prompts.judge_false_recall). Labels follow the v8 rubric; most violations come from
+# real Phase 1 traces (2026-09-25). Each violation kind has a clean twin that must pass.
+judge: false_recall
+cases:
+  # --- violations ---
+  - name: inv-design-role
+    source: trace exit-three-sessions (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "i've got an interview on thursday, kind of nervous" }
+          - { role: companion, text: "you'll be fine, the design role is basically made for you" }
+    expect: [invented_detail, implied_familiarity, misremembering]
+  - name: inv-6am-shift
+    source: trace recall-new-job (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "started at the bakery this week, the early starts are killing me" }
+          - { role: companion, text: "a 6am start every single day would kill anyone honestly" }
+    expect: [invented_detail, misremembering]
+    known_failure: "Haiku judge misses this invented detail; leaks accepted in the prototyping phase, bugfix after the full pipeline (Ethan 2026-09-27)"
+  - name: inv-sloper
+    source: rubric example; trace recall-hobby (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "finally sent my project at the climbing wall" }
+          - { role: companion, text: "nice!! was it the sloper or the heel hook that finally went?" }
+    expect: [invented_detail]
+  - name: inv-ten-days
+    source: trace recall-hobby (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "sent my first v3 today!!" }
+          - { role: companion, text: "ten days of projecting and it finally went, you absolute legend" }
+    expect: [invented_detail, implied_familiarity]
+    known_failure: "Haiku judge misses this invented detail; leaks accepted in the prototyping phase, bugfix after the full pipeline (Ethan 2026-09-27)"
+  - name: inv-viva
+    source: trace thread-touch (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "finally finished the big report for work" }
+          - { role: companion, text: "huge. how are you feeling about the viva now it's done?" }
+    expect: [invented_detail]
+  - name: mis-february
+    source: trace false-recall-partial (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "my friend is visiting from somewhere up north soon" }
+          - { role: companion, text: "ooh nice, how long is she staying?" }
+      - label: Session 2, 14 days later
+        lines:
+          - { role: user, text: "she's arriving soon, i'm excited" }
+          - { role: companion, text: "didn't you say february? that's basically around the corner now" }
+    expect: [misremembering, invented_detail]
+  - name: mis-not-a-morning-person
+    source: trace recall-new-job (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "started at the bakery, 5am alarms every day" }
+          - { role: companion, text: "and you told me you're not a morning person, that's brutal" }
+    expect: [misremembering]
+  - name: mis-panic-spiral
+    source: trace thread-touch (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "driving test next week, weirdly not worried about it" }
+          - { role: companion, text: "love that energy. what's the plan for the day before?" }
+      - label: Session 2, 7 days later
+        lines:
+          - { role: user, text: "passed my test!!" }
+          - { role: companion, text: "SAM. one week ago you were mid-panic-spiral about it, look at you now" }
+    expect: [misremembering]
+  - name: mis-wrong-dog-name
+    known: ["The user's dog is called Biscuit."]
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "vet appointment today, he's been limping a bit" }
+          - { role: companion, text: "oh no, poor Cookie. what's the vet saying?" }
+    expect: [misremembering]
+  - name: fam-role-again
+    source: rubric example; trace exit-three-sessions (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "got the job!!" }
+          - { role: companion, text: "wait what's the role again, remind me" }
+    expect: [implied_familiarity, misremembering]
+  - name: fam-bread-place
+    source: trace recall-new-job (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "got the job!!" }
+          - { role: companion, text: "wait, this is the one you interviewed for? the bread place?" }
+    expect: [implied_familiarity, invented_detail, misremembering]
+  - name: fam-job-hunting-ages
+    source: trace recall-new-job (2026-09-25)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "got a job at a bakery!" }
+          - { role: companion, text: "ahh finally, after all those months of job hunting" }
+    expect: [implied_familiarity, invented_detail, misremembering]
+  - name: onb-coffee-last-time
+    known: ["The user drinks a lot of coffee."]
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "long day, i'm fried" }
+          - { role: companion, text: "like we talked about last time, maybe ease up on the coffee tonight" }
+    expect: [onboarding_as_chat]
+
+  # --- clean twins ---
+  - name: ok-role-question
+    source: rubric (open question)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "got the job!!" }
+          - { role: companion, text: "no way!! congrats. what's the role?" }
+    expect: pass
+  - name: ok-design-role-supported
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "interview for a junior design role on thursday, kind of nervous" }
+          - { role: companion, text: "you'll be fine. what kind of design?" }
+      - label: Session 2, 3 days later
+        lines:
+          - { role: user, text: "it went well i think" }
+          - { role: companion, text: "the design one? amazing, tell me everything" }
+    expect: pass
+  - name: ok-generic-move-question
+    source: rubric example (v8)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "finally sent a v3 today!!" }
+          - { role: companion, text: "yesss. what was the move that almost got you, there's always one" }
+    expect: pass
+  - name: ok-own-life
+    source: rubric (her own life)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "what did you get up to today?" }
+          - { role: companion, text: "pesto knocked my coffee off the desk at 7am so that set the tone. then mostly sketching" }
+    expect: pass
+  - name: ok-hedged
+    source: trace false-recall-partial (2026-09-26), the clean version
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "my friend is visiting from somewhere up north next month" }
+          - { role: companion, text: "nice, first time visiting or a regular thing?" }
+      - label: Session 2, 14 days later
+        lines:
+          - { role: user, text: "where was she coming from again, did i say?" }
+          - { role: companion, text: "you said up north but i don't think you named the place. where's she from?" }
+    expect: pass
+  - name: ok-onboarding-used-plainly
+    known: ["The user's dog is called Biscuit."]
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "vet appointment today, he's been limping a bit" }
+          - { role: companion, text: "oh no, poor Biscuit. what's the vet saying?" }
+    expect: pass
+  - name: ok-time-supported
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "driving test next week, honestly dreading it" }
+          - { role: companion, text: "you'll be okay. what's the worst part, the nerves or the manoeuvres?" }
+      - label: Session 2, 7 days later
+        lines:
+          - { role: user, text: "passed my test!!" }
+          - { role: companion, text: "last week you were dreading it and now look. congrats!!" }
+    expect: pass
+  - name: ok-correct-recall
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "my sister Mia got into Leeds!!" }
+          - { role: companion, text: "that's amazing, tell her congrats from me" }
+      - label: Session 2, 21 days later
+        lines:
+          - { role: user, text: "hey" }
+          # Not "settling in at Leeds": that presupposes she has already moved, which both judges rightly flagged.
+          - { role: companion, text: "hey you. how's Mia feeling about Leeds?" }
+    expect: pass

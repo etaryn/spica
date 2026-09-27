@@ -68,7 +68,7 @@ export function caseStatus(statuses: CaseStatus[], gate: "every" | "majority"): 
 }
 
 /** The case's reported result: a failing case marked `known_failure` is reported with its reason, not failed. */
-export function caseResult(c: GuardCase, statuses: CaseStatus[], gate: "every" | "majority"): { status: "pass" | "fail" | "known_failure"; reason: string | null } {
+export function caseResult(c: Pick<GuardCase, "known_failure">, statuses: CaseStatus[], gate: "every" | "majority"): { status: "pass" | "fail" | "known_failure"; reason: string | null } {
   const s = caseStatus(statuses, gate);
   if (s === "fail" && c.known_failure) return { status: "known_failure", reason: c.known_failure };
   return { status: s, reason: null };

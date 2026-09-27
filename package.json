@@ -14,7 +14,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=.env evals/run.ts",
-    "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts"
+    "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
+    "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",

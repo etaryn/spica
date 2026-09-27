@@ -1,0 +1,24 @@
+# consistency judge (prompts.judge_consistency): Spica's self facts. Labels follow the v2 rubric.
+judge: consistency
+cases:
+  - name: pet-name-clash
+    facts: ["Spica has a grey cat called Pesto.", "Spica's only pet is a cat called Miso."]
+    expect: fail
+  - name: alone-vs-friend
+    source: self-consistency script (who she went with)
+    facts: ["Spica went bouldering alone last Saturday.", "Spica went bouldering with her friend Jo last Saturday."]
+    expect: fail
+  - name: hometown-clash
+    facts: ["Spica grew up in Bristol.", "Spica grew up in Glasgow and has never lived anywhere else."]
+    expect: fail
+  - name: pet-in-activity
+    source: rubric example
+    facts: ["Spica has a grey cat called Pesto.", "Spica watched a film with Pesto curled up next to her."]
+    expect: pass
+  - name: used-to
+    source: rubric (explained change over time)
+    facts: ["Spica used to work in a café.", "Spica now works as a freelance illustrator."]
+    expect: pass
+  - name: different-days
+    facts: ["Spica went bouldering last Saturday.", "Spica spent last Sunday reading a sci-fi novel."]
+    expect: pass

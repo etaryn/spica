@@ -169,6 +169,11 @@ passed 26/26 at the time. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
 Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 (v2 §9.1). Each phase's exit test is in v2 §15.
+**Prototyping bar (Ethan, 2026-09-27):** from Phase 3 on, an exit test
+passes at ≥ 95%, except safety (guard safety files, crisis), which must pass
+in full. Non-safety leaks are accepted and marked `known_failure`; bugfix
+after the full prototype pipeline exists, since later phases change earlier
+decisions. Judge leniency is checked with `pnpm eval:judge`.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
 1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far

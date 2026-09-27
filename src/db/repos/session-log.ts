@@ -92,13 +92,18 @@ export async function markExtracted(db: Db, userId: string, ids: string[]): Prom
   await db.update(session_log).set({ extracted: true }).where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }
 
-/** True when a reply exists whose `reply_to` turn is at or after `turn`: a buffered reply answers every earlier turn (v2 §5.6). */
-export async function isAnswered(db: Db, userId: string, turn: Turn): Promise<boolean> {
+/** The reply that answers `turn`, if any: a companion turn whose `reply_to` turn is at or after `turn` (a buffered reply answers every earlier turn, v2 §5.6). */
+export async function answeringReply(db: Db, userId: string, turn: Turn): Promise<Turn | null> {
   const res = await db.execute(sql`
-    SELECT 1 FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
+    SELECT c.id FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
     WHERE c.user_id = ${userId} AND c.role = 'companion' AND u.created_at >= ${turn.created_at.toISOString()}::timestamptz
     LIMIT 1`);
-  return res.rows.length > 0;
+  const id = res.rows[0]?.id as string | undefined;
+  return id ? getTurn(db, userId, id) : null;
+}
+
+export async function isAnswered(db: Db, userId: string, turn: Turn): Promise<boolean> {
+  return (await answeringReply(db, userId, turn)) !== null;
 }
 
 /** How long and how often they've talked, for the relationship line (spec §6). `tz` must be a valid IANA zone. */

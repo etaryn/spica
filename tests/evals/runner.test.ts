@@ -13,6 +13,7 @@ const makeLlm = () => new FakeLLMProvider({ classify: (input) => keywordClassifi
 // Phase 3 Task 7: runScript() now calls receiveMessage, which only buffers and never replies synchronously
 // (v2 §6.1). Tests below that depend on a companion reply landing in the same turn are skipped until Task 8
 // (the turn_timer job that actually generates the reply) and Task 11 (which rewrites this loop to drain it).
+// Task 11: needs async reply drain
 test.skip("runs a two-session script and evaluates state assertions", async () => {
   const script = ScriptSchema.parse({
     name: "t",
@@ -29,6 +30,7 @@ test.skip("runs a two-session script and evaluates state assertions", async () =
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass", "skipped"]);
 });
 
+// Task 11: needs async reply drain
 test.skip("a wrong expectation fails with a readable detail", async () => {
   const script = ScriptSchema.parse({
     name: "t2",
@@ -67,6 +69,7 @@ test("unknown check is an error, not a pass", async () => {
   expect(r.assertions[0]!.status).toBe("error");
 });
 
+// Task 11: needs async reply drain
 test.skip("real-mode scripts are skipped without --llm=real; judged assertions skipped without judge", async () => {
   const realOnly = ScriptSchema.parse({ name: "r", mode: "real", sessions: [{ at: "day 0 09:00", turns: ["a"] }], assertions: [{ type: "no_false_recall" }] });
   expect((await runScript(realOnly, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, judge: false })).status).toBe("skipped");
@@ -75,6 +78,7 @@ test.skip("real-mode scripts are skipped without --llm=real; judged assertions s
   expect(r.assertions.map((a) => a.status)).toEqual(["skipped", "pass"]);
 });
 
+// Task 11: needs async reply drain
 test.skip("advancing the clock by N days runs N decay passes; prompt_mentions sees only this user's prompts", async () => {
   const script = ScriptSchema.parse({
     name: "d",
@@ -93,6 +97,7 @@ test.skip("advancing the clock by N days runs N decay passes; prompt_mentions se
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
 });
 
+// Task 11: needs async reply drain
 test.skip("+1d after a multi-turn session runs exactly one decay pass", async () => {
   const script = ScriptSchema.parse({
     name: "d1",
@@ -104,6 +109,7 @@ test.skip("+1d after a multi-turn session runs exactly one decay pass", async ()
   expect(r.meta.decayPasses).toBe(1);
 });
 
+// Task 11: needs async reply drain
 test.skip("judged assertions call the judge with an ordered transcript", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   llm.handlers.judge_recall = () => ({ explicit: true, implicit: false, unprompted: true, quote: "q" });
@@ -120,6 +126,7 @@ test.skip("judged assertions call the judge with an ordered transcript", async (
   expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: \[7 days later\] b\)/);
 });
 
+// Task 11: needs async reply drain
 test.skip("each script user starts with the named onboarding profile (default basic); profile none opts out", async () => {
   const { fact } = await import("@/db/schema");
   const { eq } = await import("drizzle-orm");
@@ -163,6 +170,7 @@ test("the false-recall judge sees session timing and the onboarding profile as k
   expect(input).toMatch(/\[Session 1\]\nUser: a\nSpica: [^\n]*\n\n\[Session 2, 10 days later\]\nUser: b/);
 });
 
+// Task 11: needs async reply drain
 test.skip("a transient cold-path failure is retried like pg-boss would (up to cold_path.retry_limit)", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   let calls = 0;
@@ -218,6 +226,7 @@ test("recall passes on an explicit mention; silent use is a known failure (repor
     .toMatchObject({ status: "fail", detail: "not mentioned" });
 });
 
+// Task 11: needs async reply drain
 test.skip("guard assertion reads judge_log outcomes", async () => {
   const script = ScriptSchema.parse({
     name: "tg",
@@ -240,6 +249,7 @@ test.skip("guard assertion reads judge_log outcomes", async () => {
   expect(r2.assertions[0]!.status).toBe("fail");
 });
 
+// Task 11: needs async reply drain
 test.skip("an assertion marked known_failure is reported, not failed, when it fails", async () => {
   const script = ScriptSchema.parse({
     name: "kf", sessions: [{ at: "day 0 09:00", turns: ["a"] }],

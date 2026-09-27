@@ -27,6 +27,19 @@ describe("append", () => {
     const s = empty({ buffer_turn_ids: ["a"], buffer_started_at: at(0), buffer_version: 1 });
     expect(T.append(s, { turnId: "a", now: at(1), windowMs: 4000, maxWaitMs: 40000, openQuestions: [] }).patch?.buffer_turn_ids).toEqual(["a"]);
   });
+  test("normal path reports skipped: false", () => {
+    expect(T.append(empty(), { turnId: "a", now: at(0), windowMs: 4000, maxWaitMs: 40000, openQuestions: [] }).result.skipped).toBe(false);
+  });
+  test("a turn already in flight is a no-op (a race with a committed reply): no patch, current state echoed back, skipped: true", () => {
+    const s = empty({ inflight_turn_ids: ["a"], inflight_since: at(0), buffer_version: 2, wait_until: at(5), backchannel_sent: true });
+    const r = T.append(s, { turnId: "a", now: at(9), windowMs: 4000, maxWaitMs: 40000, openQuestions: [] });
+    expect(r.patch).toBeNull();
+    expect(r.result).toEqual({ version: 2, waitUntil: at(5), backchannelSent: true, lastBackchannelAt: null, skipped: true });
+  });
+  test("in flight with no wait_until set falls back to now", () => {
+    const s = empty({ inflight_turn_ids: ["a"], inflight_since: at(0), buffer_version: 2 });
+    expect(T.append(s, { turnId: "a", now: at(9), windowMs: 4000, maxWaitMs: 40000, openQuestions: [] }).result.waitUntil).toEqual(at(9));
+  });
 });
 
 describe("commit", () => {

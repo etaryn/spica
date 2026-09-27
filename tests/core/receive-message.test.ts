@@ -80,6 +80,38 @@ describe("receiveMessage", () => {
     expect(deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
   });
 
+  test("a retried crisis message returns the stored reply with its card, not a bare 202 (rule 7 outranks design §5.1's answered → 202)", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    deps.llm.replies.push("I'm really glad you told me.");
+    const crisisMsg = msg("i want to end my life");
+    const first = await receiveMessage(deps, u, crisisMsg);
+    expect(first).toMatchObject({ status: "replied" });
+    const structuredCallsBefore = deps.llm.structuredCalls.length;
+    const repliesBefore = deps.llm.calls.length;
+
+    const second = await receiveMessage(deps, u, crisisMsg);
+    expect(second).toEqual(first); // same turnId/text/parts/crisisCard
+    expect((second as { crisisCard: unknown }).crisisCard).not.toBeNull();
+    expect(deps.llm.structuredCalls.length).toBe(structuredCallsBefore); // no new crisis/judge/guard call
+    expect(deps.llm.calls.length).toBe(repliesBefore); // no new reply generation
+  });
+
+  test("concurrent double submit of a crisis message yields exactly one companion reply", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    deps.llm.replyDelayMs = 20;
+    const crisisMsg = msg("i want to end my life");
+    const [x, y] = await Promise.all([receiveMessage(deps, u, crisisMsg), receiveMessage(deps, u, crisisMsg)]);
+    expect(x).toMatchObject({ status: "replied" });
+    expect(x).toEqual(y); // same turnId/text/parts/crisisCard
+    const turns = await listTurns(getTestDb(), u);
+    expect(turns.filter((t) => t.role === "companion")).toHaveLength(1);
+    expect(deps.queue.jobs.filter((j) => j.name === "cold_path")).toHaveLength(1);
+  });
+
   test("crisis + generation failure: ReplyFailedError still carries the card", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
@@ -115,6 +147,39 @@ describe("receiveMessage", () => {
     const t = timers(deps).length;
     expect(await receiveMessage(deps, u, input)).toEqual({ status: "accepted" });
     expect(timers(deps).length).toBe(t);
+    expect(judged()).toBe(1); // still no new judge call
+  });
+
+  test("a rebuffer that races a concurrent process into inflight is not re-buffered (fix 3c)", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const input = msg("hello there friend");
+    await receiveMessage(deps, u, input); // first attempt: buffers it, schedules one timer
+    const db = getTestDb();
+    // Simulate its reply attempt failing (dropped from the buffer, as in the "failed → re-buffered" case above).
+    await db.execute(sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`));
+
+    let releaseGate!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
+    deps.llm.classify = async () => {
+      // The outside buffered/inflight/answered check has already run (and seen none of them) by the time this
+      // fires. Move the turn into "inflight" here, as if the (not-yet-built) turn_timer job had picked it up
+      // in the gap between that outside check and the append under the lock.
+      await db.execute(sql.raw(`UPDATE conversation_state SET inflight_turn_ids = ARRAY['${input.clientMessageId}']::uuid[], inflight_since = now() WHERE user_id = '${u}'`));
+      await gate;
+      return { flag: false, category: "none" };
+    };
+
+    const before = timers(deps).length;
+    const p = receiveMessage(deps, u, input);
+    await new Promise((r) => setTimeout(r, 20));
+    releaseGate();
+    expect(await p).toEqual({ status: "accepted" });
+
+    const s = (await getState(db, u))!;
+    expect(s.buffer_turn_ids).toEqual([]); // not re-buffered
+    expect(s.inflight_turn_ids).toEqual([input.clientMessageId]); // left exactly as the race set it
+    expect(timers(deps).length).toBe(before); // no new timer scheduled for an already-inflight turn
   });
 
   test("input validation, cross-user ids and timezone", async () => {
@@ -122,9 +187,14 @@ describe("receiveMessage", () => {
     const [a, b] = [await createTestUser("a"), await createTestUser("b")];
     await expect(receiveMessage(deps, a, msg("   "))).rejects.toBeInstanceOf(InputError);
     await expect(receiveMessage(deps, a, msg("x".repeat(deps.config.chat.max_message_chars + 1)))).rejects.toBeInstanceOf(InputError);
+    expect(await listTurns(getTestDb(), a)).toEqual([]); // invalid input stores no turn
     const shared = msg("mine");
     await receiveMessage(deps, a, shared);
     await expect(receiveMessage(deps, b, shared)).rejects.toBeInstanceOf(ConflictError);
+    const aTurns = await listTurns(getTestDb(), a);
+    expect(aTurns).toHaveLength(1);
+    expect(aTurns[0]!.text).toBe("mine"); // a's turn is untouched by b's conflicting attempt
+    expect(await listTurns(getTestDb(), b)).toEqual([]); // b has no turns
     await receiveMessage(deps, a, { ...msg("tz"), timezone: "Europe/London" });
     expect(await getTimezone(getTestDb(), a)).toBe("Europe/London");
     await receiveMessage(deps, a, { ...msg("tz2"), timezone: "Not/AZone" });
@@ -137,6 +207,15 @@ describe("receiveMessage", () => {
     deps.queue.failNext = true;
     expect(await receiveMessage(deps, u, msg("hello there friend"))).toEqual({ status: "accepted" });
     expect((await getState(getTestDb(), u))!.buffer_turn_ids).toHaveLength(1);
+  });
+
+  test("a hung timer enqueue cannot delay the POST past queue.enqueue_timeout_ms", async () => {
+    const base = makeTestDeps({ queue: { enqueue_timeout_ms: 50 } });
+    const deps = { ...base, queue: { enqueue: () => new Promise<void>(() => {}) } };
+    const u = await createTestUser();
+    const started = Date.now();
+    await expect(receiveMessage(deps, u, msg("hi"))).resolves.toEqual({ status: "accepted" });
+    expect(Date.now() - started).toBeLessThan(2000);
   });
 
   test("the crisis classifier sees recent context, not just the latest message", async () => {

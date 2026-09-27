@@ -9,7 +9,18 @@ export type Step<R> = { patch: StatePatch | null; result: R };
 
 const uniq = (ids: string[]) => [...new Set(ids)];
 
+/** No state change: the turn is already accounted for elsewhere (in flight, or answered under the lock). */
+export function skip(s: ConvState, now: Date) {
+  return {
+    patch: null,
+    result: { version: s.buffer_version, waitUntil: s.wait_until ?? now, backchannelSent: s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: true },
+  } satisfies Step<unknown>;
+}
+
 export function append(s: ConvState, a: { turnId: string; now: Date; windowMs: number; maxWaitMs: number; openQuestions: OpenQuestion[] }) {
+  // A race with a reply already in flight for this turn (design §5.2/§5.6 forward-looking guard): never re-buffer
+  // a turn that's mid-reply, or it could be answered twice once the turn_timer job (Task 8) exists.
+  if (s.inflight_turn_ids.includes(a.turnId)) return skip(s, a.now);
   const fresh = s.buffer_turn_ids.length === 0;
   const started = fresh ? a.now : (s.buffer_started_at ?? a.now);
   const waitUntil = new Date(Math.min(a.now.getTime() + a.windowMs, started.getTime() + a.maxWaitMs));
@@ -19,7 +30,7 @@ export function append(s: ConvState, a: { turnId: string; now: Date; windowMs: n
       buffer_turn_ids: uniq([...s.buffer_turn_ids, a.turnId]), buffer_started_at: started, open_questions: a.openQuestions,
       buffer_version: version, wait_until: waitUntil, updated_at: a.now, ...(fresh ? { backchannel_sent: false } : {}),
     },
-    result: { version, waitUntil, backchannelSent: fresh ? false : s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at },
+    result: { version, waitUntil, backchannelSent: fresh ? false : s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: false },
   } satisfies Step<unknown>;
 }
 

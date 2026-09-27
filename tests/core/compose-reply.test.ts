@@ -76,6 +76,35 @@ describe("composeReply", () => {
     expect((e as ReplyFailedError).crisisCard).not.toBeNull();
   });
 
+  test("guard sees onboarding facts; a flagged first candidate is regenerated; judge_log never stores fact content", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await insertFact(getTestDb(), u, {
+      subject: "user", kind: "preference", content: "The user drinks a lot of coffee.", embedding: vec(),
+      created_at: new Date("2026-01-01T00:00:00Z"), status: "open", salience: 0.5, valence: 0, confidence: 0.6, source: "onboarding",
+    });
+    const inputs: string[] = [];
+    deps.llm.handlers.guard = (i) => {
+      inputs.push(String(i));
+      return messageToCheck(String(i)).includes("again")
+        ? { reasoning: "presumes", violations: [{ category: "false_familiarity", claim: "presumes the role" }] } : { reasoning: "ok", violations: [] };
+    };
+    deps.llm.replies.push("what's the role again?", "congrats!! what's the role?");
+    const turns = [await userTurn(deps, u, "got the job!!")];
+    const r = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+
+    expect(r.text).toBe("congrats!! what's the role?");
+    expect(inputs[0]).toMatch(/User: got the job!!/);
+    expect(inputs[0]).toMatch(/drinks a lot of coffee/); // onboarding facts reach the guard input
+    expect(deps.llm.calls[1]!.system).toMatch(/stopped before it was sent/); // regeneration prompt carries the corrective note
+
+    await r.writeGuardLog();
+    const logs = (await listJudgeLogs(getTestDb(), u)).reverse();
+    expect(logs.map((l) => [l.attempt, l.outcome, l.turn_id])).toEqual([[1, null, turns[0]!.id], [2, "regenerated", turns[0]!.id]]);
+    // judge_log.input never stores fact content (v2 §5.8): ids + subject only, even though the guard call itself saw it.
+    expect(JSON.stringify(logs.map((l) => l.input))).not.toContain("drinks a lot of coffee");
+  });
+
   test("a hung onboarding-facts query cannot delay the reply past hot_path.db_timeout_ms (§15.2 #6)", async () => {
     const deps = makeTestDeps({ hot_path: { db_timeout_ms: 50 } });
     const u = await createTestUser();

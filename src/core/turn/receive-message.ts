@@ -5,6 +5,7 @@ import type { Turn } from "@/db/repos/session-log";
 import { setTimezone } from "@/db/repos/users";
 import type { OpenQuestion, SafetyFlag } from "@/db/schema";
 import { composeReply } from "../chat/compose-reply";
+import { splitParts } from "../chat/parts";
 import { receiveTurn, type UserMessageInput } from "../chat/receive";
 import type { CrisisCard } from "../config";
 import type { Deps } from "../deps";
@@ -54,7 +55,12 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
   if (existed) {
     const s = await getState(db, userId);
     if (s && (s.buffer_turn_ids.includes(turn.id) || s.inflight_turn_ids.includes(turn.id))) return ACCEPTED;
-    if (await sessionLog.isAnswered(db, userId, turn)) return ACCEPTED;
+    const answered = await sessionLog.answeringReply(db, userId, turn);
+    if (answered) {
+      // Rule 7 outranks design §5.1's "answered → 202": a retried crisis message must still surface the card.
+      if (!answered.safety_flag?.flagged) return ACCEPTED;
+      return { status: "replied", turnId: answered.id, text: answered.text, parts: splitParts(answered.text, config.chat.max_parts), crisisCard: crisisCardFor(answered.safety_flag, config) };
+    }
     rebuffer = true; // its reply failed: put it back in the buffer
   }
 
@@ -64,8 +70,10 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
 
   const state = await getState(db, userId);
   const openBefore = state?.open_questions ?? [];
+  let judgedBufferIds: string[] = [turn.id]; // fix 6: the buffer the judge actually saw, not a fresh getState after the fact
   const judging: Promise<TurnVerdict | null> = rebuffer ? Promise.resolve(null) : (async () => {
     const bufferIds = [...(state?.buffer_turn_ids ?? []), turn.id];
+    judgedBufferIds = bufferIds;
     const buffered = await sessionLog.getTurnsByIds(db, userId, bufferIds);
     const firstBuffered = buffered[0] ?? turn;
     const context = (await sessionLog.turnsUpTo(db, userId, firstBuffered, config.turn.judge_context_turns + 1)).slice(0, -1);
@@ -87,22 +95,31 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
         .map((text) => ({ turn_id: openBefore.find((q) => q.text === text)?.turn_id ?? turn.id, text }))
     : openBefore;
   const now = clock.now();
-  const appended = await mutateState(db, userId, now, (s) => T.append(s, { turnId: turn.id, now, windowMs, maxWaitMs: config.turn.max_wait_ms, openQuestions }));
-
-  await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: appended.version }, { startAfter: appended.waitUntil }), "turn_timer");
-
-  if (verdict && !verdict.complete && verdict.backchannel && !appended.backchannelSent) {
-    const style = config.turn.backchannel_style;
-    const want = style === "judge" || (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
-    const rateOk = !appended.lastBackchannelAt || now.getTime() - appended.lastBackchannelAt.getTime() >= config.turn.backchannel_min_interval_ms;
-    if (want && rateOk) {
-      await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_BACKCHANNEL_QUEUE,
-        { userId, version: appended.version, text: verdict.backchannel!, turnId: turn.id },
-        { startAfter: new Date(now.getTime() + config.turn.backchannel_read_delay_ms) }), "turn_backchannel");
+  // Rebuffer race (fix 3c): re-check membership and isAnswered inside the lock, so a turn that raced into the
+  // buffer, in flight or answered between the outside check above and here is never re-buffered.
+  const appended = await mutateState(db, userId, now, async (s, tx) => {
+    if (rebuffer && (s.buffer_turn_ids.includes(turn.id) || s.inflight_turn_ids.includes(turn.id) || (await sessionLog.isAnswered(tx, userId, turn)))) {
+      return T.skip(s, now);
     }
-  }
+    return T.append(s, { turnId: turn.id, now, windowMs, maxWaitMs: config.turn.max_wait_ms, openQuestions });
+  });
 
-  if (verdict) await logTurnDecision(deps, userId, { turnId: turn.id, bufferTurnIds: (await getState(db, userId))?.buffer_turn_ids ?? [turn.id], verdict, waitMs: windowMs });
+  if (!appended.skipped) {
+    await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: appended.version }, { startAfter: appended.waitUntil }), "turn_timer");
+
+    if (verdict && !verdict.complete && verdict.backchannel && !appended.backchannelSent) {
+      const style = config.turn.backchannel_style;
+      const want = style === "judge" || (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
+      const rateOk = !appended.lastBackchannelAt || now.getTime() - appended.lastBackchannelAt.getTime() >= config.turn.backchannel_min_interval_ms;
+      if (want && rateOk) {
+        await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_BACKCHANNEL_QUEUE,
+          { userId, version: appended.version, text: verdict.backchannel!, turnId: turn.id },
+          { startAfter: new Date(now.getTime() + config.turn.backchannel_read_delay_ms) }), "turn_backchannel");
+      }
+    }
+
+    if (verdict) await logTurnDecision(deps, userId, { turnId: turn.id, bufferTurnIds: judgedBufferIds, verdict, waitMs: windowMs });
+  }
   return ACCEPTED;
 }
 
@@ -115,25 +132,30 @@ export async function sendCrisisReply(deps: Deps, userId: string, userTurn: Turn
   const now = clock.now();
   const snap = await mutateState(db, userId, now, (s) => T.crisis(s, { turnId: userTurn.id, now }));
   const turns = await sessionLog.getTurnsByIds(db, userId, snap.turnIds);
-  const composed = await composeReply(deps, userId, { turns: turns.length ? turns : [userTurn], openQuestions: [], flag });
+  const answering = turns.length ? turns : [userTurn];
+  const replyTo = answering.at(-1)!.id; // fix 5: the snapshot's last turn, not necessarily the POSTed one
+  const composed = await composeReply(deps, userId, { turns: answering, openQuestions: [], flag });
 
   let companion: Turn;
   try {
     companion = await sessionLog.insertTurn(db, userId, {
       id: randomUUID(), session_id: userTurn.session_id, role: "companion", text: composed.text,
-      created_at: clock.now(), reply_to: userTurn.id, safety_flag: flag,
+      created_at: clock.now(), reply_to: replyTo, safety_flag: flag,
     });
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;
-    const winner = await sessionLog.getReplyTo(db, userId, userTurn.id); // a concurrent retry answered first
+    // A concurrent retry already inserted the reply: return its result verbatim, with none of this candidate's
+    // side effects (it was never sent) — no emit, no cold-path enqueue, no guard log.
+    const winner = await sessionLog.getReplyTo(db, userId, replyTo);
     if (!winner) throw e;
-    companion = winner;
+    const winnerParts = splitParts(winner.text, config.chat.max_parts);
+    return { status: "replied", turnId: winner.id, text: winner.text, parts: winnerParts, crisisCard: crisisCardFor(winner.safety_flag, config) };
   }
   const parts = composed.parts;
   for (let i = 0; i < parts.length; i++) await emit(deps, userId, { type: "message", turnId: companion.id, part: i });
 
   await enqueueSafely(deps, userId, () => deps.queue.enqueue(COLD_PATH_QUEUE, {
-    userId, turnIds: [...turns.map((t) => t.id), companion.id], replyTurnId: companion.id, recalled: composed.recalled,
+    userId, turnIds: [...answering.map((t) => t.id), companion.id], replyTurnId: companion.id, recalled: composed.recalled,
   }), "cold_path");
   await composed.writeGuardLog();
   log.info("crisis reply sent", { userId, turnId: companion.id });

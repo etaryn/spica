@@ -49,13 +49,14 @@ test("phase 1 config groups load with defaults", () => {
 
 test("turn, hot_path and events config load with conservative defaults", () => {
   const c = loadConfig();
-  expect(c.turn).toMatchObject({ settle_ms: 4000, wait_ms: 12000, max_wait_ms: 40000, backchannel_style: "judge", sweep_batch: 500 });
+  expect(c.turn).toMatchObject({ settle_ms: 4000, wait_ms: 12000, max_wait_ms: 40000, backchannel_style: "judge", sweep_batch: 500, worker_polling_interval_seconds: 0.5 });
   expect(c.turn.read_delay_min_ms).toBeLessThanOrEqual(c.turn.read_delay_max_ms);
   expect(c.hot_path.db_timeout_ms).toBe(2000);
   expect(c.events).toEqual({ channel: "spica_events", heartbeat_ms: 25000 });
   expect(c.guard.timeout_ms).toBe(6000);
   expect(() => loadConfig({ turn: { backchannel_style: "loud" } })).toThrow();
   expect(() => loadConfig({ turn: { read_delay_min_ms: 5000, read_delay_max_ms: 1000 } })).toThrow();
+  expect(() => loadConfig({ turn: { worker_polling_interval_seconds: 0.1 } })).toThrow();
 });
 
 test("isUniqueViolation finds wrapped pg errors", () => {

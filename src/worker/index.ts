@@ -25,7 +25,7 @@ await boss.work(DECAY_QUEUE, scrubErrors(DECAY_QUEUE, deps.log, async () => { aw
 await boss.schedule(SWEEP_QUEUE, deps.config.cold_path.sweep_cron);
 await boss.schedule(DECAY_QUEUE, deps.config.decay.cron);
 
-const turnWork = { localConcurrency: deps.config.turn.worker_concurrency, pollingIntervalSeconds: 0.5 };
+const turnWork = { localConcurrency: deps.config.turn.worker_concurrency, pollingIntervalSeconds: deps.config.turn.worker_polling_interval_seconds };
 await boss.work<TurnTimerJob>(TURN_TIMER_QUEUE, turnWork, scrubErrors(TURN_TIMER_QUEUE, deps.log, async (jobs) => {
   for (const job of jobs) await runTurnTimer(deps, job.data);
 }));

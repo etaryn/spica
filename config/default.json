@@ -139,6 +139,7 @@
     "retry_delay_ms": 5000,
     "inflight_recheck_ms": 1000,
     "worker_concurrency": 10,
+    "worker_polling_interval_seconds": 0.5,
     "job_expire_seconds": 180,
     "sweep_cron": "* * * * *",
     "sweep_grace_ms": 60000,

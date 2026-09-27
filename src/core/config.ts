@@ -82,6 +82,7 @@ export const ConfigSchema = z.object({
     retry_delay_ms: z.number().int().min(0),
     inflight_recheck_ms: z.number().int().positive(),
     worker_concurrency: z.number().int().positive(),
+    worker_polling_interval_seconds: z.number().min(0.5),
     job_expire_seconds: z.number().int().positive(),
     sweep_cron: z.string().min(1),
     sweep_grace_ms: z.number().int().min(0),

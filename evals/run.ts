@@ -11,6 +11,7 @@ import { assertDisposableDatabase } from "@/db/admin";
 import { createDb } from "@/db/client";
 import { runMigrations } from "@/db/migrate";
 import { aggregateRuns, findRegressions, toBaseline, type ScriptSummary } from "./lib/report";
+import { resolveProfile } from "./lib/profile";
 import { renderReview, type ReviewRun } from "./lib/review";
 import { RoutingLLM } from "./lib/routing-llm";
 import { runScript } from "./lib/runner";
@@ -37,16 +38,8 @@ const dbUrl = process.env.EVAL_DATABASE_URL ?? "postgres://spica:spica@localhost
 assertDisposableDatabase(dbUrl);
 
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
-if (args.llm !== "real" && args.llm !== "fake") throw new Error(`--llm must be fake or real, got ${args.llm}`);
-
 // Exit profiles (v2 §15, design §9.6): each call purpose is real only when listed; everything else is fake.
-const ALL = ["reply", "crisis", "extract", "reconcile", "guard", "guard_crisis", "turn_judge", "embed"];
-const JUDGES = ["judge_recall", "judge_false_recall", "judge_consistency", "judge_turn"];
-const listed = args.real?.split(",").map((x) => x.trim()).filter(Boolean) ?? [];
-const unknown = listed.filter((x) => !ALL.includes(x));
-if (unknown.length) throw new Error(`--real: unknown purpose ${unknown.join(", ")} (use a comma list of ${ALL.join(", ")})`);
-const realPurposes = new Set([...(args.llm === "real" ? ALL : listed), ...(args.annotate ? JUDGES : [])]);
-const realCalls = [...realPurposes].filter((x) => x !== "embed");
+const { realPurposes, realCalls, anyReal, realScripts, fake } = resolveProfile({ llm: args.llm!, real: args.real, annotate: args.annotate });
 
 const usage = new UsageTally();
 // The fake side: keyword crisis classifier, no-op cold path, and a guard that passes everything ("guard off").
@@ -55,16 +48,14 @@ const makeLlm = realCalls.length === 0
   ? fakeProvider
   : () => new RoutingLLM(new AnthropicProvider(new Anthropic(), config.models, usage.record), fakeProvider(), realPurposes);
 
-const real = realPurposes.size > 0;
-const runs = Number(args.runs ?? (real ? 3 : 1));
+const runs = Number(args.runs ?? (anyReal ? 3 : 1));
 if (!Number.isInteger(runs) || runs < 1) throw new Error(`--runs must be a positive integer, got ${args.runs}`);
 if (realCalls.length > 0 && !process.env.ANTHROPIC_API_KEY) throw new Error(`real ${realCalls.join(", ")} needs ANTHROPIC_API_KEY`);
 if (realPurposes.has("embed") && !process.env.VOYAGE_API_KEY) throw new Error("real embed needs VOYAGE_API_KEY");
 const embedder = realPurposes.has("embed")
   ? new VoyageEmbedder({ apiKey: process.env.VOYAGE_API_KEY, model: config.embedding.model, dimensions: config.embedding.dimensions })
   : undefined;
-const fakes = [...ALL, ...JUDGES].filter((x) => !realPurposes.has(x));
-console.log(`real: ${[...realPurposes].join(", ") || "(none)"} | fake: ${fakes.join(", ")}`);
+console.log(`real: ${[...realPurposes].join(", ") || "(none)"} | fake: ${fake.join(", ")}${realScripts ? "" : " | mode: real scripts skipped (need a real reply)"}`);
 
 const { db, pool } = createDb(dbUrl);
 await runMigrations(db);
@@ -86,7 +77,7 @@ const reviewRuns: ReviewRun[] = [];
 for (const script of scripts) {
   const attempts = [];
   for (let k = 0; k < runs; k++) {
-    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, real, annotate: args.annotate, embedder, profiles });
+    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, real: realScripts, annotate: args.annotate, embedder, profiles });
     if (args.review) reviewRuns.push({ script: script.name, attempt: k + 1, result: attempt, description: script.description, profile: script.profile });
     if (args.trace) {
       writeFileSync(path.join(traceDir, `${script.name}-${k + 1}.json`),

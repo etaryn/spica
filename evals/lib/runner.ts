@@ -83,7 +83,7 @@ async function memoryDump(db: Db, userIds: Record<string, string>): Promise<RunT
 
 export interface RunOptions {
   db: Db; dbUrl: string; config: Config; makeLlm: () => LLMProvider; embedder?: Embedder;
-  /** This run makes real model calls, so `mode: real` scripts may run. */
+  /** This run has a real reply model, so `mode: real` scripts may run. */
   real: boolean;
   /** Run the judged review annotations (`recall`, `no_false_recall`, `consistency`, `reply_about`). */
   annotate: boolean;

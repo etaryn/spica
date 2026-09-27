@@ -20,3 +20,14 @@ test("counts replies and backchannels, derives coverage from reply_to, checks re
   expect(bad.ok).toBe(false);
   expect(bad.detail).toMatch(/replies: expected 1, got 2/);
 });
+
+test("max_reply_delay_s skips a reply that covers no user turn in the session (no fallback to turn 1)", () => {
+  // A reply landing in session 2 whose reply_to is session 1's last turn covers nothing in this range; its delay
+  // must not be measured from session 2's first user turn (that would read 20 s here, over the 15 s max).
+  const s1last = turn("user", 0);
+  const u1 = turn("user", 3700), r1 = turn("companion", 3710, { reply_to: u1.id });
+  const late = turn("companion", 3720, { reply_to: s1last.id });
+  const range = { start: new Date(t0 + 3600_000), end: new Date(t0 + 7200_000) };
+  const r = checkTurn([s1last, u1, r1, late], range, { type: "turn", session: 2, user: "main", reply_covers: [[1], []], max_reply_delay_s: 15 });
+  expect(r).toEqual({ ok: true });
+});

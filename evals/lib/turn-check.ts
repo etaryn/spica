@@ -25,8 +25,11 @@ export function checkTurn(all: Turn[], range: { start: Date; end: Date }, a: Tur
 
   if (a.max_reply_delay_s !== undefined) {
     replies.forEach((r, i) => {
-      const first = users[(covers[i]?.[0] ?? 1) - 1];
-      const delay = first ? (r.created_at.getTime() - first.created_at.getTime()) / 1000 : 0;
+      // A reply covering no user turn in this session (its anchor is earlier) has no first message to measure from.
+      const firstIdx = covers[i]?.[0];
+      if (firstIdx === undefined) return;
+      const first = users[firstIdx - 1]!;
+      const delay = (r.created_at.getTime() - first.created_at.getTime()) / 1000;
       if (delay > a.max_reply_delay_s!) problems.push(`reply ${i + 1} came ${delay}s after its first message (max ${a.max_reply_delay_s}s)`);
     });
   }

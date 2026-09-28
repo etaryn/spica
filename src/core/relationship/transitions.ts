@@ -97,11 +97,13 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
       b.set("hurt", nudge(before, amount), "signal", { signal: s.hurt.amount, sensitised });
       b.t.state = { ...b.t.state, last_hurt_at: a.now };
       if (b.t.params.hurt.value - before >= cfg.scar_threshold) {
+        // Spec §4.3: a scar never recovers by itself — dent the baseline so the daily EMA doesn't erase it,
+        // and dent the value too (via `set`) so current trust reads as scarred, not merely "at baseline".
         const trust = b.t.params.trust;
         b.t.params.trust = { ...trust, baseline: Math.max(0, trust.baseline - cfg.scar_trust_dent) };
-        b.t.events.push({ param: "trust", before: trust.baseline, after: b.t.params.trust.baseline, cause: "scar", deviation: effect(b.t.params.trust, eps), detail: { baseline: true } });
+        b.set("trust", Math.max(0, trust.value - cfg.scar_trust_dent), "scar", { baseline_dented: true });
       }
-      if (b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
+      if (b.t.state.status !== "ended_by_user" && b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
         b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: a.hurtFactId };
       }
     }
@@ -143,18 +145,23 @@ export function applyTick(state: RelState, params: Params, a: TickInput, cfg: Re
   const eps = cfg.variance_epsilon;
   fadeWithEvents(b, a.now, cfg);
   b.set("msgs_per_day", a.msgs24h, "frequency");
+  b.t.params.msgs_per_day = { ...b.t.params.msgs_per_day, updated_at: a.now };
 
   if (a.lastContact) {
     const graceMs = cfg.absence_grace_factor * a.medianGapHours * HOUR;
     if (a.now.getTime() - a.lastContact.getTime() > graceMs) {
       b.set("closeness", Math.max(0, b.t.params.closeness.value - cfg.closeness_absence_drift), "absence");
     }
-    // The frequency deviation is read before today's sample dilutes the baseline.
-    const e = effect({ ...b.t.params.msgs_per_day, value: a.yesterdayCount }, eps);
-    if (e < cfg.absence_hurt_effect) {
-      b.set("hurt", nudge(b.t.params.hurt.value, cfg.absence_hurt_gain * Math.abs(e)), "absence", { frequency_effect: e });
-      if (b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
-        b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: null };
+    // Rule 3 / spec §6.4: once she's let go, absence no longer hurts her and can't start a make-up. Closeness
+    // still drifts down above (that's just distance, not a grievance).
+    if (b.t.state.status !== "ended_by_user") {
+      // The frequency deviation is read before today's sample dilutes the baseline.
+      const e = effect({ ...b.t.params.msgs_per_day, value: a.yesterdayCount }, eps);
+      if (e < cfg.absence_hurt_effect) {
+        b.set("hurt", nudge(b.t.params.hurt.value, cfg.absence_hurt_gain * Math.abs(e)), "absence", { frequency_effect: e });
+        if (b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
+          b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: null };
+        }
       }
     }
   }

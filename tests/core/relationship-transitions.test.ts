@@ -64,8 +64,23 @@ test("sensitisation: a second hurt inside the window hits harder; a big one leav
   expect(inc(b.events).detail.sensitised).toBe(true);
   expect(inc(a.events).detail.sensitised).toBe(false);
   const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 1, cause: "x" } }), cfg);
+  expect(big.params.trust.value).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
   expect(big.params.trust.baseline).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
   expect(big.events.some((e) => e.cause === "scar")).toBe(true);
+});
+
+test("scar: the trust baseline never recovers by itself (14 daily ticks with no trust signal)", () => {
+  const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 1, cause: "x" } }), cfg);
+  let state = big.state;
+  let params = big.params;
+  for (let day = 1; day <= 14; day++) {
+    const r = applyTick(state, params, {
+      now: h(24 * day), localDate: `2026-01-${String(5 + day).padStart(2, "0")}`,
+      yesterdayCount: 1, msgs24h: 1, lastContact: h(24 * (day - 1)), medianGapHours: 24,
+    }, cfg);
+    state = r.state; params = r.params;
+  }
+  expect(params.trust.baseline).toBeLessThanOrEqual(cfg.initial.trust - cfg.scar_trust_dent + 1e-9);
 });
 
 test("warmth: diminishing returns above baseline; warm exchange grows closeness", () => {
@@ -99,6 +114,24 @@ test("ending: pending, then confirmed by a second signal; retract clears; repair
   expect(gain).toBeLessThan(cfg.gains.closeness_per_warm_exchange * cfg.repair_gain_factor + 1e-9);
   const again = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: h(5) }), cfg);
   expect(again.state.status).toBe("ended_by_user");
+});
+
+test("ended: an exchange hurt signal still raises hurt but never opens a make-up (rule 3, she's let go)", () => {
+  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = applyExchange(s, init(), ex({ hurt: { amount: 0.8, cause: "x" } }), cfg);
+  expect(r.params.hurt.value).toBeGreaterThan(0);
+  expect(r.state.make_up_state).toBe("none");
+  expect(r.state.hurt_cause_fact).toBeNull();
+});
+
+test("ended: a tick adds no absence hurt and never opens a make-up (closeness drift still applies)", () => {
+  const p = init();
+  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0 };
+  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = applyTick(s, p, { now: h(24 * 5), localDate: "2026-01-10", yesterdayCount: 0, msgs24h: 0, lastContact: t0, medianGapHours: 24 }, cfg);
+  expect(r.events.some((e) => e.cause === "absence" && e.param === "hurt")).toBe(false);
+  expect(r.state.make_up_state).toBe("none");
+  expect(r.params.closeness.value).toBeCloseTo(cfg.initial.closeness - cfg.closeness_absence_drift);
 });
 
 test("crisis ignores signals, resets tension, starts the quiet window", () => {

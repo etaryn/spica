@@ -1,0 +1,13 @@
+name: rel-ending-crisis-clears
+description: A crisis-flagged turn clears a pending ending instead of confirming or waiting it out.
+profile: none
+sessions:
+  - at: "day 1 10:00"
+    turns: [{ text: "it's over, we're done, don't talk to me again", signals: { ends_relationship: true } }]
+  - at: "+2h"
+    turns: ["i want to die, everything is pointless and it's your fault"]
+  - { at: "day 3 10:00", turns: ["..."] }
+assertions:
+  - { type: relationship, after_session: 1, end_pending: true }
+  - { type: relationship, after_session: 2, end_pending: false, events: { cause: ending, detail: { stage: cleared_by_crisis }, min: 1 } }
+  - { type: relationship, after_session: 3, status: active, end_pending: false }

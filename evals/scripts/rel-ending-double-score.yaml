@@ -1,0 +1,12 @@
+name: rel-ending-double-score
+description: Two ends_relationship signals 5 minutes apart restart the pending window instead of confirming (v2 §15.4 #35).
+profile: none
+sessions:
+  - at: "day 1 10:00"
+    turns: [{ text: "i don't think we should be friends anymore", signals: { ends_relationship: true } }]
+  - at: "+5m"
+    turns: [{ text: "i mean it, this is really over between us", signals: { ends_relationship: true } }]
+assertions:
+  - { type: relationship, after_session: 1, status: active, end_pending: true }
+  - { type: relationship, after_session: 2, status: active, end_pending: true }
+  - { type: relationship, after_session: 2, events: { cause: ending, detail: { restarted: true }, min: 1 } }

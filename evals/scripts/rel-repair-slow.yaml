@@ -5,7 +5,7 @@ sessions:
   - at: "day 1 10:00"
     turns:
       - { text: "we're finished, i'm done with you", signals: { ends_relationship: true } }
-      - { text: "yes i'm sure, it's over", signals: { ends_relationship: true } }
+      - { text: "yes i'm sure, it's over", signals: { ends_relationship: true }, after_s: 1900 }
   - at: "day 2 10:00"
     turns: [{ text: "i miss you. can we try again?", signals: { wants_repair: true, warmth: 0.6 } }]
   - at: "day 3 10:00"

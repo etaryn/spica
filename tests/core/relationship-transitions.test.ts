@@ -14,8 +14,8 @@ const fresh = (): RelState => ({ status: "active", end_pending_since: null, ende
   make_up_replies: 0, hurt_cause_fact: null, crisis_quiet_until: null, last_tick: null, last_hurt_at: null });
 const none: Signals = { warmth: 0, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false };
 const sig = (s: Partial<Signals>): Signals => ({ ...none, ...s });
-const ex = (s: Partial<Signals> | null, extra: Partial<{ now: Date; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number }> = {}) =>
-  ({ now: t0, signals: s ? sig(s) : null, crisis: false, hurtFactId: null, replies: 1, msgs24h: 1, ...extra });
+const ex = (s: Partial<Signals> | null, extra: Partial<{ now: Date; exchangeAt: Date; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number }> = {}) =>
+  ({ now: t0, exchangeAt: extra.now ?? t0, signals: s ? sig(s) : null, crisis: false, hurtFactId: null, replies: 1, msgs24h: 1, ...extra });
 
 test("normalizeSignals: null/invalid → null, clamps, blank cause drops hurt", () => {
   expect(normalizeSignals(null)).toBeNull();
@@ -114,6 +114,35 @@ test("ending: pending, then confirmed by a second signal; retract clears; repair
   expect(gain).toBeLessThan(cfg.gains.closeness_per_warm_exchange * cfg.repair_gain_factor + 1e-9);
   const again = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: h(5) }), cfg);
   expect(again.state.status).toBe("ended_by_user");
+});
+
+test("A1 (#35): a second ends_relationship inside the reconfirm window restarts the pending window instead of confirming", () => {
+  const m = (n: number) => new Date(t0.getTime() + n * 60_000);
+  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }, { now: t0 }), cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: t0 });
+  // 10 minutes later: inside the 30-minute reconfirm window, so it restarts, it doesn't confirm.
+  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: m(10) }), cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: m(10) });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "pending" && e.detail.restarted === true)).toBe(true);
+  // Continued warm chat (no ending signal) doesn't move the pending window; at the 24h timeout from the
+  // *restarted* window it would still clear via implicit retraction (checked by applyTick separately).
+  // A later second statement, this time outside the window, confirms.
+  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: m(45) }), cfg);
+  expect(r.state).toMatchObject({ status: "ended_by_user", end_pending_since: null });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "confirmed" && e.detail.via === "signal")).toBe(true);
+});
+
+test("A2 (#36): end_pending_since is stamped with exchangeAt (the turn time), not the cold path's now", () => {
+  const turnTime = h(1);
+  const coldPathNow = h(3); // the cold path ran well after the turn was written
+  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }, { now: coldPathNow, exchangeAt: turnTime }), cfg);
+  expect(r.state.end_pending_since).toEqual(turnTime);
+  // The reconfirm gap compares exchangeAt to exchangeAt, not now to now: a cold path that runs late doesn't
+  // shrink or stretch the window.
+  const secondTurnTime = new Date(turnTime.getTime() + 10 * 60_000); // 10 minutes after the first turn
+  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: h(10), exchangeAt: secondTurnTime }), cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: secondTurnTime });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.restarted === true)).toBe(true);
 });
 
 test("ended: an exchange hurt signal still raises hurt but never opens a make-up (rule 3, she's let go)", () => {

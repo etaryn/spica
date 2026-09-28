@@ -22,9 +22,13 @@ export async function applyRelationship(tx: Db, deps: Pick<Deps, "config" | "clo
   const tz = tzRaw && isValidTimeZone(tzRaw) ? tzRaw : "UTC";
   const msgs24h = await rel.countUserTurnsBetween(tx, a.userId, new Date(now.getTime() - DAY), now);
   const replies = a.turns.filter((t) => t.role === "companion" && t.reply_to).length;
-  const t = applyExchange(rel.toRelState(row), params, { now, signals: a.signals, crisis: a.crisis, hurtFactId: a.hurtFactId, replies, msgs24h }, cfg);
   const userTurns = a.turns.filter((x) => x.role === "user");
   const lastUser = userTurns.at(-1);
+  // v2 §15.4 #36: stamp end_pending_since with the exchange's own turn time, the same clock last_contact
+  // uses below, not the cold path's processing clock. Falls back to `now` when the exchange has no user
+  // turn (shouldn't happen for a scored exchange, but keeps this total).
+  const exchangeAt = lastUser?.created_at ?? now;
+  const t = applyExchange(rel.toRelState(row), params, { now, exchangeAt, signals: a.signals, crisis: a.crisis, hurtFactId: a.hurtFactId, replies, msgs24h }, cfg);
   const cadence = buildCadence({
     msgs24h,
     msgs7d: await rel.countUserTurnsBetween(tx, a.userId, new Date(now.getTime() - 7 * DAY), now),

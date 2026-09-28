@@ -3,7 +3,10 @@ import type { Signals } from "./signals";
 import { PARAM_NAMES, type ParamName, type Params, type RelCause, type RelConfig, type RelEvent, type RelState } from "./types";
 
 export type Transition = { state: RelState; params: Params; events: RelEvent[] };
-export type ExchangeInput = { now: Date; signals: Signals | null; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number };
+/** `exchangeAt` is the exchange's newest user-turn `created_at` (v2 §15.4 #36): stamps `end_pending_since`
+ * on the same clock as `last_contact`, not the cold path's processing time. `now` stays the cold path clock
+ * for fades and everything else. */
+export type ExchangeInput = { now: Date; exchangeAt: Date; signals: Signals | null; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number };
 export type TickInput = { now: Date; localDate: string; yesterdayCount: number; msgs24h: number; lastContact: Date | null; medianGapHours: number };
 
 const HOUR = 3_600_000;
@@ -123,9 +126,18 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
         b.t.state = { ...b.t.state, end_pending_since: null };
         b.status("ending", { stage: "retracted" });
       } else if (s.ends_relationship) {
-        if (b.t.state.end_pending_since) confirmEnding(b, a.now, cfg, "signal");
-        else {
-          b.t.state = { ...b.t.state, end_pending_since: a.now };
+        const pending = b.t.state.end_pending_since;
+        if (pending && a.exchangeAt.getTime() - pending.getTime() >= cfg.end_reconfirm_min_minutes * 60_000) {
+          confirmEnding(b, a.now, cfg, "signal");
+        } else if (pending) {
+          // v2 §15.4 #35: a re-scored "we're done" inside the reconfirm window only restarts the pending
+          // window, so continued warm chat still clears it at the timeout (the implicit retraction); a
+          // genuine "I mean it" followed by silence still confirms there, and a later second statement
+          // outside the window confirms by signal.
+          b.t.state = { ...b.t.state, end_pending_since: a.exchangeAt };
+          b.status("ending", { stage: "pending", restarted: true });
+        } else {
+          b.t.state = { ...b.t.state, end_pending_since: a.exchangeAt };
           b.status("ending", { stage: "pending" });
         }
       }

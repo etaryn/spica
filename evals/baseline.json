@@ -164,6 +164,21 @@
     "runs": 1,
     "passedRuns": 1
   },
+  "rel-ending-crisis-clears": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-ending-double-score": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-ending-implicit-retraction": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "rel-ending-retracted": {
     "status": "pass",
     "runs": 1,

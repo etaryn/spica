@@ -191,6 +191,7 @@
     "relief_tension_factor": 0.5,
     "end_confirm_hours": 24,
     "end_closeness_factor": 0.3,
+    "end_reconfirm_min_minutes": 30,
     "repair_gain_factor": 0.3,
     "repair_complete_closeness": 0.3,
     "repair_min_days": 7,

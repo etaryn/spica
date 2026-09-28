@@ -156,6 +156,7 @@ export const ConfigSchema = z.object({
       relief_tension_factor: unit,
       end_confirm_hours: z.number().positive(),
       end_closeness_factor: unit,
+      end_reconfirm_min_minutes: z.number().int().min(0),
       repair_gain_factor: unit,
       repair_complete_closeness: unit,
       repair_min_days: z.number().min(0),

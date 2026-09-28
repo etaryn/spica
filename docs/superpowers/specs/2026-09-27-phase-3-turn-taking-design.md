@@ -1,6 +1,6 @@
 # Phase 3: Turn-taking + pacing design
 
-Date: 2026-09-27 · Status: design, awaiting Ethan's review · Parent: `spica-build-spec-v2.md` (§4, §5.6–5.8, §6.1–6.4, §14.2–14.5, §15 Phase 3, §15.2 #1–6)
+Date: 2026-09-27 · Status: implemented; exit test passed 2026-09-28 · Parent: `spica-build-spec-v2.md` (§4, §5.6–5.8, §6.1–6.4, §14.2–14.5, §15 Phase 3, §15.2 #1–6)
 
 ## 1. Goal and exit test
 

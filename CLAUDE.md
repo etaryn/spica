@@ -73,14 +73,17 @@ later. Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
 `claude-haiku-4-5` (`models.judge`; Sonnet 5 through Phase 2).
 Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
 
-Message flow: receive → crisis check → **turn-taking engine** (buffer, open
+Message flow: POST (stored, then `202`; crisis answers in the POST with
+`200` + card) → crisis check ∥ turn judge → **turn-taking engine** (buffer, open
 questions, a cheap `context_complete?` judge, backchannel style
 `judge|signals|silent`, default `judge` provisionally; no strict
 one-message-one-reply) → **hot path**, once complete → **guard layer**
 (checks every outgoing message for threats, contempt, guilt framing,
 punishment or manipulation; regenerates once, then falls back to a safe
 line) → pacing (read delay + typing time; availability stretches it,
-crisis skips it) → SSE → **cold path** (async).
+crisis skips it) → SSE (`/api/events`, history catch-up via
+`/api/chat/history`) → **cold path** (async). Waiting is durable: delayed
+pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 
 - **Hot path:** retrieve (similarity × salience × entity salience × recency,
   top 12, plus due threads and the current preoccupation forced in; recall
@@ -151,7 +154,7 @@ crisis skips it) → SSE → **cold path** (async).
 | 0. Skeleton ✅ | Chat UI, auth, session_log, full schema, crisis check, inspector, eval harness |
 | 1. Memory engine ✅ | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
 | 2. Guardrails ✅ | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
-| 3. Turn-taking + pacing | Buffer / judge / backchannels / pacing, SSE |
+| 3. Turn-taking + pacing ✅ | Buffer / judge / backchannels / pacing, SSE |
 | 4. Relationship + homeostasis | HomeostaticParam, hurt / tension / make-up, ending / repair |
 | 5. Life sim + availability + ego | Schedule / events, availability override, ego driven by life sim |
 | 6. Proactive outreach | Triggers, send gate, Web Push |
@@ -160,7 +163,13 @@ crisis skips it) → SSE → **cold path** (async).
 
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 
-**Current phase: 3 (Turn-taking + pacing), not started.** Phase 2
+**Current phase: 4 (Relationship + homeostasis), not started.** Phase 3
+(Turn-taking + pacing) done 2026-09-28: the exit run (only `turn_judge`
+real, `--runs 3`) passed all 10 Phase 3 scripts 3/3 (116 turn-judge calls,
+~$0.13), and a scripted HTTP + SSE check passed all six browser checks.
+Phase 4 starts from v2 §15.4 ("Carried forward from Phase 3") and the
+Phase 4 items in §15.2. Phase 3 design:
+`docs/superpowers/specs/2026-09-27-phase-3-turn-taking-design.md`. Phase 2
 (Guardrails) done 2026-09-26: `pnpm eval:guard --runs 3` passes 49/49
 (`evals/guard-baseline.json`) and `pnpm eval --llm=real --runs 3` passes
 36/36 with `prompts.judge_false_recall` v8 (`evals/baseline.json`), folding

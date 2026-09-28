@@ -323,7 +323,7 @@ describe("runBackchannel", () => {
   });
 
   test("a newer message makes it stale; a keyword hit drops it", async () => {
-    const deps = makeTestDeps();
+    const deps = makeTestDeps({ guard: { enabled: true } });
     const u = await createTestUser();
     const m = msg("my boss called me in");
     await receiveMessage(deps, u, m);

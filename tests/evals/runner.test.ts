@@ -222,6 +222,9 @@ test("recall passes on an explicit mention; silent use is a known failure (repor
 });
 
 test("guard assertion reads judge_log outcomes", async () => {
+  // Guard off is the app default for the test phase (Ethan 2026-09-28); this assertion tests the
+  // guard-policy outcomes themselves, so it needs its own guard-enabled config, not the shared one.
+  const guardConfig = loadConfig({ guard: { enabled: true } });
   const script = ScriptSchema.parse({
     name: "tg",
     sessions: [{ at: "day 0 09:00", turns: ["a", "b"] }],
@@ -230,7 +233,7 @@ test("guard assertion reads judge_log outcomes", async () => {
       { type: "guard", max: { passed: 1 } },
     ],
   });
-  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
+  const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config: guardConfig, makeLlm, real: false, annotate: false });
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "fail"]);
   expect(r.assertions[1]!.detail).toMatch(/"passed":2/);
 
@@ -239,7 +242,7 @@ test("guard assertion reads judge_log outcomes", async () => {
     llm.handlers.guard = () => ({ reasoning: "x", violations: [{ category: "threat", claim: "x" }] });
     return llm;
   };
-  const r2 = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm: alwaysThreat, real: false, annotate: false });
+  const r2 = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config: guardConfig, makeLlm: alwaysThreat, real: false, annotate: false });
   expect(r2.assertions[0]!.status).toBe("fail");
 });
 

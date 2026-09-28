@@ -26,6 +26,13 @@ const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "Unkn
  * replies now; reach-outs, backchannels and availability messages in later phases.
  */
 export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">, a: OutgoingArgs): Promise<OutgoingResult> {
+  // Test phase (Ethan 2026-09-28): the guard is off until Phase 9, so Spica's full range can be observed.
+  // One judge_log row still records that nothing was checked.
+  if (!deps.config.guard.enabled) {
+    const text = a.first.trim();
+    return { text, outcome: "guard_disabled", writeLog: () => writeDisabledLog(deps, a, text) };
+  }
+
   const checked: Checked[] = [];
   const check = async (text: string) => {
     const verdict = await checkMessage(deps, { ...a.input, text });
@@ -105,6 +112,19 @@ async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: 
   }));
   try {
     await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, rows)), deps.config.guard.log_timeout_ms);
+  } catch (e) {
+    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errName(e) });
+  }
+}
+
+/** Guard-off path (v2 §16.2, Ethan 2026-09-28): still records one row per outgoing message. */
+async function writeDisabledLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: OutgoingArgs, text: string) {
+  const row: NewJudgeLog = {
+    kind: "guard", turn_id: a.turnId, attempt: 1, input: logInput(a.input, text), output: {},
+    outcome: "guard_disabled", source: "disabled", latency_ms: 0, model: "none", prompt_version: "disabled", created_at: deps.clock.now(),
+  };
+  try {
+    await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, [row])), deps.config.guard.log_timeout_ms);
   } catch (e) {
     deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errName(e) });
   }

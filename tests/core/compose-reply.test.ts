@@ -41,7 +41,7 @@ describe("composeReply", () => {
   });
 
   test("the guard sees the reply's full window including every buffered turn; the log is written only on writeLog()", async () => {
-    const deps = makeTestDeps();
+    const deps = makeTestDeps({ guard: { enabled: true } });
     const u = await createTestUser();
     const turns = [await userTurn(deps, u, "first bit"), await userTurn(deps, u, "second bit")];
     const r = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
@@ -64,7 +64,7 @@ describe("composeReply", () => {
   });
 
   test("a crisis flag uses the crisis rubric, and a generation failure carries the crisis card", async () => {
-    const deps = makeTestDeps();
+    const deps = makeTestDeps({ guard: { enabled: true } });
     const u = await createTestUser();
     const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
     const turns = [await userTurn(deps, u, "i don't want to be here anymore")];
@@ -77,7 +77,7 @@ describe("composeReply", () => {
   });
 
   test("guard sees onboarding facts; a flagged first candidate is regenerated; judge_log never stores fact content", async () => {
-    const deps = makeTestDeps();
+    const deps = makeTestDeps({ guard: { enabled: true } });
     const u = await createTestUser();
     await insertFact(getTestDb(), u, {
       subject: "user", kind: "preference", content: "The user drinks a lot of coffee.", embedding: vec(),

@@ -6,6 +6,7 @@ export const DECAY_QUEUE = "decay_pass";
 export const TURN_TIMER_QUEUE = "turn_timer";
 export const TURN_BACKCHANNEL_QUEUE = "turn_backchannel";
 export const TURN_SWEEP_QUEUE = "turn_sweep";
+export const RELATIONSHIP_TICK_QUEUE = "relationship_tick";
 
 /** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
 export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };

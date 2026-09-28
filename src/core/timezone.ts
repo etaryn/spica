@@ -46,25 +46,29 @@ export function localHour(d: Date, tz: string): number {
   return Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(d));
 }
 
-/** `tz`'s UTC offset (minutes, local = UTC + offset) at instant `t` (ms). */
-function offsetMinutesAt(t: number, tz: string): number {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
-  }).formatToParts(new Date(t)).map((p) => [p.type, p.value]));
-  const asUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
-  return (asUtc - t) / 60_000;
-}
+const MIN = 60_000;
+const HOUR = 60 * MIN;
 
 /**
- * The UTC instant of local midnight on "YYYY-MM-DD" `date` in `tz`, DST-correct (v2 §15.4 #34): used to
- * build a half-open UTC range for a local calendar day, so the range compares directly against
- * `created_at` and an index on it applies. Two-step fixed-point refinement (the offset can only take the
- * zone's small set of values, so it converges in at most two passes, including across a DST change).
+ * The **start** of local date "YYYY-MM-DD" `date` in `tz` (v2 §15.4 #34): the earliest instant whose local
+ * date is ≥ `date`. This is usually literal local midnight, but not always — a zone whose clocks spring
+ * forward across midnight (e.g. America/Santiago, 00:00 → 01:00) has no instant that reads as `date` at
+ * 00:00, so the day's start is its first surviving instant instead (01:00 there); a zone that falls back
+ * across midnight has two instants that read as `date`'s first hour, and this returns the earlier one.
+ * Used to build a half-open UTC range for a local calendar day, so the range compares directly against
+ * `created_at` and an index on it applies.
+ *
+ * Binary search, not offset arithmetic: every real UTC offset is within ±15h of UTC, and a DST shift is
+ * always a whole number of minutes, so searching that window at 1-minute resolution using the existing
+ * local-date formatter needs no zone-specific offset math and is exact by construction.
  */
 export function localMidnight(date: string, tz: string): Date {
   const naive = Date.parse(`${date}T00:00:00Z`);
-  let t = naive;
-  for (let i = 0; i < 2; i++) t = naive - offsetMinutesAt(t, tz) * 60_000;
-  return new Date(t);
+  let loMin = (naive - 15 * HOUR) / MIN; // local date here is always < `date`, for any real zone
+  let hiMin = (naive + 15 * HOUR) / MIN; // local date here is always >= `date`
+  while (hiMin - loMin > 1) {
+    const midMin = loMin + Math.floor((hiMin - loMin) / 2);
+    if (localDateString(new Date(midMin * MIN), tz) >= date) hiMin = midMin; else loMin = midMin;
+  }
+  return new Date(hiMin * MIN);
 }

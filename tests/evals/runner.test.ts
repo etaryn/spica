@@ -384,6 +384,20 @@ test("script error: seed turns that would land at or before the previous session
   expect(r.error).toMatch(/session 2's seed turns would land at or before the previous session's last turn/);
 });
 
+test("script error: a session starting before the day's tick (v2 §15.4 #33)", async () => {
+  const script = ScriptSchema.parse({
+    name: "tick-before-session", profile: "none",
+    sessions: [
+      { at: "day 1 09:00", turns: ["hi"] },
+      { at: "day 2 02:00", turns: ["early"] }, // before tick_local_hour (04:00) on the new day
+    ],
+    assertions: [{ type: "state", check: "turn_count", expect: 2 }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("error");
+  expect(r.error).toMatch(/session 2 starts at day 2 02:00, before the day's tick at 04:00; start sessions at or after tick_local_hour on a new day/);
+});
+
 test("an out-of-range after_session on a relationship assertion errors like the turn branch does", async () => {
   const script = ScriptSchema.parse({
     name: "rel-oob", profile: "none",

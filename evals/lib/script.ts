@@ -22,6 +22,13 @@ const TimedTurn = z.object({
   text: z.string().min(1), after_s: z.number().min(0).optional(), repeat_previous_id: z.boolean().default(false),
   signals: PartialSignals.optional(),
 });
+/**
+ * `at`: "day N HH:MM" (absolute, from the fixed base) or "+N[d|h|m]" (relative to the previous session).
+ * When a session's `at` lands on a later calendar day than the previous session's, the runner ticks every
+ * day in between at that day's `relationship.tick_local_hour` (v2 §15.4 #33) before this session starts —
+ * so a new-day session must start **at or after `tick_local_hour`** (04:00 by default), or the runner
+ * raises a script error rather than silently rewinding the clock or skipping that day's tick.
+ */
 const Session = z.object({
   at: z.string(),
   user: z.string().regex(/^[a-z0-9_-]+$/).default("main"),

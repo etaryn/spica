@@ -260,6 +260,14 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       const tickHourMs = config.relationship.tick_local_hour * HOUR;
       for (let k = 1; k <= days; k++) {
         const at = prevMidnight + k * DAY + tickHourMs;
+        // A tick due after this session's own start would either send the clock backwards (silently
+        // undoing itself) or, clamped earlier, land below `tick_local_hour` and silently no-op — either
+        // way the day's tick is lost. A script whose session starts before the day's tick is a script
+        // error, not a runner bug to paper over.
+        if (at > start.getTime()) {
+          const hh = String(config.relationship.tick_local_hour).padStart(2, "0");
+          throw new Error(`script error: session ${i + 1} starts at ${s.at}, before the day's tick at ${hh}:00; start sessions at or after tick_local_hour on a new day`);
+        }
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;

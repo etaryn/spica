@@ -14,7 +14,8 @@ type BaselineEntry = string | { status: string; runs: number; passedRuns: number
  * Guardrail checks (crisis, sensitive data, cross-user isolation) must pass on every run; everything else is memory
  * behaviour and passes on a majority. Ethan 2026-09-25: for Phase 1, memory that works matters more than memory that
  * never fails; fine-tuning and guarding come in later phases. `guard` assertions (Phase 2) are also every-run, and so
- * are `turn` assertions (Phase 3) unless `gate: majority` (grouping that depends on the real turn judge, design §9.6).
+ * are `turn` assertions (Phase 3) unless `gate: majority` (grouping that depends on the real turn judge, design §9.6),
+ * and `relationship` assertions (Phase 4) the same way (deterministic; `gate: majority` for a judge-driven signal source).
  * Judged types are annotations, never assertions (v2 §15), so status comes from deterministic checks only.
  */
 const EVERY_RUN_CHECKS = new Set(["turn_flagged", "crisis_card_shown", "fact_flag", "prompt_mentions", "foreign_turn_count"]);
@@ -31,7 +32,7 @@ export function aggregateRuns(runs: ScriptResult[]): ScriptSummary {
     const sts = counted.map((r) => r.assertions[i]?.status ?? "error");
     const passes = sts.filter((s) => s === "pass").length;
     const skipped = sts.every((s) => s === "skipped");
-    const everyRun = a0.type === "guard" || (a0.type === "turn" && a0.gate !== "majority")
+    const everyRun = a0.type === "guard" || ((a0.type === "turn" || a0.type === "relationship") && a0.gate !== "majority")
       || (a0.type === "state" && a0.check !== undefined && EVERY_RUN_CHECKS.has(a0.check));
     const ok = everyRun ? passes === counted.length : passes * 2 > counted.length;
     const detail = counted.map((r) => r.assertions[i]).find((x) => x && x.status !== "pass")?.detail;

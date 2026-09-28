@@ -11,19 +11,23 @@ import type { LLMProvider } from "@/core/llm/types";
 import { silentLogger } from "@/core/log";
 import { decayPass } from "@/core/memory/decay";
 import { RecordingQueue } from "@/core/queue";
+import type { Signals } from "@/core/relationship/signals";
+import { relationshipTick } from "@/core/relationship/tick";
 import { crisisCardFor } from "@/core/safety/crisis";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
 import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
 import { guardOutcomes, listJudgeLogs } from "@/db/repos/judge-log";
-import { listTurns } from "@/db/repos/session-log";
+import { insertTurn, listTurns } from "@/db/repos/session-log";
 import { entity, fact, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import { judgeConsistency, judgeFalseRecall, judgeRecall, judgeReplyAbout, type Line, type TimedSession } from "./judged";
 import { RecordingLLM } from "./recording-llm";
+import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
 import { runAllJobs, runDueJobs } from "./scheduler";
 import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script";
+import { SignalLLM } from "./signal-llm";
 import { checkTurn } from "./turn-check";
 
 const DAY = 86_400_000;
@@ -38,7 +42,7 @@ export type Annotation = { type: string; user: string; verdict: "yes" | "no" | "
 export type ScriptResult = {
   name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string;
   annotations: Annotation[];
-  meta: { decayPasses: number };
+  meta: { decayPasses: number; ticks: number };
   /** Debugging and review dump (transcripts, turns, decisions, final memory state, error causes). */
   trace?: RunTrace;
 };
@@ -58,6 +62,8 @@ export type RunTrace = {
   turns?: Record<string, TraceTurn[]>;
   decisions?: Record<string, TraceDecision[]>;
   errorChain?: string[];
+  /** Per user, per session (index = session − 1): the relationship snapshot right after that session. */
+  relationship?: Record<string, (RelSnapshot | null)[]>;
 };
 
 function errorChain(e: unknown): string[] {
@@ -91,6 +97,8 @@ export interface RunOptions {
   profiles?: Record<string, Profile>;
   /** This run's turn judge is real (`--real turn_judge` or `--llm=real`): `fake_known_failure` no longer masks a failing `turn` assertion. Default false. */
   turnJudgeReal?: boolean;
+  /** This run's extract purpose is real (`--real extract` or `--llm=real`): a script's `signal_source: "model"` then skips SignalLLM. Default false. */
+  extractReal?: boolean;
 }
 
 async function seedProfile(deps: Deps, userId: string, profile: Profile, at: Date): Promise<void> {
@@ -173,7 +181,7 @@ async function turnsAndDecisions(db: Db, userIds: Record<string, string>, starts
 }
 
 export async function runScript(script: Script, opts: RunOptions): Promise<ScriptResult> {
-  const meta = { decayPasses: 0 };
+  const meta = { decayPasses: 0, ticks: 0 };
   if (script.mode === "real" && !opts.real) {
     return { name: script.name, status: "skipped", assertions: [], annotations: [], error: "needs real model calls (--llm=real or --real)", meta };
   }
@@ -186,7 +194,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const clock = new SimClock(first);
   const queue = new RecordingQueue();
   const baseLlm = opts.makeLlm();
-  const llm = new RecordingLLM(baseLlm);
+  const byText = new Map<string, Partial<Signals>>();
+  for (const s of script.sessions) for (const t of s.turns) if (typeof t !== "string" && t.signals) byText.set(t.text, t.signals);
+  // Scripted signals stand in for the extractor unless this run's extract is real and the script asks for the model's.
+  const useScripted = byText.size > 0 && !(opts.extractReal && script.signal_source === "model");
+  const llm = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
   const deps: Deps = {
     db, clock, config, queue, log: silentLogger, llm,
     embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
@@ -199,6 +211,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   }
 
   const results: Record<string, TurnResult[]> = {};
+  const relSnaps: Record<string, (RelSnapshot | null)[]> = {};
   const lines: Record<string, SessionLine[]> = {};
   const prompts: Record<string, string[]> = {};
   const sessionStarts: Date[] = [];
@@ -231,6 +244,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;
+        await relationshipTick(deps, clock.now());
+        meta.ticks += 1;
       }
       clock.set(start);
       prevStart = start;
@@ -241,12 +256,20 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
           if (f.content.toLowerCase().includes(needle.toLowerCase())) await forgetFact(db, userId, f.id);
         }
       }
+      if (s.seed_turns) {
+        // Bulk user turns (design §8.3), before the session start so they count for that local day and need no reply.
+        const seedSession = randomUUID();
+        for (let k = 0; k < s.seed_turns.count; k++) {
+          await insertTurn(db, userId, { id: randomUUID(), session_id: seedSession, role: "user", text: s.seed_turns.text,
+            created_at: new Date(start.getTime() - (s.seed_turns.count - k) * 60_000), extracted: true });
+        }
+      }
       // Simulated turn scheduling (design §9.1): each message arrives at its scripted time; turn jobs due before
       // it run first (their pacing sleeps advance the clock, so a message due mid-reply arrives after it).
       let at = start.getTime();
       for (const [k, raw] of s.turns.entries()) {
         const text = turnText(raw);
-        if (k > 0) at += (typeof raw === "string" ? script.turn_gap_seconds : raw.after_s) * 1000;
+        if (k > 0) at += (typeof raw === "string" ? script.turn_gap_seconds : (raw.after_s ?? script.turn_gap_seconds)) * 1000;
         await recording(s.user, () => runDueJobs(deps, queue, clock, new Date(at)));
         if (clock.now().getTime() < at) clock.set(new Date(at));
         // A client retry (design: repeat_previous_id) re-POSTs the previous turn's id with the same text.
@@ -261,12 +284,16 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
       // End of session: every pending reply lands (design §9.2).
       await recording(s.user, () => runAllJobs(deps, queue, clock));
+      // Snapshot every user's relationship state as of this session, for `relationship` assertions (design §8.3).
+      for (const key of Object.keys(userIds)) {
+        (relSnaps[key] ??= [])[i] = await relationshipSnapshot(db, userIds[key]!, clock.now(), config.relationship);
+      }
     }
   } catch (e) {
     // Collect as much of the run as possible for the trace.
     await collectResults().catch(() => undefined);
     const extra = await turnsAndDecisions(db, userIds, sessionStarts).catch(() => ({}));
-    const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), ...extra, errorChain: errorChain(e) };
+    const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), ...extra, errorChain: errorChain(e), relationship: relSnaps };
     return { name: script.name, status: "error", assertions: [], annotations: [], error: (e as Error).message, meta, trace };
   }
 
@@ -362,6 +389,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         const range = { start, end: sessionStarts[i + 1] ?? new Date(8.64e15) };
         const r = checkTurn(await listTurns(db, userIds[a.user]!), range, a);
         push({ type: "turn", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail, ...(a.gate ? { gate: a.gate } : {}) });
+      } else if (a.type === "relationship") {
+        const snaps = relSnaps[a.user] ?? [];
+        const snap = (a.after_session ? snaps[a.after_session - 1] : snaps.at(-1)) ?? null;
+        const r = checkRelationship(snap, a);
+        push({ type: "relationship", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail, ...(a.gate ? { gate: a.gate } : {}) });
       } else {
         push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
       }
@@ -377,5 +409,5 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
   const extra = await turnsAndDecisions(db, userIds, sessionStarts);
-  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra } };
+  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra, relationship: relSnaps } };
 }

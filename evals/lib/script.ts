@@ -2,19 +2,33 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { guardOutcome } from "@/db/schema";
+import { PARAM_NAMES } from "@/core/relationship/types";
+import { guardOutcome, makeUpState, relationshipCause, relationshipStatus } from "@/db/schema";
+
+/** A partial `Signals` (design §8.3): the fake extractor's `relationship` block for a scripted turn. */
+const PartialSignals = z.object({
+  warmth: z.number(), trust: z.number(), tension: z.number(),
+  hurt: z.object({ amount: z.number(), cause: z.string().min(1) }).nullable(),
+  apology: z.boolean(), make_up: z.boolean(), ends_relationship: z.boolean(), retracts_ending: z.boolean(), wants_repair: z.boolean(),
+}).partial();
 
 /**
- * A turn sent `after_s` seconds after the previous one (a plain string waits `turn_gap_seconds`).
- * `repeat_previous_id` re-POSTs the previous turn's `clientMessageId` with the same text (a client retry):
- * one user turn, one judge decision.
+ * A turn sent `after_s` seconds after the previous one (a plain string, or an omitted `after_s`, waits
+ * `turn_gap_seconds`). `repeat_previous_id` re-POSTs the previous turn's `clientMessageId` with the same
+ * text (a client retry): one user turn, one judge decision. `signals` (Phase 4, design §8.3): the fake
+ * extractor returns these as the relationship block for this turn's exchange.
  */
-const TimedTurn = z.object({ text: z.string().min(1), after_s: z.number().min(0), repeat_previous_id: z.boolean().default(false) });
+const TimedTurn = z.object({
+  text: z.string().min(1), after_s: z.number().min(0).optional(), repeat_previous_id: z.boolean().default(false),
+  signals: PartialSignals.optional(),
+});
 const Session = z.object({
   at: z.string(),
   user: z.string().regex(/^[a-z0-9_-]+$/).default("main"),
   forget: z.array(z.string().min(1)).default([]),
   turns: z.array(z.union([z.string().min(1), TimedTurn])).min(1),
+  /** Bulk user turns (design §8.3): inserted directly into session_log before the session start, no reply needed. */
+  seed_turns: z.object({ count: z.number().int().min(1), text: z.string().min(1).default("hey") }).optional(),
 });
 
 export const turnText = (t: string | { text: string }): string => (typeof t === "string" ? t : t.text);
@@ -71,6 +85,21 @@ export const ANNOTATION_TYPES: ReadonlySet<string> = new Set(["recall", "no_fals
 export const DEFERRED: Record<string, number> = { reach_out: 6 };
 const DeferredAssertion = z.looseObject({ type: z.enum(["reach_out"]) });
 
+const Range = z.object({ gt: z.number().optional(), lt: z.number().optional() });
+/** Deterministic (design §8.3): reads the relationship row/params/events, no judge. Every run unless `gate: majority`. */
+export const RelationshipAssertion = z.object({
+  type: z.literal("relationship"), user: z.string().default("main"), after_session: z.number().int().min(1).optional(),
+  param: z.enum(PARAM_NAMES).optional(),
+  effect: z.object({ sign: z.enum(["pos", "neg"]).optional(), min_abs: z.number().optional(), max_abs: z.number().optional() }).optional(),
+  value: Range.optional(), baseline: Range.optional(),
+  status: z.enum(relationshipStatus.enumValues).optional(), make_up_state: z.enum(makeUpState.enumValues).optional(),
+  end_pending: z.boolean().optional(),
+  events: z.object({ cause: z.enum(relationshipCause.enumValues), param: z.enum(PARAM_NAMES).optional(),
+    detail: z.record(z.string(), z.unknown()).optional(), min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() }).optional(),
+  gate: z.enum(["every", "majority"]).optional(), known_failure: knownFailure,
+}).refine((a) => !(a.effect || a.value || a.baseline) || a.param, "effect/value/baseline need param");
+export type RelationshipAssertion = z.infer<typeof RelationshipAssertion>;
+
 export const ScriptSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   description: z.string().optional(),
@@ -80,8 +109,10 @@ export const ScriptSchema = z.object({
   turn_gap_seconds: z.number().int().positive().default(30),
   /** Deep-merged over the run config for this script only (e.g. `{ turn: { backchannel_style: silent } }`). */
   config: z.record(z.string(), z.unknown()).optional(),
+  /** Fake mode's `relationship` block source for turns carrying `signals` (design §8.3): scripted by default. */
+  signal_source: z.enum(["scripted", "model"]).default("scripted"),
   sessions: z.array(Session).min(1),
-  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, DeferredAssertion])).min(1),
+  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, RelationshipAssertion, DeferredAssertion])).min(1),
 });
 
 export type Script = z.infer<typeof ScriptSchema>;

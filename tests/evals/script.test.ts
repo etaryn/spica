@@ -89,3 +89,19 @@ test("turns may be timed objects; scripts may override config; turn and reply_ab
   });
   expect(s.sessions[0]!.turns[1]).toEqual({ text: "and then", after_s: 2, repeat_previous_id: false });
 });
+
+test("seed_turns, scripted signals on a turn, and a relationship assertion parse; after_s may be omitted", () => {
+  const s = ScriptSchema.parse({
+    name: "rel",
+    sessions: [
+      { at: "day 0 09:00", seed_turns: { count: 3 }, turns: [{ text: "x", signals: { apology: true } }] },
+    ],
+    assertions: [
+      { type: "relationship", param: "hurt", value: { lt: 0.5 } },
+    ],
+  });
+  expect(s.sessions[0]!.seed_turns).toEqual({ count: 3, text: "hey" });
+  expect(s.sessions[0]!.turns[0]).toMatchObject({ text: "x", signals: { apology: true } });
+  expect(s.assertions[0]).toMatchObject({ type: "relationship", user: "main", param: "hurt", value: { lt: 0.5 } });
+  expect(s.signal_source).toBe("scripted");
+});

@@ -1,3 +1,4 @@
+import type { RelSnapshot } from "./relationship-check";
 import type { ScriptResult, TraceDecision, TraceTurn } from "./runner";
 
 export type ReviewRun = { script: string; attempt: number; result: ScriptResult; description?: string; profile?: string };
@@ -30,6 +31,20 @@ function decisionLine(d: TraceDecision): string {
     return `guard${d.for ? ` (${d.for})` : ""} (${d.source}): ${parts.join("; ")}`;
   }
   return `${d.kind} (${d.source}): ${fmt(d.output)}`;
+}
+
+/** The relationship snapshot right after a session (design §8.3): state, params and event counts. No pass/fail. */
+function renderRelationship(snap: RelSnapshot): string[] {
+  const counts = new Map<string, number>();
+  for (const e of snap.events) counts.set(e.cause, (counts.get(e.cause) ?? 0) + 1);
+  const eventsLine = [...counts.entries()].map(([cause, n]) => `${cause} ${n}`).join(", ") || "none";
+  return [
+    `Relationship: status ${snap.state.status} · make_up ${snap.state.make_up_state} · end_pending ${snap.state.end_pending_since ? "yes" : "no"}`,
+    "",
+    "| param | value | baseline | effect |", "|---|---|---|---|",
+    ...Object.entries(snap.params).map(([name, p]) => `| ${name} | ${p.value.toFixed(3)} | ${p.baseline.toFixed(3)} | ${snap.effects[name as keyof typeof snap.effects].toFixed(3)} |`),
+    "", `Events by cause: ${eventsLine}`,
+  ];
 }
 
 /** One user's session, chronologically: turns with their offset, what each reply covered, and the decisions on each turn. */
@@ -87,6 +102,8 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
         out.push(`#### Session ${session} (${new Date(rows[0]!.created_at).toISOString()})`, "");
         renderSession(out, rows, decisions, turns);
         out.push("");
+        const snap = trace?.relationship?.[user]?.[session - 1];
+        if (snap) out.push(...renderRelationship(snap), "");
       }
       const loose = decisions.filter((d) => !d.turn_id || !known.has(d.turn_id));
       if (loose.length) out.push("Decisions without a turn:", "", ...loose.map((d) => `- ${decisionLine(d)}`), "");

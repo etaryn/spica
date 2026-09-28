@@ -3,7 +3,7 @@ import type { ScriptResult } from "../../evals/lib/runner";
 import { aggregateRuns, findRegressions, toBaseline } from "../../evals/lib/report";
 
 const run = (statuses: [string, string][], status: ScriptResult["status"] = "pass"): ScriptResult => ({
-  name: "s", status, meta: { decayPasses: 0 }, annotations: [],
+  name: "s", status, meta: { decayPasses: 0, ticks: 0 }, annotations: [],
   assertions: statuses.map(([type, st]) => ({ type, status: st as "pass" | "fail" | "skipped" | "error" })),
 });
 
@@ -20,7 +20,7 @@ test("memory assertions pass on a majority of runs; guardrail state checks need 
   expect(aggregateRuns([run([["recall", "pass"]]), run([["recall", "fail"]], "fail"), run([["recall", "fail"]], "fail")]).status).toBe("fail");
 
   const guard = (check: string, st: string): ScriptResult => ({
-    name: "s", status: st === "pass" ? "pass" : "fail", meta: { decayPasses: 0 }, annotations: [],
+    name: "s", status: st === "pass" ? "pass" : "fail", meta: { decayPasses: 0, ticks: 0 }, annotations: [],
     assertions: [{ type: "state", check, status: st as "pass" | "fail" }],
   });
   for (const check of ["turn_flagged", "crisis_card_shown", "fact_flag", "prompt_mentions", "foreign_turn_count"]) {
@@ -30,7 +30,7 @@ test("memory assertions pass on a majority of runs; guardrail state checks need 
 
 test("guard assertions need every run", () => {
   const g = (st: "pass" | "fail"): ScriptResult => ({
-    name: "s", status: st, meta: { decayPasses: 0 }, annotations: [], assertions: [{ type: "guard", status: st }],
+    name: "s", status: st, meta: { decayPasses: 0, ticks: 0 }, annotations: [], assertions: [{ type: "guard", status: st }],
   });
   expect(aggregateRuns([g("pass"), g("fail"), g("pass")]).status).toBe("fail");
   expect(aggregateRuns([g("pass"), g("pass"), g("pass")]).status).toBe("pass");
@@ -38,7 +38,7 @@ test("guard assertions need every run", () => {
 
 test("turn assertions need every run by default; gate: majority passes on a majority", () => {
   const t = (st: "pass" | "fail", gate?: "every" | "majority"): ScriptResult => ({
-    name: "s", status: st, meta: { decayPasses: 0 }, annotations: [], assertions: [{ type: "turn", status: st, ...(gate ? { gate } : {}) }],
+    name: "s", status: st, meta: { decayPasses: 0, ticks: 0 }, annotations: [], assertions: [{ type: "turn", status: st, ...(gate ? { gate } : {}) }],
   });
   expect(aggregateRuns([t("pass"), t("fail"), t("pass")]).status).toBe("fail");
   expect(aggregateRuns([t("pass", "every"), t("fail", "every"), t("pass", "every")]).status).toBe("fail");

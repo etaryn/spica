@@ -338,6 +338,24 @@ test("repeat_previous_id tracks the last id per user, not globally", async () =>
   expect(r.status).toBe("pass");
 });
 
+test("relationship: scripted signals drive a make-up; seed turns and ticks move msgs_per_day", async () => {
+  const script = ScriptSchema.parse({
+    name: "rel-smoke", profile: "none",
+    sessions: [
+      { at: "day 1 10:00", seed_turns: { count: 30 }, turns: [{ text: "your news is boring", signals: { hurt: { amount: 0.8, cause: "the user called her news boring" } } }] },
+      { at: "+1d", turns: ["hey", "what's up"] },
+    ],
+    assertions: [
+      { type: "relationship", after_session: 1, param: "msgs_per_day", effect: { sign: "pos", min_abs: 0.9 } },
+      { type: "relationship", after_session: 1, make_up_state: "due", param: "hurt", value: { gt: 0.25 } },
+      { type: "relationship", after_session: 2, make_up_state: "offered", events: { cause: "baseline", min: 6 } },
+    ],
+  });
+  const r = await runScript(script, opts());
+  expect(r.assertions.map((a) => [a.status, a.detail])).toEqual([["pass", undefined], ["pass", undefined], ["pass", undefined]]);
+  expect(r.meta.ticks).toBe(1);
+});
+
 test("known_failure applies to the right assertion when annotations sit between assertions", async () => {
   const script = ScriptSchema.parse({ name: "kf2", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [

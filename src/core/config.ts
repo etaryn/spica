@@ -133,6 +133,8 @@ export const ConfigSchema = z.object({
       z.object({ closeness: t, trust: t, warmth: t, hurt: t, tension: t, msgs_per_day: t });
     return z.object({
       tick_cron: z.string().min(1),
+      tick_local_hour: z.number().int().min(0).max(23),
+      history_days: z.number().int().min(1),
       baseline_alpha: unit,
       variance_epsilon: z.number().positive(),
       initial: paramRecord(z.number().min(0)),

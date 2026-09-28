@@ -1,5 +1,6 @@
-import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import { PARAM_NAMES, type Params, type ParamName, type RelConfig, type RelEvent, type RelState } from "@/core/relationship/types";
+import { localMidnight, nextLocalDate } from "@/core/timezone";
 import type { Db } from "../client";
 import { relationship, relationship_event, relationship_param, session_log } from "../schema";
 
@@ -72,25 +73,34 @@ export async function countUserTurnsBetween(db: Db, userId: string, from: Date, 
   return r[0]?.n ?? 0;
 }
 
+/**
+ * `date`'s half-open UTC range `[localMidnight(date), localMidnight(date+1))` (v2 §15.4 #34), computed in
+ * TypeScript and DST-correct, so the comparison is a plain range against `created_at` and
+ * `session_log_user_created_idx` applies (a function on the column, as the old `AT TIME ZONE … ::date`
+ * form used, can't use it).
+ */
 export async function countUserTurnsOnLocalDate(db: Db, userId: string, date: string, tz: string): Promise<number> {
-  const r = await db.execute(sql`
-    SELECT count(*)::int AS n FROM session_log
-    WHERE user_id = ${userId} AND role = 'user' AND (created_at AT TIME ZONE ${tz})::date = ${date}::date`);
-  return Number(r.rows[0]?.n ?? 0);
+  const from = localMidnight(date, tz);
+  const to = localMidnight(nextLocalDate(date), tz);
+  const r = await db.select({ n: sql<number>`count(*)::int` }).from(session_log).where(and(
+    eq(session_log.user_id, userId), eq(session_log.role, "user"), gte(session_log.created_at, from), lt(session_log.created_at, to)));
+  return r[0]?.n ?? 0;
 }
 
-export async function userSessionStarts(db: Db, userId: string, limit: number): Promise<Date[]> {
+/** Bounded to `created_at >= since` (v2 §15.4 #34): the cadence window never needs the user's full history. */
+export async function userSessionStarts(db: Db, userId: string, limit: number, since: Date): Promise<Date[]> {
   const r = await db.execute(sql`
     SELECT min(created_at) AS started FROM session_log
-    WHERE user_id = ${userId} AND role = 'user'
+    WHERE user_id = ${userId} AND role = 'user' AND created_at >= ${since}
     GROUP BY session_id ORDER BY started DESC LIMIT ${limit}`);
   return r.rows.map((x) => new Date(String(x.started)));
 }
 
-export async function userActiveHours(db: Db, userId: string, tz: string): Promise<number[]> {
+/** Bounded to `created_at >= since` (v2 §15.4 #34). */
+export async function userActiveHours(db: Db, userId: string, tz: string, since: Date): Promise<number[]> {
   const r = await db.execute(sql`
     SELECT extract(hour FROM created_at AT TIME ZONE ${tz})::int AS h, count(*)::int AS n FROM session_log
-    WHERE user_id = ${userId} AND role = 'user' GROUP BY h`);
+    WHERE user_id = ${userId} AND role = 'user' AND created_at >= ${since} GROUP BY h`);
   const out = Array.from({ length: 24 }, () => 0);
   for (const row of r.rows) out[Number(row.h)] = Number(row.n);
   return out;

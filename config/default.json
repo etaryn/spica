@@ -167,7 +167,9 @@
     "enqueue_timeout_ms": 2000
   },
   "relationship": {
-    "tick_cron": "15 4 * * *",
+    "tick_cron": "15 * * * *",
+    "tick_local_hour": 4,
+    "history_days": 90,
     "baseline_alpha": 0.15,
     "variance_epsilon": 0.01,
     "initial": { "closeness": 0.2, "trust": 0.4, "warmth": 0.5, "hurt": 0, "tension": 0, "msgs_per_day": 5 },

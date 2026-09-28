@@ -31,6 +31,7 @@ import { SignalLLM } from "./signal-llm";
 import { checkTurn } from "./turn-check";
 
 const DAY = 86_400_000;
+const HOUR = 3_600_000;
 
 export type AssertionResult = {
   type: string; check?: string; user?: string; status: "pass" | "fail" | "skipped" | "error"; detail?: string;
@@ -250,8 +251,15 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
       // v2 §10.1: a session whose `at` advances the clock by N days (from the previous session's start) runs N decay passes.
       const days = prevStart ? Math.round((start.getTime() - prevStart.getTime()) / DAY) : 0;
+      // Eval users are always UTC (§14.4), so the tick's local date is just the UTC calendar date. Tick at
+      // that date's `tick_local_hour` (v2 §15.4 #33), not at the previous session's own clock-of-day: this
+      // keeps the same calendar date ticked either way (only the hour-of-day changes), satisfies
+      // `tickUser`'s local-hour gate regardless of what hour a script's sessions fall at, and still lands
+      // before the next session start (every rel-* script starts at or after `tick_local_hour`).
+      const prevMidnight = prevStart ? Math.floor(prevStart.getTime() / DAY) * DAY : 0;
+      const tickHourMs = config.relationship.tick_local_hour * HOUR;
       for (let k = 1; k <= days; k++) {
-        const at = prevStart!.getTime() + k * DAY;
+        const at = prevMidnight + k * DAY + tickHourMs;
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;

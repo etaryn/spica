@@ -50,11 +50,39 @@ test("turn counts: window, local date, session starts", async () => {
   await mk(s1, "2026-01-05T23:30:00Z");
   await mk(s1, "2026-01-05T23:40:00Z", "companion");
   await mk(s2, "2026-01-06T10:00:00Z");
+  const since = new Date("2020-01-01T00:00:00Z");
   expect(await rel.countUserTurnsBetween(db, u, new Date("2026-01-05T12:00:00Z"), new Date("2026-01-06T12:00:00Z"))).toBe(2);
   expect(await rel.countUserTurnsOnLocalDate(db, u, "2026-01-05", "UTC")).toBe(1);
   expect(await rel.countUserTurnsOnLocalDate(db, u, "2026-01-06", "Asia/Tokyo")).toBe(2); // 23:30Z = 08:30 JST on the 6th
-  expect((await rel.userSessionStarts(db, u, 10)).map((d) => d.toISOString())).toEqual(["2026-01-06T10:00:00.000Z", "2026-01-05T23:30:00.000Z"]);
-  expect((await rel.userActiveHours(db, u, "UTC"))[23]).toBe(1);
+  expect((await rel.userSessionStarts(db, u, 10, since)).map((d) => d.toISOString())).toEqual(["2026-01-06T10:00:00.000Z", "2026-01-05T23:30:00.000Z"]);
+  expect((await rel.userActiveHours(db, u, "UTC", since))[23]).toBe(1);
+});
+
+test("countUserTurnsOnLocalDate is DST-correct across America/New_York's spring-forward", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const s = randomUUID();
+  const mk = (iso: string) => insertTurn(db, u, { id: randomUUID(), session_id: s, role: "user", text: "x", created_at: new Date(iso) });
+  // Local midnight 2026-03-08 America/New_York is 05:00Z (still EST); local midnight 2026-03-09 is 04:00Z (EDT).
+  await mk("2026-03-08T04:59:00Z"); // 2026-03-07 23:59 EST: previous local day
+  await mk("2026-03-08T05:01:00Z"); // 2026-03-08 00:01 EST: this local day
+  await mk("2026-03-09T03:59:00Z"); // 2026-03-08 23:59 EST: still this local day (23h day)
+  await mk("2026-03-09T04:01:00Z"); // 2026-03-09 00:01 EDT: next local day
+  expect(await rel.countUserTurnsOnLocalDate(db, u, "2026-03-08", "America/New_York")).toBe(2);
+});
+
+test("userSessionStarts / userActiveHours ignore turns older than `since`", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const old = randomUUID(), recent = randomUUID();
+  await insertTurn(db, u, { id: randomUUID(), session_id: old, role: "user", text: "old", created_at: new Date("2025-01-01T05:00:00Z") });
+  await insertTurn(db, u, { id: randomUUID(), session_id: recent, role: "user", text: "new", created_at: new Date("2026-01-05T09:00:00Z") });
+  const since = new Date("2025-12-01T00:00:00Z");
+  const starts = await rel.userSessionStarts(db, u, 10, since);
+  expect(starts.map((d) => d.toISOString())).toEqual(["2026-01-05T09:00:00.000Z"]);
+  const hours = await rel.userActiveHours(db, u, "UTC", since);
+  expect(hours[9]).toBe(1);
+  expect(hours[5]).toBe(0);
 });
 
 test("adminListRelationshipUsers lists every user with a row", async () => {

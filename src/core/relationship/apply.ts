@@ -29,11 +29,12 @@ export async function applyRelationship(tx: Db, deps: Pick<Deps, "config" | "clo
   // turn (shouldn't happen for a scored exchange, but keeps this total).
   const exchangeAt = lastUser?.created_at ?? now;
   const t = applyExchange(rel.toRelState(row), params, { now, exchangeAt, signals: a.signals, crisis: a.crisis, hurtFactId: a.hurtFactId, replies, msgs24h }, cfg);
+  const since = new Date(now.getTime() - cfg.history_days * DAY);
   const cadence = buildCadence({
     msgs24h,
     msgs7d: await rel.countUserTurnsBetween(tx, a.userId, new Date(now.getTime() - 7 * DAY), now),
-    starts: await rel.userSessionStarts(tx, a.userId, cfg.cadence_sessions + 1),
-    activeHours: await rel.userActiveHours(tx, a.userId, tz),
+    starts: await rel.userSessionStarts(tx, a.userId, cfg.cadence_sessions + 1, since),
+    activeHours: await rel.userActiveHours(tx, a.userId, tz, since),
   }, cfg);
   const lastContact = lastUser && (!row.last_contact || lastUser.created_at > row.last_contact) ? lastUser.created_at : row.last_contact;
   await rel.saveRelationship(tx, a.userId, { state: t.state, params: t.params, cadence, last_contact: lastContact });

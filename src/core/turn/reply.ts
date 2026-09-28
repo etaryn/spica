@@ -42,7 +42,35 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     return "busy";
   }
 
-  const turns = await sessionLog.getTurnsByIds(db, userId, c.turnIds);
+  const getTurns = (deps as { getTurnsByIds?: typeof sessionLog.getTurnsByIds }).getTurnsByIds ?? sessionLog.getTurnsByIds;
+
+  /**
+   * A post-commit infrastructure error (before the reply row exists) must not strand the committed turns in
+   * limbo: put them back in the buffer and queue a retry, same as a generation failure (§15.4 #24). Past
+   * `retry_limit`, give up instead — no reply row exists yet, so `reply_failed` is still correct there.
+   */
+  const fail = async (e: unknown): Promise<"retry" | "abandoned" | "failed"> => {
+    log.error("turn timer failed after commit", { userId, error: errName(e) });
+    const attempt = job.attempt ?? 0;
+    const now = clock.now();
+    if (attempt < config.turn.retry_limit) {
+      const r = await mutateState(db, userId, now, (s) => T.restore(s, { epoch: c.epoch, turnIds: c.turnIds, now, retryAt: plus(now, config.turn.retry_delay_ms) }));
+      if (r.kind === "abandoned") return "abandoned";
+      await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: r.version, attempt: attempt + 1 }, { startAfter: plus(now, config.turn.retry_delay_ms) }), "turn_timer");
+      return "retry";
+    }
+    const cleared = await mutateState(db, userId, now, (s) => T.giveUp(s, { epoch: c.epoch, now }));
+    if (!cleared) return "abandoned";
+    await emit(deps, userId, { type: "reply_failed", turnIds: c.turnIds });
+    return "failed";
+  };
+
+  let turns: Turn[];
+  try {
+    turns = await getTurns(db, userId, c.turnIds);
+  } catch (e) {
+    return fail(e);
+  }
   const last = turns.at(-1);
   if (!last) {
     await mutateState(db, userId, clock.now(), (s) => T.giveUp(s, { epoch: c.epoch, now: clock.now() }));
@@ -77,38 +105,33 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
     if (!composed.ok) {
       log.error("turn reply failed", { userId, turnId: last.id, error: errName(composed.error) });
-      const attempt = job.attempt ?? 0;
-      const now = clock.now();
-      if (attempt < config.turn.retry_limit) {
-        const r = await mutateState(db, userId, now, (s) => T.restore(s, { epoch: c.epoch, turnIds: c.turnIds, now, retryAt: plus(now, config.turn.retry_delay_ms) }));
-        if (r.kind === "abandoned") return "abandoned";
-        await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: r.version, attempt: attempt + 1 }, { startAfter: plus(now, config.turn.retry_delay_ms) }), "turn_timer");
-        return "retry";
-      }
-      // A crisis meanwhile already covers these turns: giveUp reports it via `false`, and reply_failed must
-      // not also fire (rule 1/7 — no punishing language, and the crisis reply already answered them).
-      const cleared = await mutateState(db, userId, now, (s) => T.giveUp(s, { epoch: c.epoch, now }));
-      if (!cleared) return "abandoned";
-      await emit(deps, userId, { type: "reply_failed", turnIds: c.turnIds });
-      return "failed";
+      return await fail(composed.error);
     }
 
     const { parts } = composed.value;
     let sendAt = plus(typingAt, typingMs(config.turn, parts[0]?.length ?? 0));
-    await sleepUntil(clock, sendAt);
 
     // finish + the insert share one transaction: `insertReplyIfAbsent` never throws on a `reply_to` collision
     // (ON CONFLICT DO NOTHING), so a concurrent duplicate can't abort this transaction out from under the
-    // `finish` patch that clears inflight.
-    const insertAt = clock.now();
-    const companion = await mutateState<Turn | null>(db, userId, insertAt, async (s, tx) => {
-      const step = T.finish(s, { epoch: c.epoch, turnIds: c.turnIds, now: insertAt });
-      if (!step.result) return { patch: null, result: null };
-      const row = await sessionLog.insertReplyIfAbsent(tx, userId, {
-        id: randomUUID(), session_id: last.session_id, role: "companion", text: composed.value.text, created_at: insertAt, reply_to: last.id,
+    // `finish` patch that clears inflight. `companion` stays `undefined` unless the transaction commits, so a
+    // thrown error here (nothing persisted, transactional) is still safe to restore and retry (§15.4 #24); an
+    // error after that point (companion assigned) rethrows as before.
+    let companion: Turn | null | undefined;
+    try {
+      await sleepUntil(clock, sendAt);
+      const insertAt = clock.now();
+      companion = await mutateState<Turn | null>(db, userId, insertAt, async (s, tx) => {
+        const step = T.finish(s, { epoch: c.epoch, turnIds: c.turnIds, now: insertAt });
+        if (!step.result) return { patch: null, result: null };
+        const row = await sessionLog.insertReplyIfAbsent(tx, userId, {
+          id: randomUUID(), session_id: last.session_id, role: "companion", text: composed.value.text, created_at: insertAt, reply_to: last.id,
+        });
+        return { patch: step.patch, result: row };
       });
-      return { patch: step.patch, result: row };
-    });
+    } catch (e) {
+      if (companion === undefined) return await fail(e);
+      throw e;
+    }
     sending = companion !== null;
     if (!companion) {
       // Either a crisis covered these turns first (finish's epoch/turn check) or a concurrent duplicate job

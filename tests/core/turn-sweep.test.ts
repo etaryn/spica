@@ -5,6 +5,7 @@ import { TURN_TIMER_QUEUE, type TurnTimerJob } from "@/core/queue";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { runTurnTimer } from "@/core/turn/reply";
 import { sweepTurns } from "@/core/turn/sweep";
+import { mutateState } from "@/core/turn/state";
 import { listTurns } from "@/db/repos/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
@@ -53,4 +54,26 @@ test("sweep clears a sender that crashed mid-bubbles, and the buffer behind it g
   const requeued = deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
   expect(await runTurnTimer(deps, requeued)).toBe("sent");
   expect((await listTurns(getTestDb(), u)).filter((t) => t.role === "companion")).toHaveLength(1);
+});
+
+test("one failing user doesn't abort the sweep batch (§15.4 #26)", async () => {
+  const deps = makeTestDeps();
+  const u1 = await createTestUser();
+  deps.queue.failNext = true; // the timer enqueue is lost
+  await receiveMessage(deps, u1, { clientMessageId: randomUUID(), text: "hello there friend" });
+  const u2 = await createTestUser();
+  deps.queue.failNext = true; // the timer enqueue is lost
+  await receiveMessage(deps, u2, { clientMessageId: randomUUID(), text: "hi again friend" });
+  expect(deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE)).toEqual([]);
+  deps.clock.advance(200_000); // both are overdue past the grace period
+
+  let calls = 0;
+  Object.assign(deps, {
+    mutateState: async (...args: Parameters<typeof mutateState>) => {
+      calls += 1;
+      if (calls === 1) throw new Error("db down");
+      return mutateState(...args);
+    },
+  });
+  expect(await sweepTurns(deps, deps.clock.now())).toBe(1);
 });

@@ -8,7 +8,7 @@ import { TURN_TIMER_QUEUE, type TurnTimerJob } from "@/core/queue";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
 import { getState } from "@/db/repos/conversation-state";
-import { insertTurn, listTurns } from "@/db/repos/session-log";
+import { getTurnsByIds, insertTurn, listTurns } from "@/db/repos/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -304,6 +304,26 @@ describe("runTurnTimer", () => {
     expect((await getState(getTestDb(), u))!).toMatchObject({ inflight_turn_ids: [] });
     expect(deps.events.events.at(-1)!.event).toEqual({ type: "typing", on: false });
     expect((await listTurns(getTestDb(), u)).filter((t) => t.role === "companion")).toHaveLength(1);
+  });
+
+  test("post-commit infra error: turns go back to the buffer and a retry timer is queued (§15.4 #24)", async () => {
+    const deps = makeTestDeps();
+    const userId = await createTestUser();
+    const m = msg("hello there friend");
+    await receiveMessage(deps, userId, m);
+    const { version } = lastTimer(deps);
+    let failed = false;
+    Object.assign(deps, {
+      getTurnsByIds: async (...args: Parameters<typeof getTurnsByIds>) => {
+        if (!failed) { failed = true; throw new Error("db down"); }
+        return getTurnsByIds(...args);
+      },
+    });
+    expect(await runTurnTimer(deps, { userId, version })).toBe("retry");
+    const st = await getState(getTestDb(), userId);
+    expect(st?.inflight_turn_ids).toEqual([]);
+    expect(st?.buffer_turn_ids).toHaveLength(1);
+    expect(deps.queue.jobs.some((j) => j.name === "turn_timer" && j.data.attempt === 1)).toBe(true);
   });
 });
 

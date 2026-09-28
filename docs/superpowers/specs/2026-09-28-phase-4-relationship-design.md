@@ -43,7 +43,8 @@ variation (OPEN #1); settling OPEN #3 / #4 (moved to Phase 9, §2).
 
 ### 3.1 Migration 0007
 
-`relationship` (one row per user, created on the user's first message with `INSERT … ON CONFLICT DO NOTHING`):
+`relationship` (one row per user, created by the first cold-path run for that user with `INSERT … ON CONFLICT
+DO NOTHING`, together with its `relationship_param` rows at `relationship.initial`):
 
 | Change | Column | Type | Meaning |
 | --- | --- | --- | --- |
@@ -58,6 +59,7 @@ variation (OPEN #1); settling OPEN #3 / #4 (moved to Phase 9, §2).
 | add | `hurt_cause_fact` | uuid null → `fact(id)` on delete set null | [ADDED] the `feeling` fact holding why she's hurt; the reason lives in the fact store |
 | add | `crisis_quiet_until` | timestamptz null | [ADDED] §6.5 |
 | add | `last_tick` | date null | [ADDED] user-local date of the last `relationship_tick` (§8.1) |
+| add | `last_hurt_at` | timestamptz null | [ADDED] the last applied hurt signal, for sensitisation (§4.3) |
 | keep | `cadence` (jsonb), `last_contact` | | `cadence` gets a defined shape (§4.4) |
 
 `relationship_param`: `user_id` → `user(id) ON DELETE CASCADE`, `name text`, `value real`, `baseline real`,
@@ -144,8 +146,11 @@ baseline is ~35 and 40 is unremarkable (|effect| < 0.5). Day 15: 2 → strongly 
   `fade` event per param whose value changed.
 - **Diminishing returns.** A positive signal to closeness, trust or warmth is scaled by
   `1 − max(0, effect(p))`: warmth from someone always warm counts for less.
-- **Sensitisation.** A hurt whose cause reconciles as a *duplicate* of a `feeling` fact first seen within
-  `sensitise_window_days` gets its gain × `sensitise_factor`.
+- **Sensitisation.** A hurt signal arriving within `sensitise_window_days` of the previous one
+  (`relationship.last_hurt_at`) gets its gain × `sensitise_factor`. [Amended during planning, 2026-09-28: the
+  first draft keyed this on the cause reconciling as a duplicate, which fake mode can't exercise (the fake
+  reconcile always says `new`) and which ties a relationship mechanic to reconcile's similarity threshold;
+  "repeated hurt hurts more" holds either way. DECISIONS.]
 - **Lasting mark.** A single hurt increase ≥ `scar_threshold` lowers the **trust baseline** by
   `scar_trust_dent` (a `scar` event). It never recovers by itself.
 - **Absence** (tick). Days since `last_contact` beyond `absence_grace_factor × cadence.median_gap_hours`
@@ -186,9 +191,10 @@ friendship, not a goodnight, a joke or anger in the moment. `make_up` when the t
 exchange.
 
 `hurt.cause` becomes a `feeling` fact (`subject = self`, `kind = feeling`, `source = inferred`, e.g. "Spica
-felt hurt when the user brushed off her news"), inserted through the ordinary reconcile path (so a repeated
-cause reconciles as a duplicate, which drives sensitisation). Its id becomes `hurt_cause_fact` when a
-make-up becomes due.
+felt hurt when the user brushed off her news"), inserted through the ordinary reconcile path (a repeated cause
+merges as a duplicate instead of piling up). Its id (or the duplicate's target) becomes `hurt_cause_fact` when
+a make-up becomes due. In the schema sent to the model the block is **required and nullable** (`null` = nothing
+relational happened), because structured outputs are safest with every property required.
 
 A missing or schema-invalid block leaves the relationship untouched; it never fails the memory write. A
 crisis-flagged exchange applies no signal (§6.5).
@@ -298,6 +304,10 @@ make-up state, end/repair timestamps, cadence; the last 200 `relationship_event`
 - **Fake-mode signals.** A script turn gains optional `signals` (the §5 block). The fake extract handler
   returns the latest covered turn's `signals` as the `relationship` block (and a fixed `feeling` fact when
   `hurt` is set), so fake mode tests every mechanic deterministically.
+- **Bulk turns.** A session gains optional `seed_turns: {count, text?}`: that many user turns inserted
+  straight into `session_log` (one minute apart from the session start, `extracted = true`, no reply), so
+  `frequency-trace` can send 35 messages a day for two weeks without generating 490 replies. The scripted
+  `turns` then run as usual.
 - **`relationship` assertion** (deterministic, from the DB, gate `every` unless marked):
   `{type: relationship, after_session?, user?, param?, effect?: {sign: pos|neg, min_abs?}, value?: {gt?, lt?},
   baseline?: {gt?, lt?}, status?, make_up_state?, events?: {cause, min?, max?}, gate?}`.

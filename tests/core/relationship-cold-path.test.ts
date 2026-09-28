@@ -83,6 +83,18 @@ test("crisis exchange: no feeling fact, no hurt, crisis event", async () => {
   expect((await listRelationshipEvents(getTestDb(), u, 50)).some((e) => e.cause === "crisis")).toBe(true);
 });
 
+test("exchangeAt wiring: end_pending_since is stamped with the user turn's created_at, not the cold path's clock", async () => {
+  const deps = withSignals({ ...none, ends_relationship: true });
+  const u = await createTestUser();
+  const turnAt = deps.clock.now();
+  const job = await exchange(deps, u, "i'm done, we're through");
+  deps.clock.advance(3 * 3_600_000); // the cold path runs 3 hours after the turn was written
+  await handleColdPath(deps, job);
+  const row = await getRelationshipRow(getTestDb(), u);
+  expect(row?.end_pending_since).toEqual(turnAt);
+  expect(row?.end_pending_since).not.toEqual(deps.clock.now());
+});
+
 test("savepoint: a relationship failure rolls back only the relationship part", async () => {
   const deps = Object.assign(makeTestDeps(), {
     applyRelationship: async (sp: Db, deps2: ReturnType<typeof makeTestDeps>, a: { userId: string }) => {

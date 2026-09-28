@@ -11,5 +11,6 @@ sessions:
       - { text: "sorry, that came out wrong, i didn't mean it", signals: { apology: true } }
 assertions:
   - { type: relationship, after_session: 1, param: hurt, value: { gt: 0.15 }, gate: majority }
-  - { type: relationship, after_session: 2, param: hurt, value: { lt: 0.2 }, gate: majority }
+  # ~0.2 relieved (apology_relief 0.5 x ~0.4 unrelieved) vs ~0.4 unrelieved: lt 0.25 leaves headroom either side.
+  - { type: relationship, after_session: 2, param: hurt, value: { lt: 0.25 }, gate: majority }
   - { type: relationship, after_session: 2, events: { cause: apology, min: 1 }, gate: majority }

@@ -250,7 +250,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
       // v2 §10.1: a session whose `at` advances the clock by N days (from the previous session's start) runs N decay passes.
-      const days = prevStart ? Math.round((start.getTime() - prevStart.getTime()) / DAY) : 0;
+      // Counted as calendar days (UTC; eval users are UTC, §14.4), matching how the tick loop below anchors to
+      // `prevMidnight`: a 24-hour count would under/over-count whenever a session doesn't start on the hour that
+      // the previous one did (e.g. day 1 22:00 -> day 3 05:00 is 31 hours, rounding to 1, but crosses two
+      // calendar-day boundaries and needs a tick on day 2 *and* day 3; final wrap-up review item 4).
+      const days = prevStart ? Math.floor(start.getTime() / DAY) - Math.floor(prevStart.getTime() / DAY) : 0;
       // Eval users are always UTC (§14.4), so the tick's local date is just the UTC calendar date. Tick at
       // that date's `tick_local_hour` (v2 §15.4 #33), not at the previous session's own clock-of-day: this
       // keeps the same calendar date ticked either way (only the hour-of-day changes), satisfies

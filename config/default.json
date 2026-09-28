@@ -179,7 +179,7 @@
     "tension_half_life_hours": 24,
     "sensitise_window_days": 14,
     "sensitise_factor": 1.5,
-    "scar_threshold": 0.3,
+    "scar_threshold": 0.375,
     "scar_trust_dent": 0.02,
     "absence_grace_factor": 2,
     "closeness_absence_drift": 0.01,

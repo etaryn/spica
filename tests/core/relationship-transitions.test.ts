@@ -86,6 +86,18 @@ test("sensitisation: a second hurt inside the window hits harder; a big one leav
   expect(big.events.some((e) => e.cause === "scar")).toBe(true);
 });
 
+test("scar threshold (#32 wrap-up): a typical 0.6 insult stays below it, a 0.8 one crosses it", () => {
+  const typical = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.6, cause: "x" } }), cfg);
+  expect(typical.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.6);
+  expect(typical.events.some((e) => e.cause === "scar")).toBe(false);
+  expect(typical.params.trust.value).toBeCloseTo(cfg.initial.trust);
+
+  const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.8, cause: "x" } }), cfg);
+  expect(big.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.8);
+  expect(big.events.some((e) => e.cause === "scar")).toBe(true);
+  expect(big.params.trust.value).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
+});
+
 test("scar: the trust baseline never recovers by itself (14 daily ticks with no trust signal)", () => {
   const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 1, cause: "x" } }), cfg);
   let state = big.state;
@@ -145,6 +157,23 @@ test("A1 (#35): a second ends_relationship inside the reconfirm window restarts 
   // *restarted* window it would still clear via implicit retraction (checked by applyTick separately).
   // A later second statement, this time outside the window, confirms.
   r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: m(45) }), cfg);
+  expect(r.state).toMatchObject({ status: "ended_by_user", end_pending_since: null });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "confirmed" && e.detail.via === "signal")).toBe(true);
+});
+
+test("reconfirm window boundary: 29:59 restarts, exactly 30:00 confirms", () => {
+  const s = (n: number) => new Date(t0.getTime() + n * 1_000);
+  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }, { now: t0 }), cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: t0 });
+  // 29 minutes 59 seconds later: still inside the 30-minute window, so it restarts.
+  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: s(29 * 60 + 59) }), cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: s(29 * 60 + 59) });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "pending" && e.detail.restarted === true)).toBe(true);
+
+  // From that restarted window, exactly 30:00 later (>=) confirms.
+  const restartedAt = s(29 * 60 + 59).getTime();
+  const thirty = new Date(restartedAt + 30 * 60_000);
+  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: thirty }), cfg);
   expect(r.state).toMatchObject({ status: "ended_by_user", end_pending_since: null });
   expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "confirmed" && e.detail.via === "signal")).toBe(true);
 });

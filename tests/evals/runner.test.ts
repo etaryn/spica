@@ -398,6 +398,20 @@ test("script error: a session starting before the day's tick (v2 §15.4 #33)", a
   expect(r.error).toMatch(/session 2 starts at day 2 02:00, before the day's tick at 04:00; start sessions at or after tick_local_hour on a new day/);
 });
 
+test("calendar-day tick count: day 1 22:00 -> day 3 05:00 ticks on day 2 and day 3, not once (final wrap-up review item 4)", async () => {
+  const script = ScriptSchema.parse({
+    name: "tick-calendar-days", profile: "none",
+    sessions: [
+      { at: "day 1 22:00", turns: ["hi"] },
+      { at: "day 3 05:00", turns: ["hey"] }, // 31 hours later: a 24-hour round would count 1 day, not 2
+    ],
+    assertions: [{ type: "state", check: "turn_count", expect: 4 }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("pass");
+  expect(r.meta.ticks).toBe(2);
+});
+
 test("an out-of-range after_session on a relationship assertion errors like the turn branch does", async () => {
   const script = ScriptSchema.parse({
     name: "rel-oob", profile: "none",

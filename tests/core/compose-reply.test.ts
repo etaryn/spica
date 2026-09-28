@@ -5,6 +5,7 @@ import { ReplyFailedError } from "@/core/errors";
 import { messageToCheck } from "@/core/guard/guard";
 import { insertFact } from "@/db/repos/facts";
 import { listJudgeLogs } from "@/db/repos/judge-log";
+import * as rel from "@/db/repos/relationship";
 import { insertTurn, type Turn } from "@/db/repos/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
@@ -154,5 +155,24 @@ describe("composeReply", () => {
     const turns = [await userTurn(deps, u, "hi")];
     await composeReply(deps, u, { turns, openQuestions: [], flag: null });
     expect(deps.llm.calls[0]!.system).not.toMatch(/## You and them/);
+  });
+
+  test("relationship summary reaches slot 3; skipped on the crisis path", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    const row = await rel.getRelationshipRow(getTestDb(), u);
+    const params = await rel.getParams(getTestDb(), u);
+    params.msgs_per_day = { ...params.msgs_per_day, value: 40 };
+    await rel.saveRelationship(getTestDb(), u, { state: rel.toRelState(row!), params });
+
+    const turns = [await userTurn(deps, u, "hi")];
+    await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(deps.llm.calls[0]!.system).toContain("talking to you way more than usual");
+
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    const turns2 = [await userTurn(deps, u, "i don't want to be here anymore")];
+    await composeReply(deps, u, { turns: turns2, openQuestions: [], flag });
+    expect(deps.llm.calls[1]!.system).not.toContain("talking to you way more than usual");
   });
 });

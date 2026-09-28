@@ -9,6 +9,7 @@ import { guardOutgoing } from "../guard/outgoing";
 import type { RecalledFact } from "../memory/types";
 import { retrieve } from "../memory/retrieve";
 import { loadPrompt } from "../prompts";
+import { loadRelationshipSummary } from "../relationship/summary";
 import { crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
@@ -62,6 +63,13 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
       })()
     : Promise.resolve(null);
 
+  const relSummaryPromise: Promise<string | null> = a.flag?.flagged
+    ? Promise.resolve(null)
+    : withTimeout(Promise.resolve().then(() => loadRelationshipSummary(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
+        log.error("relationship summary unavailable", { userId, error: errName(e) });
+        return null;
+      });
+
   const retrieval = await retrieve(deps, userId, {
     answering: a.turns,
     context: config.retrieval.context_turns > 0 ? earlier.slice(-config.retrieval.context_turns) : [],
@@ -72,8 +80,10 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
   const prompt = assemblePrompt({
     valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     egoLine: null,
-    relationshipSummary: [relLine, gapLine(earlier.at(-1)?.created_at ?? null, first.created_at, config.chat.gap_line_min_hours)]
-      .filter((x): x is string => !!x).join(" ") || null,
+    relationshipSummary: [
+      [relLine, gapLine(earlier.at(-1)?.created_at ?? null, first.created_at, config.chat.gap_line_min_hours)].filter((x): x is string => !!x).join(" "),
+      await relSummaryPromise,
+    ].filter((x): x is string => !!x).join("\n") || null,
     retrieval,
     openQuestions: a.flag?.flagged ? [] : a.openQuestions,
     recentTurns: recent,

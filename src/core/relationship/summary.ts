@@ -23,14 +23,25 @@ export function parseSummaryPhrases(md: string): Phrases {
 
 const first = (p: Phrases, key: string): string | null => p[key]?.[0] ?? null;
 
-/** Slot 3 lines (design §7.1): status first, then the strongest deviations, then the make-up line. */
+/** Slot 3 lines (design §7.1, §6.5): status first, then the strongest deviations, then the make-up line.
+ * Until `crisis_quiet_until` passes, hurt, tension, make-up and ending lines are all omitted (design §6.5). */
 export function summaryLines(v: { state: RelState; params: Params; cause: string | null }, now: Date, cfg: RelConfig, phrases: Phrases): string[] {
   const { state } = v;
-  if (state.status === "ended_by_user") return [first(phrases, "ended")].filter((x): x is string => !!x);
   const quiet = !!state.crisis_quiet_until && now < state.crisis_quiet_until;
+  if (state.status === "ended_by_user") {
+    if (quiet) return [];
+    const line = first(phrases, "ended");
+    return line ? [line] : [];
+  }
   const out: string[] = [];
-  if (state.status === "repairing") out.push(first(phrases, "repairing")!);
-  if (!quiet && state.end_pending_since) out.push(first(phrases, "end_pending")!);
+  if (state.status === "repairing") {
+    const line = first(phrases, "repairing");
+    if (line) out.push(line);
+  }
+  if (!quiet && state.end_pending_since) {
+    const line = first(phrases, "end_pending");
+    if (line) out.push(line);
+  }
 
   const notable = PARAM_NAMES
     .filter((n) => !(quiet && (n === "hurt" || n === "tension")))
@@ -40,14 +51,18 @@ export function summaryLines(v: { state: RelState; params: Params; cause: string
     .slice(0, cfg.summary_max_lines);
   for (const { n, e } of notable) {
     if (n === "hurt" && e > 0 && v.cause) {
-      out.push(first(phrases, "hurt_cause")!.replace("{cause}", v.cause));
+      const line = first(phrases, "hurt_cause");
+      if (line) out.push(line.replace("{cause}", v.cause));
       continue;
     }
     const line = first(phrases, `${n} ${e > 0 ? "above" : "below"} ${Math.abs(e) >= cfg.summary_strong_effect ? "strong" : "mild"}`);
     if (line) out.push(line);
   }
-  if (!quiet && makeUpLineDue(state, cfg)) out.push(first(phrases, "make_up")!);
-  return out.filter(Boolean);
+  if (!quiet && makeUpLineDue(state, cfg)) {
+    const line = first(phrases, "make_up");
+    if (line) out.push(line);
+  }
+  return out;
 }
 
 /** Hot path, read-only (design §7.1): fades in memory, never writes. Null when there's no row or nothing notable. */

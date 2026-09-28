@@ -53,3 +53,10 @@ test("quiet after crisis: no hurt, tension, make-up or ending lines", () => {
   const lines = summaryLines({ state: s, params: p, cause: "x" }, now, cfg, phrases);
   expect(lines).toEqual([]);
 });
+
+test("quiet after crisis also suppresses the ended line; it returns once the quiet window passes", () => {
+  const quietUntil = new Date(now.getTime() + 3_600_000);
+  const s = { ...fresh(), status: "ended_by_user" as const, crisis_quiet_until: quietUntil };
+  expect(summaryLines({ state: s, params: init(), cause: null }, now, cfg, phrases)).toEqual([]);
+  expect(summaryLines({ state: s, params: init(), cause: null }, quietUntil, cfg, phrases)).toEqual([phrases.ended![0]]);
+});

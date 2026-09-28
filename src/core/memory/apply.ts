@@ -8,7 +8,7 @@ import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract"
 import type { Decision } from "./reconcile";
 import type { RecalledFact } from "./types";
 
-export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision };
+export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision; source?: "turn" | "inferred" };
 export type ApplyInput = {
   /** now: job run time (recall write-back, entity last_mentioned, thread resolve). exchangeAt: the earliest turn's created_at (inserted facts' created_at, thread open/touch). */
   userId: string; now: Date; exchangeAt: Date; entities: ExtractedEntity[]; facts: PlannedFact[]; threads: ExtractedThread[];
@@ -17,6 +17,8 @@ export type ApplyInput = {
 export type ApplyOutcome = {
   inserted: number; duplicates: number; resolved: number; superseded: number;
   entitiesCreated: number; threadsOpened: number; recalledUpdated: number;
+  /** One entry per planned fact, in order: the inserted row's id, or the duplicate target's id. */
+  factIds: (string | null)[];
 };
 
 const entityKey = (subject: "user" | "self", name: string) => `${subject}|${normalizeName(name)}`;
@@ -40,7 +42,7 @@ function mergeMentions(ms: ExtractedEntity[]): ExtractedEntity[] {
 /** Cold-path writes (v2 §6.3 steps 5–7). Call inside the job's transaction; every id the model supplied is ownership-checked. */
 export async function applyExtraction(db: Db, config: Config, input: ApplyInput): Promise<ApplyOutcome> {
   const { userId, now } = input;
-  const out: ApplyOutcome = { inserted: 0, duplicates: 0, resolved: 0, superseded: 0, entitiesCreated: 0, threadsOpened: 0, recalledUpdated: 0 };
+  const out: ApplyOutcome = { inserted: 0, duplicates: 0, resolved: 0, superseded: 0, entitiesCreated: 0, threadsOpened: 0, recalledUpdated: 0, factIds: [] };
 
   // 1. Entities: declared ones plus any named only in facts.
   const mentions: ExtractedEntity[] = [...input.entities];
@@ -95,7 +97,7 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
     const base = {
       subject: f.subject, kind: f.kind, content: f.content, payload, embedding: p.embedding, entity_refs, thread_id,
       occurred_at: f.occurred_at, created_at: input.exchangeAt, salience: f.salience, valence: f.valence, confidence: f.confidence,
-      source: "turn" as const, source_ref: input.sourceRef,
+      source: p.source ?? "turn", source_ref: input.sourceRef,
     };
     const target = p.decision.targetId ? await getFact(db, userId, p.decision.targetId) : null;
     const relation = target ? p.decision.relation : "new";
@@ -103,25 +105,30 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
     if (relation === "duplicate" && target) {
       await bumpDuplicate(db, userId, target.id, config.reconcile.duplicate_bump, config.retrieval.recall_cap, f.confidence);
       out.duplicates += 1;
+      out.factIds.push(target.id);
     } else if (relation === "resolves" && target) {
       // A late job must not resolve a truth stated after this exchange (§15.1 #9, mirrors contradicts).
       if (target.created_at <= input.exchangeAt) await setFactStatus(db, userId, target.id, "resolved");
-      await insertFact(db, userId, { ...base, status: "resolved" });
+      const row = await insertFact(db, userId, { ...base, status: "resolved" });
       out.resolved += 1;
       out.inserted += 1;
+      out.factIds.push(row.id);
     } else if (relation === "contradicts" && target) {
       if (target.created_at > input.exchangeAt) {
         // A late job: the target is newer than this exchange, so the candidate is the outdated one.
-        await insertFact(db, userId, { ...base, status: "superseded", superseded_by: target.id });
+        const row = await insertFact(db, userId, { ...base, status: "superseded", superseded_by: target.id });
+        out.factIds.push(row.id);
       } else {
         const row = await insertFact(db, userId, { ...base, status: "open" });
         await setFactStatus(db, userId, target.id, "superseded", row.id);
+        out.factIds.push(row.id);
       }
       out.superseded += 1;
       out.inserted += 1;
     } else {
-      await insertFact(db, userId, { ...base, status: "open" });
+      const row = await insertFact(db, userId, { ...base, status: "open" });
       out.inserted += 1;
+      out.factIds.push(row.id);
     }
   }
 

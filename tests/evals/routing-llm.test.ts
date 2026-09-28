@@ -13,6 +13,6 @@ test("routes the reply and each structured purpose to real or fake", async () =>
   expect(await onlyJudge.generateReply({ system: "", messages: [{ role: "user", content: "hi" }] })).toBe("(fake reply to: hi)");
   expect(await onlyJudge.classifyJson({ purpose: "turn_judge", system: "", input: "", schema, timeoutMs: 1, maxTokens: 1 })).toEqual({ which: "real" });
   expect(await onlyJudge.classifyJson({ purpose: "extract", system: "", input: "", schema: z.any(), timeoutMs: 1, maxTokens: 1 }))
-    .toEqual({ facts: [], entities: [], threads: [] });
+    .toEqual({ facts: [], entities: [], threads: [], relationship: null });
   expect(await new RoutingLLM(real, fake, new Set(["reply"])).generateReply({ system: "", messages: [] })).toBe("REAL");
 });

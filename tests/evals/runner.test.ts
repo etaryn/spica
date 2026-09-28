@@ -172,7 +172,7 @@ test("a transient cold-path failure is retried like pg-boss would (up to cold_pa
   llm.handlers.extract = () => {
     calls += 1;
     if (calls === 1) throw new Error("Failed to parse structured output");
-    return { facts: [], entities: [], threads: [] };
+    return { facts: [], entities: [], threads: [], relationship: null };
   };
   const script = ScriptSchema.parse({
     name: "retry", sessions: [{ at: "day 0 09:00", turns: ["a"] }],

@@ -60,9 +60,17 @@ describe("normalizeExtraction", () => {
   });
 });
 
+test("normalizeExtraction: relationship block is normalised; missing → null", () => {
+  expect(normalizeExtraction({ facts: [], entities: [], threads: [] }, 12).relationship).toBeNull();
+  const r = normalizeExtraction({ facts: [], entities: [], threads: [], relationship: {
+    warmth: 2, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false,
+  } }, 12);
+  expect(r.relationship?.warmth).toBe(1);
+});
+
 test("extract calls the extract model with the extraction prompt and returns normalized output", async () => {
   const llm = new FakeLLMProvider();
-  llm.handlers.extract = () => ({ facts: [rawFact()], entities: [], threads: [] });
+  llm.handlers.extract = () => ({ facts: [rawFact()], entities: [], threads: [], relationship: null });
   const out = await extract({ llm, config: loadConfig() }, {
     contextTurns: [], newTurns: [turn("user", "interview friday", "2026-01-05T09:00:00Z")], openThreads: [], timezone: null,
   });

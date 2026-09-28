@@ -5,9 +5,11 @@ import { listOpenThreads } from "@/db/repos/threads";
 import { getTimezone } from "@/db/repos/users";
 import type { Deps } from "./deps";
 import { applyExtraction, type ApplyOutcome, type PlannedFact } from "./memory/apply";
-import { extract } from "./memory/extract";
+import { extract, type ExtractedFact } from "./memory/extract";
 import { decide } from "./memory/reconcile";
 import type { ColdPathJob } from "./queue";
+import { applyRelationship } from "./relationship/apply";
+import { hurtFactContent } from "./relationship/signals";
 
 export class LockBusyError extends Error {}
 export type ColdPathOutcome = { status: "done" | "skipped"; applied?: ApplyOutcome };
@@ -34,15 +36,27 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
       timezone: await getTimezone(tx, job.userId),
     });
 
-    const embeddings = extraction.facts.length > 0
-      ? await embedder.embed(extraction.facts.map((f) => f.content), "document")
+    const crisis = turns.some((t) => t.safety_flag?.flagged);
+    const signals = crisis ? null : extraction.relationship;
+    // The hurt cause lives in the fact store (design §5): one self `feeling` fact, reconciled like any other.
+    const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
+    if (signals?.hurt) {
+      facts.push({ source: "inferred", fact: {
+        subject: "self", kind: "feeling", content: hurtFactContent(signals.hurt.cause), occurred_at: null,
+        salience: config.relationship.hurt_fact_salience, valence: -signals.hurt.amount, confidence: config.relationship.hurt_fact_confidence,
+        entity_names: [], thread_title: null,
+      } });
+    }
+
+    const embeddings = facts.length > 0
+      ? await embedder.embed(facts.map((f) => f.fact.content), "document")
       : [];
     const planned: PlannedFact[] = [];
-    for (const [i, fact] of extraction.facts.entries()) {
+    for (const [i, { fact, source }] of facts.entries()) {
       const embedding = embeddings[i];
       if (!embedding) throw new Error("embedder returned fewer vectors than facts");
       const neighbors = await nearFacts(tx, job.userId, fact.subject, embedding, config.reconcile.neighbor_k, config.reconcile.near_match_similarity);
-      planned.push({ fact, embedding, decision: await decide(deps, fact, neighbors) });
+      planned.push({ fact, embedding, decision: await decide(deps, fact, neighbors), source });
     }
 
     const applied = await applyExtraction(tx, config, {
@@ -52,13 +66,22 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
       entities: extraction.entities,
       facts: planned,
       threads: extraction.threads,
-      sensitive: turns.some((t) => t.safety_flag?.flagged),
+      sensitive: crisis,
       sourceRef: job.replyTurnId ?? turns.at(-1)!.id,
       recalled: job.recalled ?? [],
       replyTurnId: job.replyTurnId ?? null,
       turnIds: job.turnIds,
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
+
+    const hurtFactId = signals?.hurt ? applied.factIds.at(-1) ?? null : null;
+    const applyRel = (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ?? applyRelationship;
+    try {
+      await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
+    } catch (e) {
+      log.error("relationship update failed", { userId: job.userId, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    }
+
     return { status: "done", applied };
   });
 }

@@ -18,7 +18,7 @@ export class FakeLLMProvider implements LLMProvider {
   classify: Handler = () => ({ flag: false, category: "none" });
   /** Structured-call handlers by purpose. Defaults keep the cold path a no-op in fake mode. */
   handlers: Record<string, Handler> = {
-    extract: () => ({ facts: [], entities: [], threads: [] }),
+    extract: () => ({ facts: [], entities: [], threads: [], relationship: null }),
     reconcile: () => ({ relation: "new", target_fact_id: null }),
     // The guard passes everything by default so fake-mode scripts exercise the mechanics, not the rubric.
     guard: () => ({ reasoning: "ok", violations: [] }),

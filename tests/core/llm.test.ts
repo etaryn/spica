@@ -128,7 +128,7 @@ describe("FakeLLMProvider handlers", () => {
     expect(await f.classifyJson({ purpose: "reconcile", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
       .toEqual({ relation: "duplicate", target_fact_id: "abc" });
     expect(await f.classifyJson({ purpose: "extract", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
-      .toEqual({ facts: [], entities: [], threads: [] });
+      .toEqual({ facts: [], entities: [], threads: [], relationship: null });
     await expect(f.classifyJson({ purpose: "judge_recall", system: "", input: "x", schema: any, timeoutMs: 1, maxTokens: 1 }))
       .rejects.toThrow(/judge_recall/);
     expect(f.structuredCalls.map((c) => c.purpose)).toEqual(["crisis", "reconcile", "extract", "judge_recall"]);

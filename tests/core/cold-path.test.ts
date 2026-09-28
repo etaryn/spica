@@ -32,6 +32,7 @@ function depsWith() {
       : [],
     entities: [{ name: "Biscuit", aliases: [], type: "pet", subject: "user", relation: "dog" }],
     threads: [],
+    relationship: null,
   });
   return deps;
 }

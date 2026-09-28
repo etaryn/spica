@@ -4,6 +4,7 @@ import type { Turn } from "@/db/repos/session-log";
 import { entityType, factKind } from "@/db/schema";
 import type { Deps } from "../deps";
 import { loadPrompt } from "../prompts";
+import { normalizeSignals, RelationshipSignalsSchema, type Signals } from "../relationship/signals";
 import { formatLocal, isValidTimeZone } from "../timezone";
 
 const subject = z.enum(["user", "self", "shared"]);
@@ -23,13 +24,14 @@ export const ExtractionSchema = z.object({
     action: z.enum(["open", "touch", "resolve"]), title: z.string(), subject,
     stakes: z.enum(["low", "med", "high"]), next_checkpoint: z.string().nullable(), thread_id: z.string().nullable(),
   })),
+  relationship: RelationshipSignalsSchema.nullable(),
 });
 
 type Raw = z.infer<typeof ExtractionSchema>;
 export type ExtractedFact = Omit<Raw["facts"][number], "occurred_at"> & { occurred_at: Date | null };
 export type ExtractedEntity = EntityMention;
 export type ExtractedThread = Omit<Raw["threads"][number], "next_checkpoint"> & { next_checkpoint: Date | null };
-export type Extraction = { facts: ExtractedFact[]; entities: ExtractedEntity[]; threads: ExtractedThread[] };
+export type Extraction = { facts: ExtractedFact[]; entities: ExtractedEntity[]; threads: ExtractedThread[]; relationship: Signals | null };
 export type ExtractArgs = { newTurns: Turn[]; contextTurns: Turn[]; openThreads: { id: string; title: string }[]; timezone: string | null };
 
 const clamp = (x: number, lo: number, hi: number) => (Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : lo);
@@ -57,7 +59,7 @@ export function buildExtractionInput(a: ExtractArgs): string {
  * model's raw JSON) then clamps numbers, parses dates and drops empties.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
-  const raw = ExtractionSchema.parse(input);
+  const raw = ExtractionSchema.extend({ relationship: RelationshipSignalsSchema.nullable().optional() }).parse(input);
   const facts = raw.facts
     .map((f) => ({
       ...f, content: tidy(f.content), occurred_at: parseDate(f.occurred_at),
@@ -73,7 +75,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   const threads = raw.threads
     .map((t) => ({ ...t, title: tidy(t.title), next_checkpoint: parseDate(t.next_checkpoint) }))
     .filter((t) => t.title.length > 0);
-  return { facts, entities, threads };
+  return { facts, entities, threads, relationship: normalizeSignals(raw.relationship ?? null) };
 }
 
 /** Cold-path step 3 (v2 §6.3): strict-JSON extraction on the extract model. */

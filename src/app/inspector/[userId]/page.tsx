@@ -5,9 +5,9 @@ import { getDeps } from "@/lib/deps";
 import { parseUserIdParam } from "@/lib/inspector-access";
 import { assertInspectorAccess } from "@/lib/inspector-guard";
 import styles from "../inspector.module.css";
-import { EntitiesThreadsTab, FactsTab, IdentityTab, JudgeLogTab, ReachOutsTab, RetrievalTab, TranscriptTab, TurnStateTab } from "./tabs";
+import { EntitiesThreadsTab, FactsTab, IdentityTab, JudgeLogTab, ReachOutsTab, RelationshipTab, RetrievalTab, TranscriptTab, TurnStateTab } from "./tabs";
 
-const TABS = { transcript: "Transcript", facts: "Facts", graph: "Entities & Threads", identity: "Identity & Relationship", retrieval: "Retrieval", turn: "Turn-taking", judge: "Judge log", reachouts: "Reach-outs" } as const;
+const TABS = { transcript: "Transcript", facts: "Facts", graph: "Entities & Threads", identity: "Identity", relationship: "Relationship", retrieval: "Retrieval", turn: "Turn-taking", judge: "Judge log", reachouts: "Reach-outs" } as const;
 type Tab = keyof typeof TABS;
 
 export default async function InspectUser({ params, searchParams }: {
@@ -17,7 +17,7 @@ export default async function InspectUser({ params, searchParams }: {
   await assertInspectorAccess();
   const userId = parseUserIdParam((await params).userId);
   if (!userId) notFound();
-  const { db } = getDeps();
+  const { db, clock, config } = getDeps();
   const target = await adminGetUser(db, userId);
   if (!target) notFound();
   const sp = await searchParams;
@@ -37,6 +37,7 @@ export default async function InspectUser({ params, searchParams }: {
       {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}
       {tab === "graph" && <EntitiesThreadsTab db={db} userId={userId} base={base} />}
       {tab === "identity" && <IdentityTab db={db} userId={userId} />}
+      {tab === "relationship" && <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />}
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
       {tab === "turn" && <TurnStateTab db={db} userId={userId} />}
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}

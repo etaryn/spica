@@ -1,7 +1,9 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { loadConfig } from "@/core/config";
 import { forgetFact, insertFact } from "@/db/repos/facts";
-import { listFacts, listJudgeLog, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
+import { getRelationshipView, listFacts, listJudgeLog, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
 import { insertJudgeLogs } from "@/db/repos/judge-log";
+import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/relationship";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
@@ -59,4 +61,17 @@ test("resolveFactContents: user-scoped and view-time; a forgotten fact's judge_l
   const rows = await listJudgeLog(getTestDb(), a);
   expect(rows).toHaveLength(1);
   expect(await resolveFactContents(getTestDb(), a, [f.id])).toEqual(new Map());
+});
+
+test("getRelationshipView: faded params with effect, events newest first, user-scoped", async () => {
+  const db = getTestDb();
+  const cfg = loadConfig().relationship;
+  const [a, b] = [await createTestUser(), await createTestUser()];
+  const now = new Date("2026-01-05T10:00:00Z");
+  await ensureRelationship(db, a, now, cfg);
+  await insertRelationshipEvents(db, a, [{ param: "hurt", before: 0, after: 0.3, cause: "signal", deviation: 1, detail: {} }], { turnId: null, now });
+  const v = await getRelationshipView(db, a, now, cfg);
+  expect(v?.params.map((p) => p.name)).toEqual(["closeness", "trust", "warmth", "hurt", "tension", "msgs_per_day"]);
+  expect(v?.events).toHaveLength(1);
+  expect(await getRelationshipView(db, b, now, cfg)).toBeNull();
 });

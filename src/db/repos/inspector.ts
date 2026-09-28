@@ -1,9 +1,12 @@
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { effect, fadeParams } from "@/core/relationship/homeostasis";
+import { PARAM_NAMES, type RelConfig } from "@/core/relationship/types";
 import type { Db } from "../client";
 import {
-  conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, judge_log, reach_out_log, relationship, retrieval_trace, thread,
+  conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, judge_log, reach_out_log, retrieval_trace, thread,
 } from "../schema";
+import { getParams, getRelationshipRow, listRelationshipEvents } from "./relationship";
 
 export type FactFilters = {
   subject: (typeof factSubject.enumValues)[number] | undefined;
@@ -49,8 +52,15 @@ export async function getIdentity(db: Db, userId: string) {
   return (await db.select().from(identity).where(eq(identity.user_id, userId)))[0] ?? null;
 }
 
-export async function getRelationship(db: Db, userId: string) {
-  return (await db.select().from(relationship).where(eq(relationship.user_id, userId)))[0] ?? null;
+export async function getRelationshipView(db: Db, userId: string, now: Date, cfg: RelConfig) {
+  const row = await getRelationshipRow(db, userId);
+  if (!row) return null;
+  const params = fadeParams(await getParams(db, userId), now, cfg);
+  return {
+    row,
+    params: PARAM_NAMES.map((name) => ({ name, ...params[name], effect: effect(params[name], cfg.variance_epsilon) })),
+    events: await listRelationshipEvents(db, userId, cfg.event_list_limit),
+  };
 }
 
 export const listEgoTicks = (db: Db, userId: string) =>

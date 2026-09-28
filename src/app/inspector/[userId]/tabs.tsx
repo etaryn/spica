@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { RelConfig } from "@/core/relationship/types";
 import type { Db } from "@/db/client";
 import * as r from "@/db/repos/inspector";
 import { listTurns } from "@/db/repos/session-log";
@@ -99,16 +100,45 @@ export async function EntitiesThreadsTab({ db, userId, base }: { db: Db; userId:
 }
 
 export async function IdentityTab({ db, userId }: { db: Db; userId: string }) {
-  const [identity, rel, ticks] = await Promise.all([r.getIdentity(db, userId), r.getRelationship(db, userId), r.listEgoTicks(db, userId)]);
+  const [identity, ticks] = await Promise.all([r.getIdentity(db, userId), r.listEgoTicks(db, userId)]);
   return (
     <>
       <h3>Identity</h3>{identity ? json(identity) : <Empty phase={2} />}
-      <h3>Relationship</h3>{rel ? json(rel) : <Empty phase={3} />}
       <h3>Ego history</h3>
       {!ticks.length ? <Empty phase={2} /> : (
         <table className={styles.table}><tbody>
           {ticks.map((t) => (
             <tr key={t.id}><td>{iso(t.created_at)}</td><td>val {t.mood_valence.toFixed(2)}</td><td>ar {t.mood_arousal.toFixed(2)}</td><td>en {t.energy.toFixed(2)}</td><td>{t.reason}</td></tr>
+          ))}
+        </tbody></table>
+      )}
+    </>
+  );
+}
+
+export async function RelationshipTab({ db, userId, now, cfg }: { db: Db; userId: string; now: Date; cfg: RelConfig }) {
+  const v = await r.getRelationshipView(db, userId, now, cfg);
+  if (!v) return <Empty phase={4} />;
+  const { row } = v;
+  return (
+    <>
+      <h3>State</h3>
+      {json({
+        status: row.status, make_up_state: row.make_up_state, make_up_replies: row.make_up_replies, hurt_cause_fact: row.hurt_cause_fact,
+        end_pending_since: row.end_pending_since, ended_at: row.ended_at, repair_started_at: row.repair_started_at,
+        crisis_quiet_until: row.crisis_quiet_until, last_contact: row.last_contact, last_tick: row.last_tick, cadence: row.cadence,
+      })}
+      <h3>Params</h3>
+      <table className={styles.table}><tbody>
+        {v.params.map((p) => (
+          <tr key={p.name}><td>{p.name}</td><td>val {p.value.toFixed(3)}</td><td>base {p.baseline.toFixed(3)}</td><td>var {p.variance.toFixed(3)}</td><td>effect {p.effect.toFixed(2)}</td></tr>
+        ))}
+      </tbody></table>
+      <h3>Events</h3>
+      {!v.events.length ? <Empty phase={4} /> : (
+        <table className={styles.table}><tbody>
+          {v.events.map((e) => (
+            <tr key={e.id}><td>{iso(e.created_at)}</td><td>{e.cause}</td><td>{e.param ?? "—"}</td><td>{e.before?.toFixed(3) ?? ""} → {e.after?.toFixed(3) ?? ""}</td><td>{e.deviation?.toFixed(2) ?? ""}</td><td>{JSON.stringify(e.detail)}</td></tr>
           ))}
         </tbody></table>
       )}

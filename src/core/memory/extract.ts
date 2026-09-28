@@ -59,7 +59,10 @@ export function buildExtractionInput(a: ExtractArgs): string {
  * model's raw JSON) then clamps numbers, parses dates and drops empties.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
-  const raw = ExtractionSchema.extend({ relationship: RelationshipSignalsSchema.nullable().optional() }).parse(input);
+  // Lenient here (unlike the strict, required-nullable key sent to the model in ExtractionSchema): a
+  // schema-invalid relationship block must never fail the memory write (design §5). normalizeSignals
+  // already turns anything that doesn't validate into null.
+  const raw = ExtractionSchema.extend({ relationship: z.unknown().optional() }).parse(input);
   const facts = raw.facts
     .map((f) => ({
       ...f, content: tidy(f.content), occurred_at: parseDate(f.occurred_at),

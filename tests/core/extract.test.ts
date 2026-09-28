@@ -68,6 +68,12 @@ test("normalizeExtraction: relationship block is normalised; missing → null", 
   expect(r.relationship?.warmth).toBe(1);
 });
 
+test("normalizeExtraction: a schema-invalid relationship block never fails the memory write", () => {
+  const out = normalizeExtraction({ facts: [rawFact()], entities: [], threads: [], relationship: { warmth: "lots" } }, 12);
+  expect(out.relationship).toBeNull();
+  expect(out.facts).toHaveLength(1);
+});
+
 test("extract calls the extract model with the extraction prompt and returns normalized output", async () => {
   const llm = new FakeLLMProvider();
   llm.handlers.extract = () => ({ facts: [rawFact()], entities: [], threads: [], relationship: null });

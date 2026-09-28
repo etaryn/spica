@@ -3,10 +3,11 @@ import type { RelConfig } from "./types";
 
 const HOUR = 3_600_000;
 
-/** Median gap between consecutive session starts (design §4.4); starts are newest first. */
+/** Median gap between consecutive session starts (design §4.4); any input order. */
 export function medianGapHours(starts: Date[], cfg: RelConfig): number {
   if (starts.length < cfg.min_sessions_for_gap) return cfg.default_median_gap_hours;
-  const gaps = starts.slice(0, -1).map((s, i) => (s.getTime() - starts[i + 1]!.getTime()) / HOUR).sort((a, b) => a - b);
+  const ts = starts.map((s) => s.getTime()).sort((a, b) => b - a);
+  const gaps = ts.slice(0, -1).map((t, i) => (t - ts[i + 1]!) / HOUR).sort((a, b) => a - b);
   const mid = Math.floor(gaps.length / 2);
   return gaps.length % 2 ? gaps[mid]! : (gaps[mid - 1]! + gaps[mid]!) / 2;
 }

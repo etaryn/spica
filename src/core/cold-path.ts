@@ -40,10 +40,12 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     const signals = crisis ? null : extraction.relationship;
     // The hurt cause lives in the fact store (design §5): one self `feeling` fact, reconciled like any other.
     const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
-    if (signals?.hurt) {
+    // Same deadzone comparison applyExchange uses (`>=`): a hurt too small to move the param writes no fact.
+    const hurt = signals?.hurt && signals.hurt.amount >= config.relationship.signal_deadzone ? signals.hurt : null;
+    if (hurt) {
       facts.push({ source: "inferred", fact: {
-        subject: "self", kind: "feeling", content: hurtFactContent(signals.hurt.cause), occurred_at: null,
-        salience: config.relationship.hurt_fact_salience, valence: -signals.hurt.amount, confidence: config.relationship.hurt_fact_confidence,
+        subject: "self", kind: "feeling", content: hurtFactContent(hurt.cause), occurred_at: null,
+        salience: config.relationship.hurt_fact_salience, valence: -hurt.amount, confidence: config.relationship.hurt_fact_confidence,
         entity_names: [], thread_title: null,
       } });
     }
@@ -74,7 +76,7 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
 
-    const hurtFactId = signals?.hurt ? applied.factIds.at(-1) ?? null : null;
+    const hurtFactId = hurt ? applied.factIds.at(-1) ?? null : null;
     const applyRel = (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ?? applyRelationship;
     try {
       await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });

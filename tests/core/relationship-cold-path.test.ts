@@ -12,6 +12,7 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
+const deps0 = makeTestDeps();
 const none = { warmth: 0, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false };
 
 async function exchange(deps: ReturnType<typeof makeTestDeps>, userId: string, text: string, flagged = false) {
@@ -41,6 +42,24 @@ test("a hurt signal stores the cause as a self feeling fact, raises hurt, makes 
   expect((await listRelationshipEvents(getTestDb(), u, 50)).some((e) => e.cause === "signal" && e.param === "hurt")).toBe(true);
   expect(row?.cadence).toMatchObject({ msgs_24h: 1 });
   expect(row?.last_contact).toEqual(deps.clock.now());
+});
+
+test("a sub-deadzone hurt writes no feeling fact and moves no hurt (matches applyExchange's deadzone)", async () => {
+  const deps = withSignals({ ...none, hurt: { amount: deps0.config.relationship.signal_deadzone / 2, cause: "a tiny slight" } });
+  const u = await createTestUser();
+  await handleColdPath(deps, await exchange(deps, u, "meh"));
+  expect(await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).toEqual([]);
+  expect((await getParams(getTestDb(), u)).hurt.value).toBe(0);
+  expect((await getRelationshipRow(getTestDb(), u))?.hurt_cause_fact).toBeNull();
+});
+
+test("a hurt exactly at the deadzone still writes the feeling fact (same >= as applyExchange)", async () => {
+  const deps = withSignals({ ...none, hurt: { amount: deps0.config.relationship.signal_deadzone, cause: "a small slight" } });
+  const u = await createTestUser();
+  await handleColdPath(deps, await exchange(deps, u, "meh"));
+  const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
+  expect(facts.map((f) => f.kind)).toEqual(["feeling"]);
+  expect((await getParams(getTestDb(), u)).hurt.value).toBeGreaterThan(0);
 });
 
 test("null block: memory commits, relationship row created, no signal events", async () => {

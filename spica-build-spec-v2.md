@@ -527,7 +527,7 @@ Design: `docs/superpowers/specs/2026-09-28-phase-4-relationship-design.md` §4�
 - **Frequency trace** (unit-tested on the pure functions; eval `rel-frequency-trace`): value 5 / baseline 5 at creation; day 1, 40 against 5 → effect ≈ 1; after 13 daily samples of ~35–40 at α = 0.15 the baseline is ~35 and 40 is unremarkable (\|effect\| < 0.5); day 15, 2 → strongly negative.
 
 **Signals** (from extraction, section 6.3; a crisis-flagged exchange applies none):
-- A signal with \|s\| below `relationship.signal_deadzone` is ignored.
+- A signal with \|s\| below `relationship.signal_deadzone` is ignored; a hurt below it also writes no hurt `feeling` fact.
 - `warmth` and `trust`: `gains.<name> × s`; a positive signal is also scaled by **diminishing returns**, `1 − max(0, effect(p))`, so warmth from someone always warm counts for less.
 - A **warm exchange** (warmth ≥ the deadzone) adds `gains.closeness_per_warm_exchange` to closeness, scaled by diminishing returns and, while `repairing`, by `relationship.repair_gain_factor`.
 - `tension`: `gains.tension × s` (positive = more conflict, negative = the air cleared).
@@ -552,8 +552,9 @@ Design: `docs/superpowers/specs/2026-09-28-phase-4-relationship-design.md` §4�
 - `ends_relationship` while `active` with no pending ending → `end_pending_since = now` (`ending` event, `detail.stage = pending`); the summary tells her they said they want to end the friendship, and her reaction is hers.
 - **Confirm:** a second `ends_relationship` on a later exchange, or a tick finding `end_pending_since` older than `relationship.end_confirm_hours` → `ended_by_user`, `ended_at`, closeness × `relationship.end_closeness_factor`, `make_up_state = none` (`stage = confirmed`, `via = signal | timeout`).
 - `retracts_ending` while pending → `end_pending_since = null` (`stage = retracted`).
+- **Pending ending, crisis and continued contact** (2026-09-29): a crisis-flagged exchange clears a pending ending (`stage = cleared_by_crisis`), and the tick never confirms one while now < `crisis_quiet_until`. At the timeout the tick confirms only if `last_contact ≤ end_pending_since`; if the user kept writing without an explicit retraction, it clears the pending ending instead (`stage = retracted`, `via = continued_contact`).
 - **Ended:** she still replies when written to; the summary's only line says the friendship ended and she has let go.
-- **Repair:** `wants_repair` while `ended_by_user` → `repairing`, `repair_started_at` (`repair` event). The tick sets `active` once closeness ≥ `relationship.repair_complete_closeness` and `relationship.repair_min_days` have passed. `ends_relationship` while `repairing` → `ended_by_user` directly.
+- **Repair:** `wants_repair` (or `retracts_ending`, which after confirmation counts as a wish to repair) while `ended_by_user` → `repairing`, `repair_started_at` (`repair` event). The tick sets `active` once closeness ≥ `relationship.repair_complete_closeness` and `relationship.repair_min_days` have passed. `ends_relationship` while `repairing` → `ended_by_user` directly.
 
 **Crisis** (rule 7, kept). On an exchange with a crisis-flagged turn: no signal is applied, tension → 0 (a `crisis` event), `crisis_quiet_until = now + relationship.crisis_quiet_hours`. Hurt is kept. Crisis replies skip the whole summary; until `crisis_quiet_until`, the summary omits hurt, tension, make-up and ending lines, the `ended` line included (section 6.2).
 

@@ -185,3 +185,49 @@ test("medianGapHours: default below min sessions, else the median session gap", 
   expect(medianGapHours([t0, h(-24)], cfg)).toBe(cfg.default_median_gap_hours);
   expect(medianGapHours([h(0), h(-10), h(-30), h(-40)], cfg)).toBe(10);
 });
+
+test("F1a: a crisis exchange clears a pending ending and logs it (rule 7)", () => {
+  const s: RelState = { ...fresh(), end_pending_since: t0 };
+  const r = applyExchange(s, init(), ex(null, { now: h(1), crisis: true }), cfg);
+  expect(r.state.end_pending_since).toBeNull();
+  expect(r.state.status).toBe("active");
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "cleared_by_crisis")).toBe(true);
+  const quiet = applyExchange(fresh(), init(), ex(null, { crisis: true }), cfg);
+  expect(quiet.events.some((e) => e.cause === "ending")).toBe(false);
+});
+
+test("F1b: the tick never confirms a pending ending inside the crisis quiet window", () => {
+  const s: RelState = { ...fresh(), end_pending_since: t0, crisis_quiet_until: h(30) };
+  const r = applyTick(s, init(), { now: h(25), localDate: "2026-01-06", yesterdayCount: 1, msgs24h: 1, lastContact: t0, medianGapHours: 24 }, cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: t0 });
+  expect(r.events.some((e) => e.cause === "ending")).toBe(false);
+});
+
+test("F1c: continued contact after a pending ending is an implicit retraction at the tick", () => {
+  const s: RelState = { ...fresh(), end_pending_since: t0 };
+  const r = applyTick(s, init(), { now: h(25), localDate: "2026-01-06", yesterdayCount: 1, msgs24h: 1, lastContact: h(5), medianGapHours: 24 }, cfg);
+  expect(r.state).toMatchObject({ status: "active", end_pending_since: null });
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "retracted" && e.detail.via === "continued_contact")).toBe(true);
+});
+
+test("F1c: no contact after a pending ending confirms by timeout; nothing happens before the timeout", () => {
+  const s: RelState = { ...fresh(), end_pending_since: t0 };
+  const early = applyTick(s, init(), { now: h(5), localDate: "2026-01-05", yesterdayCount: 1, msgs24h: 1, lastContact: h(3), medianGapHours: 24 }, cfg);
+  expect(early.state.end_pending_since).toEqual(t0);
+  expect(early.events.some((e) => e.cause === "ending")).toBe(false);
+  const r = applyTick(s, init(), { now: h(25), localDate: "2026-01-06", yesterdayCount: 1, msgs24h: 1, lastContact: h(-0.01), medianGapHours: 24 }, cfg);
+  expect(r.state.status).toBe("ended_by_user");
+  expect(r.events.some((e) => e.cause === "ending" && e.detail.via === "timeout")).toBe(true);
+});
+
+test("F3: retracts_ending while ended starts repair, like wants_repair", () => {
+  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = applyExchange(s, init(), ex({ retracts_ending: true }, { now: h(2) }), cfg);
+  expect(r.state).toMatchObject({ status: "repairing", repair_started_at: h(2) });
+  expect(r.events.some((e) => e.cause === "repair" && e.detail.stage === "started")).toBe(true);
+});
+
+test("F4: medianGapHours is order-independent (ascending input)", () => {
+  expect(medianGapHours([h(-40), h(-30), h(-10), h(0)], cfg)).toBe(10);
+  expect(medianGapHours([h(-10), h(-40), h(0), h(-30)], cfg)).toBe(10);
+});

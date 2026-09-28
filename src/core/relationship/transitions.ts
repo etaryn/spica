@@ -61,6 +61,11 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
   if (a.crisis) {
     b.set("tension", 0, "crisis");
     b.t.state = { ...b.t.state, crisis_quiet_until: new Date(a.now.getTime() + cfg.crisis_quiet_hours * HOUR) };
+    // Rule 7: no relationship friction carries through a crisis, including a pending ending.
+    if (b.t.state.end_pending_since) {
+      b.t.state = { ...b.t.state, end_pending_since: null };
+      b.status("ending", { stage: "cleared_by_crisis" });
+    }
     b.status("crisis", { suppressed: true });
     return b.t;
   }
@@ -126,7 +131,8 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
       }
     } else if (b.t.state.status === "repairing" && s.ends_relationship) {
       confirmEnding(b, a.now, cfg, "signal");
-    } else if (b.t.state.status === "ended_by_user" && s.wants_repair) {
+    } else if (b.t.state.status === "ended_by_user" && (s.wants_repair || s.retracts_ending)) {
+      // Taking the ending back after it's confirmed is a wish to repair (same slow path).
       b.t.state = { ...b.t.state, status: "repairing", repair_started_at: a.now };
       b.status("repair", { stage: "started" });
     }
@@ -174,8 +180,17 @@ export function applyTick(state: RelState, params: Params, a: TickInput, cfg: Re
   }
 
   const pending = b.t.state.end_pending_since;
-  if (b.t.state.status === "active" && pending && a.now.getTime() - pending.getTime() >= cfg.end_confirm_hours * HOUR) {
-    confirmEnding(b, a.now, cfg, "timeout");
+  const quiet = b.t.state.crisis_quiet_until;
+  const inQuiet = !!quiet && a.now.getTime() < quiet.getTime();
+  // Never settle an ending inside a crisis quiet window (rule 7). At the timeout, contact after the
+  // pending exchange is an implicit retraction; only silence confirms (rule 3: she lets go only if they meant it).
+  if (b.t.state.status === "active" && pending && !inQuiet && a.now.getTime() - pending.getTime() >= cfg.end_confirm_hours * HOUR) {
+    if (a.lastContact && a.lastContact.getTime() > pending.getTime()) {
+      b.t.state = { ...b.t.state, end_pending_since: null };
+      b.status("ending", { stage: "retracted", via: "continued_contact" });
+    } else {
+      confirmEnding(b, a.now, cfg, "timeout");
+    }
   }
   const started = b.t.state.repair_started_at;
   if (b.t.state.status === "repairing" && started && b.t.params.closeness.value >= cfg.repair_complete_closeness

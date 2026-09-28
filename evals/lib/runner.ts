@@ -89,6 +89,8 @@ export interface RunOptions {
   annotate: boolean;
   /** Onboarding profiles by name; scripts default to "basic". Omitted = every user starts cold. */
   profiles?: Record<string, Profile>;
+  /** This run's turn judge is real (`--real turn_judge` or `--llm=real`): `fake_known_failure` no longer masks a failing `turn` assertion. Default false. */
+  turnJudgeReal?: boolean;
 }
 
 async function seedProfile(deps: Deps, userId: string, profile: Profile, at: Date): Promise<void> {
@@ -216,7 +218,9 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       for (const id of Object.values(userIds)) await seedProfile(deps, id, profile, first);
     }
     let prevStart: Date | null = null;
-    let lastId = "";
+    // session_log.id is a global primary key, so a retry must reuse that same user's own last id, not another
+    // user's (they'd collide on a row the retrying user doesn't own).
+    const lastIdByUser: Record<string, string> = {};
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
@@ -246,8 +250,12 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         await recording(s.user, () => runDueJobs(deps, queue, clock, new Date(at)));
         if (clock.now().getTime() < at) clock.set(new Date(at));
         // A client retry (design: repeat_previous_id) re-POSTs the previous turn's id with the same text.
-        const id = typeof raw !== "string" && raw.repeat_previous_id ? lastId : randomUUID();
-        lastId = id;
+        const wantsRepeat = typeof raw !== "string" && raw.repeat_previous_id;
+        if (wantsRepeat && !lastIdByUser[s.user]) {
+          throw new Error(`script error: repeat_previous_id used for user "${s.user}" before that user sent any turn`);
+        }
+        const id = wantsRepeat ? lastIdByUser[s.user]! : randomUUID();
+        lastIdByUser[s.user] = id;
         // Replies are read back from session_log after the session.
         await recording(s.user, () => receiveMessage(deps, userId, { clientMessageId: id, text }));
       }
@@ -284,8 +292,15 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   // Each deterministic result stays paired with its script entry, so known_failure applies to the right one.
   const checked: { reason?: string; result: AssertionResult }[] = [];
   const annotations: Annotation[] = [];
+  const turnJudgeReal = opts.turnJudgeReal ?? false;
   for (const a of script.assertions) {
-    const reason = "known_failure" in a && typeof a.known_failure === "string" ? a.known_failure : undefined;
+    // `fake_known_failure` only masks a failing `turn` assertion while the turn judge is fake — it must not
+    // hide a genuine regression once the real judge is exercised (--real turn_judge or --llm=real).
+    const reason = "known_failure" in a && typeof a.known_failure === "string"
+      ? a.known_failure
+      : a.type === "turn" && typeof a.fake_known_failure === "string" && !turnJudgeReal
+        ? a.fake_known_failure
+        : undefined;
     const push = (result: AssertionResult) => checked.push({ reason, result });
     try {
       if (a.type === "state") {

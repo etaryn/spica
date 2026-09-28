@@ -50,6 +50,12 @@ export const TurnAssertion = z.object({
   /** `majority` for judge-dependent grouping (design §9.6); mechanics scripts keep the default, every run. */
   gate: z.enum(["every", "majority"]).optional(),
   known_failure: knownFailure,
+  /**
+   * Like `known_failure`, but only while the turn judge is fake: a failing result is reported with this reason,
+   * not failed. Masking stops once the turn judge is real (`--real turn_judge` or `--llm=real`), so this never
+   * hides a genuine regression in the real-judge exit run.
+   */
+  fake_known_failure: knownFailure,
 });
 export type TurnAssertion = z.infer<typeof TurnAssertion>;
 /** LLM-judged review annotation (never a pass/fail, v2 §15): does reply N of session S address `about` and not `not_about`? */

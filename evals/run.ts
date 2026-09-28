@@ -77,7 +77,10 @@ const reviewRuns: ReviewRun[] = [];
 for (const script of scripts) {
   const attempts = [];
   for (let k = 0; k < runs; k++) {
-    const attempt = await runScript(script, { db, dbUrl, config, makeLlm, real: realScripts, annotate: args.annotate, embedder, profiles });
+    const attempt = await runScript(script, {
+      db, dbUrl, config, makeLlm, real: realScripts, annotate: args.annotate, embedder, profiles,
+      turnJudgeReal: realPurposes.has("turn_judge"),
+    });
     if (args.review) reviewRuns.push({ script: script.name, attempt: k + 1, result: attempt, description: script.description, profile: script.profile });
     if (args.trace) {
       writeFileSync(path.join(traceDir, `${script.name}-${k + 1}.json`),

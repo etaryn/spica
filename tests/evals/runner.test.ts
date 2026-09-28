@@ -9,8 +9,8 @@ import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";
 afterAll(closeTestDb);
 const config = loadConfig();
 const makeLlm = () => new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
-/** Fake-mode run options: no real calls, no annotations. */
-const opts = (): RunOptions => ({ db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
+/** Fake-mode run options: no real calls, no annotations, fake turn judge. */
+const opts = (): RunOptions => ({ db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false, turnJudgeReal: false });
 
 test("runs a two-session script and evaluates state assertions", async () => {
   const script = ScriptSchema.parse({
@@ -287,6 +287,52 @@ test("repeat_previous_id re-posts the same message: one user turn, one judge cal
     assertions: [{ type: "turn", session: 1, replies: 1, reply_covers: [[1]] }, { type: "state", check: "turn_count", params: { role: "user" }, expect: 1 }],
   });
   expect((await runScript(script, opts())).status).toBe("pass");
+});
+
+test("fake_known_failure masks a failing turn assertion only while the turn judge is fake", async () => {
+  const script = ScriptSchema.parse({
+    name: "fkf", profile: "none",
+    sessions: [{ at: "day 0 09:00", turns: ["hi"] }],
+    assertions: [{ type: "turn", session: 1, replies: 99, fake_known_failure: "not really 99 replies, just proving the mask" }],
+  });
+  const fake = await runScript(script, opts());
+  expect(fake.status).toBe("pass");
+  expect(fake.assertions[0]).toMatchObject({ status: "pass" });
+  expect(fake.assertions[0]!.detail).toMatch(/known failure \(not really 99 replies, just proving the mask\)/);
+
+  const real = await runScript({ ...script, name: "fkf2" }, { ...opts(), turnJudgeReal: true });
+  expect(real.status).toBe("fail");
+  expect(real.assertions[0]!.status).toBe("fail");
+});
+
+test("repeat_previous_id is tracked per user: a repeat before that user's own first turn is a clear script error", async () => {
+  const script = ScriptSchema.parse({
+    name: "retry-peruser-err", profile: "none",
+    sessions: [
+      { at: "day 0 09:00", user: "alice", turns: ["hi alice"] },
+      { at: "day 0 09:05", user: "bob", turns: [{ text: "hi bob", after_s: 0, repeat_previous_id: true }] },
+    ],
+    assertions: [{ type: "state", check: "turn_count", expect: 1 }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("error");
+  expect(r.error).toMatch(/repeat_previous_id used for user "bob" before that user sent any turn/);
+});
+
+test("repeat_previous_id tracks the last id per user, not globally", async () => {
+  const script = ScriptSchema.parse({
+    name: "retry-peruser-ok", profile: "none",
+    sessions: [
+      { at: "day 0 09:00", user: "alice", turns: ["hi alice", { text: "hi alice", after_s: 1, repeat_previous_id: true }] },
+      { at: "day 0 09:05", user: "bob", turns: ["hi bob", { text: "hi bob", after_s: 1, repeat_previous_id: true }] },
+    ],
+    assertions: [
+      { type: "state", user: "alice", check: "turn_count", params: { role: "user" }, expect: 1 },
+      { type: "state", user: "bob", check: "turn_count", params: { role: "user" }, expect: 1 },
+    ],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("pass");
 });
 
 test("known_failure applies to the right assertion when annotations sit between assertions", async () => {

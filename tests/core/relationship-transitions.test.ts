@@ -48,6 +48,23 @@ test("hurt past the threshold makes a make-up due with the cause fact; the line 
   expect(r.events.some((e) => e.cause === "make_up")).toBe(true);
 });
 
+test("a second hurt while a make-up is already due or offered re-points hurt_cause_fact at the newest cause", () => {
+  let r = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.8, cause: "x" } }, { hurtFactId: "f1" }), cfg);
+  expect(r.state).toMatchObject({ make_up_state: "due", hurt_cause_fact: "f1" });
+
+  // A second hurt while still "due" (the line hasn't been offered yet) re-points to the new cause.
+  r = applyExchange(r.state, r.params, ex({ hurt: { amount: 0.8, cause: "y" } }, { now: h(1), hurtFactId: "f2" }), cfg);
+  expect(r.state).toMatchObject({ make_up_state: "due", hurt_cause_fact: "f2" });
+
+  // Advance to "offered" (one reply without the line, one that carries it), then hurt again while offered.
+  r = applyExchange(r.state, r.params, ex(null, { now: h(2) }), cfg);
+  expect(makeUpLineDue(r.state, cfg)).toBe(true);
+  r = applyExchange(r.state, r.params, ex(null, { now: h(3) }), cfg);
+  expect(r.state.make_up_state).toBe("offered");
+  r = applyExchange(r.state, r.params, ex({ hurt: { amount: 0.8, cause: "z" } }, { now: h(4), hurtFactId: "f3" }), cfg);
+  expect(r.state).toMatchObject({ make_up_state: "offered", hurt_cause_fact: "f3" });
+});
+
 test("apology relieves hurt and tension even with no make-up pending", () => {
   const p = init();
   p.hurt.value = 0.2; p.tension.value = 0.4;

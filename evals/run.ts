@@ -10,7 +10,7 @@ import { messageToJudge } from "@/core/safety/crisis";
 import { assertDisposableDatabase } from "@/db/admin";
 import { createDb } from "@/db/client";
 import { runMigrations } from "@/db/migrate";
-import { aggregateRuns, findRegressions, toBaseline, type ScriptSummary } from "./lib/report";
+import { aggregateRuns, findRegressions, mergeBaseline, type ScriptSummary } from "./lib/report";
 import { resolveProfile } from "./lib/profile";
 import { renderReview, type ReviewRun } from "./lib/review";
 import { RoutingLLM } from "./lib/routing-llm";
@@ -118,7 +118,9 @@ if (args.review) {
 
 const baselinePath = path.join(root, "baseline.json");
 if (args["update-baseline"]) {
-  writeFileSync(baselinePath, JSON.stringify(toBaseline(summaries), null, 2) + "\n");
+  // Merge (v2 §15.4 #30): a partial (--only) or fake run must not wipe the entries of scripts it didn't run.
+  const existing = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
+  writeFileSync(baselinePath, JSON.stringify(mergeBaseline(existing, summaries), null, 2) + "\n");
   console.log(`baseline written: ${baselinePath}`);
 }
 

@@ -4,6 +4,7 @@ import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import { composeReply, type Composed } from "../chat/compose-reply";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { emit } from "../events";
 import { guardOutgoing } from "../guard/outgoing";
 import { COLD_PATH_QUEUE, TURN_TIMER_QUEUE, type BackchannelJob, type TurnTimerJob } from "../queue";
@@ -13,14 +14,13 @@ import { readDelayMs, seededUnit, sleepUntil, typingMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 const plus = (d: Date, ms: number) => new Date(d.getTime() + ms);
 
 async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>, what: string) {
   try {
     await withTimeout(fn(), deps.config.queue.enqueue_timeout_ms);
   } catch (e) {
-    deps.log.error(`${what} enqueue failed`, { userId, error: errName(e) });
+    deps.log.error(`${what} enqueue failed`, { userId, error: errorName(e) });
   }
 }
 
@@ -50,7 +50,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
    * `retry_limit`, give up instead — no reply row exists yet, so `reply_failed` is still correct there.
    */
   const fail = async (e: unknown): Promise<"retry" | "abandoned" | "failed"> => {
-    log.error("turn timer failed after commit", { userId, error: errName(e) });
+    log.error("turn timer failed after commit", { userId, error: errorName(e) });
     const attempt = job.attempt ?? 0;
     const now = clock.now();
     if (attempt < config.turn.retry_limit) {
@@ -104,7 +104,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     const composed = await composing;
 
     if (!composed.ok) {
-      log.error("turn reply failed", { userId, turnId: last.id, error: errName(composed.error) });
+      log.error("turn reply failed", { userId, turnId: last.id, error: errorName(composed.error) });
       return await fail(composed.error);
     }
 
@@ -171,7 +171,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
         const at = clock.now();
         await mutateState(db, userId, at, (s) => T.release(s, { epoch: c.epoch, now: at }));
       } catch (e) {
-        log.error("turn release failed", { userId, error: errName(e) });
+        log.error("turn release failed", { userId, error: errorName(e) });
       }
     }
   }

@@ -9,7 +9,7 @@ import { splitParts } from "../chat/parts";
 import { receiveTurn, type UserMessageInput } from "../chat/receive";
 import type { CrisisCard } from "../config";
 import type { Deps } from "../deps";
-import { ConflictError, isUniqueViolation } from "../errors";
+import { ConflictError, errorName, isUniqueViolation } from "../errors";
 import { emit } from "../events";
 import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
@@ -25,7 +25,6 @@ export type ReceiveResult =
   | { status: "accepted" }
   | { status: "replied"; turnId: string; text: string; parts: string[]; crisisCard: CrisisCard | null };
 
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 const ACCEPTED: ReceiveResult = { status: "accepted" };
 
 /** Bounded, best-effort enqueue: a lost timer is recovered by `turn_sweep` (design §5.6). */
@@ -33,7 +32,7 @@ async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>
   try {
     await withTimeout(fn(), deps.config.queue.enqueue_timeout_ms);
   } catch (e) {
-    deps.log.error(`${what} enqueue failed`, { userId, error: errName(e) });
+    deps.log.error(`${what} enqueue failed`, { userId, error: errorName(e) });
   }
 }
 
@@ -47,7 +46,7 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
   if (turn.role !== "user") throw new ConflictError("message id refers to a companion turn");
 
   if (input.timezone && isValidTimeZone(input.timezone)) {
-    await setTimezone(db, userId, input.timezone).catch((e) => log.error("timezone update failed", { userId, error: errName(e) }));
+    await setTimezone(db, userId, input.timezone).catch((e) => log.error("timezone update failed", { userId, error: errorName(e) }));
   }
 
   // Retries (design §5.1 step 1): no second judge call.

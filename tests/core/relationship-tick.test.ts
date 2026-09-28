@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
+import type { Logger } from "@/core/log";
 import { relationshipTick, tickUser } from "@/core/relationship/tick";
 import { localMidnight } from "@/core/timezone";
 import * as rel from "@/db/repos/relationship";
@@ -7,6 +8,12 @@ import { insertTurn } from "@/db/repos/session-log";
 import { setTimezone } from "@/db/repos/users";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+
+function captureLog() {
+  const lines: { msg: string; meta?: Record<string, unknown> }[] = [];
+  const log: Logger = { info: (msg, meta) => lines.push({ msg, meta }), error: (msg, meta) => lines.push({ msg, meta }) };
+  return { log, lines };
+}
 
 const HOUR = 3_600_000;
 
@@ -49,6 +56,23 @@ test("one failing user doesn't stop the batch", async () => {
   const spy = vi.spyOn(rel, "getParams").mockRejectedValueOnce(new Error("boom"));
   expect(await relationshipTick(deps, now)).toEqual({ users: 2, failed: 1 });
   spy.mockRestore();
+});
+
+test("a failure wrapped by an infrastructure error still logs the innermost cause's class name", async () => {
+  const { log, lines } = captureLog();
+  const deps = { ...makeTestDeps(), log };
+  const db = getTestDb();
+  const u = await createTestUser();
+  const now = new Date("2026-01-06T10:00:00Z");
+  await rel.ensureRelationship(db, u, now, deps.config.relationship);
+  class DrizzleQueryError extends Error {}
+  const spy = vi.spyOn(rel, "getParams").mockRejectedValueOnce(new DrizzleQueryError("wrapped", { cause: new TypeError("boom") }));
+  expect(await relationshipTick(deps, now)).toEqual({ users: 1, failed: 1 });
+  spy.mockRestore();
+  expect(lines).toEqual([
+    { msg: "relationship tick failed", meta: { userId: u, error: "TypeError" } },
+    { msg: "relationship tick", meta: { users: 1, failed: 1 } },
+  ]);
 });
 
 test("hour < tick_local_hour is a no-op: no events, no last_tick write", async () => {

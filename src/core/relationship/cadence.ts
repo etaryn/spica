@@ -1,7 +1,6 @@
 import type { Cadence } from "@/db/repos/relationship";
+import { HOUR } from "../time";
 import type { RelConfig } from "./types";
-
-const HOUR = 3_600_000;
 
 /** Median gap between consecutive session starts (design §4.4); any input order. */
 export function medianGapHours(starts: Date[], cfg: RelConfig): number {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { loadPrompt } from "../prompts";
 import { withTimeout } from "../timeout";
 import { CATEGORIES, type Category } from "./categories";
@@ -48,9 +49,6 @@ export function renderGuardInput(input: GuardInput): string {
   ].join("\n\n");
 }
 
-/** Class name (TimeoutError doesn't set `.name`), never the message: messages can hold user text. */
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
-
 /**
  * The guard check (v2 §6.4). Never rejects: after `guard.retry_limit` retries it degrades to the
  * outage keyword list (spec §2, C), reported as `source: "keyword_fallback"`.
@@ -74,7 +72,7 @@ export async function checkMessage(deps: Pick<Deps, "llm" | "config" | "clock">,
       }), config.guard.timeout_ms);
       return { ok: r.violations.length === 0, violations: r.violations, reasoning: r.reasoning, source: "model", latencyMs: elapsed(), error: null, promptVersion };
     } catch (e) {
-      error = errName(e);
+      error = errorName(e);
     }
   }
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);

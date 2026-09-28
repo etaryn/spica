@@ -1,11 +1,11 @@
 import * as rel from "@/db/repos/relationship";
 import { getTimezone } from "@/db/repos/users";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { isValidTimeZone, localDateString, localHour, previousLocalDate } from "../timezone";
 import { applyTick } from "./transitions";
 
 const DAY = 86_400_000;
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 
 /** Not yet due for `localDate`'s tick: before `tick_local_hour` local, or already ticked today or later. */
 const notDue = (lastTick: string | null, localDate: string) => lastTick !== null && lastTick >= localDate;
@@ -51,7 +51,7 @@ export async function relationshipTick(deps: Pick<Deps, "db" | "config" | "log">
       await tickUser(deps, userId, now);
     } catch (e) {
       failed += 1;
-      deps.log.error("relationship tick failed", { userId, error: errName(e) });
+      deps.log.error("relationship tick failed", { userId, error: errorName(e) });
     }
   }
   deps.log.info("relationship tick", { users: users.length, failed });

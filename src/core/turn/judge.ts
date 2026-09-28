@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { insertJudgeLogs } from "@/db/repos/judge-log";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { loadPrompt } from "../prompts";
 import { withTimeout } from "../timeout";
 import { cueVerdict } from "./cues";
@@ -25,7 +26,6 @@ export const TurnVerdictSchema = z.object({
 
 export const BUFFER_MARKER = "NEW MESSAGES (not yet replied to), oldest first:\n";
 const OPEN_MARKER = "OPEN QUESTIONS (asked, not yet answered by Spica):\n";
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 
 function ago(at: Date, now: Date): string {
   const s = Math.max(0, Math.round((now.getTime() - at.getTime()) / 1000));
@@ -86,7 +86,7 @@ export async function judgeTurn(deps: Pick<Deps, "llm" | "config" | "clock">, in
     };
   } catch (e) {
     const v = cueVerdict(input.buffer.map((m) => m.text), input.openQuestions, config.turn.incomplete_cues);
-    return { ...v, open_questions: v.open_questions.slice(0, config.turn.max_open_questions), reasoning: null, source: "keyword_fallback", latencyMs: elapsed(), error: errName(e), promptVersion };
+    return { ...v, open_questions: v.open_questions.slice(0, config.turn.max_open_questions), reasoning: null, source: "keyword_fallback", latencyMs: elapsed(), error: errorName(e), promptVersion };
   }
 }
 
@@ -106,6 +106,6 @@ export async function logTurnDecision(
       prompt_version: v.promptVersion, created_at: deps.clock.now(),
     }])), deps.config.guard.log_timeout_ms);
   } catch (e) {
-    deps.log.error("judge_log write failed", { userId, turnId: a.turnId, kind: "turn", error: errName(e) });
+    deps.log.error("judge_log write failed", { userId, turnId: a.turnId, kind: "turn", error: errorName(e) });
   }
 }

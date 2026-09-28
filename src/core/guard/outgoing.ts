@@ -1,5 +1,6 @@
 import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos/judge-log";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { withTimeout } from "../timeout";
 import { hasSafety } from "./categories";
 import { correctiveNote, fallbackLine } from "./fallback";
@@ -18,8 +19,6 @@ export type OutgoingArgs = {
 /** `writeLog` is deferred: the caller writes judge_log after the message is sent (v2 §15.2 #1). */
 export type OutgoingResult = { text: string; outcome: GuardOutcome; writeLog: () => Promise<void> };
 type Checked = { text: string; verdict: GuardVerdict };
-
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 
 /**
  * The regenerate/fallback policy (spec §4.3). The single entry point for every outgoing message:
@@ -65,7 +64,7 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
   try {
     c2 = (await a.regenerate(correctiveNote(deps.config, v1.violations))).trim();
   } catch (e) {
-    deps.log.error("guard regeneration failed", { userId: a.userId, turnId: a.turnId, error: errName(e) });
+    deps.log.error("guard regeneration failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
     return hasSafety(v1.violations) ? decide(fallback(), "fallback") : decide(c1, "sent_with_violation");
   }
   const v2 = await check(c2);
@@ -113,7 +112,7 @@ async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: 
   try {
     await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, rows)), deps.config.guard.log_timeout_ms);
   } catch (e) {
-    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errName(e) });
+    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
   }
 }
 
@@ -126,6 +125,6 @@ async function writeDisabledLog(deps: Pick<Deps, "db" | "config" | "clock" | "lo
   try {
     await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, [row])), deps.config.guard.log_timeout_ms);
   } catch (e) {
-    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errName(e) });
+    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
   }
 }

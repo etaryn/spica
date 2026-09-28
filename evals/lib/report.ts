@@ -48,6 +48,16 @@ export function toBaseline(summaries: ScriptSummary[]): Record<string, BaselineE
 }
 
 /**
+ * `--update-baseline` (v2 §15.4 #30): merges this run's entries into the existing baseline instead of
+ * replacing the whole file, so a partial (`--only`) or fake run can no longer wipe real-run entries for
+ * scripts it didn't run. Keys are re-sorted alphabetically, matching the file's existing convention.
+ */
+export function mergeBaseline(existing: Record<string, BaselineEntry>, summaries: ScriptSummary[]): Record<string, BaselineEntry> {
+  const merged = { ...existing, ...toBaseline(summaries) };
+  return Object.fromEntries(Object.keys(merged).sort().map((k) => [k, merged[k]!]));
+}
+
+/**
  * Baseline-passing scripts that no longer pass, or whose pass rate dropped. Scripts not run are ignored, and a
  * `skipped` script counts as not run (e.g. a `mode: real` script under --llm=fake against a real-run baseline).
  */

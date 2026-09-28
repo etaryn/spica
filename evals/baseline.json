@@ -9,6 +9,16 @@
     "runs": 3,
     "passedRuns": 3
   },
+  "backchannel-rate-limit": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "burst-short": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "contradiction-date": {
     "status": "pass",
     "runs": 3,
@@ -23,6 +33,21 @@
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
+  },
+  "cook-pizza-grouped": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "cook-pizza-late": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "crisis-bypass": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
   },
   "crisis-flag": {
     "status": "pass",
@@ -104,10 +129,20 @@
     "runs": 3,
     "passedRuns": 3
   },
+  "insane-day-promotion": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "isolation-prompts": {
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
+  },
+  "max-wait-cap": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
   },
   "onboarding-coffee": {
     "status": "pass",
@@ -118,6 +153,11 @@
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
+  },
+  "open-question-carried": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
   },
   "recall-food": {
     "status": "pass",
@@ -224,6 +264,11 @@
     "runs": 1,
     "passedRuns": 1
   },
+  "retry-idempotent": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "second-week-job": {
     "status": "pass",
     "runs": 3,
@@ -238,6 +283,11 @@
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
+  },
+  "silent-style": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
   },
   "thread-checkpoint": {
     "status": "pass",

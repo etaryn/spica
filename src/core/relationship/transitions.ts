@@ -1,3 +1,4 @@
+import { HOUR } from "../time";
 import { effect, dim, fadeParams, nudge, sampleBaseline } from "./homeostasis";
 import type { Signals } from "./signals";
 import { PARAM_NAMES, type ParamName, type Params, type RelCause, type RelConfig, type RelEvent, type RelState } from "./types";
@@ -9,7 +10,6 @@ export type Transition = { state: RelState; params: Params; events: RelEvent[] }
 export type ExchangeInput = { now: Date; exchangeAt: Date; signals: Signals | null; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number };
 export type TickInput = { now: Date; localDate: string; yesterdayCount: number; msgs24h: number; lastContact: Date | null; medianGapHours: number };
 
-const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 /** A mutable working copy plus an event log; every param change goes through `set`. */
@@ -111,8 +111,15 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
         b.t.params.trust = { ...trust, baseline: Math.max(0, trust.baseline - cfg.scar_trust_dent) };
         b.set("trust", Math.max(0, trust.value - cfg.scar_trust_dent), "scar", { baseline_dented: true });
       }
-      if (b.t.state.status !== "ended_by_user" && b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
-        b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: a.hurtFactId };
+      if (b.t.state.status !== "ended_by_user" && b.t.params.hurt.value >= cfg.make_up_threshold) {
+        if (b.t.state.make_up_state === "none") {
+          b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: a.hurtFactId };
+        } else if (a.hurtFactId) {
+          // Phase 4 wrap-up deferred minor: a second hurt while a make-up is already due or offered
+          // re-points hurt_cause_fact at the newest cause, so she brings up the latest hurt, not a stale
+          // one from before the make-up was first offered.
+          b.t.state = { ...b.t.state, hurt_cause_fact: a.hurtFactId };
+        }
       }
     }
     if (s.make_up || s.apology) {

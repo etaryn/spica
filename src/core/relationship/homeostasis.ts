@@ -1,6 +1,6 @@
+import { HOUR } from "../time";
 import type { Param, Params, RelConfig } from "./types";
 
-const HOUR = 3_600_000;
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 
 /** v2 §8: bounded deviation from this user's own baseline. */

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import type { ScriptResult } from "../../evals/lib/runner";
-import { aggregateRuns, findRegressions, toBaseline } from "../../evals/lib/report";
+import { aggregateRuns, findRegressions, mergeBaseline, toBaseline } from "../../evals/lib/report";
 
 const run = (statuses: [string, string][], status: ScriptResult["status"] = "pass"): ScriptResult => ({
   name: "s", status, meta: { decayPasses: 0, ticks: 0 }, annotations: [],
@@ -63,4 +63,26 @@ test("a skipped script counts as not run, never a regression (real-mode scripts 
   const skipped = { name: "real-only", status: "skipped" as const, runs: 1, passedRuns: 0, assertions: [], errors: [] };
   expect(findRegressions([skipped], { "real-only": { status: "pass", runs: 3, passedRuns: 3 } })).toEqual([]);
   expect(findRegressions([skipped], { "real-only": "pass" })).toEqual([]);
+});
+
+test("mergeBaseline (v2 §15.4 #30): keeps untouched entries byte-for-byte", () => {
+  const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({ name, status, runs: 3, passedRuns, assertions: [], errors: [] });
+  const existing = { a: { status: "pass", runs: 3, passedRuns: 3 }, b: "pass" as const };
+  expect(mergeBaseline(existing, [s("a", "fail", 0)])).toEqual({ a: { status: "fail", runs: 3, passedRuns: 0 }, b: "pass" });
+});
+
+test("mergeBaseline replaces only the entries for scripts that were run", () => {
+  const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({ name, status, runs: 3, passedRuns, assertions: [], errors: [] });
+  const existing = { a: { status: "pass", runs: 3, passedRuns: 3 }, b: { status: "pass", runs: 3, passedRuns: 2 } };
+  const merged = mergeBaseline(existing, [s("b", "pass", 3)]);
+  expect(merged.a).toEqual({ status: "pass", runs: 3, passedRuns: 3 });
+  expect(merged.b).toEqual({ status: "pass", runs: 3, passedRuns: 3 });
+});
+
+test("mergeBaseline adds new entries and keeps the result sorted alphabetically", () => {
+  const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({ name, status, runs: 1, passedRuns, assertions: [], errors: [] });
+  const existing = { zeta: { status: "pass", runs: 1, passedRuns: 1 } };
+  const merged = mergeBaseline(existing, [s("alpha", "pass", 1)]);
+  expect(Object.keys(merged)).toEqual(["alpha", "zeta"]);
+  expect(merged.alpha).toEqual({ status: "pass", runs: 1, passedRuns: 1 });
 });

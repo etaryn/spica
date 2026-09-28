@@ -1,10 +1,9 @@
 import { adminFindStuckConversations } from "@/db/repos/conversation-state";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { TURN_TIMER_QUEUE } from "../queue";
 import { mutateState } from "./state";
 import * as T from "./transitions";
-
-const errName = (e: unknown) => (e instanceof Error ? e.constructor.name : "UnknownError");
 
 /**
  * turn_sweep (design §5.6): requeue buffers whose timer was lost and replies stuck in flight after a crash.
@@ -25,7 +24,7 @@ export async function sweepTurns(deps: Pick<Deps, "db" | "queue" | "config" | "l
       await queue.enqueue(TURN_TIMER_QUEUE, { userId, version: r.version }, { startAfter: now });
       n += 1;
     } catch (e) {
-      log.error("turn sweep failed for user", { userId, error: errName(e) });
+      log.error("turn sweep failed for user", { userId, error: errorName(e) });
     }
   }
   if (n > 0) log.info("turn sweep requeued", { count: n });

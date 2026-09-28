@@ -1,5 +1,6 @@
 import type { ChatMessage } from "../llm/types";
 import type { RecalledFact } from "../memory/types";
+import { HOUR } from "../time";
 
 export type RetrievedFact = { id: string; content: string; when: Date };
 export type DueThread = { id: string; title: string; detail?: string | null };
@@ -74,7 +75,7 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
   // The window can span days; without a marker the model carries on from the old moment.
   const messages: ChatMessage[] = turns.map((t, i) => {
     const prev = turns[i - 1];
-    const gapHours = prev?.created_at && t.created_at ? (t.created_at.getTime() - prev.created_at.getTime()) / 3_600_000 : 0;
+    const gapHours = prev?.created_at && t.created_at ? (t.created_at.getTime() - prev.created_at.getTime()) / HOUR : 0;
     const marked = t.role === "user" && input.gapMarkerMinHours !== undefined && gapHours >= input.gapMarkerMinHours;
     return { role: t.role === "user" ? "user" : "assistant", content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text };
   });
@@ -99,7 +100,7 @@ export function relationshipLine(s: { sessions: number; days: number; first: Dat
 /** Phase 1 relationship line: time since the previous turn, omitted under `minHours` (v2 §6.2 slot 3). */
 export function gapLine(prevAt: Date | null, now: Date, minHours: number): string | null {
   if (!prevAt) return null;
-  const hours = (now.getTime() - prevAt.getTime()) / 3_600_000;
+  const hours = (now.getTime() - prevAt.getTime()) / HOUR;
   if (hours < minHours) return null;
   const days = Math.floor(hours / 24);
   if (days <= 1) return "You last talked yesterday.";

@@ -34,7 +34,7 @@ test("null block: params only refresh msgs_per_day, no signal events", () => {
 
 test("hurt past the threshold makes a make-up due with the cause fact; the line waits one reply", () => {
   let r = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.8, cause: "x" } }, { hurtFactId: "f1" }), cfg);
-  expect(r.params.hurt.value).toBeCloseTo(0.32);
+  expect(r.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.8);
   expect(r.state).toMatchObject({ make_up_state: "due", hurt_cause_fact: "f1", make_up_replies: 0, last_hurt_at: t0 });
   expect(makeUpLineDue(r.state, cfg)).toBe(false);
   r = applyExchange(r.state, r.params, ex(null, { now: h(1) }), cfg); // a reply without the line
@@ -44,7 +44,7 @@ test("hurt past the threshold makes a make-up due with the cause fact; the line 
   expect(r.state.make_up_state).toBe("offered");
   r = applyExchange(r.state, r.params, ex({ make_up: true }, { now: h(3) }), cfg);
   expect(r.state).toMatchObject({ make_up_state: "none", hurt_cause_fact: null });
-  expect(r.params.hurt.value).toBeLessThan(0.15);
+  expect(r.params.hurt.value).toBeLessThan((cfg.gains.hurt * 0.8) / 2); // making up at least halves the hurt
   expect(r.events.some((e) => e.cause === "make_up")).toBe(true);
 });
 

@@ -174,7 +174,7 @@
     "variance_epsilon": 0.01,
     "initial": { "closeness": 0.2, "trust": 0.4, "warmth": 0.5, "hurt": 0, "tension": 0, "msgs_per_day": 5 },
     "initial_variance": { "closeness": 0.01, "trust": 0.01, "warmth": 0.02, "hurt": 0.01, "tension": 0.01, "msgs_per_day": 25 },
-    "gains": { "warmth": 0.15, "trust": 0.1, "tension": 0.3, "hurt": 0.4, "closeness_per_warm_exchange": 0.02 },
+    "gains": { "warmth": 0.15, "trust": 0.1, "tension": 0.3, "hurt": 0.5, "closeness_per_warm_exchange": 0.02 },
     "hurt_half_life_hours": 48,
     "tension_half_life_hours": 24,
     "sensitise_window_days": 14,

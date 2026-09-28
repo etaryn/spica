@@ -110,6 +110,7 @@ export async function answeringReply(db: Db, userId: string, turn: Turn): Promis
   const res = await db.execute(sql`
     SELECT c.id FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
     WHERE c.user_id = ${userId} AND c.role = 'companion' AND u.created_at >= ${turn.created_at.toISOString()}::timestamptz
+    ORDER BY u.created_at, c.created_at, c.id
     LIMIT 1`);
   const id = res.rows[0]?.id as string | undefined;
   return id ? getTurn(db, userId, id) : null;

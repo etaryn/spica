@@ -108,6 +108,51 @@ describe("runTurnTimer", () => {
     expect(replies[1]!.reply_to).toBe(late.clientMessageId);
   });
 
+  test("final review fix: a message during the later bubbles of a reply waits until its last bubble is out", async () => {
+    const deps = makeTestDeps();
+    const clock = new HookedClock(deps.clock.now());
+    deps.clock = clock;
+    const u = await createTestUser();
+    await receiveMessage(deps, u, msg("tell me about your week"));
+    const first = lastTimer(deps);
+    deps.llm.replies.push("part one here\n\npart two here");
+    const late = msg("haha same honestly");
+    let lateResult: string | undefined;
+    // Sleep 3 is the part-gap + typing wait before bubble 1: the first reply is inserted and bubble 0 is out.
+    clock.hookAtCall = 3;
+    clock.hook = async () => {
+      await receiveMessage(deps, u, late);
+      deps.clock.advance(deps.config.turn.settle_ms);
+      lateResult = await runTurnTimer(deps, lastTimer(deps));
+    };
+    expect(await runTurnTimer(deps, first)).toBe("sent");
+    expect(lateResult).toBe("busy");
+    expect((await getState(getTestDb(), u))!.sending_since).toBeNull();
+
+    // The rescheduled timer now commits and follows up, after every bubble of the first reply.
+    deps.llm.replies.push("same energy");
+    expect(await runTurnTimer(deps, lastTimer(deps))).toBe("sent");
+    const [r1, r2] = (await listTurns(getTestDb(), u)).filter((t) => t.role === "companion");
+    const events = deps.events.events.map((x) => x.event);
+    const lastOfFirst = events.findIndex((e) => e.type === "message" && e.turnId === r1!.id && e.part === 1);
+    const firstOfSecond = events.findIndex((e) => e.type === "message" && e.turnId === r2!.id);
+    expect(r2!.reply_to).toBe(late.clientMessageId);
+    expect(lastOfFirst).toBeGreaterThan(-1);
+    expect(firstOfSecond).toBeGreaterThan(lastOfFirst);
+  });
+
+  test("final review fix: a reply still sending blocks a commit; a crisis clears the marker", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await receiveMessage(deps, u, msg("first thing here"));
+    await getTestDb().execute(sql.raw(`UPDATE conversation_state SET sending_since = '2026-01-05T09:00:00Z' WHERE user_id = '${u}'`));
+    expect(await runTurnTimer(deps, lastTimer(deps))).toBe("busy");
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    await receiveMessage(deps, u, msg("actually i want to end my life"));
+    expect((await getState(getTestDb(), u))!.sending_since).toBeNull();
+    expect(deps.events.events.map((x) => x.event).at(-1)).toEqual({ type: "typing", on: false });
+  });
+
   test("a timer that finds a reply still in flight reschedules itself instead of racing it", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();

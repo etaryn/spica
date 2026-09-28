@@ -220,6 +220,7 @@ export const conversation_state = pgTable("conversation_state", {
   backchannel_sent: boolean("backchannel_sent").notNull().default(false),
   inflight_turn_ids: uuid("inflight_turn_ids").array().notNull().default(emptyUuidArray),
   inflight_since: ts("inflight_since"),
+  sending_since: ts("sending_since"),
   reply_epoch: integer("reply_epoch").notNull().default(0),
   updated_at: ts("updated_at").notNull(),
 }, (t) => [index("conversation_state_wait_idx").on(t.wait_until)]);

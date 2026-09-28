@@ -6,7 +6,7 @@ const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
 const empty = (over: Partial<ConvState> = {}): ConvState => ({
   user_id: "u", buffer_turn_ids: [], open_questions: [], wait_until: null, last_backchannel_at: null,
   buffer_version: 0, buffer_started_at: null, backchannel_sent: false, inflight_turn_ids: [], inflight_since: null,
-  reply_epoch: 0, updated_at: at(0), ...over,
+  sending_since: null, reply_epoch: 0, updated_at: at(0), ...over,
 });
 const apply = (s: ConvState, patch: Partial<ConvState> | null): ConvState => ({ ...s, ...(patch ?? {}) });
 
@@ -60,8 +60,17 @@ describe("commit", () => {
 
 describe("finish / restore / giveUp / crisis", () => {
   const inflight = empty({ inflight_turn_ids: ["a"], inflight_since: at(5), buffer_version: 3, reply_epoch: 0 });
-  test("finish clears inflight when the epoch is unchanged and the turns match", () => {
-    expect(T.finish(inflight, { epoch: 0, turnIds: ["a"], now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, updated_at: at(9) }, result: true });
+  test("finish clears inflight and marks the reply sending when the epoch is unchanged and the turns match", () => {
+    expect(T.finish(inflight, { epoch: 0, turnIds: ["a"], now: at(9) })).toEqual({ patch: { inflight_turn_ids: [], inflight_since: null, sending_since: at(9), updated_at: at(9) }, result: true });
+  });
+  test("release clears the sending marker only under the same epoch", () => {
+    const sending = empty({ sending_since: at(9), reply_epoch: 2 });
+    expect(T.release(sending, { epoch: 2, now: at(20) })).toEqual({ patch: { sending_since: null, updated_at: at(20) }, result: true });
+    expect(T.release(sending, { epoch: 1, now: at(20) })).toEqual({ patch: null, result: false });
+    expect(T.release(empty(), { epoch: 0, now: at(20) })).toEqual({ patch: null, result: false });
+  });
+  test("commit is busy while a reply is still sending", () => {
+    expect(T.commit(empty({ buffer_turn_ids: ["b"], buffer_version: 4, sending_since: at(9) }), { version: 4, now: at(10) }).result).toEqual({ kind: "busy" });
   });
   test("finish is order-independent on which turns it's clearing", () => {
     expect(T.finish({ ...inflight, inflight_turn_ids: ["b", "a"] }, { epoch: 0, turnIds: ["a", "b"], now: at(9) }).result).toBe(true);
@@ -104,6 +113,15 @@ describe("backchannel and recover", () => {
     expect(T.backchannel(after, { version: 1, now: at(3), minIntervalMs: 90000 }).result).toBe(false);
     expect(T.backchannel(s, { version: 0, now: at(2), minIntervalMs: 90000 }).result).toBe(false);
     expect(T.backchannel({ ...s, last_backchannel_at: at(0) }, { version: 1, now: at(30), minIntervalMs: 90000 }).result).toBe(false);
+  });
+  test("recover clears a stale sending marker without re-buffering, and requeues a buffer that waited behind it", () => {
+    const later = new Date(at(0).getTime() + 200_000);
+    const alone = T.recover(empty({ sending_since: at(0), buffer_version: 3 }), { now: later, graceMs: 60000, inflightMaxAgeMs: 180000 });
+    expect(alone).toEqual({ patch: { sending_since: null, updated_at: later }, result: { version: null } });
+    const waiting = T.recover(empty({ sending_since: at(0), buffer_turn_ids: ["b"], wait_until: new Date(later.getTime() - 1000), buffer_version: 3 }), { now: later, graceMs: 60000, inflightMaxAgeMs: 180000 });
+    expect(waiting.result.version).toBe(4);
+    expect(waiting.patch).toMatchObject({ sending_since: null, buffer_turn_ids: ["b"], wait_until: later });
+    expect(T.recover(empty({ sending_since: at(0) }), { now: at(1), graceMs: 60000, inflightMaxAgeMs: 180000 }).patch).toBeNull();
   });
   test("recover requeues an overdue buffer and a stuck in-flight reply; leaves healthy state alone", () => {
     expect(T.recover({ ...s, wait_until: at(5) }, { now: at(10), graceMs: 60000, inflightMaxAgeMs: 180000 }).result.version).toBeNull();

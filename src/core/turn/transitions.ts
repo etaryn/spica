@@ -49,7 +49,8 @@ export type CommitResult =
 
 export function commit(s: ConvState, a: { version: number; now: Date }): Step<CommitResult> {
   if (s.buffer_version !== a.version || s.buffer_turn_ids.length === 0) return { patch: null, result: { kind: "stale" } };
-  if (s.inflight_turn_ids.length > 0) return { patch: null, result: { kind: "busy" } };
+  // A reply still sending its later bubbles counts as busy too, or a follow-up would interleave with them.
+  if (s.inflight_turn_ids.length > 0 || s.sending_since) return { patch: null, result: { kind: "busy" } };
   return {
     patch: {
       inflight_turn_ids: s.buffer_turn_ids, inflight_since: a.now, buffer_turn_ids: [], buffer_started_at: null,
@@ -63,12 +64,22 @@ export function commit(s: ConvState, a: { version: number; now: Date }): Step<Co
  * Just before the paced reply is inserted: false when a crisis reply went out meanwhile (design §5.2 step 4),
  * or when the inflight snapshot no longer matches the turns this call is responsible for (someone else's
  * commit already occupies the slot) — either way, inflight is left untouched rather than cleared out from
- * under whoever does own it.
+ * under whoever does own it. On success the turns leave inflight (the reply row now answers them) and the
+ * reply is marked sending until `release`, so no follow-up commits while its later bubbles go out.
  */
 export function finish(s: ConvState, a: { epoch: number; turnIds: string[]; now: Date }): Step<boolean> {
   if (s.reply_epoch !== a.epoch) return { patch: null, result: false };
   if (!sameIds(s.inflight_turn_ids, a.turnIds)) return { patch: null, result: false };
-  return { patch: { inflight_turn_ids: [], inflight_since: null, updated_at: a.now }, result: true };
+  return { patch: { inflight_turn_ids: [], inflight_since: null, sending_since: a.now, updated_at: a.now }, result: true };
+}
+
+/**
+ * After the last bubble (or on any exit once the reply was inserted): clears the sending marker. A crisis
+ * meanwhile already cleared it and may have let a newer reply set its own, so only the same epoch releases.
+ */
+export function release(s: ConvState, a: { epoch: number; now: Date }): Step<boolean> {
+  if (s.reply_epoch !== a.epoch || !s.sending_since) return { patch: null, result: false };
+  return { patch: { sending_since: null, updated_at: a.now }, result: true };
 }
 
 export function restore(s: ConvState, a: { epoch: number; turnIds: string[]; now: Date; retryAt: Date }): Step<{ kind: "abandoned" } | { kind: "restored"; version: number }> {
@@ -96,7 +107,7 @@ export function giveUp(s: ConvState, a: { epoch: number; now: Date }): Step<bool
 export function crisis(s: ConvState, a: { turnId: string; now: Date }): Step<{ turnIds: string[] }> {
   return {
     patch: {
-      buffer_turn_ids: [], inflight_turn_ids: [], inflight_since: null, buffer_started_at: null, wait_until: null,
+      buffer_turn_ids: [], inflight_turn_ids: [], inflight_since: null, sending_since: null, buffer_started_at: null, wait_until: null,
       backchannel_sent: false, open_questions: [], buffer_version: s.buffer_version + 1, reply_epoch: s.reply_epoch + 1, updated_at: a.now,
     },
     result: { turnIds: uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids, a.turnId]) },
@@ -112,13 +123,19 @@ export function backchannel(s: ConvState, a: { version: number; now: Date; minIn
 export function recover(s: ConvState, a: { now: Date; graceMs: number; inflightMaxAgeMs: number }): Step<{ version: number | null }> {
   const t = a.now.getTime();
   const stuck = s.inflight_turn_ids.length > 0 && !!s.inflight_since && t - s.inflight_since.getTime() > a.inflightMaxAgeMs;
+  // A crashed sender: its reply row exists, so only the marker is cleared (never re-buffered). Any buffer
+  // that waited behind it is requeued now.
+  const sendingStuck = !!s.sending_since && t - s.sending_since.getTime() > a.inflightMaxAgeMs;
   const overdue = s.buffer_turn_ids.length > 0 && (!s.wait_until || t - s.wait_until.getTime() > a.graceMs);
-  if (!stuck && !overdue) return { patch: null, result: { version: null } };
+  if (!stuck && !overdue && !(sendingStuck && s.buffer_turn_ids.length > 0)) {
+    return sendingStuck ? { patch: { sending_since: null, updated_at: a.now }, result: { version: null } } : { patch: null, result: { version: null } };
+  }
   const version = s.buffer_version + 1;
   return {
     patch: {
       buffer_turn_ids: stuck ? uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids]) : s.buffer_turn_ids,
       ...(stuck ? { inflight_turn_ids: [], inflight_since: null } : {}),
+      ...(sendingStuck ? { sending_since: null } : {}),
       buffer_started_at: s.buffer_started_at ?? a.now, buffer_version: version, wait_until: a.now, updated_at: a.now,
     },
     result: { version },

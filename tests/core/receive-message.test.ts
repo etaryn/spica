@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
 import { TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { getState } from "@/db/repos/conversation-state";
 import { listJudgeLogs } from "@/db/repos/judge-log";
+import * as sessionLog from "@/db/repos/session-log";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
@@ -75,9 +76,24 @@ describe("receiveMessage", () => {
     expect(reply.safety_flag?.flagged).toBe(true);
     const s = (await getState(getTestDb(), u))!;
     expect(s).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [], reply_epoch: 1 });
-    expect(deps.events.events.map((e) => e.event)).toEqual([{ type: "message", turnId: reply.id, part: 0 }, { type: "message", turnId: reply.id, part: 1 }]);
+    expect(deps.events.events.map((e) => e.event)).toEqual([{ type: "message", turnId: reply.id, part: 0 }, { type: "message", turnId: reply.id, part: 1 }, { type: "typing", on: false }]);
     expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({ turnIds: [turns[0]!.id, crisisMsg.clientMessageId, reply.id] });
     expect(deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
+  });
+
+  test("final review fix: a failure in the judging branch never costs a crisis message its reply and card", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+    // The judge's buffer read is the first getTurnsByIds call; the crisis path's own read still works.
+    const spy = vi.spyOn(sessionLog, "getTurnsByIds").mockRejectedValueOnce(new Error("db blip"));
+    try {
+      const r = await receiveMessage(deps, u, msg("i want to end my life"));
+      expect(r).toMatchObject({ status: "replied" });
+      expect((r as { crisisCard: unknown }).crisisCard).not.toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test("a retried crisis message returns the stored reply with its card, not a bare 202 (rule 7 outranks design §5.1's answered → 202)", async () => {

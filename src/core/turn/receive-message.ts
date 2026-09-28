@@ -82,10 +82,17 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
       buffer: buffered.map((t) => ({ text: t.text, at: t.created_at })),
       openQuestions: openBefore.map((q) => q.text),
     });
-  })();
+  })().catch((e: unknown) => {
+    // Settled so a failure here (a DB read; judgeTurn itself never throws) can't reject past the crisis check.
+    // A null verdict is treated as complete, like the cue fallback.
+    log.error("turn judge input failed", { userId, turnId: turn.id, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    return null;
+  });
 
-  const [flag, verdict] = await Promise.all([crisis, judging]);
+  // Rule 7: a flagged message doesn't wait for the judge's verdict, which it would discard anyway.
+  const flag = await crisis;
   if (flag?.flagged) return sendCrisisReply(deps, userId, turn, flag);
+  const verdict = await judging;
 
   const complete = verdict?.complete ?? true;
   const stretch = await availabilityStretch(deps, userId);
@@ -153,6 +160,8 @@ export async function sendCrisisReply(deps: Deps, userId: string, userTurn: Turn
   }
   const parts = composed.parts;
   for (let i = 0; i < parts.length; i++) await emit(deps, userId, { type: "message", turnId: companion.id, part: i });
+  // A paced reply this abandoned may still show typing until its next epoch check; rule 7: no lingering dots.
+  await emit(deps, userId, { type: "typing", on: false });
 
   await enqueueSafely(deps, userId, () => deps.queue.enqueue(COLD_PATH_QUEUE, {
     userId, turnIds: [...answering.map((t) => t.id), companion.id], replyTurnId: companion.id, recalled: composed.recalled,

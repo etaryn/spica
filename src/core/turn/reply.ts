@@ -66,6 +66,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
   // stopTyping is idempotent so the normal "sent" path (which emits it right after the last bubble, to keep
   // it out of the outgoing-message ordering) doesn't also double-emit it from the finally below.
   let typingOn = true;
+  let sending = false; // set once the reply row is in and finish marked it sending; cleared by release below
   const stopTyping = async () => {
     if (!typingOn) return;
     typingOn = false;
@@ -108,6 +109,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
       });
       return { patch: step.patch, result: row };
     });
+    sending = companion !== null;
     if (!companion) {
       // Either a crisis covered these turns first (finish's epoch/turn check) or a concurrent duplicate job
       // already inserted the reply — either way, nothing more to send, but the guard check still ran.
@@ -139,6 +141,16 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     return "sent";
   } finally {
     await stopTyping();
+    if (sending) {
+      // Release the sending marker on every exit, errors included; if this fails, turn_sweep clears it after
+      // turn.job_expire_seconds (the reply row already exists, so nothing is re-buffered).
+      try {
+        const at = clock.now();
+        await mutateState(db, userId, at, (s) => T.release(s, { epoch: c.epoch, now: at }));
+      } catch (e) {
+        log.error("turn release failed", { userId, error: errName(e) });
+      }
+    }
   }
 }
 

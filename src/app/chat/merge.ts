@@ -15,6 +15,11 @@ export type UiMessage = {
   of?: number;
   /** "backchannel" renders as a small bubble (v2 §8.2); null when the turn wasn't one. */
   trigger?: string | null;
+  /**
+   * Sent from this tab and not yet seen in server history. A POST 202 marks it "sent" but says nothing about
+   * what the server stored before it (a reply emitted while SSE was down), so it's never a catch-up anchor.
+   */
+  local?: boolean;
 };
 
 /** One SSE bubble. Parts arrive in order; a repeat (reconnect, history overlap) is ignored. */
@@ -38,15 +43,22 @@ export function applyPart(
 /** Catch-up after (re)connecting: add turns we don't have; a fuller server copy of a reply wins. */
 export function mergeHistory(msgs: UiMessage[], incoming: HistoryMessage[]): UiMessage[] {
   const next = [...msgs];
+  // `incoming` is in server order: a missing turn goes right after its predecessor from the same page, so a
+  // reply recovered after a reconnect lands above the messages the user sent after it, not at the bottom.
+  let prev = -1;
   for (const h of incoming) {
     const i = next.findIndex((m) => m.id === h.id);
     const ui: UiMessage = {
       id: h.id, role: h.role, parts: h.parts, crisisCard: h.crisisCard, status: "sent", trigger: h.trigger ?? null,
       ...(h.role === "companion" ? { of: h.parts.length } : {}),
     };
-    if (i === -1) next.push(ui);
-    else if (h.role === "companion" && h.parts.length > next[i]!.parts.length) next[i] = ui;
-    else if (next[i]!.status !== "sent" && h.role === "user") next[i] = { ...next[i]!, status: "sent" };
+    if (i === -1) {
+      if (prev === -1) { next.push(ui); prev = next.length - 1; } else { next.splice(prev + 1, 0, ui); prev += 1; }
+      continue;
+    }
+    if (h.role === "companion" && h.parts.length > next[i]!.parts.length) next[i] = ui;
+    else if (h.role === "user") next[i] = { ...next[i]!, status: "sent", local: false };
+    prev = i;
   }
   return next;
 }
@@ -68,7 +80,7 @@ export function catchUpAnchor(msgs: UiMessage[]): string | null {
   const end = incompleteIdx === -1 ? msgs.length : incompleteIdx;
   for (let i = end - 1; i >= 0; i--) {
     const m = msgs[i]!;
-    if (m.status === "pending" || m.status === "failed") continue;
+    if (m.status === "pending" || m.status === "failed" || m.local) continue;
     return m.id;
   }
   return null;

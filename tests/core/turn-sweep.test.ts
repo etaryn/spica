@@ -39,3 +39,18 @@ test("sweep recovers a lost timer and a stuck in-flight reply without double-sen
   expect(await runTurnTimer(deps, recovered)).toBe("sent");
   expect((await listTurns(db, u)).filter((t) => t.role === "companion")).toHaveLength(2);
 });
+
+test("sweep clears a sender that crashed mid-bubbles, and the buffer behind it gets its reply", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "you there?" });
+  // A crashed sender left its marker behind; the waiting timer keeps finding the reply busy.
+  await getTestDb().execute(sql.raw(`UPDATE conversation_state SET sending_since = '2026-01-05T08:00:00Z' WHERE user_id = '${u}'`));
+  const timer = deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
+  expect(await runTurnTimer(deps, timer)).toBe("busy");
+
+  expect(await sweepTurns(deps, deps.clock.now())).toBe(1);
+  const requeued = deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
+  expect(await runTurnTimer(deps, requeued)).toBe("sent");
+  expect((await listTurns(getTestDb(), u)).filter((t) => t.role === "companion")).toHaveLength(1);
+});

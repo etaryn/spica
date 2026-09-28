@@ -100,3 +100,14 @@ test("userTurnStats counts sessions and local days of user turns up to a time", 
   expect((await log.userTurnStats(getTestDb(), u, upTo, "Pacific/Auckland")).days).toBe(2);
   expect((await log.userTurnStats(getTestDb(), u, new Date("2026-01-06T00:00:00Z"), "UTC")).sessions).toBe(1);
 });
+
+test("answeringReply returns the earliest reply covering the turn, not whichever row the scan finds first", async () => {
+  const u = await createTestUser();
+  const sid = randomUUID();
+  const t1 = await turn(u, "user", "i can't do this anymore", at(0), { session_id: sid });
+  const t2 = await turn(u, "user", "anyway, pizza?", at(5), { session_id: sid });
+  // Insert the later reply first so an unordered LIMIT 1 would find it before the crisis reply.
+  await turn(u, "companion", "pizza!", at(6), { session_id: sid, reply_to: t2.id });
+  const crisisReply = await turn(u, "companion", "i'm here", at(1), { session_id: sid, reply_to: t1.id, safety_flag: { flagged: true, category: "self_harm", source: "model" } as never });
+  expect((await log.answeringReply(getTestDb(), u, t1))?.id).toBe(crisisReply.id);
+});

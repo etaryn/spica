@@ -169,6 +169,7 @@ export async function TurnStateTab({ db, userId }: { db: Db; userId: string }) {
         <tr><th>wait until</th><td>{s.wait_until ? iso(s.wait_until) : "—"}</td></tr>
         <tr><th>version</th><td>{s.buffer_version}</td></tr>
         <tr><th>in flight</th><td>{json(s.inflight_turn_ids)} {s.inflight_since ? `since ${iso(s.inflight_since)}` : ""}</td></tr>
+        <tr><th>sending</th><td>{s.sending_since ? `since ${iso(s.sending_since)}` : "—"}</td></tr>
         <tr><th>reply epoch</th><td>{s.reply_epoch}</td></tr>
         <tr><th>last backchannel</th><td>{s.last_backchannel_at ? iso(s.last_backchannel_at) : "—"}</td></tr>
       </tbody>

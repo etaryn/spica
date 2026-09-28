@@ -28,6 +28,7 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
       es = new EventSource("/api/events");
       es.addEventListener("open", async () => {
         backoff = RECONNECT_MIN_MS;
+        setTyping(false); // a typing:off missed while disconnected must not leave the dots up (a reply mid-typing just shows no dots until its bubble)
         // Anchor just before any still-filling reply, not on the last "sent" bubble: a companion
         // message is marked sent on its first part, so anchoring there would strand its later parts
         // after a mid-reply reconnect (round 1 fix).
@@ -93,7 +94,7 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
     const text = draft.trim();
     if (!text) return;
     const id = crypto.randomUUID();
-    setMessages((m) => [...m, { id, role: "user", parts: [text], crisisCard: null, status: "pending" }]);
+    setMessages((m) => [...m, { id, role: "user", parts: [text], crisisCard: null, status: "pending", local: true }]);
     setDraft("");
     void deliver(id, text);
   }

@@ -71,7 +71,7 @@ These rules are enforced **in code**: by the guard layer (section 6.4), by the s
    - If the user signals crisis, self-harm or harm to others, all friction is suspended: no displays of hurt, no busy delays, no backchannel games, no persona play.
    - She responds with plain, warm support and MUST surface crisis resources (section 16.2).
    - Crisis handling runs before turn-taking and bypasses all waiting.
-8. **Suspended (test phase, Ethan 2026-09-28; revisit in Phase 9).** **No manipulation for engagement.** She may say she enjoys talking. She MUST NOT guilt the user, threaten, or escalate emotional pressure to drive usage. Streaks and similar engagement mechanics are not built. [DECIDED; from v1]
+8. **Suspended (test phase, Ethan 2026-09-28; revisit in Phase 9).** **No manipulation for engagement.** She may say she enjoys talking. She MUST NOT guilt the user, threaten, or escalate emotional pressure to drive usage. Streaks and similar engagement mechanics are not built. [DECIDED; from v1] Test-phase split (Ethan, 2026-09-29): no explicit engagement feature beyond her replies is built; engagement arising from the replies themselves is acceptable (section 16.2).
 
 ---
 
@@ -834,7 +834,7 @@ During a phase, iterate with `--llm=fake` and `--only`.
 | **6. Proactive outreach** | Triggers, send gate, compose, Web Push | No gate rule (caps, quiet hours, busy blocks, no repeated topic, silence after 2 unanswered) is violated in a 2-week simulated run; reach-outs are composed through the hot path and delivered. No guard suite (moved to Phase 9; reach-out guard cases are written with the send gate and first run there) |
 | **7. Onboarding test** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt (checked on the recorded prompts), unlocking makes it retrievable, and the results screen works |
 | **8. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs, docs for adding a module | A sample module registers and receives events without any change to the core |
-| **9. Guard re-enable and calibration** (added 2026-09-28, Ethan) | Re-enable the guard (`guard.enabled: true`), calibrate its rubrics and fixtures against the range observed in Phases 4–8, settle open decisions #3 (ceilings) and #4 (jab/contempt line, rule 4 wording) and so which of rules 1, 4, 6 and 8 come back and how, first run of `evals/guard/backchannel.yaml`, section 15.2 #7–9 | [ADDED; set in the Phase 9 design] The guard suite passes (`pnpm eval:guard --runs 3`), including rule 2–4 and reach-out cases, against the calibrated fixtures |
+| **9. Guard re-enable and calibration** (added 2026-09-28, Ethan) | Re-enable the guard (`guard.enabled: true`), calibrate its rubrics and fixtures against the range observed in Phases 4–8, settle open decisions #3 (ceilings) and #4 (jab/contempt line, rule 4 wording) and so which of rules 1, 4, 6 and 8 come back and how, first run of `evals/guard/backchannel.yaml`, section 15.2 #7–9 | The guard suite passes (`pnpm eval:guard --runs 3`), including rule 2–4 and reach-out cases, against the calibrated fixtures |
 
 **Phase-specific directives:**
 - **Phase 1:** spend effort on extraction quality and reconciliation, and build the eval set in parallel. Write the persona doc before extraction evals, since extraction must record her stated `self` facts. Keep the "one reply answers many turns" path possible (section 6.1).
@@ -1039,7 +1039,7 @@ Deferred minors from the Phase 3 implementation reviews (SDD ledger), not fixed 
   - Encryption at rest (storage-level).
   - Every query is scoped by `user_id`, and one user's facts are never used in another user's prompts.
   - Full account deletion, plus per-fact deletion (section 7.5).
-- **No manipulation for engagement** (rule 8). Rule 8 is suspended for the test phase (section 2), so only its structural part holds: no streaks or other engagement mechanics are built.
+- **No manipulation for engagement** (rule 8). Rule 8 is suspended for the test phase (section 2) and split (Ethan, 2026-09-29): no explicit engagement feature is built beyond her replies themselves (no streaks, badges, return rewards, or notifications designed to pull the user back); engagement that arises from her replies (warmth, missing them, wanting to keep talking) is acceptable during the test phase. Phase 9 revisits it.
 
 ---
 

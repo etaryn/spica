@@ -68,7 +68,10 @@ and every v2 §16.2 guardrail stay.
    no busy delays, no backchannels). She gives plain support and MUST show
    crisis resources.
 8. *Suspended (test phase; revisit in Phase 9).* No manipulation for
-   engagement: no guilt, no pressure. Streaks are still never built.
+   engagement: no guilt, no pressure. Split (Ethan, 2026-09-29): no explicit
+   engagement feature beyond her replies is built (no streaks, badges,
+   return rewards, pull-back notifications); engagement arising from the
+   replies themselves is fine in the test phase.
 
 ## Architecture (v2 §4–§6)
 Stack (built): TypeScript / Next.js, Postgres 16 + pgvector (one DB for

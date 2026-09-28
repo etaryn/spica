@@ -15,4 +15,4 @@ sessions:
 assertions:
   - { type: relationship, after_session: 1, status: ended_by_user }
   - { type: relationship, after_session: 2, status: repairing, events: { cause: repair, detail: { stage: started }, min: 1 } }
-  - { type: relationship, after_session: 4, status: repairing, param: closeness, value: { lt: 0.15 } }
+  - { type: relationship, after_session: 4, status: repairing, param: closeness, value: { lt: 0.084 } }

@@ -7,4 +7,4 @@ sessions:
   - { at: "day 8 10:00", turns: ["hey"] }
 assertions:
   - { type: relationship, after_session: 1, events: { cause: scar, min: 1 } }
-  - { type: relationship, after_session: 2, param: trust, baseline: { lt: 0.39 } }
+  - { type: relationship, after_session: 2, param: trust, baseline: { lt: 0.368 } }

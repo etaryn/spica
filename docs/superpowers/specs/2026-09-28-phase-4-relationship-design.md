@@ -1,6 +1,6 @@
 # Phase 4: Relationship + homeostasis design
 
-Date: 2026-09-28 · Status: design, awaiting Ethan's review · Parent: `spica-build-spec-v2.md` (§2, §5.5, §5.8,
+Date: 2026-09-28 · Status: implemented (plan Tasks 1–11), folded into v2 2026-09-29; exit run pending · Parent: `spica-build-spec-v2.md` (§2, §5.5, §5.8,
 §6.2–6.4, §8, §14.1–14.5, §15 Phase 4, §15.2 #7–9, §15.4)
 
 ## 1. Goal and exit test
@@ -322,7 +322,11 @@ make-up state, end/repair timestamps, cadence; the last 200 `relationship_event`
 ### 8.4 Exit run
 
 `pnpm eval --real extract --only <the 13 scripts> --runs 3`: deterministic assertions every run, the
-extract-dependent ones (the five above) on a majority. Under `--real extract`, `signals` is ignored. Then an
+extract-dependent ones (the five above) on a majority. [Amended as built, 2026-09-28: under `--real extract`,
+scripts with scripted `signals` keep using them unless the script sets `signal_source: model` (the five
+above do), so the other mechanics scripts stay deterministic. While scripted signals are active, an exchange
+with no scripted turn gets `relationship: null`. `SignalLLM` matches whole `User: <text>` lines, and a
+scripted text must be unique within its script (the runner reports a script error otherwise).] Then an
 on-demand review run with a real reply (`--real reply,extract --review`) for Ethan.
 
 ## 9. v2 spec edits (definition of done)

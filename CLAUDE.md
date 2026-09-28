@@ -47,22 +47,28 @@ over richness · memory writes never delay a reply (deliberate human pacing
 is fine) · built to extend (modules register through interfaces).
 
 ## Behavioral rules (v2 §2): enforced in code, not only in prompts
-1. No threats, ever (of leaving, punishment or withdrawal).
+**Test phase (Ethan 2026-09-28):** rules 1, 6 and 8 are **suspended** and
+rule 4 is **removed**, so Spica's full range can be observed; the guard is
+off until Phase 9, which re-enables it and settles them. Rules 2, 3, 5 and 7
+and every v2 §16.2 guardrail stay.
+1. *Suspended (test phase; revisit in Phase 9).* No threats, ever (of
+   leaving, punishment or withdrawal).
 2. May show hurt, annoyance or disappointment toward the user, then always
    makes up.
 3. Only the user can end the relationship; she lets go, and repair is slow
    but possible.
-4. Hurt about absence is OK, punishing it is not. She may say once that she
-   missed them, owned as her own feeling, never as a debt the user owes.
-   (Provisional, testing.)
+4. *Removed (test phase).* ~~Hurt about absence is OK, punishing it is not.
+   She may say once that she missed them, owned as her own feeling, never
+   as a debt the user owes.~~
 5. Proactive messages are capped; she never repeats a topic the user
    didn't respond to.
-6. She never attacks the user personally: jabs are fine, contempt is not.
-   Where that line sits is OPEN.
+6. *Suspended (test phase; revisit in Phase 9).* She never attacks the user
+   personally: jabs are fine, contempt is not. Where that line sits is OPEN.
 7. **Crisis carve-out:** crisis or self-harm suspends all friction (no hurt,
    no busy delays, no backchannels). She gives plain support and MUST show
    crisis resources.
-8. No manipulation for engagement: no guilt, no pressure, no streaks.
+8. *Suspended (test phase; revisit in Phase 9).* No manipulation for
+   engagement: no guilt, no pressure. Streaks are still never built.
 
 ## Architecture (v2 §4–§6)
 Stack (built): TypeScript / Next.js, Postgres 16 + pgvector (one DB for
@@ -78,8 +84,10 @@ Message flow: POST (stored, then `202`; crisis answers in the POST with
 questions, a cheap `context_complete?` judge, backchannel style
 `judge|signals|silent`, default `judge` provisionally; no strict
 one-message-one-reply) → **hot path**, once complete → **guard layer**
-(checks every outgoing message for threats, contempt, guilt framing,
-punishment or manipulation; regenerates once, then falls back to a safe
+(**off until Phase 9**: `guard.enabled: false` sends the first candidate
+unchecked and logs one `guard_disabled` row in `judge_log`; when on, it
+checks every outgoing message for threats, contempt, guilt framing,
+punishment or manipulation, regenerates once, then falls back to a safe
 line) → pacing (read delay + typing time; availability stretches it,
 crisis skips it) → SSE (`/api/events`, history catch-up via
 `/api/chat/history`) → **cold path** (async). Waiting is durable: delayed
@@ -128,7 +136,11 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 - **Relationship (v2 §8):** every param is a `HomeostaticParam` judged by
   its deviation from *this user's* baseline, not its absolute value. Hurt
   goes through a make-up flow Spica initiates. Tension has its own rules.
-  Closeness drifts down during absence with no punishment.
+  Closeness drifts down during absence with no punishment. Built in Phase
+  4: signals come from the extraction call's `relationship` block, applied
+  in a cold-path savepoint; a daily `relationship_tick` fades, samples
+  baselines and handles absence; hurt and tension are uncapped for the
+  test phase (OPEN #3, decided in Phase 9).
 - **Persona / ego (v2 §9):** Claude drafts persona v1 and Ethan edits it.
   The persona is iterable, but a new version must not contradict existing
   self facts. `interest_alignment` defaults to `adjacent`. The ego is
@@ -160,10 +172,19 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 | 6. Proactive outreach | Triggers, send gate, Web Push |
 | 7. Onboarding test | Questionnaire, reveal pacing, results screen |
 | 8. Extension stubs | Event bus, module registration, social stubs |
+| 9. Guard re-enable and calibration | Re-enable the guard, calibrate it against the observed range, settle OPEN #3 / #4, first run of `evals/guard/backchannel.yaml`, v2 §15.2 #7–9 |
 
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
+Phase 9 added 2026-09-28 (Ethan): the guard is off from Phase 4 until then.
 
-**Current phase: 4 (Relationship + homeostasis), not started.** Phase 3
+**Current phase: 4 (Relationship + homeostasis), built; exit run pending.**
+Tasks 1–11 of the Phase 4 plan (code) are done on branch
+`phase-4-relationship` and folded into v2 (§2, §5.5, §5.8, §6.2–6.4, §8,
+§14, §15, §16.1, §18 rows G1–G4 and S1–S3). Next: the exit run (only
+`extract` real, the 13 `rel-*` scripts, `--runs 3`; no guard suite). After
+merge, Ethan runs `pnpm db:migrate` on the dev DB (it was not migrated
+during the build). Phase 4 design:
+`docs/superpowers/specs/2026-09-28-phase-4-relationship-design.md`. Phase 3
 (Turn-taking + pacing) done 2026-09-28: the exit run (only `turn_judge`
 real, `--runs 3`) passed all 10 Phase 3 scripts 3/3 (116 turn-judge calls,
 ~$0.13), and a scripted HTTP + SSE check passed all six browser checks.
@@ -185,15 +206,16 @@ Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
 **Exit tests from Phase 3 on (v2 §15):** only the phase's own functionality,
 with deterministic assertions. Exit runs call the real API only for the
 phase's own LLM processes; the reply model is always faked, the guard is off
-(guard suite only at the Phase 4 and 6 exits), and other fakes are agreed
+(no guard suite until Phase 9), and other fakes are agreed
 per phase with Ethan. Quality is never an exit criterion: on-demand review
 runs log every input and output for manual analysis. The app keeps Sonnet 5
-replies and the guard.
+replies; the guard is off in the app too until Phase 9.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
 1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far
-to push irreversibility (hurt / tension ceilings). 4. Where the jab vs
-contempt line sits (including the rule 4 wording). 5. Whether the
+to push irreversibility (hurt / tension ceilings; test phase: uncapped,
+decide in Phase 9). 4. Where the jab vs contempt line sits (including the
+rule 4 wording; test phase: rules suspended, decide in Phase 9). 5. Whether the
 backchannel style is global or per user. 6. Shared vs per-user life (heavy
 decision). 7. Final reach-out caps. 8. Identity disclosure ("are you an
 AI?"; placeholder: answer honestly, in her own voice).

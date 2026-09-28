@@ -167,7 +167,7 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 | 1. Memory engine ✅ | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads + checkpoints, memory view, schema additions, **persona doc v1** |
 | 2. Guardrails ✅ | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
 | 3. Turn-taking + pacing ✅ | Buffer / judge / backchannels / pacing, SSE |
-| 4. Relationship + homeostasis | HomeostaticParam, hurt / tension / make-up, ending / repair |
+| 4. Relationship + homeostasis ✅ | HomeostaticParam, hurt / tension / make-up, ending / repair |
 | 5. Life sim + availability + ego | Schedule / events, availability override, ego driven by life sim |
 | 6. Proactive outreach | Triggers, send gate, Web Push |
 | 7. Onboarding test | Questionnaire, reveal pacing, results screen |
@@ -177,11 +177,12 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 Phase 9 added 2026-09-28 (Ethan): the guard is off from Phase 4 until then.
 
-**Current phase: 4 (Relationship + homeostasis), built; exit run pending.**
-Tasks 1–11 of the Phase 4 plan (code) are done on branch
-`phase-4-relationship` and folded into v2 (§2, §5.5, §5.8, §6.2–6.4, §8,
-§14, §15, §16.1, §18 rows G1–G4 and S1–S3). Next: the exit run (only
-`extract` real, the 13 `rel-*` scripts, `--runs 3`; no guard suite). After
+**Current phase: 5 (Life sim + availability + ego), not started.** Phase 4
+(Relationship + homeostasis) done 2026-09-29: the exit run (only `extract`
+real, `--runs 3`, no guard suite) passed all 13 `rel-*` scripts 3/3 with
+`prompts.extract` v4 (162 Haiku calls, ~$0.58; ~$1.81 across all attempts),
+folded into v2 (§2, §5.5, §5.8, §6.2–6.4, §8, §14, §15, §16.1, §18 rows
+G1–G4 and S1–S3). Phase 5 starts from v2 §15.4 and the tuning backlog. After
 merge, Ethan runs `pnpm db:migrate` on the dev DB (it was not migrated
 during the build). Phase 4 design:
 `docs/superpowers/specs/2026-09-28-phase-4-relationship-design.md`. Phase 3

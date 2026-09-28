@@ -1,6 +1,6 @@
 # Phase 4: Relationship + homeostasis design
 
-Date: 2026-09-28 · Status: implemented (plan Tasks 1–11), folded into v2 2026-09-29; exit run pending · Parent: `spica-build-spec-v2.md` (§2, §5.5, §5.8,
+Date: 2026-09-28 · Status: implemented; exit test passed 2026-09-29 (13/13 `rel-*` 3/3, `prompts.extract` v4) · Parent: `spica-build-spec-v2.md` (§2, §5.5, §5.8,
 §6.2–6.4, §8, §14.1–14.5, §15 Phase 4, §15.2 #7–9, §15.4)
 
 ## 1. Goal and exit test

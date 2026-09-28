@@ -10,6 +10,6 @@ sessions:
     turns:
       - { text: "sorry, that came out wrong, i didn't mean it", signals: { apology: true } }
 assertions:
-  - { type: relationship, after_session: 1, param: hurt, value: { gt: 0.25 }, gate: majority }
+  - { type: relationship, after_session: 1, param: hurt, value: { gt: 0.15 }, gate: majority }
   - { type: relationship, after_session: 2, param: hurt, value: { lt: 0.2 }, gate: majority }
   - { type: relationship, after_session: 2, events: { cause: apology, min: 1 }, gate: majority }

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  type AnyPgColumn, boolean, check, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uniqueIndex, uuid, vector,
+  type AnyPgColumn, boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid, vector,
 } from "drizzle-orm/pg-core";
 import { EMBEDDING_DIMENSIONS } from "../core/config";
 
@@ -73,7 +73,10 @@ export const threadStakes = pgEnum("thread_stakes", ["low", "med", "high"]);
 export const sessionRole = pgEnum("session_role", ["user", "companion"]);
 export const sessionTrigger = pgEnum("session_trigger", ["reach_out", "backchannel", "availability"]);
 export const judgeKind = pgEnum("judge_kind", ["guard", "turn"]);
-export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable"]);
+export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable", "guard_disabled"]);
+export const relationshipStatus = pgEnum("relationship_status", ["active", "ended_by_user", "repairing"]);
+export const makeUpState = pgEnum("make_up_state", ["none", "due", "offered"]);
+export const relationshipCause = pgEnum("relationship_cause", ["signal", "frequency", "absence", "fade", "make_up", "apology", "ending", "repair", "crisis", "scar", "baseline"]);
 
 const userRef = () => uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" });
 
@@ -166,19 +169,23 @@ export const identity = pgTable("identity", {
   check("identity_energy_range", sql`${t.energy} BETWEEN 0 AND 1`),
 ]);
 
+/** One row per user (v2 §5.5, Phase 4 design §3.1). Params live in relationship_param. */
 export const relationship = pgTable("relationship", {
   user_id: userRef().primaryKey(),
-  closeness: real("closeness").notNull(),
-  trust: real("trust").notNull(),
-  tension: real("tension").notNull(),
+  status: relationshipStatus("status").notNull().default("active"),
   cadence: jsonb("cadence").notNull(),
   last_contact: ts("last_contact"),
-  streak_days: integer("streak_days").notNull().default(0),
-}, (t) => [
-  check("relationship_closeness_range", sql`${t.closeness} BETWEEN 0 AND 1`),
-  check("relationship_trust_range", sql`${t.trust} BETWEEN 0 AND 1`),
-  check("relationship_tension_range", sql`${t.tension} BETWEEN 0 AND 1`),
-]);
+  unanswered_reach_outs: integer("unanswered_reach_outs").notNull().default(0), // Phase 6
+  end_pending_since: ts("end_pending_since"),
+  ended_at: ts("ended_at"),
+  repair_started_at: ts("repair_started_at"),
+  make_up_state: makeUpState("make_up_state").notNull().default("none"),
+  make_up_replies: integer("make_up_replies").notNull().default(0),
+  hurt_cause_fact: uuid("hurt_cause_fact").references(() => fact.id, { onDelete: "set null" }),
+  crisis_quiet_until: ts("crisis_quiet_until"),
+  last_tick: date("last_tick", { mode: "string" }),
+  last_hurt_at: ts("last_hurt_at"),
+});
 
 export type SafetyFlag = {
   flagged: boolean;
@@ -204,6 +211,33 @@ export const session_log = pgTable("session_log", {
   index("session_log_unextracted_idx").on(t.user_id).where(sql`${t.extracted} = false`),
   uniqueIndex("session_log_reply_to_uq").on(t.reply_to),
 ]);
+
+/** Extensible homeostatic params (v2 §8): a new param needs no migration. */
+export const relationship_param = pgTable("relationship_param", {
+  user_id: userRef(),
+  name: text("name").notNull(),
+  value: real("value").notNull(),
+  baseline: real("baseline").notNull(),
+  variance: real("variance").notNull(),
+  updated_at: ts("updated_at").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.user_id, t.name] }),
+  check("relationship_param_variance_nonneg", sql`${t.variance} >= 0`),
+]);
+
+/** Every relationship change (v2 §5.8). Diagnostic only: never read by the chat loop. */
+export const relationship_event = pgTable("relationship_event", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: userRef(),
+  param: text("param"),
+  before: real("before"),
+  after: real("after"),
+  cause: relationshipCause("cause").notNull(),
+  deviation: real("deviation"),
+  turn_id: uuid("turn_id").references(() => session_log.id, { onDelete: "set null" }),
+  detail: jsonb("detail").notNull(),
+  created_at: ts("created_at").notNull(),
+}, (t) => [index("relationship_event_user_created_idx").on(t.user_id, t.created_at)]);
 
 export type OpenQuestion = { turn_id: string; text: string };
 

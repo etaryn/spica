@@ -28,11 +28,13 @@ async function seedEverything(userId: string) {
     user_id: userId, traits: {}, stances: {}, boundaries: [], humor_style: "dry", verbal_tics: [],
     speech_rules: [], mood_valence: 0, mood_arousal: 0.5, energy: 0.5, preoccupation: f!.id, baseline: {},
   });
-  await db.insert(s.relationship).values({ user_id: userId, closeness: 0.1, trust: 0.1, tension: 0, cadence: {} });
+  await db.insert(s.relationship).values({ user_id: userId, cadence: {} });
   const turnId = crypto.randomUUID();
   await db.insert(s.session_log).values({
     id: turnId, user_id: userId, session_id: crypto.randomUUID(), role: "user", text: "hi", created_at: T,
   });
+  await db.insert(s.relationship_param).values({ user_id: userId, name: "hurt", value: 0, baseline: 0, variance: 0.01, updated_at: T });
+  await db.insert(s.relationship_event).values({ user_id: userId, cause: "signal", detail: {}, created_at: T });
   await db.insert(s.retrieval_trace).values({
     user_id: userId, turn_id: turnId, fact_id: f!.id, sim: 0.9, fact_salience: 0.7,
     entity_salience: 0.8, recency: 1, score: 0.5, forced: false, created_at: T,
@@ -47,8 +49,8 @@ async function seedEverything(userId: string) {
 }
 
 const domainTables = [
-  s.fact, s.entity, s.thread, s.identity, s.relationship, s.session_log, s.retrieval_trace, s.ego_tick, s.reach_out_log,
-  s.judge_log, s.conversation_state,
+  s.fact, s.entity, s.thread, s.identity, s.relationship, s.relationship_param, s.relationship_event, s.session_log,
+  s.retrieval_trace, s.ego_tick, s.reach_out_log, s.judge_log, s.conversation_state,
 ] as const;
 
 describe("schema", () => {

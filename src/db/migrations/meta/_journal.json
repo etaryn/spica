@@ -50,6 +50,20 @@
       "when": 1790567801103,
       "tag": "0006_gray_tag",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790588751142,
+      "tag": "0007_safe_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790588763638,
+      "tag": "0008_small_big_bertha",
+      "breakpoints": true
     }
   ]
 }

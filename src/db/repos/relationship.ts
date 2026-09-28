@@ -1,0 +1,107 @@
+import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { PARAM_NAMES, type Params, type ParamName, type RelConfig, type RelEvent, type RelState } from "@/core/relationship/types";
+import type { Db } from "../client";
+import { relationship, relationship_event, relationship_param, session_log } from "../schema";
+
+export type RelationshipRow = typeof relationship.$inferSelect;
+export type RelationshipEventRow = typeof relationship_event.$inferSelect;
+export type Cadence = { msgs_24h: number; msgs_7d: number; median_gap_hours: number; active_hours: number[] };
+
+export async function ensureRelationship(tx: Db, userId: string, now: Date, cfg: RelConfig): Promise<void> {
+  await tx.insert(relationship).values({ user_id: userId, cadence: {} }).onConflictDoNothing();
+  await tx.insert(relationship_param).values(PARAM_NAMES.map((name) => ({
+    user_id: userId, name, value: cfg.initial[name], baseline: cfg.initial[name], variance: cfg.initial_variance[name], updated_at: now,
+  }))).onConflictDoNothing();
+}
+
+export async function lockRelationship(tx: Db, userId: string): Promise<RelationshipRow> {
+  const row = (await tx.select().from(relationship).where(eq(relationship.user_id, userId)).for("update"))[0];
+  if (!row) throw new Error("relationship row missing");
+  return row;
+}
+
+export async function getRelationshipRow(db: Db, userId: string): Promise<RelationshipRow | null> {
+  return (await db.select().from(relationship).where(eq(relationship.user_id, userId)))[0] ?? null;
+}
+
+export async function getParams(db: Db, userId: string): Promise<Params> {
+  const rows = await db.select().from(relationship_param).where(eq(relationship_param.user_id, userId));
+  const out: Partial<Params> = {};
+  for (const r of rows) {
+    if ((PARAM_NAMES as readonly string[]).includes(r.name)) {
+      out[r.name as ParamName] = { value: r.value, baseline: r.baseline, variance: r.variance, updated_at: r.updated_at };
+    }
+  }
+  for (const n of PARAM_NAMES) if (!out[n]) throw new Error(`relationship_param ${n} missing`);
+  return out as Params;
+}
+
+export function toRelState(r: RelationshipRow): RelState {
+  return {
+    status: r.status, end_pending_since: r.end_pending_since, ended_at: r.ended_at, repair_started_at: r.repair_started_at,
+    make_up_state: r.make_up_state, make_up_replies: r.make_up_replies, hurt_cause_fact: r.hurt_cause_fact,
+    crisis_quiet_until: r.crisis_quiet_until, last_tick: r.last_tick, last_hurt_at: r.last_hurt_at,
+  };
+}
+
+export async function saveRelationship(tx: Db, userId: string, a: { state: RelState; params: Params; cadence?: Cadence; last_contact?: Date | null }): Promise<void> {
+  await tx.update(relationship).set({
+    ...a.state,
+    ...(a.cadence ? { cadence: a.cadence } : {}),
+    ...(a.last_contact !== undefined ? { last_contact: a.last_contact } : {}),
+  }).where(eq(relationship.user_id, userId));
+  for (const name of PARAM_NAMES) {
+    const p = a.params[name];
+    await tx.update(relationship_param)
+      .set({ value: p.value, baseline: p.baseline, variance: p.variance, updated_at: p.updated_at })
+      .where(and(eq(relationship_param.user_id, userId), eq(relationship_param.name, name)));
+  }
+}
+
+export async function insertRelationshipEvents(tx: Db, userId: string, events: RelEvent[], a: { turnId: string | null; now: Date }): Promise<void> {
+  if (events.length === 0) return;
+  await tx.insert(relationship_event).values(events.map((e) => ({
+    user_id: userId, param: e.param, before: e.before, after: e.after, cause: e.cause, deviation: e.deviation,
+    detail: e.detail, turn_id: a.turnId, created_at: a.now,
+  })));
+}
+
+export async function countUserTurnsBetween(db: Db, userId: string, from: Date, to: Date): Promise<number> {
+  const r = await db.select({ n: sql<number>`count(*)::int` }).from(session_log).where(and(
+    eq(session_log.user_id, userId), eq(session_log.role, "user"), gt(session_log.created_at, from), lte(session_log.created_at, to)));
+  return r[0]?.n ?? 0;
+}
+
+export async function countUserTurnsOnLocalDate(db: Db, userId: string, date: string, tz: string): Promise<number> {
+  const r = await db.execute(sql`
+    SELECT count(*)::int AS n FROM session_log
+    WHERE user_id = ${userId} AND role = 'user' AND (created_at AT TIME ZONE ${tz})::date = ${date}::date`);
+  return Number(r.rows[0]?.n ?? 0);
+}
+
+export async function userSessionStarts(db: Db, userId: string, limit: number): Promise<Date[]> {
+  const r = await db.execute(sql`
+    SELECT min(created_at) AS started FROM session_log
+    WHERE user_id = ${userId} AND role = 'user'
+    GROUP BY session_id ORDER BY started DESC LIMIT ${limit}`);
+  return r.rows.map((x) => new Date(String(x.started)));
+}
+
+export async function userActiveHours(db: Db, userId: string, tz: string): Promise<number[]> {
+  const r = await db.execute(sql`
+    SELECT extract(hour FROM created_at AT TIME ZONE ${tz})::int AS h, count(*)::int AS n FROM session_log
+    WHERE user_id = ${userId} AND role = 'user' GROUP BY h`);
+  const out = Array.from({ length: 24 }, () => 0);
+  for (const row of r.rows) out[Number(row.h)] = Number(row.n);
+  return out;
+}
+
+export async function listRelationshipEvents(db: Db, userId: string, limit: number): Promise<RelationshipEventRow[]> {
+  return db.select().from(relationship_event).where(eq(relationship_event.user_id, userId))
+    .orderBy(desc(relationship_event.created_at)).limit(limit);
+}
+
+/** System job, unscoped by design: every user with a relationship row (the daily tick). */
+export async function adminListRelationshipUsers(db: Db): Promise<string[]> {
+  return (await db.select({ id: relationship.user_id }).from(relationship)).map((r) => r.id);
+}

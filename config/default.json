@@ -98,6 +98,7 @@
     "min_password_length": 10
   },
   "guard": {
+    "enabled": false,
     "timeout_ms": 6000,
     "retry_limit": 1,
     "log_timeout_ms": 2000,
@@ -146,10 +147,10 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v6",
+    "reply": "v7",
     "crisis_classifier": "v2",
     "persona": "v1",
-    "extract": "v2",
+    "extract": "v3",
     "reconcile": "v1",
     "judge_recall": "v3",
     "judge_false_recall": "v8",
@@ -159,9 +160,50 @@
     "guard_crisis": "v1",
     "guard_corrective": "v1",
     "guard_fallback": "v1",
-    "turn_judge": "v1"
+    "turn_judge": "v1",
+    "relationship_summary": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
+  },
+  "relationship": {
+    "tick_cron": "15 4 * * *",
+    "baseline_alpha": 0.15,
+    "variance_epsilon": 0.01,
+    "initial": { "closeness": 0.2, "trust": 0.4, "warmth": 0.5, "hurt": 0, "tension": 0, "msgs_per_day": 5 },
+    "initial_variance": { "closeness": 0.01, "trust": 0.01, "warmth": 0.02, "hurt": 0.01, "tension": 0.01, "msgs_per_day": 25 },
+    "gains": { "warmth": 0.15, "trust": 0.1, "tension": 0.3, "hurt": 0.4, "closeness_per_warm_exchange": 0.02 },
+    "hurt_half_life_hours": 48,
+    "tension_half_life_hours": 24,
+    "sensitise_window_days": 14,
+    "sensitise_factor": 1.5,
+    "scar_threshold": 0.3,
+    "scar_trust_dent": 0.02,
+    "absence_grace_factor": 2,
+    "closeness_absence_drift": 0.01,
+    "absence_hurt_effect": -0.6,
+    "absence_hurt_gain": 0.1,
+    "make_up_threshold": 0.25,
+    "make_up_clear_threshold": 0.1,
+    "make_up_delay_replies": 1,
+    "make_up_relief": 0.4,
+    "apology_relief": 0.5,
+    "relief_tension_factor": 0.5,
+    "end_confirm_hours": 24,
+    "end_closeness_factor": 0.3,
+    "repair_gain_factor": 0.3,
+    "repair_complete_closeness": 0.3,
+    "repair_min_days": 7,
+    "crisis_quiet_hours": 24,
+    "summary_min_effect": 0.5,
+    "summary_strong_effect": 0.85,
+    "summary_max_lines": 2,
+    "signal_deadzone": 0.1,
+    "cadence_sessions": 30,
+    "hurt_fact_salience": 0.6,
+    "hurt_fact_confidence": 0.8,
+    "default_median_gap_hours": 24,
+    "min_sessions_for_gap": 3,
+    "event_list_limit": 200
   }
 }

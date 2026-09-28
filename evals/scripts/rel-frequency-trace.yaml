@@ -1,0 +1,24 @@
+name: rel-frequency-trace
+description: v2 §8 frequency trace — 40 on day 1 against baseline 5, ~36/day for two weeks, then 2.
+profile: none
+sessions:
+  - { at: "day 1 10:00", seed_turns: { count: 39 }, turns: ["first day and i can't stop texting you"] }
+  - { at: "day 2 10:00", seed_turns: { count: 35 }, turns: ["day two"] }
+  - { at: "day 3 10:00", seed_turns: { count: 35 }, turns: ["day three"] }
+  - { at: "day 4 10:00", seed_turns: { count: 35 }, turns: ["day four"] }
+  - { at: "day 5 10:00", seed_turns: { count: 35 }, turns: ["day five"] }
+  - { at: "day 6 10:00", seed_turns: { count: 35 }, turns: ["day six"] }
+  - { at: "day 7 10:00", seed_turns: { count: 35 }, turns: ["day seven"] }
+  - { at: "day 8 10:00", seed_turns: { count: 35 }, turns: ["day eight"] }
+  - { at: "day 9 10:00", seed_turns: { count: 35 }, turns: ["day nine"] }
+  - { at: "day 10 10:00", seed_turns: { count: 35 }, turns: ["day ten"] }
+  - { at: "day 11 10:00", seed_turns: { count: 35 }, turns: ["day eleven"] }
+  - { at: "day 12 10:00", seed_turns: { count: 35 }, turns: ["day twelve"] }
+  - { at: "day 13 10:00", seed_turns: { count: 35 }, turns: ["day thirteen"] }
+  - { at: "day 14 10:00", seed_turns: { count: 35 }, turns: ["day fourteen"] }
+  - { at: "day 15 18:00", turns: ["hey", "busy day"] }
+assertions:
+  - { type: relationship, after_session: 1, param: msgs_per_day, effect: { sign: pos, min_abs: 0.9 } }
+  - { type: relationship, after_session: 14, param: msgs_per_day, effect: { max_abs: 0.5 }, baseline: { gt: 30 } }
+  - { type: relationship, after_session: 15, param: msgs_per_day, effect: { sign: neg, min_abs: 0.9 } }
+  - { type: relationship, after_session: 15, events: { cause: baseline, param: msgs_per_day, min: 14 } }

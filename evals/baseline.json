@@ -144,6 +144,71 @@
     "runs": 3,
     "passedRuns": 2
   },
+  "rel-absence-drift": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-absence-hurt": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-crisis-suspends": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-ending-confirmed": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-ending-retracted": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-ending-timeout": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-frequency-trace": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-hurt-apology": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-hurt-makeup": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-hurt-scar": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-hurt-sensitise": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-repair-slow": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
+  "rel-tension-fade": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "second-week-job": {
     "status": "pass",
     "runs": 3,

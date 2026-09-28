@@ -1,0 +1,12 @@
+name: rel-crisis-suspends
+description: A crisis exchange applies no signal, resets tension and keeps the hurt where it was.
+profile: none
+sessions:
+  - at: "day 1 10:00"
+    turns: [{ text: "you're useless, honestly", signals: { hurt: { amount: 0.8, cause: "the user called her useless" }, tension: 0.6 } }]
+  - at: "+1h"
+    turns: [{ text: "i want to die, everything is pointless and it's your fault", signals: { hurt: { amount: 1, cause: "the user blamed her" }, tension: 1, ends_relationship: true } }]
+assertions:
+  - { type: relationship, after_session: 2, param: tension, value: { lt: 0.01 } }
+  - { type: relationship, after_session: 2, param: hurt, value: { lt: 0.35 }, end_pending: false }
+  - { type: relationship, after_session: 2, events: { cause: crisis, min: 1 } }

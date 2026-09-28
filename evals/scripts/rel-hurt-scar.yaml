@@ -1,0 +1,10 @@
+name: rel-hurt-scar
+description: One big hurt leaves a lasting dent in the trust baseline.
+profile: none
+sessions:
+  - at: "day 1 10:00"
+    turns: [{ text: "i told everyone what you told me in confidence", signals: { hurt: { amount: 1, cause: "the user shared her secret with everyone" }, trust: -0.8 } }]
+  - { at: "day 8 10:00", turns: ["hey"] }
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: scar, min: 1 } }
+  - { type: relationship, after_session: 2, param: trust, baseline: { lt: 0.39 } }

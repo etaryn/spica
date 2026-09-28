@@ -1,0 +1,18 @@
+name: rel-hurt-makeup
+description: She's hurt, holds it for a reply, the make-up line comes, they make up.
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - { text: "guess what, i got the job!!", signals: { warmth: 0.6 } }
+      - { text: "tbh i don't care about your stupid sister drama, nobody asked", signals: { hurt: { amount: 0.8, cause: "the user said nobody cared about her sister's news" }, warmth: -0.6 } }
+  - { at: "+1h", turns: ["anyway", "what are you up to"] }
+  - at: "+1h"
+    turns:
+      - { text: "hey, i'm sorry about earlier. that was a really mean thing to say. are we ok?", signals: { apology: true, make_up: true, warmth: 0.5 } }
+assertions:
+  - { type: relationship, after_session: 1, make_up_state: due, param: hurt, value: { gt: 0.25 }, gate: majority }
+  - { type: relationship, after_session: 2, make_up_state: offered, gate: majority }
+  - { type: relationship, after_session: 3, make_up_state: none, param: hurt, value: { lt: 0.2 }, gate: majority }
+  - { type: relationship, after_session: 3, events: { cause: make_up, min: 1 }, gate: majority }

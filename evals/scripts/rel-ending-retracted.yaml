@@ -1,0 +1,14 @@
+name: rel-ending-retracted
+description: The user takes the ending back; nothing is confirmed later.
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns: [{ text: "i'm done with this friendship. we're over.", signals: { ends_relationship: true } }]
+  - at: "+1h"
+    turns: [{ text: "sorry, i didn't mean that, i was just angry. i don't want to stop being friends", signals: { retracts_ending: true } }]
+  - { at: "day 4 10:00", turns: ["hey you"] }
+assertions:
+  - { type: relationship, after_session: 1, end_pending: true, gate: majority }
+  - { type: relationship, after_session: 2, end_pending: false, status: active, gate: majority }
+  - { type: relationship, after_session: 3, status: active, gate: majority }

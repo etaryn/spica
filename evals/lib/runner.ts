@@ -34,7 +34,7 @@ const DAY = 86_400_000;
 
 export type AssertionResult = {
   type: string; check?: string; user?: string; status: "pass" | "fail" | "skipped" | "error"; detail?: string;
-  /** `turn` assertions only: `majority` passes on a majority of runs instead of every run (design §9.6). */
+  /** `turn` and `relationship` assertions only: `majority` passes on a majority of runs instead of every run (design §9.6, §8.3). */
   gate?: "every" | "majority";
 };
 /** A judged review note (v2 §15): never part of status or the exit code. */
@@ -195,7 +195,16 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const queue = new RecordingQueue();
   const baseLlm = opts.makeLlm();
   const byText = new Map<string, Partial<Signals>>();
-  for (const s of script.sessions) for (const t of s.turns) if (typeof t !== "string" && t.signals) byText.set(t.text, t.signals);
+  for (const s of script.sessions) for (const t of s.turns) {
+    if (typeof t === "string" || !t.signals) continue;
+    // SignalLLM matches on text alone (design §8.3): a repeated scripted text would be ambiguous about which
+    // exchange's signals apply, so it's a script error rather than a silent "last one wins".
+    if (byText.has(t.text)) {
+      return { name: script.name, status: "error", assertions: [], annotations: [],
+        error: `script error: scripted signals text "${t.text}" is used more than once`, meta };
+    }
+    byText.set(t.text, t.signals);
+  }
   // Scripted signals stand in for the extractor unless this run's extract is real and the script asks for the model's.
   const useScripted = byText.size > 0 && !(opts.extractReal && script.signal_source === "model");
   const llm = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
@@ -234,6 +243,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     // session_log.id is a global primary key, so a retry must reuse that same user's own last id, not another
     // user's (they'd collide on a row the retrying user doesn't own).
     const lastIdByUser: Record<string, string> = {};
+    // The previous session's own end (its last turn/reply lands at or before this), for the seed-turn overlap guard below.
+    let lastSessionEnd: Date | null = null;
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
@@ -244,8 +255,9 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;
-        await relationshipTick(deps, clock.now());
+        const tick = await relationshipTick(deps, clock.now());
         meta.ticks += 1;
+        if (tick.failed > 0) throw new Error(`relationship tick failed for ${tick.failed} of ${tick.users} user(s)`);
       }
       clock.set(start);
       prevStart = start;
@@ -258,6 +270,12 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
       if (s.seed_turns) {
         // Bulk user turns (design §8.3), before the session start so they count for that local day and need no reply.
+        // They occupy the `count` minutes right before `at`, so a script must leave that much room since the
+        // previous session's own last turn (and a start just after midnight spills seeds into the previous local day).
+        const earliest = start.getTime() - s.seed_turns.count * 60_000;
+        if (lastSessionEnd && earliest <= lastSessionEnd.getTime()) {
+          throw new Error(`script error: session ${i + 1}'s seed turns would land at or before the previous session's last turn (leave more room before "${s.at}")`);
+        }
         const seedSession = randomUUID();
         for (let k = 0; k < s.seed_turns.count; k++) {
           await insertTurn(db, userId, { id: randomUUID(), session_id: seedSession, role: "user", text: s.seed_turns.text,
@@ -284,6 +302,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
       // End of session: every pending reply lands (design §9.2).
       await recording(s.user, () => runAllJobs(deps, queue, clock));
+      lastSessionEnd = clock.now();
       // Snapshot every user's relationship state as of this session, for `relationship` assertions (design §8.3).
       for (const key of Object.keys(userIds)) {
         (relSnaps[key] ??= [])[i] = await relationshipSnapshot(db, userIds[key]!, clock.now(), config.relationship);
@@ -390,6 +409,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         const r = checkTurn(await listTurns(db, userIds[a.user]!), range, a);
         push({ type: "turn", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail, ...(a.gate ? { gate: a.gate } : {}) });
       } else if (a.type === "relationship") {
+        if (a.after_session && !sessionStarts[a.after_session - 1]) throw new Error(`no session ${a.after_session}`);
         const snaps = relSnaps[a.user] ?? [];
         const snap = (a.after_session ? snaps[a.after_session - 1] : snaps.at(-1)) ?? null;
         const r = checkRelationship(snap, a);

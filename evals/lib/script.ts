@@ -27,7 +27,11 @@ const Session = z.object({
   user: z.string().regex(/^[a-z0-9_-]+$/).default("main"),
   forget: z.array(z.string().min(1)).default([]),
   turns: z.array(z.union([z.string().min(1), TimedTurn])).min(1),
-  /** Bulk user turns (design §8.3): inserted directly into session_log before the session start, no reply needed. */
+  /**
+   * Bulk user turns (design §8.3): inserted directly into session_log before the session start, no reply needed.
+   * Seeds occupy the `count` minutes right before `at`, so leave that much room since the previous session's
+   * last turn — and note a start just after midnight spills its seeds into the previous local day.
+   */
   seed_turns: z.object({ count: z.number().int().min(1), text: z.string().min(1).default("hey") }).optional(),
 });
 

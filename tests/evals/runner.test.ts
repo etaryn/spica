@@ -356,6 +356,44 @@ test("relationship: scripted signals drive a make-up; seed turns and ticks move 
   expect(r.meta.ticks).toBe(1);
 });
 
+test("script error: the same scripted signals text used twice is ambiguous, not last-one-wins", async () => {
+  const script = ScriptSchema.parse({
+    name: "dup-signals", profile: "none",
+    sessions: [
+      { at: "day 0 09:00", turns: [{ text: "sorry", signals: { apology: true } }] },
+      { at: "+1h", turns: [{ text: "sorry", signals: { apology: true } }] },
+    ],
+    assertions: [{ type: "state", check: "turn_count", expect: 4 }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("error");
+  expect(r.error).toMatch(/scripted signals text "sorry" is used more than once/);
+});
+
+test("script error: seed turns that would land at or before the previous session's last turn", async () => {
+  const script = ScriptSchema.parse({
+    name: "seed-overlap", profile: "none",
+    sessions: [
+      { at: "day 0 09:00", turns: ["hi"] },
+      { at: "+1m", seed_turns: { count: 30 }, turns: ["hey"] },
+    ],
+    assertions: [{ type: "state", check: "turn_count", expect: 4 }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.status).toBe("error");
+  expect(r.error).toMatch(/session 2's seed turns would land at or before the previous session's last turn/);
+});
+
+test("an out-of-range after_session on a relationship assertion errors like the turn branch does", async () => {
+  const script = ScriptSchema.parse({
+    name: "rel-oob", profile: "none",
+    sessions: [{ at: "day 0 09:00", turns: ["hi"] }],
+    assertions: [{ type: "relationship", after_session: 5, param: "hurt", value: { lt: 1 } }],
+  });
+  const r = await runScript(script, opts());
+  expect(r.assertions[0]).toMatchObject({ status: "error", detail: "no session 5" });
+});
+
 test("known_failure applies to the right assertion when annotations sit between assertions", async () => {
   const script = ScriptSchema.parse({ name: "kf2", sessions: [{ at: "day 0 09:00", turns: ["a"] }],
     assertions: [

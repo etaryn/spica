@@ -169,3 +169,13 @@ export async function listGeneratedBlockRows(db: Db, userId: string, lifeDay: st
     sql`${fact.payload}->>'life_day' = ${lifeDay}`, sql`${fact.payload}->>'block' IS NOT NULL`,
   ));
 }
+
+/** Her recent self facts for the event generator (design §6.3), excluding copied schedule blocks. */
+export async function listRecentSelfFacts(db: Db, userId: string, limit: number): Promise<{ content: string; when: Date }[]> {
+  if (limit <= 0) return [];
+  const rows = await db.select({ content: fact.content, occurred_at: fact.occurred_at, created_at: fact.created_at }).from(fact).where(and(
+    eq(fact.user_id, userId), eq(fact.scope, "private"), eq(fact.subject, "self"), notInArray(fact.status, [...INACTIVE]),
+    sql`(${fact.payload} IS NULL OR ${fact.payload}->>'block' IS NULL)`,
+  )).orderBy(desc(fact.created_at)).limit(limit);
+  return rows.map((r) => ({ content: r.content, when: r.occurred_at ?? r.created_at }));
+}

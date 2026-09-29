@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "../client";
 import { entity, entityType } from "../schema";
 import { one } from "./util";
@@ -47,4 +47,16 @@ export async function upsertEntityMention(
     subject: m.subject, relation: m.relation, salience: opts.newSalience, first_seen: now, last_mentioned: now,
   }).returning());
   return { id: row.id, created: true };
+}
+
+export async function listSelfEntityNames(db: Db, userId: string): Promise<string[]> {
+  const rows = await db.select({ name: entity.name, aliases: entity.aliases }).from(entity).where(and(eq(entity.user_id, userId), eq(entity.subject, "self")));
+  return rows.flatMap((r) => [r.name, ...r.aliases]);
+}
+
+/** When her newest self entity was first seen (the one-new-entity-a-week rule, design §6.3). */
+export async function latestSelfEntityFirstSeen(db: Db, userId: string): Promise<Date | null> {
+  const rows = await db.select({ at: entity.first_seen }).from(entity).where(and(eq(entity.user_id, userId), eq(entity.subject, "self")))
+    .orderBy(desc(entity.first_seen)).limit(1);
+  return rows[0]?.at ?? null;
 }

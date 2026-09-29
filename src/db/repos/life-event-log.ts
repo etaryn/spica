@@ -11,7 +11,7 @@ export async function insertLifeEventLogs(tx: Db, userId: string, rows: NewLifeE
 }
 
 export async function listLifeEventLogs(db: Db, userId: string, limit: number): Promise<LifeEventLogRow[]> {
-  return db.select().from(life_event_log).where(eq(life_event_log.user_id, userId)).orderBy(desc(life_event_log.created_at)).limit(limit);
+  return db.select().from(life_event_log).where(eq(life_event_log.user_id, userId)).orderBy(desc(life_event_log.created_at), desc(life_event_log.attempt)).limit(limit);
 }
 
 /** When the last high-stakes event was accepted for this user (the high-stakes rule, design §6.3). */

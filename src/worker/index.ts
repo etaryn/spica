@@ -1,8 +1,11 @@
 import { handleColdPath } from "@/core/cold-path";
+import { egoTick } from "@/core/ego/tick";
+import { ensurePlans } from "@/core/life/plan";
+import { lifeTick } from "@/core/life/tick";
 import { decayPass } from "@/core/memory/decay";
 import { sweepUnextracted } from "@/core/memory/sweep";
 import {
-  type BackchannelJob, COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE,
+  type BackchannelJob, COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE,
   TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE, TURN_TIMER_QUEUE, type TurnTimerJob,
 } from "@/core/queue";
 import { relationshipTick } from "@/core/relationship/tick";
@@ -38,9 +41,15 @@ await boss.schedule(TURN_SWEEP_QUEUE, deps.config.turn.sweep_cron);
 
 await boss.work(RELATIONSHIP_TICK_QUEUE, scrubErrors(RELATIONSHIP_TICK_QUEUE, deps.log, async () => { await relationshipTick(deps, deps.clock.now()); }));
 await boss.schedule(RELATIONSHIP_TICK_QUEUE, deps.config.relationship.tick_cron);
+await boss.work(LIFE_PLAN_QUEUE, scrubErrors(LIFE_PLAN_QUEUE, deps.log, async () => { await ensurePlans(deps, deps.clock.now()); }));
+await boss.schedule(LIFE_PLAN_QUEUE, deps.config.life.plan_cron);
+await boss.work(LIFE_TICK_QUEUE, scrubErrors(LIFE_TICK_QUEUE, deps.log, async () => { await lifeTick(deps, deps.clock.now()); }));
+await boss.schedule(LIFE_TICK_QUEUE, deps.config.life.tick_cron);
+await boss.work(EGO_TICK_QUEUE, scrubErrors(EGO_TICK_QUEUE, deps.log, async () => { await egoTick(deps, deps.clock.now()); }));
+await boss.schedule(EGO_TICK_QUEUE, deps.config.ego.tick_cron);
 
 await sweepUnextracted(deps, deps.clock.now()); // pick up anything left from before this start
-deps.log.info("worker started", { queues: [COLD_PATH_QUEUE, SWEEP_QUEUE, DECAY_QUEUE, TURN_TIMER_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE, RELATIONSHIP_TICK_QUEUE] });
+deps.log.info("worker started", { queues: [COLD_PATH_QUEUE, SWEEP_QUEUE, DECAY_QUEUE, TURN_TIMER_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE, RELATIONSHIP_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE] });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {

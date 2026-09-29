@@ -8,6 +8,8 @@ import { applyExtraction, type ApplyOutcome, type PlannedFact } from "./memory/a
 import { extract, type ExtractedFact } from "./memory/extract";
 import { decide } from "./memory/reconcile";
 import type { ColdPathJob } from "./queue";
+import { nudgeEgoForExchange } from "./ego/nudge";
+import { errorName } from "./errors";
 import { applyRelationship } from "./relationship/apply";
 import { hurtFactContent } from "./relationship/signals";
 
@@ -82,6 +84,15 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
       await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
     } catch (e) {
       log.error("relationship update failed", { userId: job.userId, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    }
+
+    // Phase 5 (design §7.3): its own savepoint, so an ego failure never loses the memory or relationship writes.
+    try {
+      await tx.transaction(async (sp) => {
+        await nudgeEgoForExchange(sp, config, { userId: job.userId, facts: facts.map((f) => f.fact), crisis, now: clock.now() });
+      });
+    } catch (e) {
+      log.error("ego nudge failed", { userId: job.userId, error: errorName(e) });
     }
 
     return { status: "done", applied };

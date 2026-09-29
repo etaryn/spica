@@ -226,8 +226,9 @@
       { "start": "00:00", "end": "08:00", "kind": "quiet", "label": "offline, winding down" },
       { "start": "23:30", "end": "24:00", "kind": "quiet", "label": "offline, winding down" }
     ],
-    "tick_cron": "30 * * * *",
-    "tick_local_hour": 1,
+    "tick_cron": "10 * * * *",
+    "tick_local_hour": 0,
+    "lock_timeout_ms": 5000,
     "block_salience": 0.2,
     "events_per_day_max": 1,
     "event_probability": 0.5,

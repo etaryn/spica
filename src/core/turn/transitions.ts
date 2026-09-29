@@ -99,6 +99,7 @@ export function release(s: ConvState, a: { epoch: number; now: Date }): Step<boo
 export function restore(s: ConvState, a: { epoch: number; turnIds: string[]; now: Date; retryAt: Date }): Step<{ kind: "abandoned" } | { kind: "restored"; version: number }> {
   if (s.reply_epoch !== a.epoch) return { patch: null, result: { kind: "abandoned" } };
   const version = s.buffer_version + 1;
+  // Setting wait_until to retryAt can answer a still-deferred buffer before deferred_until: fails open by design.
   return {
     patch: {
       buffer_turn_ids: uniq([...a.turnIds, ...s.buffer_turn_ids]), inflight_turn_ids: [], inflight_since: null,
@@ -146,6 +147,7 @@ export function recover(s: ConvState, a: { now: Date; graceMs: number; inflightM
     return sendingStuck ? { patch: { sending_since: null, updated_at: a.now }, result: { version: null } } : { patch: null, result: { version: null } };
   }
   const version = s.buffer_version + 1;
+  // Setting wait_until to now can answer a still-deferred buffer before deferred_until: fails open by design.
   return {
     patch: {
       buffer_turn_ids: stuck ? uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids]) : s.buffer_turn_ids,

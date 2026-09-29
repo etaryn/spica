@@ -36,6 +36,9 @@ export async function lifeTickUser(deps: Deps, userId: string, now: Date, opts: 
   const events = await generateEvents(deps, userId, day, lifeDay?.plan ?? null, now, opts.inject);
 
   await deps.db.transaction(async (tx) => {
+    // Bound the wait for a busy cold path: a timeout fails this user (retried next hour) instead of stalling
+    // the batch. SET LOCAL takes no bind parameters; the value is a zod-validated positive integer.
+    await tx.execute(sql.raw(`SET LOCAL lock_timeout = ${Math.trunc(cfg.lock_timeout_ms)}`));
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cold_path:${userId}`}))`);
     await ensureIdentity(tx, userId, config.ego.baseline);
     let row = await lockIdentity(tx, userId);

@@ -190,6 +190,7 @@ export const ConfigSchema = z.object({
       fallback_plan: z.array(z.object({ start: hhmm, end: hhmm, kind: z.enum(["busy", "downtime", "quiet"]), label: z.string().min(1) })).min(1),
       tick_cron: z.string().min(1),
       tick_local_hour: z.number().int().min(0).max(23),
+      lock_timeout_ms: z.number().int().positive(),
       block_salience: unit,
       events_per_day_max: z.number().int().min(0),
       event_probability: unit,

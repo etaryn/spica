@@ -11,7 +11,8 @@ export function assertLocalDatabase(url: string): void {
 /** Dev only, every user: hard-deletes her self facts, entities and threads (persona v1 scrapped, design D3). */
 export async function adminResetSelf(db: Db): Promise<{ facts: number; entities: number; threads: number }> {
   return db.transaction(async (tx) => {
-    await tx.update(identity).set({ preoccupation: null, preoccupation_since: null });
+    // life_last_date is cleared too, so the next life tick re-copies today's blocks as self facts.
+    await tx.update(identity).set({ preoccupation: null, preoccupation_since: null, life_last_date: null });
     const facts = await tx.delete(fact).where(eq(fact.subject, "self")).returning({ id: fact.id });
     const entities = await tx.delete(entity).where(eq(entity.subject, "self")).returning({ id: entity.id });
     const threads = await tx.delete(thread).where(eq(thread.subject, "self")).returning({ id: thread.id });

@@ -27,7 +27,7 @@ export async function retrieve(
     const text = [...input.context, ...input.answering].map((t) => t.text).join("\n");
     const [q] = await withTimeout(embedder.embed([text], "query"), config.retrieval.embed_timeout_ms);
     if (!q) throw new Error("embedder returned no vector");
-    scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool), input.now, config.retrieval);
+    scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now), input.now, config.retrieval);
   } catch (e) {
     log.error("retrieval degraded", { userId, error: errName(e) });
   }
@@ -48,7 +48,7 @@ export async function retrieve(
         result.recalled.push({ factId: t.fact_id, sim: 0, fact_salience: t.salience ?? 0, entity_salience: 1, recency: 1, score: 0, forced: true });
       }
     }
-    const pre = await getPreoccupationFact(db, userId);
+    const pre = await getPreoccupationFact(db, userId, input.now);
     if (pre) {
       const hit = result.facts.self.find((f) => f.id === pre.id);
       if (hit) hit.onMind = true;

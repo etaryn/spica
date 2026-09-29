@@ -18,8 +18,16 @@ export type CandidateFact = {
   sim: number; entity_salience: number;
 };
 
+/**
+ * A generated (life-sim) fact whose `occurred_at` is still ahead of `now` hasn't happened yet:
+ * the nightly tick stores the day's events in advance, so they stay hidden until their time.
+ * Other sources with a future `occurred_at` (a user's plan) are real now and stay visible.
+ */
+const notYetHappened = (now: Date) =>
+  sql`(${fact.source} <> 'generated' OR ${fact.occurred_at} IS NULL OR ${fact.occurred_at} <= ${now.toISOString()}::timestamptz)`;
+
 /** Nearest active private facts for this user, with max entity salience (v2 §6.2 step 1). */
-export async function candidateFacts(db: Db, userId: string, queryVec: number[], limit: number): Promise<CandidateFact[]> {
+export async function candidateFacts(db: Db, userId: string, queryVec: number[], limit: number, now: Date): Promise<CandidateFact[]> {
   const q = vecLiteral(queryVec);
   return db.transaction(async (tx) => {
     // The HNSW index spans all users; iterative scan keeps filtered result sets full.
@@ -31,6 +39,7 @@ export async function candidateFacts(db: Db, userId: string, queryVec: number[],
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
+        AND (f.source <> 'generated' OR f.occurred_at IS NULL OR f.occurred_at <= ${now.toISOString()}::timestamptz)
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
     return res.rows.map((r) => ({
@@ -119,10 +128,11 @@ export async function applyRecall(
   });
 }
 
-export async function getPreoccupationFact(db: Db, userId: string): Promise<FactRow | null> {
+/** Her current preoccupation, unless it is a generated event that hasn't happened yet at `now`. */
+export async function getPreoccupationFact(db: Db, userId: string, now: Date): Promise<FactRow | null> {
   const rows = await db.select({ f: fact }).from(identity)
     .innerJoin(fact, and(eq(fact.id, identity.preoccupation), eq(fact.user_id, identity.user_id), eq(fact.scope, "private")))
-    .where(and(eq(identity.user_id, userId), notInArray(fact.status, [...INACTIVE]))).limit(1);
+    .where(and(eq(identity.user_id, userId), notInArray(fact.status, [...INACTIVE]), notYetHappened(now))).limit(1);
   return rows[0]?.f ?? null;
 }
 

@@ -72,10 +72,13 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
         return null;
       });
 
-  const egoPromise: Promise<string | null> = withTimeout(Promise.resolve().then(() => loadEgoLine(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
-    log.error("ego line unavailable", { userId, error: errName(e) });
-    return null;
-  });
+  // Rule 7: a crisis reply carries no mood or energy colouring.
+  const egoPromise: Promise<string | null> = a.flag?.flagged
+    ? Promise.resolve(null)
+    : withTimeout(Promise.resolve().then(() => loadEgoLine(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
+        log.error("ego line unavailable", { userId, error: errName(e) });
+        return null;
+      });
   // Rule 7: a crisis reply never mentions being busy.
   const lifePromise: Promise<string | null> = a.flag?.flagged
     ? Promise.resolve(null)

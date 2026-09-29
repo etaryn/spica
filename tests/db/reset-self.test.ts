@@ -16,7 +16,7 @@ test("refuses a non-local database", () => {
   expect(() => assertLocalDatabase("postgres://u:p@127.0.0.1:5432/spica")).not.toThrow();
 });
 
-test("deletes self facts, entities and threads for every user and keeps user facts", async () => {
+test("deletes self facts, entities and threads for every user, keeps user facts, clears preoccupation and life_last_date", async () => {
   const db = getTestDb();
   const u = await createTestUser();
   const base = { kind: "event" as const, embedding: vec(), created_at: t0, status: "open" as const, salience: 0.5, valence: 0, confidence: 1, source: "turn" as const };
@@ -25,8 +25,10 @@ test("deletes self facts, entities and threads for every user and keeps user fac
   await db.insert(entity).values({ user_id: u, name: "Theo", type: "person", subject: "self", salience: 0.5, first_seen: t0, last_mentioned: t0 });
   await db.insert(thread).values({ user_id: u, title: "Theo's move", subject: "self", status: "open", stakes: "low", opened_at: t0, last_touched: t0 });
   await ensureIdentity(db, u, loadConfig().ego.baseline);
-  await updateIdentity(db, u, { preoccupation: self.id, preoccupation_since: t0 });
+  await updateIdentity(db, u, { preoccupation: self.id, preoccupation_since: t0, life_last_date: "2026-01-05" });
   expect(await adminResetSelf(db)).toEqual({ facts: 1, entities: 1, threads: 1 });
   expect((await db.select().from(fact)).map((f) => f.content)).toEqual(["The user likes tea."]);
-  expect((await getIdentityRow(db, u))?.preoccupation).toBeNull();
+  const row = await getIdentityRow(db, u);
+  expect(row?.preoccupation).toBeNull();
+  expect(row?.life_last_date).toBeNull();
 });

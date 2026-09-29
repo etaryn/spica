@@ -4,6 +4,7 @@ import { composeReply } from "@/core/chat/compose-reply";
 import { ReplyFailedError } from "@/core/errors";
 import { messageToCheck } from "@/core/guard/guard";
 import { insertFact } from "@/db/repos/facts";
+import { ensureIdentity, updateIdentity } from "@/db/repos/identity";
 import { listJudgeLogs } from "@/db/repos/judge-log";
 import * as rel from "@/db/repos/relationship";
 import { insertTurn, type Turn } from "@/db/repos/session-log";
@@ -174,5 +175,19 @@ describe("composeReply", () => {
     const turns2 = [await userTurn(deps, u, "i don't want to be here anymore")];
     await composeReply(deps, u, { turns: turns2, openQuestions: [], flag });
     expect(deps.llm.calls[1]!.system).not.toContain("talking to you way more than usual");
+  });
+
+  test("ego line reaches slot 2; skipped on the crisis path (rule 7)", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await ensureIdentity(getTestDb(), u, deps.config.ego.baseline);
+    await updateIdentity(getTestDb(), u, { energy: 0.01 });
+
+    await composeReply(deps, u, { turns: [await userTurn(deps, u, "hi")], openQuestions: [], flag: null });
+    expect(deps.llm.calls[0]!.system).toContain("## How you're feeling");
+
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    await composeReply(deps, u, { turns: [await userTurn(deps, u, "i don't want to be here anymore")], openQuestions: [], flag });
+    expect(deps.llm.calls[1]!.system).not.toContain("## How you're feeling");
   });
 });

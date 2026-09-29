@@ -7,7 +7,7 @@ import { insertLifeDay } from "@/db/repos/life-day";
 import { ensureRelationship } from "@/db/repos/relationship";
 import { setTimezone } from "@/db/repos/users";
 import { fact } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -22,8 +22,12 @@ const plan = { blocks: [
 // 02:00 on 2026-01-06 in Singapore = 18:00 UTC on the 5th.
 const at = new Date("2026-01-05T18:00:00Z");
 
-async function setup(opts: { events?: number } = {}) {
-  const deps = makeTestDeps({ life: { events_per_day_max: opts.events ?? 0 } });
+async function setup(opts: { events?: number; tickHour?: number; lockTimeoutMs?: number } = {}) {
+  const deps = makeTestDeps({ life: {
+    events_per_day_max: opts.events ?? 0,
+    ...(opts.tickHour === undefined ? {} : { tick_local_hour: opts.tickHour }),
+    ...(opts.lockTimeoutMs === undefined ? {} : { lock_timeout_ms: opts.lockTimeoutMs }),
+  } });
   const u = await createTestUser();
   await ensureRelationship(deps.db, u, at, deps.config.relationship);
   await insertLifeDay(deps.db, { date: "2026-01-06", plan, source: "scripted", model: "none", prompt_version: "scripted", generated_at: at });
@@ -51,8 +55,30 @@ test("copies busy and quiet blocks (not downtime) as self generated facts, once 
 });
 
 test("not due before tick_local_hour in her zone", async () => {
-  const { deps, u } = await setup();
+  const { deps, u } = await setup({ tickHour: 1 });
   expect(await lifeTickUser(deps, u, new Date("2026-01-05T16:30:00Z"))).toBe("not_due"); // 00:30 in Singapore
+  expect(await lifeTickUser(deps, u, new Date("2026-01-05T17:10:00Z"))).toBe("done"); // 01:10 in Singapore
+});
+
+test("a held cold-path lock fails the user after life.lock_timeout_ms instead of stalling (retried next hour)", async () => {
+  const { deps, u } = await setup({ lockTimeoutMs: 200 });
+  let release!: () => void;
+  const held = new Promise<void>((r) => { release = r; });
+  let locked!: () => void;
+  const isLocked = new Promise<void>((r) => { locked = r; });
+  const holder = deps.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`cold_path:${u}`}))`);
+    locked();
+    await held;
+  });
+  await isLocked;
+  const t0 = performance.now();
+  await expect(lifeTickUser(deps, u, at)).rejects.toThrow();
+  expect(performance.now() - t0).toBeLessThan(3000);
+  release();
+  await holder;
+  expect((await getIdentityRow(deps.db, u))?.life_last_date ?? null).toBeNull();
+  expect(await lifeTickUser(deps, u, at)).toBe("done");
 });
 
 test("a failure after block inserts rolls back everything (review focus 4)", async () => {

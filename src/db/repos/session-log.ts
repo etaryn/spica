@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
 import type { Db } from "../client";
 import { session_log } from "../schema";
 import { one, toDateOrNull } from "./util";
@@ -130,4 +130,12 @@ export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: stri
     WHERE user_id = ${userId} AND role = 'user' AND created_at <= ${upTo.toISOString()}::timestamptz`);
   const r = res.rows[0] as { sessions: number; days: number; first: unknown };
   return { sessions: Number(r.sessions), days: Number(r.days), first: toDateOrNull(r.first) };
+}
+
+/** Has she sent a message with this trigger since `since`? (The availability note is once per block, design §8.3.) */
+export async function hasTriggerSince(db: Db, userId: string, trigger: "availability" | "backchannel", since: Date): Promise<boolean> {
+  const rows = await db.select({ id: session_log.id }).from(session_log).where(and(
+    eq(session_log.user_id, userId), eq(session_log.trigger, trigger), gte(session_log.created_at, since),
+  )).limit(1);
+  return rows.length > 0;
 }

@@ -1,6 +1,6 @@
 # Phase 5: Life sim + availability + ego design
 
-Date: 2026-09-29 · Status: design approved in brainstorming, awaiting spec review · Parent: `spica-build-spec-v2.md`
+Date: 2026-09-29 · Status: **implemented** (exit run passed 2026-09-30; folded into v2; deviations in §13 "As built") · Parent: `spica-build-spec-v2.md`
 (§5, §6.1–6.3, §9, §10, §14.5, §15 Phase 5, §16.1 #6)
 
 ## 1. Goal and exit test
@@ -432,3 +432,23 @@ events or blocks; a clash with a shared block goes through the same reconcile re
 - **The real reconcile may call the injected contradiction `new`.** That is a genuine exit failure, not a
   flaky one: it means rejection doesn't work.
 - **Plan quality** (repetitive days, labels that drift from canon) is quality, not exit; review run.
+
+## 13. As built (2026-09-30)
+
+Implemented on branch `phase-5-life-sim` (plan `docs/superpowers/plans/2026-09-29-phase-5-life-sim.md`; Tasks 9 and 10 built as one unit, since each alone left typecheck broken). Exit run (profile C, `--runs 3`): all 8 scripts 3/3; see v2 §15. Deviations from this design:
+
+- **`life.canon_entities`** (`["Alcor"]`, new config key): persona people count as known for the new-entity rule (§6.3 step 2), so the first mention of Alcor isn't a "new" person.
+- **`life.event_max_chars`** (300) and **`life.injected_event_at`** ("12:00"): new config keys for the event content cap and the injected eval event's time (the plan had literals).
+- **Block content template** is tense-free: `"Spica's <part of day>: <label>."`, not §6.2's `"Spica spent <part of day> <label>."`, so it reads true before and after the block.
+- **Slot 4** shows " (busy)" for a busy block and just the label for a quiet one (no "(winding down, offline)" suffix; the quiet label already says it); a gap reads "Right now you're free.".
+- **`life_event_log.decision`** has no `error` value: an LLM or embed error aborts the user's tick and its rows roll back, so there is nothing to log.
+- **The note** is gated on the pending deferral (`T.availabilityNote`: `deferred_until` in the future, buffer non-empty), not on the buffer version, because later messages join the same deferred buffer.
+- **`pnpm db:reset-self`** doesn't null `relationship.hurt_cause_fact` explicitly; its `ON DELETE SET NULL` does it.
+- **Inspector:** the ego values and `ego_tick` history stay on the Identity tab (last 100), not the Life tab.
+- **Harness (§9.3):**
+  - script keys are grouped as `life: {plan: model | scripted, plans, inject: [{day, content, valence}], until}` instead of top-level `life_plan` / `plans` / `inject_event`; `plans` accepts `"*"` for every other day; `inject` is a list, and `until` keeps the life loop running after the last session;
+  - `relationship_seed` is applied **before session 1** (the life and ego ticks only visit users with a relationship row, so every Phase 5 script sets it, `{}` if no param is needed);
+  - the life loop runs the three jobs at every whole simulated hour (plan, life tick, ego tick), not a separate daily life step;
+  - the `turn` assertion gains session-level `min_reply_delay_s` and `notes: {min, max}` instead of per-turn `reply_after_ms` / `note`;
+  - `life` assertions are `plans`, `block_days`, `events` (each `{min, max}`), `decision: {content_includes, in}`, `not_stored`, plus **`needs_real: [purposes]`** (skipped unless those purposes are real); `ego` assertions are `energy: {at, lt|gt}`, `lower_energy: {at, than, by}`, `preoccupation_set`;
+  - thresholds: `avail-quiet` `min_reply_delay_s: 10800` (measured midpoint), `ego-busy-day` `by: 0.1` (measured on-difference 0.13–0.28, below the ~0.25 expected; v2 §15.3a P2).

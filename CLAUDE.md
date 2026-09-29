@@ -39,7 +39,10 @@ consequences, so Spica has opinions, moods, limits, a life, and stakes.
 **One fixed Spica** (she/her): the same values, ego and voice for every
 user. The personality test calibrates the *user*, not her
 (`test_calibrates: user`). Whether Spica should instead vary per user is
-still OPEN.
+still OPEN. Persona **v2** (`prompts/persona/v2.md`, Ethan's draft: openly an
+AI, sibling Alcor, loves stars / old films / books, no body) replaced v1 in
+Phase 5; the persona is fixed once shipped and changes only during test and
+development (v2 §9.1).
 
 Principles: continuity and specificity first · one substrate (every feature
 reads and writes the same fact store and DB) · thin but real · consistency
@@ -91,10 +94,13 @@ one-message-one-reply) → **hot path**, once complete → **guard layer**
 unchecked and logs one `guard_disabled` row in `judge_log`; when on, it
 checks every outgoing message for threats, contempt, guilt framing,
 punishment or manipulation, regenerates once, then falls back to a safe
-line) → pacing (read delay + typing time; availability stretches it,
-crisis skips it) → SSE (`/api/events`, history catch-up via
-`/api/chat/history`) → **cold path** (async). Waiting is durable: delayed
-pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
+line) → pacing (read delay + typing time; crisis skips it; while she's
+busy, availability defers the whole buffer instead, v2 §6.1.1) → SSE
+(`/api/events`, history catch-up via `/api/chat/history`) → **cold path** (async). Waiting is durable: delayed
+pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`. Ten
+pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
+`turn_timer`, `turn_backchannel`, `turn_sweep`, `relationship_tick`,
+`life_plan`, `life_tick`, `ego_tick`.
 
 - **Hot path:** retrieve (similarity × salience × entity salience × recency,
   top 12, plus due threads and the current preoccupation forced in; recall
@@ -111,7 +117,7 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 - A reach-out is a reply with a synthetic trigger, composed through the
   same hot path and guard.
 
-## Data model (v2 §5): all tables `user_id`-scoped
+## Data model (v2 §5): all tables `user_id`-scoped (except `life_day`)
 - **`fact`**: the atom (`salience` is the directive's "weight"). Kinds
   event / trait / preference / state / opinion / **feeling / promise**.
   Sources turn / generated / onboarding / **inferred**. Adds
@@ -119,9 +125,12 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
   always `private` for now. The system never hard-deletes (contradicted
   facts are superseded); the **user** can hard-delete their own facts.
 - **`entity`**, **`thread`** (with `next_checkpoint`): as in v1.
-- **Persona**: the versioned file `prompts/persona/v<N>.md`, the same for
-  every user. The `identity` table keeps the per-user **ego** (mood,
-  energy, preoccupation).
+- **Persona**: the versioned file `prompts/persona/v<N>.md` (v2), the same
+  for every user. The `identity` table keeps the per-user **ego** (mood,
+  energy, preoccupation, `preoccupation_since`) and `life_last_date`.
+- **`life_day`** (Phase 5): her shared day plan per her local date, the one
+  table without `user_id` (no user data); the life tick copies its blocks
+  into each user's facts, and every other reader reads the facts.
 - **`relationship`** (status active / ended_by_user / repairing, cadence,
   last_contact, unanswered_reach_outs) plus **`relationship_param`**
   (extensible homeostatic params: closeness, trust, warmth, hurt, tension,
@@ -129,7 +138,8 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 - **`session_log`** (raw transcript; `reply_to` points at the last turn of
   the buffer a reply answers), **`conversation_state`** (turn-taking), and
   trace tables `retrieval_trace`, `ego_tick`, `reach_out_log`,
-  **`judge_log`**, **`relationship_event`**.
+  **`judge_log`**, **`relationship_event`**, **`life_event_log`**.
+  `conversation_state` gains `deferred_until` / `deferred_fact` (Phase 5).
 
 ## Modules in brief
 - **Memory (v2 §7):** recall reinforces weight; a daily decay pass (below
@@ -144,15 +154,28 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
   in a cold-path savepoint; a daily `relationship_tick` fades, samples
   baselines and handles absence; hurt and tension are uncapped for the
   test phase (OPEN #3, decided in Phase 9).
-- **Persona / ego (v2 §9):** Claude drafts persona v1 and Ethan edits it.
-  The persona is iterable, but a new version must not contradict existing
-  self facts. `interest_alignment` defaults to `adjacent`. The ego is
-  driven by the life sim and reaches behaviour only through the one prompt
-  line.
-- **Life sim (v2 §10):** MVP is a shared canon (in the persona doc) plus a
-  per-user daily life (busy/downtime blocks, 0–2 small events a day) stored
-  as self facts, with contradiction rejection. Higher closeness overrides
-  busy. (Shared vs per-user life is OPEN and a heavy decision.)
+- **Persona / ego (v2 §9):** persona v2 is Ethan's; fixed once shipped
+  (the old "check new versions against self facts" rule is deleted).
+  `interest_alignment` defaults to `adjacent`. The ego (built in Phase 5)
+  drifts hourly (`ego_tick`) toward a baseline with a daily energy rhythm
+  in **her** zone, busy blocks drain energy, accepted events nudge mood and
+  a strong one becomes the preoccupation, the cold path nudges mood toward
+  the exchange's tone; it reaches behaviour only through the slot 2 line
+  ("How you're feeling", `prompts/ego/line/v1.md`).
+- **Life sim (v2 §10.3, built in Phase 5):** **hybrid life** (OPEN #6
+  settled): one shared day plan of busy/downtime/quiet blocks per her local
+  date (`life_plan`, Haiku, validated, fallback plan), the same for every
+  user, on **her own clock** (`life.timezone` Asia/Singapore via
+  `lifeTimezone`). A per-user `life_tick` copies the blocks into self facts
+  (tense-free "Spica's evening: …") and generates at most 1 personal event
+  a day (p 0.5), each checked by rules (new entity, high stakes) and the
+  real reconcile: `duplicate` / `contradicts` rejected and regenerated,
+  every attempt in `life_event_log`. Slot 4 ("Your day") shows what she's
+  doing; skipped on crisis. **Availability (v2 §10.2):** the first message
+  of a buffer landing in a busy/quiet block is deferred by busy level ×
+  (1 − closeness **value** / 0.8), capped at the block's end; mid closeness
+  gets a "busy, later?" note first; closeness ≥ 0.8 overrides; crisis
+  bypasses; fails open.
 - **Outreach (v2 §11):** caps of 1/day and 3/week (placeholders), quiet
   hours, her busy blocks, never repeating a topic, silence after 2
   unanswered reach-outs until the user writes.
@@ -171,7 +194,7 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 | 2. Guardrails ✅ | Guard layer on every outgoing message (rules + false-familiarity check), fallback lines, guard tests |
 | 3. Turn-taking + pacing ✅ | Buffer / judge / backchannels / pacing, SSE |
 | 4. Relationship + homeostasis ✅ | HomeostaticParam, hurt / tension / make-up, ending / repair |
-| 5. Life sim + availability + ego | Schedule / events, availability override, ego driven by life sim |
+| 5. Life sim + availability + ego ✅ | Schedule / events, availability override, ego driven by life sim |
 | 6. Proactive outreach | Triggers, send gate, Web Push |
 | 7. Onboarding test | Questionnaire, reveal pacing, results screen |
 | 8. Extension stubs | Event bus, module registration, social stubs |
@@ -180,14 +203,26 @@ pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`.
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 Phase 9 added 2026-09-28 (Ethan): the guard is off from Phase 4 until then.
 
-**Current phase: 5 (Life sim + availability + ego), not started.** Phase 4
+**Current phase: 6 (Proactive outreach), not started.** Phase 5 (Life sim +
+availability + ego) done 2026-09-30: the exit run (real `life_plan`,
+`life_event`, `reconcile` and `embed`; reply, extract, turn judge and crisis
+fake; guard off; `--runs 3`) passed all 8 scripts 3/3 (`life-two-weeks`,
+`avail-low-closeness`, `avail-mid-closeness`, `avail-high-closeness`,
+`avail-quiet`, `avail-burst-deferred`, `avail-crisis`, `ego-busy-day`); in
+`life-two-weeks` the real reconcile logged the injected contradiction as
+`contradicts` and the injected duplicate as `duplicate`, neither stored
+(141 Haiku calls, ~$0.48). `pnpm test` 76 files / 516 tests. Folded into v2
+(§5.4–5.9, §6.1.1, §6.2, §6.3, §9, §10.2–10.3, §14, §15, §15.3a, §15.4
+#41–57, §16.1 #6, §18 rows L1–L6). Phase 6 starts from v2 §15.4 and the
+tuning backlog (§15.3, §15.3a). After merge, Ethan runs `pnpm db:migrate`,
+then `pnpm db:reset-self`, and restarts the worker. Phase 5 design:
+`docs/superpowers/specs/2026-09-29-phase-5-life-sim-design.md`; plan:
+`docs/superpowers/plans/2026-09-29-phase-5-life-sim.md`. Phase 4
 (Relationship + homeostasis) done 2026-09-29: the exit run (only `extract`
 real, `--runs 3`, no guard suite) passed all 13 `rel-*` scripts 3/3 with
 `prompts.extract` v4 (162 Haiku calls, ~$0.58; ~$1.81 across all attempts),
 folded into v2 (§2, §5.5, §5.8, §6.2–6.4, §8, §14, §15, §16.1, §18 rows
-G1–G4 and S1–S3). Phase 5 starts from v2 §15.4 and the tuning backlog. After
-merge, Ethan runs `pnpm db:migrate` on the dev DB (it was not migrated
-during the build). Phase 4 design:
+G1–G4 and S1–S3). Phase 4 design:
 `docs/superpowers/specs/2026-09-28-phase-4-relationship-design.md`. Phase 3
 (Turn-taking + pacing) done 2026-09-28: the exit run (only `turn_judge`
 real, `--runs 3`) passed all 10 Phase 3 scripts 3/3 (116 turn-judge calls,
@@ -205,8 +240,8 @@ from Phase 2"), which also assigns every open item to a later phase.
 Phase 1 (Memory engine) done 2026-09-25: `pnpm eval --llm=real --runs 3`
 passed 26/26 at the time. Phase 1 design:
 `docs/superpowers/specs/2026-09-24-phase-1-memory-design.md`.
-Persona v1 (`prompts/persona/v1.md`) accepted by Ethan for the test phase
-(v2 §9.1). Each phase's exit test is in v2 §15.
+Persona v1 (`prompts/persona/v1.md`) was accepted for Phases 1–4 and is
+scrapped; persona v2 is current (v2 §9.1). Each phase's exit test is in v2 §15.
 **Exit tests from Phase 3 on (v2 §15):** only the phase's own functionality,
 with deterministic assertions. Exit runs call the real API only for the
 phase's own LLM processes; the reply model is always faked, the guard is off
@@ -220,8 +255,8 @@ replies; the guard is off in the app too until Phase 9.
 to push irreversibility (hurt / tension ceilings; test phase: uncapped,
 decide in Phase 9). 4. Where the jab vs contempt line sits (including the
 rule 4 wording; test phase: rules suspended, decide in Phase 9). 5. Whether the
-backchannel style is global or per user. 6. Shared vs per-user life (heavy
-decision). 7. Final reach-out caps. 8. Identity disclosure ("are you an
+backchannel style is global or per user. 6. ~~Shared vs per-user life~~
+settled 2026-09-29: hybrid (shared day plan, personal events). 7. Final reach-out caps. 8. Identity disclosure ("are you an
 AI?"; placeholder: answer honestly, in her own voice).
 
 ## Guardrails: not optional (v2 §16.2)
@@ -244,7 +279,9 @@ AI?"; placeholder: answer honestly, in her own voice).
 - Timestamps come from the injected `Clock`; never `DEFAULT now()`.
 - Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
   `pnpm eval --llm=fake --compare`; `pnpm db:up`, `pnpm db:migrate` (dev
-  DB only; tests migrate their own), `pnpm worker`.
+  DB only; tests migrate their own), `pnpm worker`, `pnpm db:reset-self`
+  (dev only; run after `pnpm db:migrate`: wipes every user's self facts,
+  entities and threads; refuses a non-local DB).
 - Drizzle property names for domain tables are the spec's snake_case names
   (`session_log.user_id`); Better Auth tables use camelCase (required).
 - TypeScript is pinned `~6.0` (typescript-eslint doesn't support 7 yet).

@@ -44,7 +44,7 @@ test("phase 1 config groups load with defaults", () => {
   expect(c.reconcile.near_match_similarity).toBe(0.82);
   expect(c.decay).toMatchObject({ grace_days: 3, rate: 0.08, stale_floor: 0.05, dormant_after_days: 14 });
   expect(c.cold_path.max_sweep_attempts).toBe(3);
-  expect(c.prompts.persona).toBe("v1");
+  expect(c.prompts.persona).toBe("v2");
 });
 
 test("turn, hot_path and events config load with conservative defaults", () => {

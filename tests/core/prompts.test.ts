@@ -42,3 +42,11 @@ test("loads the turn judge prompt", () => {
   expect(p).toMatch(/open_questions/);
   expect(p).toMatch(/backchannel/);
 });
+
+test("persona v2 is the configured persona (v1 scrapped, design D3)", () => {
+  const c = loadConfig();
+  expect(c.prompts.persona).toBe("v2");
+  const p = loadPrompt("persona", c.prompts.persona);
+  expect(p).toMatch(/Alcor/);
+  expect(p).not.toMatch(/Pesto/);
+});

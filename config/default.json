@@ -150,7 +150,7 @@
   "prompts": {
     "reply": "v7",
     "crisis_classifier": "v2",
-    "persona": "v1",
+    "persona": "v2",
     "extract": "v4",
     "reconcile": "v1",
     "judge_recall": "v3",

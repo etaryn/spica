@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { LifeConfig } from "@/core/config";
+import { lifeDate } from "@/core/life/clock";
 import type { RelConfig } from "@/core/relationship/types";
 import type { Db } from "@/db/client";
 import * as r from "@/db/repos/inspector";
@@ -241,5 +243,33 @@ export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+export async function LifeTab({ db, userId, now, cfg }: { db: Db; userId: string; now: Date; cfg: LifeConfig }) {
+  const day = lifeDate(cfg, now);
+  const v = await r.getLifeView(db, userId, day);
+  return (
+    <>
+      <h3>Her plan for {day} ({cfg.timezone})</h3>
+      {v.plan ? (
+        <table className={styles.table}><tbody>
+          {v.plan.plan.blocks.map((b) => <tr key={b.start}><td>{b.start}–{b.end}</td><td>{b.kind}</td><td>{b.busy.toFixed(2)}</td><td>{b.label}</td></tr>)}
+        </tbody></table>
+      ) : <Empty phase={5} />}
+      <p>source: {v.plan?.source ?? "—"}</p>
+      <h3>Generated facts</h3>
+      {!v.facts.length ? <Empty phase={5} /> : (
+        <table className={styles.table}><tbody>
+          {v.facts.map((f) => <tr key={f.id}><td>{iso(f.occurred_at)}</td><td>{f.status}</td><td>{f.content}</td></tr>)}
+        </tbody></table>
+      )}
+      <h3>Event attempts</h3>
+      {!v.log.length ? <Empty phase={5} /> : (
+        <table className={styles.table}><tbody>
+          {v.log.map((l) => <tr key={l.id}><td>{iso(l.created_at)}</td><td>{l.life_day}</td><td>#{l.attempt}</td><td>{l.decision}</td><td>{String((l.candidate as { content?: unknown }).content ?? "")}</td></tr>)}
+        </tbody></table>
+      )}
+    </>
   );
 }

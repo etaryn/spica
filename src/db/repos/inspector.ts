@@ -6,6 +6,8 @@ import type { Db } from "../client";
 import {
   conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, judge_log, reach_out_log, retrieval_trace, thread,
 } from "../schema";
+import { getLifeDay } from "./life-day";
+import { listLifeEventLogs } from "./life-event-log";
 import { getParams, getRelationshipRow, listRelationshipEvents } from "./relationship";
 
 export type FactFilters = {
@@ -95,4 +97,15 @@ export async function resolveFactContents(db: Db, userId: string, ids: string[])
   const rows = await db.select({ id: fact.id, content: fact.content }).from(fact)
     .where(and(eq(fact.user_id, userId), inArray(fact.id, unique)));
   return new Map(rows.map((r) => [r.id, r.content]));
+}
+
+/** The Life tab (Phase 5 design §9.2). The plan is global; facts and the event log are this user's. */
+export async function getLifeView(db: Db, userId: string, day: string) {
+  const [plan, facts, log] = await Promise.all([
+    getLifeDay(db, day),
+    db.select({ id: fact.id, content: fact.content, status: fact.status, payload: fact.payload, occurred_at: fact.occurred_at })
+      .from(fact).where(and(eq(fact.user_id, userId), eq(fact.source, "generated"))).orderBy(desc(fact.created_at)).limit(200),
+    listLifeEventLogs(db, userId, 200),
+  ]);
+  return { plan, facts, log };
 }

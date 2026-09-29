@@ -8,7 +8,7 @@ import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract"
 import type { Decision } from "./reconcile";
 import type { RecalledFact } from "./types";
 
-export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision; source?: "turn" | "inferred" };
+export type PlannedFact = { fact: ExtractedFact; embedding: number[]; decision: Decision; source?: "turn" | "inferred" | "generated" };
 export type ApplyInput = {
   /** now: job run time (recall write-back, entity last_mentioned, thread resolve). exchangeAt: the earliest turn's created_at (inserted facts' created_at, thread open/touch). */
   userId: string; now: Date; exchangeAt: Date; entities: ExtractedEntity[]; facts: PlannedFact[]; threads: ExtractedThread[];

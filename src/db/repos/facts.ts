@@ -161,3 +161,11 @@ export async function forgetFact(db: Db, userId: string, factId: string): Promis
     return rows.length > 0;
   });
 }
+
+/** Her copied schedule blocks for one of her local dates (Phase 5 design §6.2). Stale blocks still count; superseded don't. */
+export async function listGeneratedBlockRows(db: Db, userId: string, lifeDay: string): Promise<{ id: string; payload: unknown }[]> {
+  return db.select({ id: fact.id, payload: fact.payload }).from(fact).where(and(
+    eq(fact.user_id, userId), eq(fact.scope, "private"), eq(fact.source, "generated"), sql`${fact.status} <> 'superseded'`,
+    sql`${fact.payload}->>'life_day' = ${lifeDay}`, sql`${fact.payload}->>'block' IS NOT NULL`,
+  ));
+}

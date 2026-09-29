@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
 import { TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
 import { receiveMessage } from "@/core/turn/receive-message";
@@ -11,6 +11,7 @@ import * as rel from "@/db/repos/relationship";
 import * as sessionLog from "@/db/repos/session-log";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
+import { relationship_param } from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -259,4 +260,18 @@ test("a message in a busy block from a low-closeness user defers the timer and s
   expect(timer.startAfter!.getTime() - now.getTime()).toBeGreaterThan(15 * 60_000);
   expect(deps.queue.jobs.some((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toBe(false);
   expect((await getState(deps.db, u))?.deferred_until).not.toBeNull();
+});
+
+test("a mid-closeness user's first message in a busy block enqueues the availability note", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  const u = await createTestUser();
+  const now = new Date("2026-01-05T10:30:00Z");
+  deps.clock.set(now);
+  await rel.ensureRelationship(deps.db, u, now, deps.config.relationship);
+  await deps.db.update(relationship_param).set({ value: 0.5, baseline: 0.5 }).where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
+  await insertFact(deps.db, u, { subject: "self", kind: "event", content: "Spica's morning: reading.", payload: { start: "2026-01-05T10:00:00.000Z", end: "2026-01-05T13:00:00.000Z", block: "busy", busy: 0.8, label: "reading", life_day: "2026-01-05", shared: true }, embedding: vec(), created_at: now, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
+  await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "hey are you around?" });
+  const notes = deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE && (j.data as { trigger?: string }).trigger === "availability");
+  expect(notes).toHaveLength(1);
+  expect(notes[0]).toMatchObject({ data: { userId: u, trigger: "availability", blockKind: "busy", blockStart: "2026-01-05T10:00:00.000Z" }, startAfter: new Date(now.getTime() + deps.config.availability.note_read_delay_ms) });
 });

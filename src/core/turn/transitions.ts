@@ -156,3 +156,13 @@ export function recover(s: ConvState, a: { now: Date; graceMs: number; inflightM
     result: { version },
   };
 }
+
+/**
+ * The availability note (Phase 5 design §8.3): allowed only while this buffer's deferral is still pending.
+ * Not version-checked (later messages join the same deferred buffer) and sets nothing: once-per-block is read
+ * from session_log.
+ */
+export function availabilityNote(s: ConvState, a: { now: Date }): Step<boolean> {
+  const ok = !!s.deferred_until && s.deferred_until.getTime() > a.now.getTime() && s.buffer_turn_ids.length > 0;
+  return { patch: null, result: ok };
+}

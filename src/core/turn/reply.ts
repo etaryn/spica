@@ -8,6 +8,7 @@ import { errorName } from "../errors";
 import { emit } from "../events";
 import { guardOutgoing } from "../guard/outgoing";
 import { COLD_PATH_QUEUE, TURN_TIMER_QUEUE, type BackchannelJob, type TurnTimerJob } from "../queue";
+import { runAvailabilityNote } from "./availability-note";
 import { withTimeout } from "../timeout";
 import { readDelayMs, seededUnit, sleepUntil, typingMs } from "./pacing";
 import { mutateState } from "./state";
@@ -177,6 +178,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
 /** turn_backchannel (design §5.1 step 5, §7): once per buffer, rate-limited, keyword-guarded, never a memory. */
 export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"sent" | "skipped" | "dropped"> {
+  if (job.trigger === "availability") return runAvailabilityNote(deps, job);
   const { db, clock, config } = deps;
   const now = clock.now();
   const ok = await mutateState(db, job.userId, now, (s) => T.backchannel(s, { version: job.version, now, minIntervalMs: config.turn.backchannel_min_interval_ms }));

@@ -43,8 +43,8 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
   const fallback = () => fallbackLine(deps.config, a.input.kind === "crisis_reply" ? "crisis_reply" : "reply", a.turnId);
 
   // Backchannels (design §7): a few words can't carry a threat or invented detail the keyword list misses,
-  // so they skip the model call; a hit drops the backchannel rather than sending a fallback line.
-  if (a.input.kind === "backchannel") {
+  // so they skip the model call; a hit drops the backchannel rather than sending a fallback line. Same for availability notes (Phase 5), which are picked from a fixed list.
+  if (a.input.kind === "backchannel" || a.input.kind === "availability") {
     const text = a.first.trim();
     const hit = matchKeyword(text, deps.config.guard.fallback_keywords);
     checked.push({ text, verdict: {

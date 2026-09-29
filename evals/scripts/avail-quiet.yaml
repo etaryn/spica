@@ -1,0 +1,17 @@
+name: avail-quiet
+description: A 02:00 message in her quiet block from a distant friend (0.05) waits until the quiet block ends at 08:00, never longer (design §8.2 cap).
+profile: none
+relationship_seed: { closeness: 0.05 }
+config: { life: { timezone: UTC } }
+life:
+  plan: scripted
+  plans:
+    "*":
+      - { start: "00:00", end: "08:00", kind: quiet, label: "offline, winding down" }
+      - { start: "10:00", end: "13:00", kind: busy, busy: 0.8, label: "rewatching an old film" }
+      - { start: "23:00", end: "24:00", kind: quiet, label: "offline, winding down" }
+sessions:
+  - at: "day 0 02:00"
+    turns: ["can't sleep"]
+assertions:
+  - { type: turn, session: 1, replies: 1, min_reply_delay_s: 10800, max_reply_delay_s: 21700, notes: { max: 0 } }

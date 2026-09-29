@@ -31,10 +31,19 @@ async function user(d: ReturnType<typeof deps>) {
 }
 
 test("checkEvent rejects bad times and empty content, clamps valence", () => {
-  expect(checkEvent({ content: " ", at: "10:00", valence: 0, stakes: "low", entity_names: [] })).toBeNull();
-  expect(checkEvent({ content: "Spica read.", at: "24:00", valence: 0, stakes: "low", entity_names: [] })).toBeNull();
-  expect(checkEvent({ content: "Spica read.", at: "10:00", valence: 3, stakes: "low", entity_names: [" Alcor "] }))
+  expect(checkEvent({ content: " ", at: "10:00", valence: 0, stakes: "low", entity_names: [] }, 300)).toBeNull();
+  expect(checkEvent({ content: "Spica read.", at: "24:00", valence: 0, stakes: "low", entity_names: [] }, 300)).toBeNull();
+  expect(checkEvent({ content: "Spica read.", at: "10:00", valence: 3, stakes: "low", entity_names: [" Alcor "] }, 300))
     .toEqual({ content: "Spica read.", at: "10:00", valence: 1, stakes: "low", entity_names: ["Alcor"] });
+});
+
+test("checkEvent enforces the configured content cap; config defaults", () => {
+  const cfg = makeTestDeps().config.life;
+  expect(cfg.event_max_chars).toBe(300);
+  expect(cfg.injected_event_at).toBe("12:00");
+  const c = { content: "Spica read a long book.", at: "10:00", valence: 0, stakes: "low" as const, entity_names: [] };
+  expect(checkEvent(c, 10)).toBeNull();
+  expect(checkEvent(c, cfg.event_max_chars)).not.toBeNull();
 });
 
 test("checkRules: one new entity a week, one high-stakes event per window, canon is known", () => {

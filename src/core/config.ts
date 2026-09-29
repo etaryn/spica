@@ -195,6 +195,8 @@ export const ConfigSchema = z.object({
       event_probability: unit,
       event_context_facts: z.number().int().min(0),
       event_max_tokens: z.number().int().positive(),
+      event_max_chars: z.number().int().positive(),
+      injected_event_at: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
       event_salience: unit,
       event_confidence: unit,
       regen_attempts: z.number().int().min(0),

@@ -233,6 +233,8 @@
     "event_probability": 0.5,
     "event_context_facts": 20,
     "event_max_tokens": 600,
+    "event_max_chars": 300,
+    "injected_event_at": "12:00",
     "event_salience": 0.4,
     "event_confidence": 1.0,
     "regen_attempts": 2,

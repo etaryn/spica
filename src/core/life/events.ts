@@ -53,9 +53,9 @@ export function buildEventInput(ctx: LifeContext, day: string, rejected: { candi
   return parts.join("\n\n");
 }
 
-export function checkEvent(raw: EventCandidate): EventCandidate | null {
+export function checkEvent(raw: EventCandidate, maxChars: number): EventCandidate | null {
   const content = tidy(raw.content);
-  if (!content || content.length > 300 || !HHMM.test(raw.at)) return null;
+  if (!content || content.length > maxChars || !HHMM.test(raw.at)) return null;
   const valence = Number.isFinite(raw.valence) ? Math.min(1, Math.max(-1, raw.valence)) : 0;
   return { content, at: raw.at, valence, stakes: raw.stakes, entity_names: raw.entity_names.map(tidy).filter(Boolean) };
 }
@@ -71,7 +71,7 @@ export function checkRules(
   return null;
 }
 
-const REASON: Record<string, string> = {
+const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = {
   invalid: "it wasn't a valid event (one sentence, a time HH:MM between 00:00 and 23:59)",
   "rule:new_entity": "it introduces a new person too soon; use people she already knows",
   "rule:high_stakes": "it's high-stakes too soon after the last one; keep it small",
@@ -109,17 +109,17 @@ export async function generateEvents(
       const key = `${i}:${attempt}`;
       const useInjected = !!injected && i === 0 && attempt === 1;
       const raw: EventCandidate = useInjected
-        ? { content: injected!.content, at: "12:00", valence: injected!.valence, stakes: "low", entity_names: [] }
+        ? { content: injected!.content, at: cfg.injected_event_at, valence: injected!.valence, stakes: "low", entity_names: [] }
         : await llm.classifyJson({
             purpose: "life_event", model: "life", system, input: buildEventInput(ctx, day, rejected, now), schema: EventSchema,
             timeoutMs: config.models.structured_timeout_ms, maxTokens: cfg.event_max_tokens,
           });
       const source = useInjected ? "injected" as const : "model" as const;
-      const reject = (decision: EventDecision, targetFactId: string | null = null) => {
+      const reject = (decision: keyof typeof REASON, targetFactId: string | null = null) => {
         attempts.push({ key, attempt, candidate: raw, decision, targetFactId, source });
-        rejected.push({ candidate: raw, reason: REASON[decision]! });
+        rejected.push({ candidate: raw, reason: REASON[decision] });
       };
-      const c = checkEvent(raw);
+      const c = checkEvent(raw, cfg.event_max_chars);
       if (!c) { reject("invalid"); continue; }
       const rule = checkRules(c, { known, lastNewEntityAt, lastHighStakesAt }, now, cfg);
       if (rule) { reject(rule); continue; }

@@ -49,10 +49,14 @@ export async function retrieve(
       }
     }
     const pre = await getPreoccupationFact(db, userId);
-    if (pre && !seen.has(pre.id)) {
-      seen.add(pre.id);
-      result.facts.self.push({ id: pre.id, content: pre.content, when: pre.occurred_at ?? pre.created_at });
-      result.recalled.push({ factId: pre.id, sim: 0, fact_salience: pre.salience, entity_salience: 1, recency: 1, score: 0, forced: true });
+    if (pre) {
+      const hit = result.facts.self.find((f) => f.id === pre.id);
+      if (hit) hit.onMind = true;
+      else if (!seen.has(pre.id)) {
+        seen.add(pre.id);
+        result.facts.self.push({ id: pre.id, content: pre.content, when: pre.occurred_at ?? pre.created_at, onMind: true });
+        result.recalled.push({ factId: pre.id, sim: 0, fact_salience: pre.salience, entity_salience: 1, recency: 1, score: 0, forced: true });
+      }
     }
   } catch (e) {
     log.error("forced retrieval failed", { userId, error: errName(e) });

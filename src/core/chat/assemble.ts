@@ -2,7 +2,7 @@ import type { ChatMessage } from "../llm/types";
 import type { RecalledFact } from "../memory/types";
 import { HOUR } from "../time";
 
-export type RetrievedFact = { id: string; content: string; when: Date };
+export type RetrievedFact = { id: string; content: string; when: Date; onMind?: boolean };
 export type DueThread = { id: string; title: string; detail?: string | null };
 
 export interface RetrievalResult {
@@ -21,6 +21,8 @@ export interface AssembleInput {
   valuesDoc: string;
   egoLine: string | null;
   relationshipSummary: string | null;
+  /** Her day (v2 §6.2 slot 4, Phase 5). */
+  lifeState?: string | null;
   retrieval: RetrievalResult;
   recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
   now: Date;
@@ -45,7 +47,7 @@ export function relativeDate(d: Date, now: Date): string {
 
 function factList(title: string, facts: RetrievedFact[], now: Date): string | null {
   if (facts.length === 0) return null;
-  return `### ${title}\n${facts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})`).join("\n")}`;
+  return `### ${title}\n${facts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})${f.onMind ? " (on your mind lately)" : ""}`).join("\n")}`;
 }
 
 /** Fixed slot order from v2 §6.2 step 2. Empty slots are skipped. */
@@ -61,6 +63,8 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     input.valuesDoc,
     input.egoLine ? `## How you're feeling\n${input.egoLine}` : null,
     input.relationshipSummary ? `## You and them\n${input.relationshipSummary}` : null,
+    input.lifeState ? `## Your day
+${input.lifeState}` : null,
     memory.length ? `## What you remember\n${memory.join("\n\n")}` : null,
     retrieval.dueThreads.length
       ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}${t.detail ? ` (latest: ${t.detail})` : ""}`).join("\n")}`

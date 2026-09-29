@@ -5,7 +5,9 @@ import { getTimezone } from "@/db/repos/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { Deps } from "../deps";
 import { ReplyFailedError } from "../errors";
+import { loadEgoLine } from "../ego/line";
 import { guardOutgoing } from "../guard/outgoing";
+import { loadLifeState } from "../life/state";
 import type { RecalledFact } from "../memory/types";
 import { retrieve } from "../memory/retrieve";
 import { loadPrompt } from "../prompts";
@@ -33,7 +35,7 @@ function guardFacts(r: RetrievalResult): { id: string; subject: string; content:
  * inserts the reply, sends it, enqueues the cold path and then calls `writeGuardLog` (judge_log after the send).
  * Called by the turn timer, the crisis path and (Phase 6) reach-outs.
  */
-export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[]; openQuestions: string[]; flag: SafetyFlag | null }): Promise<Composed> {
+export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[]; openQuestions: string[]; flag: SafetyFlag | null; deferredFact?: string | null }): Promise<Composed> {
   const { db, clock, config, llm, log } = deps;
   const last = a.turns.at(-1);
   if (!last) throw new Error("composeReply needs at least one turn");
@@ -70,6 +72,18 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
         return null;
       });
 
+  const egoPromise: Promise<string | null> = withTimeout(Promise.resolve().then(() => loadEgoLine(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
+    log.error("ego line unavailable", { userId, error: errName(e) });
+    return null;
+  });
+  // Rule 7: a crisis reply never mentions being busy.
+  const lifePromise: Promise<string | null> = a.flag?.flagged
+    ? Promise.resolve(null)
+    : withTimeout(Promise.resolve().then(() => loadLifeState(deps, userId, clock.now(), a.deferredFact ?? null)), config.hot_path.db_timeout_ms).catch((e) => {
+        log.error("life state unavailable", { userId, error: errName(e) });
+        return null;
+      });
+
   const retrieval = await retrieve(deps, userId, {
     answering: a.turns,
     context: config.retrieval.context_turns > 0 ? earlier.slice(-config.retrieval.context_turns) : [],
@@ -79,11 +93,12 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
 
   const prompt = assemblePrompt({
     valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
-    egoLine: null,
+    egoLine: await egoPromise,
     relationshipSummary: [
       [relLine, gapLine(earlier.at(-1)?.created_at ?? null, first.created_at, config.chat.gap_line_min_hours)].filter((x): x is string => !!x).join(" "),
       await relSummaryPromise,
     ].filter((x): x is string => !!x).join("\n") || null,
+    lifeState: await lifePromise,
     retrieval,
     openQuestions: a.flag?.flagged ? [] : a.openQuestions,
     recentTurns: recent,

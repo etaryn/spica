@@ -148,7 +148,7 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v7",
+    "reply": "v8",
     "crisis_classifier": "v2",
     "persona": "v2",
     "extract": "v4",

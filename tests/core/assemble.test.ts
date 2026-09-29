@@ -145,3 +145,16 @@ test("relationshipLine: first conversation, same day, then days and first-contac
   expect(relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, now))
     .toBe("You first talked 2 weeks ago, and have talked on 3 different days.");
 });
+
+test("slot 4 'Your day' sits after 'You and them'; the preoccupation is labelled", () => {
+  const r = emptyRetrieval();
+  r.facts.self.push({ id: "p", content: "Spica got the telescope images.", when: new Date("2026-01-05T09:00:00Z"), onMind: true });
+  const { system } = assemblePrompt({
+    valuesDoc: "V", egoLine: "You're in a good mood.", relationshipSummary: "R", lifeState: "Right now you're free.",
+    retrieval: r, recentTurns: [], now: new Date("2026-01-05T10:00:00Z"),
+  });
+  expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## You and them"));
+  expect(system.indexOf("## You and them")).toBeLessThan(system.indexOf("## Your day"));
+  expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## What you remember"));
+  expect(system).toContain("Spica got the telescope images. (today) (on your mind lately)");
+});

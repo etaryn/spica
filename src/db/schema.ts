@@ -163,6 +163,8 @@ export const identity = pgTable("identity", {
   preoccupation: uuid("preoccupation").references(() => fact.id, { onDelete: "set null" }),
   baseline: jsonb("baseline").notNull(),
   last_tick: ts("last_tick"),
+  preoccupation_since: ts("preoccupation_since"),
+  life_last_date: date("life_last_date", { mode: "string" }),
 }, (t) => [
   check("identity_mood_valence_range", sql`${t.mood_valence} BETWEEN -1 AND 1`),
   check("identity_mood_arousal_range", sql`${t.mood_arousal} BETWEEN 0 AND 1`),
@@ -241,6 +243,11 @@ export const relationship_event = pgTable("relationship_event", {
 
 export type OpenQuestion = { turn_id: string; text: string };
 
+export type LifeBlockKind = "busy" | "downtime" | "quiet";
+/** One block of her shared day plan (Phase 5 design §5.2); times are "HH:MM" in her zone, "24:00" = midnight. */
+export type LifeBlock = { start: string; end: string; kind: LifeBlockKind; busy: number; label: string };
+export type LifePlan = { blocks: LifeBlock[] };
+
 // ---------- Turn-taking (v2 §5.7; design §3.1) ----------
 
 export const conversation_state = pgTable("conversation_state", {
@@ -256,6 +263,8 @@ export const conversation_state = pgTable("conversation_state", {
   inflight_since: ts("inflight_since"),
   sending_since: ts("sending_since"),
   reply_epoch: integer("reply_epoch").notNull().default(0),
+  deferred_until: ts("deferred_until"),
+  deferred_fact: uuid("deferred_fact").references(() => fact.id, { onDelete: "set null" }),
   updated_at: ts("updated_at").notNull(),
 }, (t) => [index("conversation_state_wait_idx").on(t.wait_until)]);
 
@@ -285,6 +294,31 @@ export const ego_tick = pgTable("ego_tick", {
   reason: text("reason").notNull(),
   created_at: ts("created_at").notNull(),
 }, (t) => [index("ego_tick_user_created_idx").on(t.user_id, t.created_at)]);
+
+/** Her shared day plan (Phase 5 design §5): canon for that day, like the persona file. No user data, so no user_id. */
+export const life_day = pgTable("life_day", {
+  date: date("date", { mode: "string" }).primaryKey(),
+  plan: jsonb("plan").$type<LifePlan>().notNull(),
+  source: text("source").notNull(), // model | fallback | scripted
+  model: text("model").notNull(),
+  prompt_version: text("prompt_version").notNull(),
+  generated_at: ts("generated_at").notNull(),
+});
+
+/** Every personal-event attempt (Phase 5 design §6.3). Diagnostic only, never read by the chat loop. */
+export const life_event_log = pgTable("life_event_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: userRef(),
+  life_day: date("life_day", { mode: "string" }).notNull(),
+  attempt: integer("attempt").notNull(),
+  candidate: jsonb("candidate").notNull(),
+  decision: text("decision").notNull(),
+  target_fact_id: uuid("target_fact_id").references(() => fact.id, { onDelete: "set null" }),
+  fact_id: uuid("fact_id").references(() => fact.id, { onDelete: "set null" }),
+  model: text("model"),
+  prompt_version: text("prompt_version"),
+  created_at: ts("created_at").notNull(),
+}, (t) => [index("life_event_log_user_created_idx").on(t.user_id, t.created_at)]);
 
 export const reach_out_log = pgTable("reach_out_log", {
   id: uuid("id").primaryKey().defaultRandom(),

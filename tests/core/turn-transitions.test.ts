@@ -6,7 +6,7 @@ const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
 const empty = (over: Partial<ConvState> = {}): ConvState => ({
   user_id: "u", buffer_turn_ids: [], open_questions: [], wait_until: null, last_backchannel_at: null,
   buffer_version: 0, buffer_started_at: null, backchannel_sent: false, inflight_turn_ids: [], inflight_since: null,
-  sending_since: null, reply_epoch: 0, updated_at: at(0), ...over,
+  sending_since: null, reply_epoch: 0, deferred_until: null, deferred_fact: null, updated_at: at(0), ...over,
 });
 const apply = (s: ConvState, patch: Partial<ConvState> | null): ConvState => ({ ...s, ...(patch ?? {}) });
 

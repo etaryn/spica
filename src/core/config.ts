@@ -1,5 +1,6 @@
 import { z } from "zod";
 import defaults from "../../config/default.json";
+import { isValidTimeZone } from "./timezone";
 
 const CrisisCardSchema = z.object({ title: z.string().min(1), lines: z.array(z.string().min(1)).min(1) });
 const unit = z.number().min(0).max(1);
@@ -10,6 +11,7 @@ export const ConfigSchema = z.object({
     cheap: z.string().min(1),
     extract: z.string().min(1),
     judge: z.string().min(1),
+    life: z.string().min(1),
     guard: z.string().min(1),
     turn_judge: z.string().min(1),
     reply_max_tokens: z.number().int().positive(),
@@ -175,6 +177,61 @@ export const ConfigSchema = z.object({
       event_list_limit: z.number().int().positive(),
     }).refine((r) => r.make_up_clear_threshold < r.make_up_threshold, "relationship.make_up_clear_threshold must be < make_up_threshold");
   })(),
+  life: (() => {
+    const hhmm = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/);
+    return z.object({
+      timezone: z.string().refine(isValidTimeZone, "life.timezone must be an IANA zone"),
+      plan_cron: z.string().min(1),
+      plan_context_days: z.number().int().min(0),
+      plan_max_tokens: z.number().int().positive(),
+      max_busy_blocks: z.number().int().positive(),
+      min_quiet_hours: z.number().min(0).max(24),
+      quiet_busy: unit,
+      fallback_plan: z.array(z.object({ start: hhmm, end: hhmm, kind: z.enum(["busy", "downtime", "quiet"]), label: z.string().min(1) })).min(1),
+      tick_cron: z.string().min(1),
+      tick_local_hour: z.number().int().min(0).max(23),
+      block_salience: unit,
+      events_per_day_max: z.number().int().min(0),
+      event_probability: unit,
+      event_context_facts: z.number().int().min(0),
+      event_max_tokens: z.number().int().positive(),
+      event_salience: unit,
+      event_confidence: unit,
+      regen_attempts: z.number().int().min(0),
+      new_entity_days: z.number().min(0),
+      high_stakes_min_days: z.number().min(0),
+      high_stakes_checkpoint_days: z.number().min(0),
+      preoccupation_min_valence: unit,
+      canon_entities: z.array(z.string().min(1)),
+    });
+  })(),
+  ego: (() => {
+    const band = z.tuple([z.number(), z.number()]).refine(([lo, hi]) => lo <= hi, "band low must be <= high");
+    return z.object({
+      baseline: z.object({ mood_valence: z.number().min(-1).max(1), mood_arousal: unit, energy: unit }),
+      tick_cron: z.string().min(1),
+      drift_rate: unit,
+      noise: unit,
+      energy_peak_hour: z.number().int().min(0).max(23),
+      energy_amplitude: unit,
+      busy_drain: unit,
+      full_load_hours: z.number().positive(),
+      preoccupation_hours: z.number().positive(),
+      event_gain: unit,
+      event_arousal_gain: unit,
+      exchange_gain: unit,
+      bands: z.object({ energy: band, mood_valence: band, mood_arousal: band }),
+    });
+  })(),
+  availability: z.object({
+    override_closeness: z.number().gt(0).max(1),
+    max_delay_ms: z.number().int().min(0),
+    quiet_max_delay_ms: z.number().int().min(0),
+    jitter: z.number().min(0).max(0.5),
+    note_min_delay_ms: z.number().int().min(0),
+    note_min_closeness: unit,
+    note_read_delay_ms: z.number().int().min(0),
+  }),
   prompts: z.object({
     reply: z.string().regex(/^v\d+$/),
     persona: z.string().regex(/^v\d+$/),
@@ -191,12 +248,19 @@ export const ConfigSchema = z.object({
     guard_fallback: z.string().regex(/^v\d+$/),
     turn_judge: z.string().regex(/^v\d+$/),
     relationship_summary: z.string().regex(/^v\d+$/),
+    life_plan: z.string().regex(/^v\d+$/),
+    life_event: z.string().regex(/^v\d+$/),
+    life_availability: z.string().regex(/^v\d+$/),
+    ego_line: z.string().regex(/^v\d+$/),
   }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type CrisisCard = z.infer<typeof CrisisCardSchema>;
 export type TurnConfig = Config["turn"];
+export type LifeConfig = Config["life"];
+export type EgoConfig = Config["ego"];
+export type AvailabilityConfig = Config["availability"];
 
 /** The dimension baked into the `fact.embedding` column. Changing it needs a migration + re-embed. */
 export const EMBEDDING_DIMENSIONS: number = defaults.embedding.dimensions;

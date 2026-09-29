@@ -14,8 +14,8 @@ export function assertDisposableDatabase(url: string): void {
 /** Deletes every row of every Spica table. Tests and evals only. */
 export async function truncateAll(db: Db, url: string): Promise<void> {
   assertDisposableDatabase(url);
-  // Every domain table cascades from "user"; verification is not user-scoped.
-  await db.execute(sql`TRUNCATE "user", verification CASCADE`);
+  // Every domain table cascades from "user"; verification and life_day (Phase 5, no user_id) are not user-scoped.
+  await db.execute(sql`TRUNCATE "user", verification, life_day CASCADE`);
 }
 
 /** Inserts a user row directly, bypassing Better Auth. Tests and evals only. */

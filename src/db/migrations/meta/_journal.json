@@ -64,6 +64,13 @@
       "when": 1790588763638,
       "tag": "0008_small_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790698339008,
+      "tag": "0009_needy_blink",
+      "breakpoints": true
     }
   ]
 }

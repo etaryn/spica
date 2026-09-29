@@ -5,11 +5,13 @@ import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
 import { TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { getState } from "@/db/repos/conversation-state";
+import { insertFact } from "@/db/repos/facts";
 import { listJudgeLogs } from "@/db/repos/judge-log";
+import * as rel from "@/db/repos/relationship";
 import * as sessionLog from "@/db/repos/session-log";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
 beforeEach(resetDb);
@@ -243,4 +245,18 @@ describe("receiveMessage", () => {
     const crisisInput = deps.llm.structuredCalls.filter((c) => c.purpose === "crisis").at(-1)!.input;
     expect(crisisInput).toContain("everything is falling apart");
   });
+});
+
+test("a message in a busy block from a low-closeness user defers the timer and suppresses backchannels", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  const u = await createTestUser();
+  const now = new Date("2026-01-05T10:30:00Z");
+  deps.clock.set(now);
+  await rel.ensureRelationship(deps.db, u, now, deps.config.relationship); // closeness 0.2
+  await insertFact(deps.db, u, { subject: "self", kind: "event", content: "Spica's morning: reading.", payload: { start: "2026-01-05T10:00:00.000Z", end: "2026-01-05T13:00:00.000Z", block: "busy", busy: 0.8, label: "reading", life_day: "2026-01-05", shared: true }, embedding: vec(), created_at: now, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
+  await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "so i was thinking and" });
+  const timer = deps.queue.jobs.find((j) => j.name === TURN_TIMER_QUEUE)!;
+  expect(timer.startAfter!.getTime() - now.getTime()).toBeGreaterThan(15 * 60_000);
+  expect(deps.queue.jobs.some((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toBe(false);
+  expect((await getState(deps.db, u))?.deferred_until).not.toBeNull();
 });

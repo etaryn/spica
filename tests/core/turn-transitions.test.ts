@@ -34,7 +34,7 @@ describe("append", () => {
     const s = empty({ inflight_turn_ids: ["a"], inflight_since: at(0), buffer_version: 2, wait_until: at(5), backchannel_sent: true });
     const r = T.append(s, { turnId: "a", now: at(9), windowMs: 4000, maxWaitMs: 40000, openQuestions: [] });
     expect(r.patch).toBeNull();
-    expect(r.result).toEqual({ version: 2, waitUntil: at(5), backchannelSent: true, lastBackchannelAt: null, skipped: true });
+    expect(r.result).toEqual({ version: 2, waitUntil: at(5), backchannelSent: true, lastBackchannelAt: null, skipped: true, deferredUntil: null, deferredNow: false });
   });
   test("in flight with no wait_until set falls back to now", () => {
     const s = empty({ inflight_turn_ids: ["a"], inflight_since: at(0), buffer_version: 2 });
@@ -53,7 +53,7 @@ describe("commit", () => {
   });
   test("commit moves the buffer in flight and bumps the version", () => {
     const r = T.commit(buffered, { version: 2, now: at(5) });
-    expect(r.result).toEqual({ kind: "commit", turnIds: ["a", "b"], epoch: 0, openQuestions: ["what should I cook?"] });
+    expect(r.result).toEqual({ kind: "commit", turnIds: ["a", "b"], epoch: 0, openQuestions: ["what should I cook?"], deferredFact: null });
     expect(r.patch).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: ["a", "b"], inflight_since: at(5), buffer_version: 3, wait_until: null, buffer_started_at: null, backchannel_sent: false });
   });
 });
@@ -130,5 +130,37 @@ describe("backchannel and recover", () => {
     const stuck = T.recover(empty({ inflight_turn_ids: ["a"], inflight_since: at(0), buffer_version: 3 }), { now: new Date(at(0).getTime() + 200_000), graceMs: 60000, inflightMaxAgeMs: 180000 });
     expect(stuck.result.version).toBe(4);
     expect(stuck.patch).toMatchObject({ buffer_turn_ids: ["a"], inflight_turn_ids: [] });
+  });
+});
+
+describe("availability deferral (Phase 5)", () => {
+  test("a deferred first turn holds wait_until past max_wait; later turns keep it", () => {
+    const now = new Date("2026-01-05T10:30:00Z");
+    const until = new Date(now.getTime() + 20 * 60_000);
+    const a = T.append(empty(), { turnId: "t1", now, windowMs: 4000, maxWaitMs: 40_000, openQuestions: [], defer: { until, factId: "f1" } });
+    expect(a.result).toMatchObject({ waitUntil: until, deferredUntil: until, deferredNow: true });
+    expect(a.patch).toMatchObject({ deferred_until: until, deferred_fact: "f1" });
+    const s2 = { ...empty(), ...a.patch } as ConvState;
+    const b = T.append(s2, { turnId: "t2", now: new Date(now.getTime() + 20_000), windowMs: 4000, maxWaitMs: 40_000, openQuestions: [] });
+    expect(b.result).toMatchObject({ waitUntil: until, deferredNow: false });
+    expect(b.patch).not.toHaveProperty("deferred_until");
+  });
+
+  test("commit clears the deferral and reports its block fact", () => {
+    const s = { ...empty(), buffer_turn_ids: ["t1"], buffer_version: 3, deferred_until: new Date(), deferred_fact: "f1" } as ConvState;
+    const c = T.commit(s, { version: 3, now: new Date() });
+    expect(c.result).toMatchObject({ kind: "commit", deferredFact: "f1" });
+    expect(c.patch).toMatchObject({ deferred_until: null, deferred_fact: null });
+  });
+
+  test("crisis clears the deferral; the next buffer computes a fresh one (review focus 3)", () => {
+    const until = new Date("2026-01-05T11:00:00Z");
+    const s = { ...empty(), buffer_turn_ids: ["t1"], deferred_until: until, deferred_fact: "f1" } as ConvState;
+    const c = T.crisis(s, { turnId: "t2", now: new Date("2026-01-05T10:31:00Z") });
+    expect(c.patch).toMatchObject({ deferred_until: null, deferred_fact: null });
+    const after = { ...s, ...c.patch } as ConvState;
+    const next = T.append(after, { turnId: "t3", now: new Date("2026-01-05T10:32:00Z"), windowMs: 4000, maxWaitMs: 40_000, openQuestions: [] });
+    expect(next.result.deferredUntil).toBeNull();
+    expect(next.result.waitUntil.toISOString()).toBe("2026-01-05T10:32:04.000Z");
   });
 });

@@ -15,8 +15,14 @@ export const EGO_TICK_QUEUE = "ego_tick";
 export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };
 /** `version` must still equal `conversation_state.buffer_version` when the job runs, or it is stale (design §5.2). */
 export type TurnTimerJob = { userId: string; version: number; attempt?: number };
-/** `turnId`: the user turn whose judge verdict proposed the backchannel (judge_log / guard seed). */
-export type BackchannelJob = { userId: string; version: number; text: string; turnId: string };
+/**
+ * `turnId`: the user turn whose judge verdict proposed the backchannel (judge_log / guard seed). Phase 5: the
+ * same queue carries the availability note (`trigger: "availability"`), whose text is picked when it runs.
+ */
+export type BackchannelJob = {
+  userId: string; version: number; text: string; turnId: string;
+  trigger?: "backchannel" | "availability"; blockKind?: "busy" | "quiet"; blockStart?: string;
+};
 
 export type JobMap = {
   [COLD_PATH_QUEUE]: ColdPathJob;

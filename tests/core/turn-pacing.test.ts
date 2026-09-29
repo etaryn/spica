@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import { SimClock } from "@/core/clock";
 import { loadConfig } from "@/core/config";
-import { availabilityStretch } from "@/core/turn/availability";
 import { readDelayMs, seededUnit, sleepUntil, typingMs, waitWindowMs } from "@/core/turn/pacing";
 
 const t = loadConfig().turn;
@@ -45,8 +44,4 @@ test("sleepUntil waits only for the remaining time", async () => {
   expect(clock.now().toISOString()).toBe("2026-01-05T09:00:03.000Z");
   await sleepUntil(clock, new Date("2026-01-05T09:00:01Z"));
   expect(clock.now().toISOString()).toBe("2026-01-05T09:00:03.000Z");
-});
-
-test("availability does not stretch anything until Phase 5", async () => {
-  expect(await availabilityStretch({ config: loadConfig() }, "u")).toBe(1);
 });

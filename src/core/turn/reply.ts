@@ -9,7 +9,6 @@ import { emit } from "../events";
 import { guardOutgoing } from "../guard/outgoing";
 import { COLD_PATH_QUEUE, TURN_TIMER_QUEUE, type BackchannelJob, type TurnTimerJob } from "../queue";
 import { withTimeout } from "../timeout";
-import { availabilityStretch } from "./availability";
 import { readDelayMs, seededUnit, sleepUntil, typingMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
@@ -77,13 +76,12 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     return "abandoned";
   }
 
-  const stretch = await availabilityStretch(deps, userId);
   const bufferChars = turns.reduce((n, t) => n + t.text.length, 0);
-  const typingAt = plus(commitAt, Math.round(readDelayMs(config.turn, bufferChars, seededUnit(last.id)) * stretch));
+  const typingAt = plus(commitAt, readDelayMs(config.turn, bufferChars, seededUnit(last.id)));
 
   // Generate during the read delay; settle so a rejection never goes unhandled while we sleep.
   const composing: Promise<{ ok: true; value: Composed } | { ok: false; error: unknown }> =
-    composeReply(deps, userId, { turns, openQuestions: c.openQuestions, flag: null })
+    composeReply(deps, userId, { turns, openQuestions: c.openQuestions, flag: null, deferredFact: c.deferredFact })
       .then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
 
   await sleepUntil(clock, typingAt);

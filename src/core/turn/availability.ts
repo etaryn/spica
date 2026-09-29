@@ -54,8 +54,3 @@ export async function availabilityFor(deps: Pick<Deps, "db" | "config" | "log">,
     return NO_DELAY;
   }
 }
-
-/** @deprecated Interim stub (Task 9 → Task 10): its two callers move to `availabilityFor` in the next commit. */
-export async function availabilityStretch(_deps: Pick<Deps, "config">, _userId: string): Promise<number> {
-  return 1;
-}

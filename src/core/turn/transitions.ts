@@ -21,31 +21,45 @@ function sameIds(a: string[], b: string[]): boolean {
 export function skip(s: ConvState, now: Date) {
   return {
     patch: null,
-    result: { version: s.buffer_version, waitUntil: s.wait_until ?? now, backchannelSent: s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: true },
+    result: {
+      version: s.buffer_version, waitUntil: s.wait_until ?? now, backchannelSent: s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: true,
+      deferredUntil: s.deferred_until, deferredNow: false,
+    },
   } satisfies Step<unknown>;
 }
 
-export function append(s: ConvState, a: { turnId: string; now: Date; windowMs: number; maxWaitMs: number; openQuestions: OpenQuestion[] }) {
+export function append(s: ConvState, a: {
+  turnId: string; now: Date; windowMs: number; maxWaitMs: number; openQuestions: OpenQuestion[];
+  /** Availability (Phase 5 design §8.4): only applied to the first turn of a buffer. */
+  defer?: { until: Date; factId: string | null } | null;
+}) {
   // A race with a reply already in flight for this turn (design §5.2/§5.6 forward-looking guard): never re-buffer
   // a turn that's mid-reply, or it could be answered twice once the turn_timer job (Task 8) exists.
   if (s.inflight_turn_ids.includes(a.turnId)) return skip(s, a.now);
   const fresh = s.buffer_turn_ids.length === 0;
   const started = fresh ? a.now : (s.buffer_started_at ?? a.now);
-  const waitUntil = new Date(Math.min(a.now.getTime() + a.windowMs, started.getTime() + a.maxWaitMs));
+  const capped = Math.min(a.now.getTime() + a.windowMs, started.getTime() + a.maxWaitMs);
+  // A deferral overrides the max-wait cap: messages sent while she's busy pile into one buffer.
+  const deferredUntil = fresh ? (a.defer?.until ?? null) : s.deferred_until;
+  const waitUntil = new Date(deferredUntil ? Math.max(capped, deferredUntil.getTime()) : capped);
   const version = s.buffer_version + 1;
   return {
     patch: {
       buffer_turn_ids: uniq([...s.buffer_turn_ids, a.turnId]), buffer_started_at: started, open_questions: a.openQuestions,
-      buffer_version: version, wait_until: waitUntil, updated_at: a.now, ...(fresh ? { backchannel_sent: false } : {}),
+      buffer_version: version, wait_until: waitUntil, updated_at: a.now,
+      ...(fresh ? { backchannel_sent: false, deferred_until: a.defer?.until ?? null, deferred_fact: a.defer?.factId ?? null } : {}),
     },
-    result: { version, waitUntil, backchannelSent: fresh ? false : s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: false },
+    result: {
+      version, waitUntil, backchannelSent: fresh ? false : s.backchannel_sent, lastBackchannelAt: s.last_backchannel_at, skipped: false,
+      deferredUntil, deferredNow: fresh && !!a.defer,
+    },
   } satisfies Step<unknown>;
 }
 
 export type CommitResult =
   | { kind: "stale" }
   | { kind: "busy" }
-  | { kind: "commit"; turnIds: string[]; epoch: number; openQuestions: string[] };
+  | { kind: "commit"; turnIds: string[]; epoch: number; openQuestions: string[]; deferredFact: string | null };
 
 export function commit(s: ConvState, a: { version: number; now: Date }): Step<CommitResult> {
   if (s.buffer_version !== a.version || s.buffer_turn_ids.length === 0) return { patch: null, result: { kind: "stale" } };
@@ -54,9 +68,9 @@ export function commit(s: ConvState, a: { version: number; now: Date }): Step<Co
   return {
     patch: {
       inflight_turn_ids: s.buffer_turn_ids, inflight_since: a.now, buffer_turn_ids: [], buffer_started_at: null,
-      wait_until: null, backchannel_sent: false, buffer_version: s.buffer_version + 1, updated_at: a.now,
+      wait_until: null, backchannel_sent: false, deferred_until: null, deferred_fact: null, buffer_version: s.buffer_version + 1, updated_at: a.now,
     },
-    result: { kind: "commit", turnIds: s.buffer_turn_ids, epoch: s.reply_epoch, openQuestions: s.open_questions.map((q) => q.text) },
+    result: { kind: "commit", turnIds: s.buffer_turn_ids, epoch: s.reply_epoch, openQuestions: s.open_questions.map((q) => q.text), deferredFact: s.deferred_fact },
   };
 }
 
@@ -108,7 +122,8 @@ export function crisis(s: ConvState, a: { turnId: string; now: Date }): Step<{ t
   return {
     patch: {
       buffer_turn_ids: [], inflight_turn_ids: [], inflight_since: null, sending_since: null, buffer_started_at: null, wait_until: null,
-      backchannel_sent: false, open_questions: [], buffer_version: s.buffer_version + 1, reply_epoch: s.reply_epoch + 1, updated_at: a.now,
+      backchannel_sent: false, open_questions: [], deferred_until: null, deferred_fact: null,
+      buffer_version: s.buffer_version + 1, reply_epoch: s.reply_epoch + 1, updated_at: a.now,
     },
     result: { turnIds: uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids, a.turnId]) },
   };

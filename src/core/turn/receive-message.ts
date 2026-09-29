@@ -15,7 +15,7 @@ import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "../qu
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
-import { availabilityStretch } from "./availability";
+import { availabilityFor, NO_DELAY } from "./availability";
 import { judgeTurn, logTurnDecision, type TurnVerdict } from "./judge";
 import { seededUnit, waitWindowMs } from "./pacing";
 import { mutateState } from "./state";
@@ -94,26 +94,31 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
   const verdict = await judging;
 
   const complete = verdict?.complete ?? true;
-  const stretch = await availabilityStretch(deps, userId);
-  const windowMs = Math.round(waitWindowMs(config.turn, complete, turn.text) * stretch);
+  const windowMs = waitWindowMs(config.turn, complete, turn.text);
+  // Availability (design §8.1): decided once, on the first message of a buffer. The unlocked `state` read is
+  // fine: `T.append` applies `defer` only if the buffer is still empty under the lock.
+  const freshBuffer = !state || state.buffer_turn_ids.length === 0;
+  const avail = freshBuffer ? await availabilityFor(deps, userId, clock.now(), turn.id) : NO_DELAY;
   const openQuestions: OpenQuestion[] = verdict
     ? verdict.open_questions.slice(0, config.turn.max_open_questions)
         .map((text) => ({ turn_id: openBefore.find((q) => q.text === text)?.turn_id ?? turn.id, text }))
     : openBefore;
   const now = clock.now();
+  const defer = avail.delayMs > 0 ? { until: new Date(now.getTime() + avail.delayMs), factId: avail.blockFactId } : null;
   // Rebuffer race (fix 3c): re-check membership and isAnswered inside the lock, so a turn that raced into the
   // buffer, in flight or answered between the outside check above and here is never re-buffered.
   const appended = await mutateState(db, userId, now, async (s, tx) => {
     if (rebuffer && (s.buffer_turn_ids.includes(turn.id) || s.inflight_turn_ids.includes(turn.id) || (await sessionLog.isAnswered(tx, userId, turn)))) {
       return T.skip(s, now);
     }
-    return T.append(s, { turnId: turn.id, now, windowMs, maxWaitMs: config.turn.max_wait_ms, openQuestions });
+    return T.append(s, { turnId: turn.id, now, windowMs, maxWaitMs: config.turn.max_wait_ms, openQuestions, defer });
   });
 
   if (!appended.skipped) {
     await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: appended.version }, { startAfter: appended.waitUntil }), "turn_timer");
 
-    if (verdict && !verdict.complete && verdict.backchannel && !appended.backchannelSent) {
+    const deferred = !!appended.deferredUntil && appended.deferredUntil > now; // she isn't reading while busy
+    if (verdict && !verdict.complete && verdict.backchannel && !appended.backchannelSent && !deferred) {
       const style = config.turn.backchannel_style;
       const want = style === "judge" || (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
       const rateOk = !appended.lastBackchannelAt || now.getTime() - appended.lastBackchannelAt.getTime() >= config.turn.backchannel_min_interval_ms;
@@ -122,6 +127,13 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
           { userId, version: appended.version, text: verdict.backchannel!, turnId: turn.id },
           { startAfter: new Date(now.getTime() + config.turn.backchannel_read_delay_ms) }), "turn_backchannel");
       }
+    }
+
+    if (appended.deferredNow && avail.note && avail.blockKind && avail.blockStart) {
+      await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_BACKCHANNEL_QUEUE, {
+        userId, version: appended.version, text: "", turnId: turn.id,
+        trigger: "availability", blockKind: avail.blockKind!, blockStart: avail.blockStart!.toISOString(),
+      }, { startAfter: new Date(now.getTime() + config.availability.note_read_delay_ms) }), "availability note");
     }
 
     if (verdict) await logTurnDecision(deps, userId, { turnId: turn.id, bufferTurnIds: judgedBufferIds, verdict, waitMs: windowMs });

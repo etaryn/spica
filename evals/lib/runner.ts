@@ -19,10 +19,13 @@ import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
 import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
 import { guardOutcomes, listJudgeLogs } from "@/db/repos/judge-log";
+import { ensureRelationship } from "@/db/repos/relationship";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
-import { entity, fact, thread } from "@/db/schema";
+import { entity, fact, relationship_param, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import { judgeConsistency, judgeFalseRecall, judgeRecall, judgeReplyAbout, type Line, type TimedSession } from "./judged";
+import { checkEgo, checkLife, egoHistory, lifeSnapshot, type LifeSnapshot } from "./life-check";
+import { makeLifeLoop } from "./life-loop";
 import { RecordingLLM } from "./recording-llm";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
 import { runAllJobs, runDueJobs } from "./scheduler";
@@ -43,7 +46,7 @@ export type Annotation = { type: string; user: string; verdict: "yes" | "no" | "
 export type ScriptResult = {
   name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string;
   annotations: Annotation[];
-  meta: { decayPasses: number; ticks: number };
+  meta: { decayPasses: number; ticks: number; lifeHours: number };
   /** Debugging and review dump (transcripts, turns, decisions, final memory state, error causes). */
   trace?: RunTrace;
 };
@@ -65,6 +68,8 @@ export type RunTrace = {
   errorChain?: string[];
   /** Per user, per session (index = session − 1): the relationship snapshot right after that session. */
   relationship?: Record<string, (RelSnapshot | null)[]>;
+  /** Per user: the life snapshot at the end of a script with a `life` key (Phase 5). */
+  life?: Record<string, LifeSnapshot>;
 };
 
 function errorChain(e: unknown): string[] {
@@ -100,6 +105,8 @@ export interface RunOptions {
   turnJudgeReal?: boolean;
   /** This run's extract purpose is real (`--real extract` or `--llm=real`): a script's `signal_source: "model"` then skips SignalLLM. Default false. */
   extractReal?: boolean;
+  /** This run's real purposes, for `needs_real` (Phase 5). */
+  realPurposes?: ReadonlySet<string>;
 }
 
 async function seedProfile(deps: Deps, userId: string, profile: Profile, at: Date): Promise<void> {
@@ -182,7 +189,7 @@ async function turnsAndDecisions(db: Db, userIds: Record<string, string>, starts
 }
 
 export async function runScript(script: Script, opts: RunOptions): Promise<ScriptResult> {
-  const meta = { decayPasses: 0, ticks: 0 };
+  const meta = { decayPasses: 0, ticks: 0, lifeHours: 0 };
   if (script.mode === "real" && !opts.real) {
     return { name: script.name, status: "skipped", assertions: [], annotations: [], error: "needs real model calls (--llm=real or --real)", meta };
   }
@@ -214,6 +221,10 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
     events: new RecordingEventBus(),
   };
+  const lifeLoop = script.life ? makeLifeLoop(deps, clock, script.life, first) : null;
+  const lifeSnaps = async () => script.life
+    ? Object.fromEntries(await Promise.all(Object.entries(userIds).map(async ([k, id]) => [k, await lifeSnapshot(db, id)] as const)))
+    : undefined;
 
   const userIds: Record<string, string> = {};
   for (const key of userKeys(script)) {
@@ -240,6 +251,25 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       known = profile.facts.map((f) => f.content);
       for (const id of Object.values(userIds)) await seedProfile(deps, id, profile, first);
     }
+    if (script.relationship_seed) {
+      for (const id of Object.values(userIds)) {
+        await ensureRelationship(db, id, first, config.relationship);
+        for (const [name, value] of Object.entries(script.relationship_seed)) {
+          await db.update(relationship_param).set({ value, baseline: value, updated_at: first })
+            .where(and(eq(relationship_param.user_id, id), eq(relationship_param.name, name)));
+        }
+      }
+    }
+    if (script.seed_self_facts.length) {
+      const vectors = await deps.embedder.embed(script.seed_self_facts, "document");
+      for (const id of Object.values(userIds)) {
+        for (const [i, content] of script.seed_self_facts.entries()) {
+          await insertFact(db, id, { subject: "self", kind: "event", content, embedding: vectors[i]!, created_at: new Date(first.getTime() - DAY),
+            status: "open", salience: 0.6, valence: 0, confidence: 1, source: "turn" });
+        }
+      }
+    }
+    await lifeLoop?.start();
     let prevStart: Date | null = null;
     // session_log.id is a global primary key, so a retry must reuse that same user's own last id, not another
     // user's (they'd collide on a row the retrying user doesn't own).
@@ -272,6 +302,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
           const hh = String(config.relationship.tick_local_hour).padStart(2, "0");
           throw new Error(`script error: session ${i + 1} starts at ${s.at}, before the day's tick at ${hh}:00; start sessions at or after tick_local_hour on a new day`);
         }
+        await lifeLoop?.advance(new Date(at));
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;
@@ -279,6 +310,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         meta.ticks += 1;
         if (tick.failed > 0) throw new Error(`relationship tick failed for ${tick.failed} of ${tick.users} user(s)`);
       }
+      await lifeLoop?.advance(start);
       clock.set(start);
       prevStart = start;
       sessionStarts[i] = start;
@@ -328,11 +360,15 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         (relSnaps[key] ??= [])[i] = await relationshipSnapshot(db, userIds[key]!, clock.now(), config.relationship);
       }
     }
+    if (script.life?.until) await lifeLoop!.advance(parseAt(script.life.until, prevStart));
+    meta.lifeHours = lifeLoop?.hours ?? 0;
   } catch (e) {
+    meta.lifeHours = lifeLoop?.hours ?? 0;
     // Collect as much of the run as possible for the trace.
     await collectResults().catch(() => undefined);
     const extra = await turnsAndDecisions(db, userIds, sessionStarts).catch(() => ({}));
-    const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), ...extra, errorChain: errorChain(e), relationship: relSnaps };
+    const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), ...extra, errorChain: errorChain(e), relationship: relSnaps,
+      life: await lifeSnaps().catch(() => undefined) };
     return { name: script.name, status: "error", assertions: [], annotations: [], error: (e as Error).message, meta, trace };
   }
 
@@ -434,6 +470,14 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         const snap = (a.after_session ? snaps[a.after_session - 1] : snaps.at(-1)) ?? null;
         const r = checkRelationship(snap, a);
         push({ type: "relationship", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail, ...(a.gate ? { gate: a.gate } : {}) });
+      } else if (a.type === "life") {
+        const missing = a.needs_real.filter((p) => !(opts.realPurposes?.has(p) ?? false));
+        if (missing.length) { push({ type: "life", user: a.user, status: "skipped", detail: `needs real ${missing.join(", ")}` }); continue; }
+        const r = checkLife(await lifeSnapshot(db, userIds[a.user]!), a);
+        push({ type: "life", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
+      } else if (a.type === "ego") {
+        const r = checkEgo(await egoHistory(db, userIds[a.user]!), a, (spec) => parseAt(spec, null));
+        push({ type: "ego", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
       } else {
         push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
       }
@@ -449,5 +493,5 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
   const extra = await turnsAndDecisions(db, userIds, sessionStarts);
-  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra, relationship: relSnaps } };
+  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra, relationship: relSnaps, life: await lifeSnaps() } };
 }

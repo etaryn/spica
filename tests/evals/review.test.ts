@@ -4,7 +4,7 @@ import { renderReview } from "../../evals/lib/review";
 test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
   const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
   const md = renderReview([{ script: "burst-short", attempt: 1, result: {
-    name: "burst-short", status: "pass", meta: { decayPasses: 0, ticks: 0 }, assertions: [],
+    name: "burst-short", status: "pass", meta: { decayPasses: 0, ticks: 0, lifeHours: 0 }, assertions: [],
     annotations: [{ type: "reply_about", user: "main", verdict: "yes", detail: "mentions the driving test" }],
     trace: {
       transcripts: {},

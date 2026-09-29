@@ -33,3 +33,9 @@ test("rejects unknown purposes, an unknown --llm, and --real combined with --llm
   expect(() => resolveProfile({ llm: "maybe" })).toThrow(/--llm must be fake or real/);
   expect(() => resolveProfile({ llm: "real", real: "turn_judge" })).toThrow(/--real cannot be combined with --llm=real/);
 });
+
+test("phase 5 purposes can be made real", () => {
+  const p = resolveProfile({ llm: "fake", real: "life_plan,life_event,reconcile,embed" });
+  expect([...p.realPurposes].sort()).toEqual(["embed", "life_event", "life_plan", "reconcile"]);
+  expect(p.realCalls.sort()).toEqual(["life_event", "life_plan", "reconcile"]);
+});

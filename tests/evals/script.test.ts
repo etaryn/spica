@@ -105,3 +105,13 @@ test("seed_turns, scripted signals on a turn, and a relationship assertion parse
   expect(s.assertions[0]).toMatchObject({ type: "relationship", user: "main", param: "hurt", value: { lt: 0.5 } });
   expect(s.signal_source).toBe("scripted");
 });
+
+test("phase 5 script keys parse", () => {
+  const s = ScriptSchema.parse({
+    name: "x", sessions: [{ at: "day 0 10:00", turns: ["hi"] }], relationship_seed: { closeness: 0.5 },
+    life: { plan: "scripted", plans: { "*": [{ start: "10:00", end: "13:00", kind: "busy", label: "reading" }] }, inject: [{ day: 1, content: "Spica read." }] },
+    assertions: [{ type: "life", plans: { min: 1 } }, { type: "ego", lower_energy: { at: "day 1 19:00", than: "day 0 19:00" } }, { type: "turn", session: 1, min_reply_delay_s: 5, notes: { max: 0 } }],
+  });
+  expect(s.life?.plans["*"]![0]!.busy).toBe(0.5);
+  expect(() => ScriptSchema.parse({ name: "y", sessions: [{ at: "day 0 10:00", turns: ["hi"] }], life: { plan: "scripted" }, assertions: [{ type: "life" }] })).toThrow();
+});

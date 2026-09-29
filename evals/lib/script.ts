@@ -72,6 +72,10 @@ export const TurnAssertion = z.object({
   backchannels: z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() }).optional(),
   reply_covers: z.array(z.array(z.number().int().min(1))).optional(),
   max_reply_delay_s: z.number().positive().optional(),
+  /** Phase 5: every reply comes at least this long after the first message it covers (availability delay). */
+  min_reply_delay_s: z.number().min(0).optional(),
+  /** Phase 5: count of `availability` notes in the session. */
+  notes: z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() }).optional(),
   /** `majority` for judge-dependent grouping (design §9.6); mechanics scripts keep the default, every run. */
   gate: z.enum(["every", "majority"]).optional(),
   known_failure: knownFailure,
@@ -111,6 +115,41 @@ export const RelationshipAssertion = z.object({
 }).refine((a) => !(a.effect || a.value || a.baseline) || a.param, "effect/value/baseline need param");
 export type RelationshipAssertion = z.infer<typeof RelationshipAssertion>;
 
+const Hhmm = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/);
+const ScriptBlock = z.object({ start: Hhmm, end: Hhmm, kind: z.enum(["busy", "downtime", "quiet"]), busy: z.number().min(0).max(1).default(0.5), label: z.string().min(1) });
+/**
+ * Phase 5 (design §9.3): when present, the runner runs the hourly life jobs (plan, life tick, ego tick) from the
+ * script start. `plans` keys are day indexes from her local date at day 0, or "*" for every other day.
+ */
+export const LifeScript = z.object({
+  plan: z.enum(["model", "scripted"]).default("model"),
+  plans: z.record(z.string().regex(/^(\d+|\*)$/), z.array(ScriptBlock)).default({}),
+  inject: z.array(z.object({ day: z.number().int().min(0), content: z.string().min(1), valence: z.number().min(-1).max(1).default(0) })).default([]),
+  until: z.string().optional(),
+}).refine((l) => l.plan === "model" || Object.keys(l.plans).length > 0, "life.plan: scripted needs plans");
+export type LifeScript = z.infer<typeof LifeScript>;
+
+const MinMax = z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() });
+/** Deterministic (design §9.3). `needs_real`: skipped unless every listed purpose is real in this run. */
+export const LifeAssertion = z.object({
+  type: z.literal("life"), user: z.string().default("main"),
+  plans: MinMax.optional(), block_days: MinMax.optional(), events: MinMax.optional(),
+  decision: z.object({ content_includes: z.string().min(1), in: z.array(z.string().min(1)).min(1) }).optional(),
+  not_stored: z.string().min(1).optional(),
+  needs_real: z.array(z.string()).default([]),
+  known_failure: knownFailure,
+});
+export type LifeAssertion = z.infer<typeof LifeAssertion>;
+/** Reads ego_tick history (design §9.3). Times are "day N HH:MM". */
+export const EgoAssertion = z.object({
+  type: z.literal("ego"), user: z.string().default("main"),
+  energy: z.object({ at: z.string(), lt: z.number().optional(), gt: z.number().optional() }).optional(),
+  lower_energy: z.object({ at: z.string(), than: z.string(), by: z.number().min(0).default(0) }).optional(),
+  preoccupation_set: z.boolean().optional(),
+  known_failure: knownFailure,
+});
+export type EgoAssertion = z.infer<typeof EgoAssertion>;
+
 export const ScriptSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   description: z.string().optional(),
@@ -123,7 +162,12 @@ export const ScriptSchema = z.object({
   /** Fake mode's `relationship` block source for turns carrying `signals` (design §8.3): scripted by default. */
   signal_source: z.enum(["scripted", "model"]).default("scripted"),
   sessions: z.array(Session).min(1),
-  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, RelationshipAssertion, DeferredAssertion])).min(1),
+  life: LifeScript.optional(),
+  /** Her own facts that exist before day 0 (source turn, as if she'd said them), embedded with the run's embedder. */
+  seed_self_facts: z.array(z.string().min(1)).default([]),
+  /** Creates every user's relationship row before session 1 and sets these params' value and baseline. */
+  relationship_seed: z.partialRecord(z.enum(PARAM_NAMES), z.number()).optional(),
+  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, RelationshipAssertion, LifeAssertion, EgoAssertion, DeferredAssertion])).min(1),
 });
 
 export type Script = z.infer<typeof ScriptSchema>;
@@ -156,7 +200,7 @@ const HOUR = 60 * MIN;
 const DAY = 24 * HOUR;
 const UNIT: Record<string, number> = { d: DAY, h: HOUR, m: MIN };
 /** Monday 2026-01-05 00:00 UTC. Fixed so every run is deterministic. */
-const BASE = Date.UTC(2026, 0, 5);
+export const BASE = Date.UTC(2026, 0, 5);
 
 export function parseAt(spec: string, prev: Date | null): Date {
   const abs = /^day (\d+) (\d{2}):(\d{2})$/.exec(spec);

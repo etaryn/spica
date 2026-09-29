@@ -31,3 +31,17 @@ test("max_reply_delay_s skips a reply that covers no user turn in the session (n
   const r = checkTurn([s1last, u1, r1, late], range, { type: "turn", session: 2, user: "main", reply_covers: [[1], []], max_reply_delay_s: 15 });
   expect(r).toEqual({ ok: true });
 });
+
+test("min_reply_delay_s and availability notes", () => {
+  const u1 = turn("user", 0), r1 = turn("companion", 100, { reply_to: u1.id });
+  const note = turn("companion", 50, { trigger: "availability" });
+  const turns = [u1, note, r1];
+  const range = { start: new Date(t0), end: new Date(t0 + 3600_000) };
+  const slow = checkTurn(turns, range, { type: "turn", session: 1, user: "main", min_reply_delay_s: 200 });
+  expect(slow.ok).toBe(false);
+  expect(slow.detail).toMatch(/min 200s/);
+  expect(checkTurn(turns, range, { type: "turn", session: 1, user: "main", min_reply_delay_s: 50 })).toEqual({ ok: true });
+  const notes = checkTurn(turns, range, { type: "turn", session: 1, user: "main", notes: { max: 0 } });
+  expect(notes.ok).toBe(false);
+  expect(notes.detail).toMatch(/notes/);
+});

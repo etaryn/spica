@@ -25,6 +25,13 @@ export class FakeLLMProvider implements LLMProvider {
     guard_crisis: () => ({ reasoning: "ok", violations: [] }),
     // The deterministic cue check stands in for the turn judge in tests and --llm=fake evals (design §4.2).
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
+    // Phase 5: a valid shared day and one small personal event, so fake-mode life scripts run the mechanics.
+    life_plan: () => ({ blocks: [
+      { start: "00:00", end: "08:00", kind: "quiet", busy: 0, label: "offline, winding down" },
+      { start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" },
+      { start: "23:00", end: "24:00", kind: "quiet", busy: 0, label: "offline, winding down" },
+    ] }),
+    life_event: () => ({ content: "Spica found an old film she'd forgotten she loved.", at: "15:00", valence: 0.3, stakes: "low", entity_names: [] }),
   };
 
   constructor(opts: { classify?: Handler } = {}) {

@@ -1,0 +1,115 @@
+import { afterAll, beforeEach, expect, test } from "vitest";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { runReachOutSend } from "@/core/outreach/send";
+import { COLD_PATH_QUEUE } from "@/core/queue";
+import { getState } from "@/db/repos/conversation-state";
+import { getReachOutLog, insertReachOutLog } from "@/db/repos/reach-out";
+import { ensureRelationship, getRelationshipRow } from "@/db/repos/relationship";
+import { insertTurn, listTurns } from "@/db/repos/session-log";
+import { conversation_state, relationship } from "@/db/schema";
+import { closeTestDb, createTestUser, resetDb } from "../helpers/db";
+import { makeTestDeps } from "../helpers/deps";
+
+beforeEach(resetDb);
+afterAll(closeTestDb);
+
+const now = new Date("2026-01-05T15:30:00Z");
+const winner = { kind: "thread", topic: "thread:t@x", text: "interview at Canva", strength: 1, score: 1, factId: null, threadId: "t", filtered: null };
+
+async function setup(opts: { history?: boolean; sendAt?: Date } = {}) {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  deps.clock.set(now);
+  const u = await createTestUser();
+  await ensureRelationship(deps.db, u, now, deps.config.relationship);
+  if (opts.history !== false) {
+    await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "wish me luck", created_at: new Date(now.getTime() - 86_400_000) });
+  }
+  const logId = await insertReachOutLog(deps.db, u, { candidates: [winner], winner, gate_results: [], status: "scheduled", topic: winner.topic, send_at: opts.sendAt ?? now, created_at: now });
+  return { deps, u, logId };
+}
+
+test("sends: a reach_out turn, log sent with turn and time, counter +1, bubbles delivered and pushed, cold path queued", async () => {
+  const { deps, u, logId } = await setup();
+  deps.llm.replies.push("hey!! how did the interview go");
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("sent");
+  const out = (await listTurns(deps.db, u)).filter((t) => t.trigger === "reach_out");
+  expect(out).toHaveLength(1);
+  expect(out[0]).toMatchObject({ role: "companion", reply_to: null });
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect(row).toMatchObject({ status: "sent", sent: true, turn_id: out[0]!.id });
+  expect(row!.send_at!.getTime()).toBe(out[0]!.created_at.getTime());
+  expect((await getRelationshipRow(deps.db, u))?.unanswered_reach_outs).toBe(1);
+  expect(deps.pusher.pushes.every((p) => p.msg.tag === out[0]!.id)).toBe(true);
+  expect(deps.pusher.pushes.length).toBeGreaterThan(0);
+  expect(deps.events.events.map((e) => e.event.type)).toEqual(expect.arrayContaining(["typing", "message"]));
+  expect(deps.queue.jobs.find((j) => j.name === COLD_PATH_QUEUE)?.data).toMatchObject({ userId: u, turnIds: [out[0]!.id], replyTurnId: out[0]!.id });
+  expect((await getState(deps.db, u))?.sending_since).toBeNull(); // released
+});
+
+test("stale: a row that isn't scheduled any more is ignored", async () => {
+  const { deps, u, logId } = await setup();
+  await runReachOutSend(deps, { userId: u, logId });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("stale");
+  expect((await listTurns(deps.db, u)).filter((t) => t.trigger === "reach_out")).toHaveLength(1);
+});
+
+test("R6: a job that runs far too late is dropped, nothing composed or typed", async () => {
+  const { deps, u, logId } = await setup({ sendAt: new Date(now.getTime() - 3 * 3_600_000) });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect(row?.status).toBe("dropped");
+  expect(row?.gate_results).toMatchObject({ dropped: "late" });
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+  expect(deps.events.events).toEqual([]);
+});
+
+test("review focus 1: the user wrote meanwhile (buffer non-empty) → dropped with the recheck, nothing sent", async () => {
+  const { deps, u, logId } = await setup();
+  await deps.db.insert(conversation_state).values({ user_id: u, updated_at: now, buffer_turn_ids: [randomUUID()] });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect(row?.status).toBe("dropped");
+  expect((row!.gate_results as { recheck?: unknown }).recheck).toBeDefined();
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+  expect(deps.pusher.pushes).toEqual([]);
+  expect(deps.events.events.at(-1)?.event).toEqual({ type: "typing", on: false });
+});
+
+test("a cap filled or a crisis started since scheduling → dropped", async () => {
+  const { deps, u, logId } = await setup();
+  await deps.db.update(relationship).set({ crisis_quiet_until: new Date(now.getTime() + 3_600_000) }).where(eq(relationship.user_id, u));
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+});
+
+test("review focus 2: a crisis mid-send stops later bubbles and releases sending_since", async () => {
+  const { deps, u, logId } = await setup();
+  deps.llm.replies.push("hey\n\nhow did it go?\n\nwas thinking of you");
+  let bumped = false;
+  const orig = deps.clock.sleep.bind(deps.clock);
+  deps.clock.sleep = async (ms: number) => {
+    await orig(ms);
+    const s = await getState(deps.db, u);
+    if (!bumped && s?.sending_since) {
+      bumped = true;
+      await deps.db.update(conversation_state).set({ reply_epoch: s.reply_epoch + 1, sending_since: null }).where(eq(conversation_state.user_id, u));
+    }
+  };
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("abandoned");
+  const parts = deps.events.events.filter((e) => e.event.type === "message");
+  expect(parts.length).toBeLessThan(3);
+  expect(deps.events.events.at(-1)?.event).toEqual({ type: "typing", on: false });
+});
+
+test("review focus 5: no stored turns → dropped no_history", async () => {
+  const { deps, u, logId } = await setup({ history: false });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  expect((await getReachOutLog(deps.db, u, logId))?.gate_results).toMatchObject({ dropped: "no_history" });
+});
+
+test("compose failure → dropped compose_failed, nothing sent", async () => {
+  const { deps, u, logId } = await setup();
+  deps.llm.failReplies = 1;
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  expect((await getReachOutLog(deps.db, u, logId))?.gate_results).toMatchObject({ dropped: "compose_failed" });
+});

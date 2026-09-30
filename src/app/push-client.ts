@@ -13,15 +13,22 @@ export async function registerSw(): Promise<ServiceWorkerRegistration | null> {
   return navigator.serviceWorker.register("/sw.js");
 }
 
+/** Explicit opt-out from the settings switch; survives because browser permission stays "granted" after unsubscribing. */
+const OFF = "spica.notifications.off";
+export const pushOptedOut = () => { try { return localStorage.getItem(OFF) === "1"; } catch { return false; } };
+const setOptOut = (off: boolean) => { try { if (off) localStorage.setItem(OFF, "1"); else localStorage.removeItem(OFF); } catch { /* private window */ } };
+
 export async function subscribePush(publicKey: string): Promise<boolean> {
   const reg = await registerSw();
   if (!reg || (await Notification.requestPermission()) !== "granted") return false;
   const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }));
   const res = await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
+  if (res.ok) setOptOut(false);
   return res.ok;
 }
 
 export async function unsubscribePush(): Promise<void> {
+  setOptOut(true);
   const reg = pushSupported() ? await navigator.serviceWorker.getRegistration() : null;
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;

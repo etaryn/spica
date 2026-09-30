@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { isSubscribed, pushSupported, registerSw, subscribePush } from "../push-client";
+import { isSubscribed, pushOptedOut, pushSupported, registerSw, subscribePush } from "../push-client";
 import styles from "./chat.module.css";
 
 const DISMISSED = "spica.notifications.dismissed";
@@ -14,7 +14,11 @@ export function NotificationsBanner({ publicKey }: { publicKey: string | null })
     if (!publicKey || !pushSupported()) return;
     void registerSw();
     void (async () => {
-      if (Notification.permission === "granted" && !(await isSubscribed())) { await subscribePush(publicKey); return; } // re-subscribe silently
+      if (Notification.permission === "granted") {
+        // Re-subscribe silently, unless she was switched off in /settings.
+        if (!pushOptedOut() && !(await isSubscribed())) await subscribePush(publicKey);
+        return;
+      }
       setShow(Notification.permission === "default" && !read());
     })();
   }, [publicKey]);

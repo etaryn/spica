@@ -101,6 +101,40 @@ test("review focus 2: a crisis mid-send stops later bubbles and releases sending
   expect(deps.events.events.at(-1)?.event).toEqual({ type: "typing", on: false });
 });
 
+function onFirstSleep(deps: ReturnType<typeof makeTestDeps>, act: () => Promise<void>) {
+  let done = false;
+  const orig = deps.clock.sleep.bind(deps.clock);
+  deps.clock.sleep = async (ms: number) => {
+    await orig(ms);
+    if (!done) { done = true; await act(); }
+  };
+}
+
+test("R7a: a crisis epoch bump during the typing sleep (before insert) → dropped, epochChanged", async () => {
+  const { deps, u, logId } = await setup();
+  onFirstSleep(deps, async () => {
+    await deps.db.insert(conversation_state).values({ user_id: u, updated_at: now, reply_epoch: 1 }).onConflictDoUpdate({ target: conversation_state.user_id, set: { reply_epoch: 1 } });
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect((row!.gate_results as { recheck: { epochChanged: boolean } }).recheck.epochChanged).toBe(true);
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+  expect(deps.pusher.pushes).toEqual([]);
+  expect(deps.events.events.at(-1)?.event).toEqual({ type: "typing", on: false });
+});
+
+test("R7b: a user turn stored (not yet buffered) during the typing sleep → dropped, newTurn", async () => {
+  const { deps, u, logId } = await setup();
+  onFirstSleep(deps, async () => {
+    await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "hi", created_at: new Date(now.getTime() + 1000) });
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect((row!.gate_results as { recheck: { newTurn: boolean } }).recheck.newTurn).toBe(true);
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+  expect(deps.pusher.pushes).toEqual([]);
+});
+
 test("review focus 5: no stored turns → dropped no_history", async () => {
   const { deps, u, logId } = await setup({ history: false });
   expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");

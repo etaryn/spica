@@ -20,6 +20,7 @@ import { loadGateInputs } from "./inputs";
 import type { Candidate, GateResult } from "./types";
 
 const plus = (d: Date, ms: number) => new Date(d.getTime() + ms);
+type Recheck = { gate: GateResult[]; topicUsed: boolean; epochChanged: boolean; newTurn: boolean };
 
 /**
  * `reach_out_send` (spec §6.2). Compose outside any lock (typing shows meanwhile), then under the conversation-
@@ -33,7 +34,7 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
   const row = await getReachOutLog(db, userId, logId);
   if (!row || row.status !== "scheduled") return "stale";
   const winner = row.winner as Candidate;
-  const drop = async (reason: string, recheck?: { gate: GateResult[]; topicUsed: boolean }) => {
+  const drop = async (reason: string, recheck?: Recheck) => {
     await updateReachOutLog(db, userId, logId, { status: "dropped", gate_results: { tick: row.gate_results, dropped: reason, ...(recheck ? { recheck } : {}) } });
     return "dropped" as const;
   };
@@ -43,6 +44,10 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
 
   const recent = await sessionLog.recentTurns(db, userId, config.chat.recent_turns);
   if (recent.length === 0) return drop("no_history");
+
+  // R7: a crisis (epoch bump) or a new turn landing during compose/typing must win over this reach-out.
+  const startEpoch = (await getState(db, userId))?.reply_epoch ?? 0;
+  const lastTurnId = recent.at(-1)!.id;
 
   await emit(deps, userId, { type: "typing", on: true });
   let typingOn = true;
@@ -65,12 +70,13 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
     await sleepUntil(clock, sendAt);
 
     const insertAt = clock.now();
-    type Recheck = { gate: GateResult[]; topicUsed: boolean };
     const outcome = await mutateState<{ turn: Turn; epoch: number } | { recheck: Recheck }>(db, userId, insertAt, async (s, tx) => {
       const gateIn = await loadGateInputs(deps, userId, insertAt, tx, s);
       const gate = gateIn ? evaluateGate(gateIn, config.outreach, insertAt) : { pass: false, results: [] as GateResult[] };
       const topicUsed = (await usedTopics(tx, userId)).includes(winner.topic);
-      if (!gate.pass || topicUsed) return { patch: null, result: { recheck: { gate: gate.results, topicUsed } } };
+      const epochChanged = s.reply_epoch !== startEpoch;
+      const newTurn = (await sessionLog.recentTurns(tx, userId, 1)).at(-1)?.id !== lastTurnId;
+      if (!gate.pass || topicUsed || epochChanged || newTurn) return { patch: null, result: { recheck: { gate: gate.results, topicUsed, epochChanged, newTurn } } };
       const turn = await sessionLog.insertTurn(tx, userId, {
         id: randomUUID(), session_id: resolveSessionId(recent.at(-1)!, insertAt, config.session.idle_gap_minutes, randomUUID),
         role: "companion", text: composed.text, created_at: insertAt, trigger: "reach_out",

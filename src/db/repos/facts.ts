@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { RecalledFact } from "@/core/memory/types";
 import type { Db } from "../client";
@@ -194,11 +194,14 @@ export type OutreachFact = { id: string; content: string; salience: number; sens
 const sensitiveCol = sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`;
 const outreachCols = { id: fact.id, content: fact.content, salience: fact.salience, sensitive: sensitiveCol };
 
-/** Spec §4.1 `user_event`: the user's events/promises whose time passed in (from, to], not talked about since. */
+/**
+ * Spec §4.1 `user_event`: the user's events/promises whose time passed in (from, to], not talked about since.
+ * R10: a fact attached to a thread is followed up only through that thread (its checkpoint), never as its own event.
+ */
 export async function listOutreachUserEvents(db: Db, userId: string, from: Date, to: Date): Promise<OutreachFact[]> {
   return db.select(outreachCols).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.subject, "user"), eq(fact.scope, "private"), eq(fact.status, "open"),
-    inArray(fact.kind, ["event", "promise"]),
+    inArray(fact.kind, ["event", "promise"]), isNull(fact.thread_id),
     sql`${fact.occurred_at} > ${from.toISOString()}::timestamptz AND ${fact.occurred_at} <= ${to.toISOString()}::timestamptz`,
     sql`(${fact.last_recalled_at} IS NULL OR ${fact.last_recalled_at} < ${fact.occurred_at})`,
   ));

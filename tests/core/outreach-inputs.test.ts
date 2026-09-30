@@ -42,6 +42,15 @@ test("user events: passed within the lookback, open, not recalled since, sensiti
   expect(i.userEvents.map((e) => [e.id, e.sensitive]).sort()).toEqual([[hit.id, false], [sens.id, true]].sort());
 });
 
+test("user events: a fact attached to a thread is left to the thread (R10)", async () => {
+  const { deps, u } = await setup();
+  const t = await insertThread(deps.db, u, { title: "interview", subject: "user", stakes: "high", next_checkpoint: new Date(now.getTime() + 4 * H) }, ago(50));
+  await insertFact(deps.db, u, fact({ content: "The user had an interview at Canva.", occurred_at: ago(2), thread_id: t.id }));
+  const free = await insertFact(deps.db, u, fact({ content: "The user ran a race.", occurred_at: ago(2) }));
+  const i = await loadCandidateInputs(deps, u, now);
+  expect(i.userEvents.map((e) => e.id)).toEqual([free.id]);
+});
+
 test("her day: generated non-block self events that have happened, plus the preoccupation", async () => {
   const { deps, u } = await setup();
   const ev = await insertFact(deps.db, u, fact({ subject: "self", source: "generated", content: "Spica finished Solaris.", occurred_at: ago(2), payload: null }));

@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { Client } from "pg";
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { handleColdPath, LockBusyError } from "@/core/cold-path";
 import { ScriptedEmbedder } from "@/core/embed/scripted";
-import { insertTurn } from "@/db/repos/session-log";
+import { getIdentityRow } from "@/db/repos/identity";
+import { getTurn, insertTurn } from "@/db/repos/session-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
@@ -150,4 +151,17 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
   expect(input.indexOf("earlier chat")).toBeLessThan(input.indexOf("New exchange"));
   const [f] = await getTestDb().select().from(s.fact).where(sql`${s.fact.content} LIKE 'The user''s dog%'`);
   expect(f!.payload).toEqual({ sensitive: true });
+});
+
+test("an exchange with no user turn (a reach-out) extracts but touches neither relationship nor ego", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const c = await insertTurn(getTestDb(), u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "finally finished Solaris", created_at: at(0), trigger: "reach_out" });
+  const applyRelationship = vi.fn();
+  deps.llm.handlers.extract = () => ({ facts: [], entities: [], threads: [], relationship: { warmth: 0.9, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false } });
+  const out = await handleColdPath({ ...deps, applyRelationship } as never, { userId: u, turnIds: [c.id], replyTurnId: c.id, recalled: [] });
+  expect(out.status).toBe("done");
+  expect(applyRelationship).not.toHaveBeenCalled();
+  expect(await getIdentityRow(getTestDb(), u)).toBeNull();
+  expect((await getTurn(getTestDb(), u, c.id))?.extracted).toBe(true);
 });

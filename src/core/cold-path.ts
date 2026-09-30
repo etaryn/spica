@@ -39,7 +39,9 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     });
 
     const crisis = turns.some((t) => t.safety_flag?.flagged);
-    const signals = crisis ? null : extraction.relationship;
+    // Phase 6 (spec §6.2 step 5): a reach-out alone is her words only; no user behaviour to score, no exchange tone.
+    const hasUserTurn = turns.some((t) => t.role === "user");
+    const signals = crisis || !hasUserTurn ? null : extraction.relationship;
     // The hurt cause lives in the fact store (design §5): one self `feeling` fact, reconciled like any other.
     const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
     // Same deadzone comparison applyExchange uses (`>=`): a hurt too small to move the param writes no fact.
@@ -80,19 +82,23 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
 
     const hurtFactId = hurt ? applied.factIds.at(-1) ?? null : null;
     const applyRel = (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ?? applyRelationship;
-    try {
-      await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
-    } catch (e) {
-      log.error("relationship update failed", { userId: job.userId, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    if (hasUserTurn) {
+      try {
+        await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
+      } catch (e) {
+        log.error("relationship update failed", { userId: job.userId, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+      }
     }
 
     // Phase 5 (design §7.3): its own savepoint, so an ego failure never loses the memory or relationship writes.
-    try {
-      await tx.transaction(async (sp) => {
-        await nudgeEgoForExchange(sp, config, { userId: job.userId, facts: facts.map((f) => f.fact), crisis, now: clock.now() });
-      });
-    } catch (e) {
-      log.error("ego nudge failed", { userId: job.userId, error: errorName(e) });
+    if (hasUserTurn) {
+      try {
+        await tx.transaction(async (sp) => {
+          await nudgeEgoForExchange(sp, config, { userId: job.userId, facts: facts.map((f) => f.fact), crisis, now: clock.now() });
+        });
+      } catch (e) {
+        log.error("ego nudge failed", { userId: job.userId, error: errorName(e) });
+      }
     }
 
     return { status: "done", applied };

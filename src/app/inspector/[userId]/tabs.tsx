@@ -186,7 +186,10 @@ const Gate = ({ results }: { results: unknown }) => (
   </>
 );
 
-/** `gate_results` is the tick's array, or (after a send-job drop) `{ tick, dropped, recheck? }`. */
+/**
+ * `gate_results` is the tick's array, or (after a send-job drop) `{ tick, dropped, recheck? }`; a `precheck` drop
+ * (before typing) carries the same `recheck` shape from the unlocked check.
+ */
 function GateCell({ value }: { value: unknown }) {
   if (Array.isArray(value)) return <Gate results={value} />;
   const d = (value ?? {}) as DropShape;
@@ -196,7 +199,7 @@ function GateCell({ value }: { value: unknown }) {
       <div>tick: <Gate results={d.tick} /></div>
       {d.recheck && (
         <div>
-          recheck: <Gate results={d.recheck.gate} />
+          {d.dropped === "precheck" ? "precheck" : "recheck"}: <Gate results={d.recheck.gate} />
           {" "}topicUsed {String(!!d.recheck.topicUsed)} · epochChanged {String(!!d.recheck.epochChanged)} · newTurn {String(!!d.recheck.newTurn)}
         </div>
       )}

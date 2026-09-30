@@ -7,7 +7,7 @@ import { getState } from "@/db/repos/conversation-state";
 import { getReachOutLog, insertReachOutLog } from "@/db/repos/reach-out";
 import { ensureRelationship, getRelationshipRow } from "@/db/repos/relationship";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
-import { conversation_state, relationship } from "@/db/schema";
+import { conversation_state, reach_out_log, relationship } from "@/db/schema";
 import { closeTestDb, createTestUser, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -64,16 +64,55 @@ test("R6: a job that runs far too late is dropped, nothing composed or typed", a
   expect(deps.events.events).toEqual([]);
 });
 
-test("review focus 1: the user wrote meanwhile (buffer non-empty) → dropped with the recheck, nothing sent", async () => {
+test("I3: the buffer is non-empty at job start → dropped by the precheck: zero events, no LLM call, nothing sent", async () => {
   const { deps, u, logId } = await setup();
   await deps.db.insert(conversation_state).values({ user_id: u, updated_at: now, buffer_turn_ids: [randomUUID()] });
   expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
   const row = await getReachOutLog(deps.db, u, logId);
   expect(row?.status).toBe("dropped");
-  expect((row!.gate_results as { recheck?: unknown }).recheck).toBeDefined();
+  const g = row!.gate_results as { dropped: string; recheck: { gate: { rule: string; pass: boolean }[]; topicUsed: boolean; epochChanged: boolean; newTurn: boolean } };
+  expect(g.dropped).toBe("precheck");
+  expect(g.recheck).toMatchObject({ topicUsed: false, epochChanged: false, newTurn: false });
+  expect(g.recheck.gate).toContainEqual(expect.objectContaining({ rule: "in_progress", pass: false }));
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+  expect(deps.pusher.pushes).toEqual([]);
+  expect(deps.events.events).toEqual([]);
+  expect(deps.llm.calls).toEqual([]);
+});
+
+test("I3: the topic was already sent → dropped by the precheck with topicUsed, zero events", async () => {
+  const { deps, u, logId } = await setup();
+  await insertReachOutLog(deps.db, u, { candidates: [], winner: null, gate_results: [], status: "sent", topic: winner.topic, send_at: new Date(now.getTime() - 8 * 86_400_000), created_at: now });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const g = (await getReachOutLog(deps.db, u, logId))!.gate_results as { dropped: string; recheck: { topicUsed: boolean } };
+  expect(g).toMatchObject({ dropped: "precheck", recheck: { topicUsed: true } });
+  expect(deps.events.events).toEqual([]);
+  expect(deps.llm.calls).toEqual([]);
+});
+
+test("review focus 1: the user wrote during typing (buffer filled) → the locked recheck drops it, nothing sent", async () => {
+  const { deps, u, logId } = await setup();
+  onFirstSleep(deps, async () => {
+    await deps.db.insert(conversation_state).values({ user_id: u, updated_at: now, buffer_turn_ids: [randomUUID()] })
+      .onConflictDoUpdate({ target: conversation_state.user_id, set: { buffer_turn_ids: [randomUUID()] } });
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  expect(row?.status).toBe("dropped");
+  expect(row!.gate_results).toMatchObject({ dropped: "recheck" });
   expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
   expect(deps.pusher.pushes).toEqual([]);
   expect(deps.events.events.at(-1)?.event).toEqual({ type: "typing", on: false });
+});
+
+test("M1: a duplicate delivery whose row was sent meanwhile never turns sent into dropped", async () => {
+  const { deps, u, logId } = await setup();
+  onFirstSleep(deps, async () => {
+    await deps.db.update(reach_out_log).set({ status: "sent", sent: true, send_at: now }).where(eq(reach_out_log.id, logId));
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("stale");
+  expect(await getReachOutLog(deps.db, u, logId)).toMatchObject({ status: "sent", sent: true, gate_results: [] });
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
 });
 
 test("a cap filled or a crisis started since scheduling → dropped", async () => {

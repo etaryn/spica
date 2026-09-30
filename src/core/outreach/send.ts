@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getState } from "@/db/repos/conversation-state";
-import { getReachOutLog, updateReachOutLog, usedTopics } from "@/db/repos/reach-out";
+import { dropScheduled, getReachOutLog, updateReachOutLog, usedTopics } from "@/db/repos/reach-out";
 import { incrementUnanswered } from "@/db/repos/relationship";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
@@ -26,7 +26,10 @@ type Recheck = { gate: GateResult[]; topicUsed: boolean; epochChanged: boolean; 
  * `reach_out_send` (spec §6.2). Compose outside any lock (typing shows meanwhile), then under the conversation-
  * state lock re-run the whole gate and the topic check on fresh state and insert the turn in the same transaction,
  * so a user message or crisis that arrived during the jitter or typing wins. Paced like a reply; `sending_since`
- * makes a user message arriving mid-bubbles buffer behind them; released in a finally.
+ * makes a user message arriving mid-bubbles buffer behind them; released in a finally. An unlocked precheck of the same
+ * gate and topic runs first, so a job that would fail anyway shows no typing and spends no generation; the locked
+ * recheck stays the authority. A drop applies only while the row is still `scheduled` (a duplicate delivery of a
+ * sent job is `stale`).
  */
 export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise<"stale" | "dropped" | "sent" | "abandoned"> {
   const { db, clock, config, log } = deps;
@@ -34,16 +37,21 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
   const row = await getReachOutLog(db, userId, logId);
   if (!row || row.status !== "scheduled") return "stale";
   const winner = row.winner as Candidate;
-  const drop = async (reason: string, recheck?: Recheck) => {
-    await updateReachOutLog(db, userId, logId, { status: "dropped", gate_results: { tick: row.gate_results, dropped: reason, ...(recheck ? { recheck } : {}) } });
-    return "dropped" as const;
-  };
+  const drop = async (reason: string, recheck?: Recheck): Promise<"dropped" | "stale"> =>
+    (await dropScheduled(db, userId, logId, { tick: row.gate_results, dropped: reason, ...(recheck ? { recheck } : {}) })) ? "dropped" : "stale";
 
   // A job that runs long after its slot (worker down) is dropped rather than sent out of context (ruling R6).
   if (row.send_at && clock.now().getTime() > row.send_at.getTime() + config.outreach.pending_max_age_minutes * 60_000) return drop("late");
 
   const recent = await sessionLog.recentTurns(db, userId, config.chat.recent_turns);
   if (recent.length === 0) return drop("no_history");
+
+  // Precheck (unlocked, nothing emitted yet): mid-conversation, capped, in her block, crisis or topic used → drop now.
+  const preAt = clock.now();
+  const preIn = await loadGateInputs(deps, userId, preAt);
+  const pre = preIn ? evaluateGate(preIn, config.outreach, preAt) : { pass: false, results: [] as GateResult[] };
+  const preTopicUsed = (await usedTopics(db, userId)).includes(winner.topic);
+  if (!pre.pass || preTopicUsed) return drop("precheck", { gate: pre.results, topicUsed: preTopicUsed, epochChanged: false, newTurn: false });
 
   // R7: a crisis (epoch bump) or a new turn landing during compose/typing must win over this reach-out.
   const startEpoch = (await getState(db, userId))?.reply_epoch ?? 0;

@@ -41,6 +41,17 @@ test("markLatestAnswered marks only the most recent unanswered sent row", async 
   expect(await ro.markLatestAnswered(db, a, h(41))).toBeNull(); // nothing left unanswered after the latest
 });
 
+test("M1: dropScheduled drops only a row that is still scheduled", async () => {
+  const db = getTestDb();
+  const a = await createTestUser("a");
+  const sched = await ro.insertReachOutLog(db, a, { ...base, status: "scheduled", topic: "t:1", send_at: h(1), created_at: h(0) });
+  const sent = await ro.insertReachOutLog(db, a, { ...base, status: "sent", topic: "t:2", send_at: h(1), created_at: h(0) });
+  expect(await ro.dropScheduled(db, a, sched, { dropped: "x" })).toBe(true);
+  expect(await ro.getReachOutLog(db, a, sched)).toMatchObject({ status: "dropped", sent: false, gate_results: { dropped: "x" } });
+  expect(await ro.dropScheduled(db, a, sent, { dropped: "x" })).toBe(false);
+  expect(await ro.getReachOutLog(db, a, sent)).toMatchObject({ status: "sent", sent: true, gate_results: [] });
+});
+
 test("unanswered counter increments and resets", async () => {
   const deps = makeTestDeps();
   const a = await createTestUser();

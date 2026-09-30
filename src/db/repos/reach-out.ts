@@ -28,6 +28,17 @@ export async function updateReachOutLog(
     .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.id, id)));
 }
 
+/**
+ * Drop a row only while it is still `scheduled`, so a duplicate send-job delivery never turns `sent` into `dropped`.
+ * Returns whether this call dropped it.
+ */
+export async function dropScheduled(db: Db, userId: string, id: string, gate_results: unknown): Promise<boolean> {
+  const rows = await db.update(reach_out_log).set({ status: "dropped", sent: false, gate_results })
+    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.id, id), eq(reach_out_log.status, "scheduled")))
+    .returning({ id: reach_out_log.id });
+  return rows.length > 0;
+}
+
 /** Send times of sent reach-outs at or after `since`, oldest first (caps, spec §5 G2). */
 export async function sentReachOutTimes(db: Db, userId: string, since: Date): Promise<Date[]> {
   const rows = await db.select({ at: reach_out_log.send_at }).from(reach_out_log)

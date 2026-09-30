@@ -22,11 +22,13 @@ import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
 import { guardOutcomes, listJudgeLogs } from "@/db/repos/judge-log";
 import { ensureRelationship } from "@/db/repos/relationship";
 import { insertTurn, listTurns } from "@/db/repos/session-log";
+import { insertThread } from "@/db/repos/threads";
 import { entity, fact, relationship_param, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import { judgeConsistency, judgeFalseRecall, judgeRecall, judgeReplyAbout, type Line, type TimedSession } from "./judged";
 import { checkEgo, checkLife, egoHistory, lifeSnapshot, type LifeSnapshot } from "./life-check";
 import { makeLifeLoop } from "./life-loop";
+import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
 import { RecordingLLM } from "./recording-llm";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
 import { runAllJobs, runDueJobs } from "./scheduler";
@@ -71,6 +73,8 @@ export type RunTrace = {
   relationship?: Record<string, (RelSnapshot | null)[]>;
   /** Per user: the life snapshot at the end of a script with a `life` key (Phase 5). */
   life?: Record<string, LifeSnapshot>;
+  /** Per user: the outreach snapshot at the end of a script with an `outreach` key (Phase 6), for review. */
+  outreach?: Record<string, OutreachSnapshot>;
 };
 
 function errorChain(e: unknown): string[] {
@@ -224,7 +228,6 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     events: new RecordingEventBus(),
     pusher,
   };
-  const lifeLoop = script.life ? makeLifeLoop(deps, clock, script.life, first) : null;
   const lifeSnaps = async () => script.life
     ? Object.fromEntries(await Promise.all(Object.entries(userIds).map(async ([k, id]) => [k, await lifeSnapshot(db, id)] as const)))
     : undefined;
@@ -233,6 +236,17 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   for (const key of userKeys(script)) {
     userIds[key] = await insertUserRow(db, { name: key, email: `${key}-${randomUUID()}@eval.local`, now: first });
   }
+  const lifeLoop = script.life
+    ? makeLifeLoop(deps, clock, script.life, first, script.outreach ? { queue, script: script.outreach, userIds: () => Object.values(userIds) } : undefined)
+    : null;
+  /** Phase 6: what the `reach_out` assertion reads for one user (sent turns, her blocks, endings, pushes, reach-out prompts). */
+  const outreachSnap = (id: string) => outreachSnapshot(db, id, {
+    pushTags: pusher.pushes.filter((p) => p.userId === id).map((p) => p.msg.tag),
+    composedPrompts: llm.prompts.filter((p) => p.includes("## Why you're writing")).length,
+  }, config);
+  const outreachSnaps = async () => script.outreach
+    ? Object.fromEntries(await Promise.all(Object.entries(userIds).map(async ([k, id]) => [k, await outreachSnap(id)] as const)))
+    : undefined;
 
   const results: Record<string, TurnResult[]> = {};
   const relSnaps: Record<string, (RelSnapshot | null)[]> = {};
@@ -269,6 +283,21 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         for (const [i, content] of script.seed_self_facts.entries()) {
           await insertFact(db, id, { subject: "self", kind: "event", content, embedding: vectors[i]!, created_at: new Date(first.getTime() - DAY),
             status: "open", salience: 0.6, valence: 0, confidence: 1, source: "turn" });
+        }
+      }
+    }
+    if (script.seed_user_facts.length) {
+      // User facts (and threads) that exist before day 0, as if the user had said them (Phase 6 outreach scripts).
+      const before = new Date(first.getTime() - DAY);
+      const vectors = await deps.embedder.embed(script.seed_user_facts.map((f) => f.content), "document");
+      for (const id of Object.values(userIds)) {
+        for (const [i, f] of script.seed_user_facts.entries()) {
+          const th = f.thread
+            ? await insertThread(db, id, { title: f.content, subject: "user", stakes: f.thread.stakes, next_checkpoint: parseAt(f.thread.next_checkpoint, null) }, before)
+            : null;
+          await insertFact(db, id, { subject: "user", kind: f.kind, content: f.content, embedding: vectors[i]!, occurred_at: parseAt(f.occurred_at, null),
+            created_at: before, status: "open", salience: f.salience, valence: 0, confidence: 1, source: "turn",
+            payload: f.sensitive ? { sensitive: true } : null, thread_id: th?.id ?? null });
         }
       }
     }
@@ -371,7 +400,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     await collectResults().catch(() => undefined);
     const extra = await turnsAndDecisions(db, userIds, sessionStarts).catch(() => ({}));
     const trace = { transcripts: results, memory: await memoryDump(db, userIds).catch(() => ({})), ...extra, errorChain: errorChain(e), relationship: relSnaps,
-      life: await lifeSnaps().catch(() => undefined) };
+      life: await lifeSnaps().catch(() => undefined), outreach: await outreachSnaps().catch(() => undefined) };
     return { name: script.name, status: "error", assertions: [], annotations: [], error: (e as Error).message, meta, trace };
   }
 
@@ -481,8 +510,13 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       } else if (a.type === "ego") {
         const r = checkEgo(await egoHistory(db, userIds[a.user]!), a, (spec) => parseAt(spec, null));
         push({ type: "ego", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
+      } else if (a.type === "reach_out") {
+        const r = checkReachOut(await outreachSnap(userIds[a.user]!), a, config);
+        push({ type: "reach_out", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
       } else {
-        push({ type: a.type, status: "skipped", detail: `implemented in Phase ${DEFERRED[a.type]}` });
+        // No deferred types remain after Phase 6; kept for later phases' reserved types.
+        const type = (a as { type: string }).type;
+        push({ type, status: "skipped", detail: `implemented in Phase ${DEFERRED[type]}` });
       }
     } catch (e) {
       push({ type: a.type, status: "error", detail: (e as Error).message });
@@ -496,5 +530,5 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const statuses = assertions.map((x) => x.status);
   const status = statuses.some((s) => s === "fail" || s === "error") ? "fail" : statuses.includes("pass") ? "pass" : "skipped";
   const extra = await turnsAndDecisions(db, userIds, sessionStarts);
-  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra, relationship: relSnaps, life: await lifeSnaps() } };
+  return { name: script.name, status, assertions, annotations, meta, trace: { transcripts: results, memory: await memoryDump(db, userIds), ...extra, relationship: relSnaps, life: await lifeSnaps(), outreach: await outreachSnaps() } };
 }

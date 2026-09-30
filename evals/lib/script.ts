@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { KIND_ORDER } from "@/core/outreach/types";
 import { PARAM_NAMES } from "@/core/relationship/types";
 import { guardOutcome, makeUpState, relationshipCause, relationshipStatus } from "@/db/schema";
 
@@ -96,9 +97,8 @@ const ReplyAboutAssertion = z.object({
 /** Judged entry types: review annotations only (v2 §15), run with `--annotate`, never pass/fail. */
 export const ANNOTATION_TYPES: ReadonlySet<string> = new Set(["recall", "no_false_recall", "consistency", "reply_about"]);
 
-/** Assertion types defined by v2 §14.2 but implemented in later phases. */
-export const DEFERRED: Record<string, number> = { reach_out: 6 };
-const DeferredAssertion = z.looseObject({ type: z.enum(["reach_out"]) });
+/** Assertion types defined by v2 §14.2 but implemented in later phases (none left after Phase 6; the runner branch stays). */
+export const DEFERRED: Record<string, number> = {};
 
 const Range = z.object({ gt: z.number().optional(), lt: z.number().optional() });
 /** Deterministic (design §8.3): reads the relationship row/params/events, no judge. Every run unless `gate: majority`. */
@@ -115,6 +115,42 @@ export const RelationshipAssertion = z.object({
 }).refine((a) => !(a.effect || a.value || a.baseline) || a.param, "effect/value/baseline need param");
 export type RelationshipAssertion = z.infer<typeof RelationshipAssertion>;
 
+const MinMax = z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() });
+
+/**
+ * Phase 6 (design §9.2): reads session_log reach-out turns; `no_gate_violation` recomputes every gate rule
+ * independently of the gate's own log (evals/lib/outreach-check.ts). Window times are "day N HH:MM".
+ */
+export const ReachOutAssertion = z.object({
+  type: z.literal("reach_out"), user: z.string().default("main"),
+  count: MinMax.optional(),
+  kinds: z.array(z.enum(KIND_ORDER)).optional(),
+  kinds_exclude: z.array(z.enum(KIND_ORDER)).optional(),
+  windows: z.array(z.object({ from: z.string().optional(), to: z.string().optional(), count: MinMax })).optional(),
+  distinct_topics: z.boolean().optional(),
+  no_gate_violation: z.boolean().default(true),
+  pushed: z.boolean().default(false),
+  composed: z.boolean().default(false),
+  known_failure: knownFailure,
+});
+export type ReachOutAssertion = z.infer<typeof ReachOutAssertion>;
+
+/** A user fact that exists before day 0 (source turn); `thread` also opens a user thread with that checkpoint. */
+const SeedUserFact = z.object({
+  content: z.string().min(1), kind: z.enum(["event", "promise"]).default("event"),
+  occurred_at: z.string(), salience: z.number().min(0).max(1).default(0.6), sensitive: z.boolean().default(false),
+  thread: z.object({ stakes: z.enum(["low", "med", "high"]), next_checkpoint: z.string() }).optional(),
+});
+/**
+ * Phase 6: the runner runs the hourly outreach tick and due `reach_out_send` jobs in the life loop (needs `life`).
+ * `user_replies`: never answer a reach-out, or answer each one `after_hours` later with `reply_text`.
+ */
+export const OutreachScript = z.object({
+  user_replies: z.union([z.literal("never"), z.object({ after_hours: z.number().positive() })]).default("never"),
+  reply_text: z.string().min(1).default("haha yes! tell me more"),
+});
+export type OutreachScript = z.infer<typeof OutreachScript>;
+
 const Hhmm = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/);
 const ScriptBlock = z.object({ start: Hhmm, end: Hhmm, kind: z.enum(["busy", "downtime", "quiet"]), busy: z.number().min(0).max(1).default(0.5), label: z.string().min(1) });
 /**
@@ -129,7 +165,6 @@ export const LifeScript = z.object({
 }).refine((l) => l.plan === "model" || Object.keys(l.plans).length > 0, "life.plan: scripted needs plans");
 export type LifeScript = z.infer<typeof LifeScript>;
 
-const MinMax = z.object({ min: z.number().int().min(0).optional(), max: z.number().int().min(0).optional() });
 /** Deterministic (design §9.3). `needs_real`: skipped unless every listed purpose is real in this run. */
 export const LifeAssertion = z.object({
   type: z.literal("life"), user: z.string().default("main"),
@@ -163,12 +198,15 @@ export const ScriptSchema = z.object({
   signal_source: z.enum(["scripted", "model"]).default("scripted"),
   sessions: z.array(Session).min(1),
   life: LifeScript.optional(),
+  outreach: OutreachScript.optional(),
   /** Her own facts that exist before day 0 (source turn, as if she'd said them), embedded with the run's embedder. */
   seed_self_facts: z.array(z.string().min(1)).default([]),
+  /** User facts (and threads) that exist before day 0, seeded for every user after `seed_self_facts`. */
+  seed_user_facts: z.array(SeedUserFact).default([]),
   /** Creates every user's relationship row before session 1 and sets these params' value and baseline. */
   relationship_seed: z.partialRecord(z.enum(PARAM_NAMES), z.number()).optional(),
-  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, RelationshipAssertion, LifeAssertion, EgoAssertion, DeferredAssertion])).min(1),
-});
+  assertions: z.array(z.union([StateAssertion, RecallAssertion, NoFalseRecallAssertion, ConsistencyAssertion, GuardAssertion, TurnAssertion, ReplyAboutAssertion, RelationshipAssertion, LifeAssertion, EgoAssertion, ReachOutAssertion])).min(1),
+}).refine((s) => !s.outreach || !!s.life, "outreach needs life");
 
 export type Script = z.infer<typeof ScriptSchema>;
 

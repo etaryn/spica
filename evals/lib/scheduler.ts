@@ -1,10 +1,12 @@
 import type { SimClock } from "@/core/clock";
 import { handleColdPath } from "@/core/cold-path";
 import type { Deps } from "@/core/deps";
-import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE, type QueuedJob, type RecordingQueue } from "@/core/queue";
+import { runReachOutSend } from "@/core/outreach/send";
+import { COLD_PATH_QUEUE, REACH_OUT_SEND_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE, type QueuedJob, type RecordingQueue } from "@/core/queue";
 import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
 
-const isTurnJob = (j: QueuedJob) => j.name === TURN_TIMER_QUEUE || j.name === TURN_BACKCHANNEL_QUEUE;
+/** Jobs run on simulated time: turn timers, backchannels and (Phase 6) reach-out sends. */
+const isTurnJob = (j: QueuedJob) => j.name === TURN_TIMER_QUEUE || j.name === TURN_BACKCHANNEL_QUEUE || j.name === REACH_OUT_SEND_QUEUE;
 const due = (j: QueuedJob, now: number) => (j.startAfter?.getTime() ?? now);
 
 async function drainColdPath(deps: Deps, queue: RecordingQueue): Promise<void> {
@@ -32,6 +34,7 @@ export async function runDueJobs(deps: Deps, queue: RecordingQueue, clock: SimCl
     if (due(next, now) > now) clock.set(new Date(due(next, now)));
     if (next.name === TURN_TIMER_QUEUE) await runTurnTimer(deps, next.data);
     else if (next.name === TURN_BACKCHANNEL_QUEUE) await runBackchannel(deps, next.data);
+    else if (next.name === REACH_OUT_SEND_QUEUE) await runReachOutSend(deps, next.data);
   }
   throw new Error("runDueJobs: too many jobs (a timer keeps rescheduling itself)");
 }

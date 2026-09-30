@@ -133,6 +133,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
       ? {
           queryText: a.reachOut.text || recent.slice(-Math.max(1, config.retrieval.context_turns)).map((t) => t.text).join("\n"),
           forceFactIds: a.reachOut.factId ? [a.reachOut.factId] : [],
+          excludeSensitive: true, // v2 §5.1: nothing sensitive in a message she opens with
         }
       : {}),
   });

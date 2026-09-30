@@ -9,6 +9,7 @@ import { ensureIdentity, updateIdentity } from "@/db/repos/identity";
 import { listJudgeLogs } from "@/db/repos/judge-log";
 import * as rel from "@/db/repos/relationship";
 import { insertTurn, type Turn } from "@/db/repos/session-log";
+import { insertThread } from "@/db/repos/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -216,5 +217,32 @@ describe("composeReachOut", () => {
     const r = renderReachOut(loadPrompt("reach-out", "v1"), { kind: "check_in", text: "", factId: null, threadId: null });
     expect(r.slot).toContain("On your mind: just saying hi");
     expect(r.slot).not.toContain("{{");
+  });
+
+  test("I1: a reach-out prompt never carries sensitive threads, facts or preoccupation; a normal reply still does", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const db = getTestDb();
+    const at = new Date(deps.clock.now().getTime() - 72 * 3_600_000);
+    const base = { embedding: vec(0.02), created_at: at, status: "open" as const, salience: 0.8, valence: 0, confidence: 0.9, source: "turn" as const };
+    const t = await insertThread(db, u, { title: "psychiatrist appointment", subject: "user", stakes: "high", next_checkpoint: new Date(deps.clock.now().getTime() - 48 * 3_600_000) }, at);
+    await insertFact(db, u, { ...base, subject: "user", kind: "event", content: "The user sees a psychiatrist on Monday", thread_id: t.id, payload: { sensitive: true } });
+    await insertFact(db, u, { ...base, subject: "user", kind: "state", content: "The user has been on antidepressants", payload: { sensitive: true } });
+    await insertFact(db, u, { ...base, subject: "user", kind: "preference", content: "The user is vegetarian" });
+    const pre = await insertFact(db, u, { ...base, subject: "self", kind: "feeling", content: "Spica keeps worrying about the diagnosis", source: "inferred", payload: { sensitive: true } });
+    await ensureIdentity(db, u, deps.config.ego.baseline);
+    await updateIdentity(db, u, { preoccupation: pre.id });
+    const turn = await userTurn(deps, u, "night!");
+
+    await composeReachOut(deps, u, { kind: "check_in", text: "", factId: null, threadId: null }, [turn]);
+    const reach = deps.llm.calls.at(-1)!.system;
+    expect(reach).toContain("The user is vegetarian");
+    for (const s of ["psychiatrist", "antidepressants", "diagnosis"]) expect(reach).not.toContain(s);
+
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    const reply = deps.llm.calls.at(-1)!.system;
+    expect(reply).toContain("psychiatrist appointment");
+    expect(reply).toContain("The user has been on antidepressants");
+    expect(reply).toContain("Spica keeps worrying about the diagnosis");
   });
 });

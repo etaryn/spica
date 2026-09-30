@@ -11,16 +11,19 @@ const errName = (e: unknown) => String((e as Error)?.name ?? "Error");
 /**
  * Hot-path retrieval (v2 §6.2 step 1). Read-only and never throws: any failure
  * degrades to whatever could still be retrieved, so a memory problem never costs
- * the user their reply. `answering` is a list so the Phase 3 turn buffer fits.
+ * the user their reply. `answering` is a list so the Phase 3 turn buffer fits. `excludeSensitive` (reach-outs)
+ * keeps every `payload.sensitive` fact out: ranked, forced, due threads (by their latest fact) and the preoccupation.
  */
 export async function retrieve(
   deps: Pick<Deps, "db" | "embedder" | "config" | "log">,
   userId: string,
-  input: { answering: Turn[]; context: Turn[]; now: Date; queryText?: string; forceFactIds?: string[] },
+  input: { answering: Turn[]; context: Turn[]; now: Date; queryText?: string; forceFactIds?: string[]; excludeSensitive?: boolean },
 ): Promise<RetrievalResult> {
   const { db, embedder, config, log } = deps;
   const result = emptyRetrieval();
   const seen = new Set<string>();
+  const excl = input.excludeSensitive === true;
+  const isSensitive = (f: { payload: unknown }) => (f.payload as { sensitive?: unknown } | null)?.sensitive === true;
 
   let scored: Scored[] = [];
   try {
@@ -29,7 +32,7 @@ export async function retrieve(
     if (text.trim() !== "") {
       const [q] = await withTimeout(embedder.embed([text], "query"), config.retrieval.embed_timeout_ms);
       if (!q) throw new Error("embedder returned no vector");
-      scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now), input.now, config.retrieval);
+      scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now, { excludeSensitive: excl }), input.now, config.retrieval);
     }
   } catch (e) {
     log.error("retrieval degraded", { userId, error: errName(e) });
@@ -47,12 +50,13 @@ export async function retrieve(
     for (const id of input.forceFactIds ?? []) {
       if (seen.has(id)) continue;
       const f = await getFact(db, userId, id);
-      if (!f || f.status === "superseded" || f.status === "stale") continue;
+      if (!f || f.status === "superseded" || f.status === "stale" || (excl && isSensitive(f))) continue;
       seen.add(id);
       result.facts[f.subject].push({ id: f.id, content: f.content, when: f.occurred_at ?? f.created_at });
       result.recalled.push({ factId: f.id, sim: 0, fact_salience: f.salience, entity_salience: 1, recency: 1, score: 0, forced: true });
     }
     for (const t of await dueThreads(db, userId, input.now, config.retrieval.max_due_threads)) {
+      if (excl && t.sensitive) continue;
       result.dueThreads.push({ id: t.id, title: t.title, detail: t.content });
       if (t.fact_id && !seen.has(t.fact_id)) {
         seen.add(t.fact_id);
@@ -60,7 +64,7 @@ export async function retrieve(
       }
     }
     const pre = await getPreoccupationFact(db, userId, input.now);
-    if (pre) {
+    if (pre && !(excl && isSensitive(pre))) {
       const hit = result.facts.self.find((f) => f.id === pre.id);
       if (hit) hit.onMind = true;
       else if (!seen.has(pre.id)) {

@@ -26,8 +26,13 @@ export type CandidateFact = {
 const notYetHappened = (now: Date) =>
   sql`(${fact.source} <> 'generated' OR ${fact.occurred_at} IS NULL OR ${fact.occurred_at} <= ${now.toISOString()}::timestamptz)`;
 
-/** Nearest active private facts for this user, with max entity salience (v2 §6.2 step 1). */
-export async function candidateFacts(db: Db, userId: string, queryVec: number[], limit: number, now: Date): Promise<CandidateFact[]> {
+/**
+ * Nearest active private facts for this user, with max entity salience (v2 §6.2 step 1). `excludeSensitive`
+ * drops `payload.sensitive` facts before the limit (a reach-out never carries them, v2 §5.1).
+ */
+export async function candidateFacts(
+  db: Db, userId: string, queryVec: number[], limit: number, now: Date, opts: { excludeSensitive?: boolean } = {},
+): Promise<CandidateFact[]> {
   const q = vecLiteral(queryVec);
   return db.transaction(async (tx) => {
     // The HNSW index spans all users; iterative scan keeps filtered result sets full.
@@ -40,6 +45,7 @@ export async function candidateFacts(db: Db, userId: string, queryVec: number[],
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
         AND (f.source <> 'generated' OR f.occurred_at IS NULL OR f.occurred_at <= ${now.toISOString()}::timestamptz)
+        ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
     return res.rows.map((r) => ({

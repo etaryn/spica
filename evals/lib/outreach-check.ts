@@ -8,7 +8,9 @@ import { parseAt, type ReachOutAssertion } from "./script";
 
 export type OutreachSnapshot = {
   reachOuts: { id: string; at: Date; topic: string | null; kind: string | null }[];
-  userTurns: { at: Date; crisis: boolean }[];
+  userTurns: { at: Date }[];
+  /** Start of each crisis quiet window, which runs [at, at + relationship.crisis_quiet_hours). */
+  crises: { at: Date }[];
   blocks: { start: Date; end: Date; kind: "busy" | "quiet" }[];
   endings: { at: Date; kind: "ended" | "repair" }[];
   pushTags: string[];
@@ -18,6 +20,11 @@ export type OutreachSnapshot = {
 /**
  * Independent of the gate's own log (spec §9.2): recomputed from session_log, the shared life_day plans and
  * relationship_event. Topics and kinds are the one thing only reach_out_log knows.
+ *
+ * Crisis windows are anchored on the `crisis` relationship events: their created_at is the cold path's `now`,
+ * where `crisis_quiet_until = now + crisis_quiet_hours` is set. Production writes `safety_flag` only on the
+ * companion crisis reply, so a flagged companion turn with no crisis event from it until the next flagged turn
+ * (a failed or pending cold path) falls back to that turn's own time.
  */
 export async function outreachSnapshot(
   db: Db, userId: string, extra: { pushTags: string[]; composedPrompts: number }, cfg: Config,
@@ -32,7 +39,11 @@ export async function outreachSnapshot(
       const l = byTurn.get(t.id);
       return { id: t.id, at: t.created_at, topic: l?.topic ?? null, kind: (l?.winner as { kind?: string } | null)?.kind ?? null };
     }),
-    userTurns: turns.filter((t) => t.role === "user").map((t) => ({ at: t.created_at, crisis: !!t.safety_flag?.flagged })),
+    userTurns: turns.filter((t) => t.role === "user").map((t) => ({ at: t.created_at })),
+    crises: crisisStarts(
+      events.filter((e) => e.cause === "crisis").map((e) => e.created_at),
+      turns.filter((t) => t.role === "companion" && t.safety_flag?.flagged).map((t) => t.created_at),
+    ),
     blocks: days.flatMap((d) => d.plan.blocks.filter((b) => b.kind !== "downtime").map((b) => ({
       start: lifeInstant(cfg.life, d.date, b.start), end: lifeInstant(cfg.life, d.date, b.end), kind: b.kind as "busy" | "quiet",
     }))),
@@ -44,6 +55,16 @@ export async function outreachSnapshot(
     }),
     ...extra,
   };
+}
+
+/** Distinct crisis window starts: every crisis event, plus flagged crisis replies no crisis event followed. */
+function crisisStarts(events: Date[], flagged: Date[]): { at: Date }[] {
+  const starts = new Set(events.map((d) => d.getTime()));
+  for (const [i, f] of flagged.entries()) {
+    const until = flagged[i + 1]?.getTime() ?? Infinity;
+    if (!events.some((e) => e.getTime() >= f.getTime() && e.getTime() < until)) starts.add(f.getTime());
+  }
+  return [...starts].sort((a, b) => a - b).map((t) => ({ at: new Date(t) }));
 }
 
 /** Every gate rule (spec §5) recomputed over the whole run; one line per violating reach-out and rule. */
@@ -63,7 +84,7 @@ export function gateViolations(s: OutreachSnapshot, cfg: Config): string[] {
       if (seen.has(r.topic)) out.push(`${r.id}: topic repeated ${r.topic}`);
       seen.add(r.topic);
     }
-    if (s.userTurns.some((u) => u.crisis && u.at.getTime() <= t && t < u.at.getTime() + cfg.relationship.crisis_quiet_hours * HOUR)) out.push(`${r.id}: crisis window`);
+    if (s.crises.some((c) => c.at.getTime() <= t && t < c.at.getTime() + cfg.relationship.crisis_quiet_hours * HOUR)) out.push(`${r.id}: crisis window`);
     const lastEnding = s.endings.filter((e) => e.at.getTime() <= t).at(-1);
     if (lastEnding?.kind === "ended") out.push(`${r.id}: ended`);
     // Unanswered: more than max_unanswered consecutive reach-outs with no user turn between the first and this one.

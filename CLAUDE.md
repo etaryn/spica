@@ -38,8 +38,7 @@ consequences, so Spica has opinions, moods, limits, a life, and stakes.
 
 **One fixed Spica** (she/her): the same values, ego and voice for every
 user. The personality test calibrates the *user*, not her
-(`test_calibrates: user`). Whether Spica should instead vary per user is
-still OPEN. Persona **v2** (`prompts/persona/v2.md`, Ethan's draft: openly an
+(`test_calibrates: user`); settled 2026-09-30 (OPEN #1). Persona **v2** (`prompts/persona/v2.md`, Ethan's draft: openly an
 AI, sibling Alcor, loves stars / old films / books, no body) replaced v1 in
 Phase 5; the persona is fixed once shipped and changes only during test and
 development (v2 §9.1).
@@ -88,7 +87,7 @@ Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
 Message flow: POST (stored, then `202`; crisis answers in the POST with
 `200` + card) → crisis check ∥ turn judge → **turn-taking engine** (buffer, open
 questions, a cheap `context_complete?` judge, backchannel style
-`judge|signals|silent`, default `judge` provisionally; no strict
+`judge|signals|silent`, global `judge` (OPEN #5 settled); no strict
 one-message-one-reply) → **hot path**, once complete → **guard layer**
 (**off until Phase 9**: `guard.enabled: false` sends the first candidate
 unchecked and logs one `guard_disabled` row in `judge_log`; when on, it
@@ -203,7 +202,8 @@ pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 Phase 9 added 2026-09-28 (Ethan): the guard is off from Phase 4 until then.
 
-**Current phase: 6 (Proactive outreach), not started.** Phase 5 (Life sim +
+**Current phase: 6 (Proactive outreach), not started.** Start from
+`docs/phase-6-handoff.md`. Phase 5 (Life sim +
 availability + ego) done 2026-09-30: the exit run (real `life_plan`,
 `life_event`, `reconcile` and `embed`; reply, extract, turn judge and crisis
 fake; guard off; `--runs 3`) passed all 8 scripts 3/3 (`life-two-weeks`,
@@ -251,13 +251,14 @@ runs log every input and output for manual analysis. The app keeps Sonnet 5
 replies; the guard is off in the app too until Phase 9.
 
 ## Open decisions: ask Ethan, don't settle (v2 §16.1)
-1. Fixed vs variable Spica. 2. Whether interests need to match. 3. How far
-to push irreversibility (hurt / tension ceilings; test phase: uncapped,
-decide in Phase 9). 4. Where the jab vs contempt line sits (including the
-rule 4 wording; test phase: rules suspended, decide in Phase 9). 5. Whether the
-backchannel style is global or per user. 6. ~~Shared vs per-user life~~
-settled 2026-09-29: hybrid (shared day plan, personal events). 7. Final reach-out caps. 8. Identity disclosure ("are you an
-AI?"; placeholder: answer honestly, in her own voice).
+Still open, both decided in Phase 9: 3. How far to push irreversibility
+(hurt / tension ceilings; test phase: uncapped). 4. Where the jab vs
+contempt line sits (including the rule 4 wording; test phase: rules
+suspended). Settled (v2 §18 rows L1, D1–D5): 1. fixed Spica
+(`test_calibrates: user`); 2. interests `adjacent`; 5. backchannel style
+global `judge`; 6. hybrid life; 7. reach-out caps 1/day, 3/week, silence
+after 2 unanswered (Phase 6 starting values); 8. identity disclosure:
+honestly, in her own voice.
 
 ## Guardrails: not optional (v2 §16.2)
 - **Crisis handling:** checked on every message using recent context, with

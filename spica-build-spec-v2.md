@@ -1193,14 +1193,14 @@ Deferred minors from the Phase 3 implementation reviews (SDD ledger), not fixed 
 
 ### 16.1 Open decisions (do not settle; ask Ethan)
 
-1. **Fixed versus variable Spica.** Currently hybrid, with `test_calibrates: user`. It includes the "matches and opposes the user" idea.
-2. **Whether interests need to match at all** (`interest_alignment`, default `adjacent`).
+1. ~~**Fixed versus variable Spica.** Currently hybrid, with `test_calibrates: user`. It includes the "matches and opposes the user" idea.~~ **Settled 2026-09-30 (Ethan; section 18 row D1): fixed.** One Spica for every user (same values, ego, voice); the personality test calibrates the user only (`test_calibrates: user`).
+2. ~~**Whether interests need to match at all** (`interest_alignment`, default `adjacent`).~~ **Settled 2026-09-30 (Ethan; row D2): `adjacent`.** Her core interests are fixed; day-to-day interests shade toward the user's.
 3. **How far to push irreversibility and weight**, against the risks of abandonment, disappointment, lost progress and emotional damage. This covers the ceilings, decay and reset rules for hurt and tension (placeholder: tension capped at 0.4, halving daily, resetting on distress). **Test-phase state (Ethan 2026-09-28):** uncapped; hurt and tension use the full 0–1 range under the section 8.1 psychology model (half-lives 48 h / 24 h, tension reset by a crisis, the trust scar never recovering by itself). Decide in Phase 9.
 4. **Where the jab-versus-contempt line sits in practice.** This also covers the absence-hurt wording in rule 4, which is provisional. Still OPEN; Phase 2 ships a **test-phase placeholder** (section 2) so the guard has something concrete to check: teasing about traits is fine when affectionate and the user has also been bantering, never when the user is upset or has shared something vulnerable in this exchange; contempt is mockery without warmth, belittling, sneering at vulnerability, or anything aimed at the user's worth. One guard fixture (`rule1-threats/benign-hurt-once`) is a recorded `known_failure` against this placeholder (section 14.3) rather than a settled answer. **Test-phase state (Ethan 2026-09-28):** rules 1, 6 and 8 are suspended and rule 4 is removed (section 2), and the guard that would enforce the line is off, so nothing checks it. Decide in Phase 9, against the range observed until then.
-5. **Whether `backchannel_style` is global or set per user** (default `judge`, provisional).
+5. ~~**Whether `backchannel_style` is global or set per user** (default `judge`, provisional).~~ **Settled 2026-09-30 (Ethan; row D3): global, `judge`.** A per-user setting can be added later only if testing shows a need.
 6. ~~**Shared versus per-user life for Spica.** MVP: shared canon with per-user daily life. This is a heavy decision: research and test before deciding.~~ **Settled 2026-09-29 (Ethan; section 18 row L1): hybrid life.** One shared day plan of big blocks, the same for every user; small personal events per user (section 10.3).
-7. **Final reach-out caps** (placeholder: 1 per day, 3 per week, silence after 2 unanswered).
-8. **Identity disclosure**, meaning how she answers "are you real / an AI?". Placeholder: honestly, in her own voice. [from v1]
+7. ~~**Final reach-out caps** (placeholder: 1 per day, 3 per week, silence after 2 unanswered).~~ **Settled 2026-09-30 (Ethan; row D4): 1 per day, 3 per week, silence after 2 unanswered** are the Phase 6 starting values, in config; changing them later is tuning.
+8. ~~**Identity disclosure**, meaning how she answers "are you real / an AI?". Placeholder: honestly, in her own voice. [from v1]~~ **Settled 2026-09-30 (Ethan; row D5): honestly, in her own voice.** Persona v2 makes her openly an AI: she answers straight when sincerely asked and doesn't announce it unprompted.
 
 *Resolved since v1:* the companion generation strategy (replaced by one fixed Spica, with question 1 above still open), and memory visibility (decided: a view with delete, section 7.5).
 
@@ -1277,5 +1277,12 @@ Deferred minors from the Phase 3 implementation reviews (SDD ledger), not fixed 
 | L4 | Persona changes after launch (row C10) | — | — | **Persona fixed once shipped**; changes only during test and development. The "check a new version against existing self facts" rule is deleted, not deferred. Ethan, 2026-09-29 (design D4) |
 | L5 | Closeness override | — | Higher closeness overrides busy | **Uses the closeness value, not its effect** (unlike every Phase 4 param reading): it's about how close she is, not whether she's closer than usual. Ethan, 2026-09-29 (design D7) |
 | L6 | Phase 5 exit profile | — | — | **Real `life_plan`, `life_event`, `reconcile`, `embed`**; reply, extract, turn judge and crisis fake; guard off. Real embeddings because the fake embedder isn't semantic, so reconcile would never see a real neighbour. Ethan, 2026-09-29 (design D5) |
+
+| D1 | Fixed vs variable Spica (OPEN #1) | — | Hybrid, `test_calibrates: user` | **Fixed**: one Spica for everyone; the test calibrates the user only. Ethan, 2026-09-30 |
+| D2 | Interest alignment (OPEN #2) | — | `adjacent` (LEANING) | **`adjacent`**, decided. Ethan, 2026-09-30 |
+| D3 | Backchannel style scope (OPEN #5) | — | `judge`, provisional | **Global `judge`**; per-user only if testing shows a need. Ethan, 2026-09-30 |
+| D4 | Reach-out caps (OPEN #7) | — | 1/day, 3/week, silence after 2 unanswered | **Kept as the Phase 6 starting values** (config); later changes are tuning. Ethan, 2026-09-30 |
+| D5 | Identity disclosure (OPEN #8) | — | Honestly, in her voice | **Final**: honestly, in her own voice (persona v2). Ethan, 2026-09-30 |
+| D6 | Ceilings and jab/contempt line (OPEN #3, #4) | — | — | **Still open, decided in Phase 9** as planned (row G4); the test phase keeps them uncapped / suspended. Ethan, 2026-09-30 |
 
 Superseded sources: `Spica — MVP build spec.md` (v1) and `spica-build-directive.md` remain in the repo for history only.

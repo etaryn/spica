@@ -1,6 +1,6 @@
 # Phase 6: Proactive outreach design
 
-Date: 2026-09-30 · Status: **draft, for Ethan's review** · Parent: `spica-build-spec-v2.md`
+Date: 2026-09-30 · Status: **built; see §12 "As built"** · Parent: `spica-build-spec-v2.md`
 (§2 rule 5, §4, §5.1, §5.5, §5.8, §6.2, §11, §14.5, §15 Phase 6, §15.2 #10, §16.1 #7)
 
 ## 1. Goal and exit test
@@ -317,3 +317,28 @@ candidate list (collapsed), `answered_at`, and a link to the sent turn. The rela
   checker uses the same definition.
 - **Cold path on her turn alone** is a new exchange shape; the no-user-turn guard (§6.2 step 5) keeps it from
   touching the relationship or ego.
+
+## 12. As built (2026-09-30)
+
+Implemented on branch `phase-6-outreach` (plan `docs/superpowers/plans/2026-09-30-phase-6-outreach.md`). Exit run (all fake, `--runs 3`): all six scripts 3/3; see v2 §15. Deviations from this design:
+
+- **Threshold 0.2, not 0.4** (§3.2, ruling R1): at 0.4 a `her_day` candidate (0.6 × 0.4 = 0.24) could never fire.
+- **A due thread reserves its fact** (R2, §4): the fact of every high/med due thread is excluded from `user_event` and `her_day`.
+- **`user_event` excludes facts attached to a thread** (R10, §4.1), including facts of closed threads. Found by the exit run: a thread's own fact went out as a `user_event` before its checkpoint, then the thread asked again.
+- **Prompt path `prompts/reach-out/v1.md`** (R5, §7): `loadPrompt` rejects underscores; the config key stays `prompts.reach_out`. The prompt file has `slot`, `cue` and one guidance section per kind.
+- **Late jobs are dropped** (R6, §6.2): a `reach_out_send` running more than `pending_max_age_minutes` (new key, 120) after `send_at` drops as `late`. The tick's pre-check also ignores `scheduled` rows older than that.
+- **New turn or crisis during compose** (R7, §6.2): under the lock the send drops if `reply_epoch` changed or a new turn landed since compose began (recorded as `epochChanged` / `newTurn` in `gate_results.recheck`).
+- **Unlocked precheck before typing** (final review I3, §6.2): the same gate and topic check runs first; a failure drops as `precheck` with no typing and no generation. The locked recheck is unchanged and stays the authority.
+- **Topic re-check form** (§6.2 step 3): `usedTopics` is read under the lock and logged as `recheck.topicUsed`, next to the gate results, instead of as a separate rule.
+- **Effective crisis window** (I2, §5 G6): max(`crisis_quiet_until`, latest safety-flagged turn + `crisis_quiet_hours`), because the cold path sets `crisis_quiet_until` later than the crisis reply. Used by the gate and the tick pre-check.
+- **Sensitive facts out of the prompt** (I1, §7): `retrieve()` takes `excludeSensitive`, set only for a reach-out; it filters facts in SQL, forced facts, a sensitive preoccupation and due threads whose latest fact is sensitive. The design only excluded sensitive candidates.
+- **Drops apply only to `scheduled` rows** (M1): `dropScheduled`; a duplicate delivery of a sent job returns `stale`.
+- **Answered on the crisis path** (M2, §6.3): runs after the crisis reply in a `finally`, bounded by `hot_path.db_timeout_ms` (reused; no new key). On a normal message it is awaited before the judge verdict. `unanswered_reach_outs` is reset by any new user message; the send increments it in the same transaction as the insert.
+- **Push body cap** (M3, §8.1): new key `push.body_max_chars` (1000); `deliverPart` cuts the body by code point with an ellipsis.
+- **Push and accounts** (I4, §8.3): sign-out calls `releasePush` (DELETE the subscription and `unsubscribe()`, bounded by `push.timeout_ms`), and `/chat` always re-posts an existing subscription to the current account.
+- **Opt-out flag** (R8, §8.3): the settings switch sets a per-browser `localStorage` flag that the banner checks before silently re-subscribing; the switch reads `pushSupported()` in an effect to avoid a hydration mismatch.
+- **Banner and service worker hardening** (M4, M5): the banner's async work is in try/catch and marks itself dismissed only when `subscribePush` succeeds; `sw.js` ignores a malformed or non-object payload.
+- **`reach_out_log` index** is on `(user_id, send_at)` (§3.1 said `created_at`). `gate_results` for a dropped row is `{tick, dropped, recheck?}`; the inspector labels `precheck` and `recheck` separately.
+- **Harness** (§9.2): the `user_replies: always` policy was dropped (`{after_hours}` covers it); the independent checker anchors crisis windows on `crisis` relationship events (falling back to flagged companion turns), because production sets `safety_flag` only on the companion crisis reply (ruling R9). Scripts add `seed_user_facts` and the assertion fields `kinds_exclude`, `windows`, `distinct_topics`, `composed`.
+- **Twelve queues**; `reach_out_send` uses the turn queues' concurrency and polling.
+- **Not built, by ruling:** advancing `make_up_state` to `offered` on a make-up reach-out, closing stale `scheduled` rows, a resources card in the crisis push (R12); notification text privacy is Ethan's call (R13). See v2 §15.3b.

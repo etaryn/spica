@@ -1,5 +1,5 @@
 name: outreach-unanswered
-description: The user never answers. Exactly two reach-outs (different topics) go out, then silence until the user writes on day 12; then she may reach out again.
+description: The user never answers. Exactly two reach-outs (different topics, the interview thread then a check-in, because the half marathon falls after the silence starts) go out, then silence until the user writes on day 12; then she may reach out again.
 profile: none
 config: { life: { timezone: UTC, events_per_day_max: 0 } }
 life:

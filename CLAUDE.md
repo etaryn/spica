@@ -79,7 +79,8 @@ and every v2 §16.2 guardrail stay.
 Stack (built): TypeScript / Next.js, Postgres 16 + pgvector (one DB for
 everything, including pg-boss jobs), POST for sending messages, **SSE**
 (fed by Postgres LISTEN/NOTIFY) for everything the server pushes, Web Push
-later. Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
+for out-of-app delivery (Phase 6: every message pushes; the service worker
+hides it while a tab is visible). Models sit behind `LLMProvider`: `claude-sonnet-5` for replies,
 `claude-haiku-4-5` for extraction, the guard and classifiers; judges use
 `claude-haiku-4-5` (`models.judge`; Sonnet 5 through Phase 2).
 Embeddings: Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder`.
@@ -96,10 +97,10 @@ punishment or manipulation, regenerates once, then falls back to a safe
 line) → pacing (read delay + typing time; crisis skips it; while she's
 busy, availability defers the whole buffer instead, v2 §6.1.1) → SSE
 (`/api/events`, history catch-up via `/api/chat/history`) → **cold path** (async). Waiting is durable: delayed
-pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`. Ten
+pg-boss `turn_timer` jobs in the worker, recovered by `turn_sweep`. Twelve
 pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
 `turn_timer`, `turn_backchannel`, `turn_sweep`, `relationship_tick`,
-`life_plan`, `life_tick`, `ego_tick`.
+`life_plan`, `life_tick`, `ego_tick`, `outreach_tick`, `reach_out_send`.
 
 - **Hot path:** retrieve (similarity × salience × entity salience × recency,
   top 12, plus due threads and the current preoccupation forced in; recall
@@ -138,6 +139,8 @@ pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
   the buffer a reply answers), **`conversation_state`** (turn-taking), and
   trace tables `retrieval_trace`, `ego_tick`, `reach_out_log`,
   **`judge_log`**, **`relationship_event`**, **`life_event_log`**.
+  **`push_subscription`** (Phase 6; `user_id`-scoped, unique endpoint).
+  `reach_out_log` gains `topic`, `status`, `send_at`, `answered_at`.
   `conversation_state` gains `deferred_until` / `deferred_fact` (Phase 5).
 
 ## Modules in brief
@@ -175,9 +178,20 @@ pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
   (1 − closeness **value** / 0.8), capped at the block's end; mid closeness
   gets a "busy, later?" note first; closeness ≥ 0.8 overrides; crisis
   bypasses; fails open.
-- **Outreach (v2 §11):** caps of 1/day and 3/week (placeholders), quiet
-  hours, her busy blocks, never repeating a topic, silence after 2
-  unanswered reach-outs until the user writes.
+- **Outreach (v2 §11, §11.1; built in Phase 6):** an hourly `outreach_tick`
+  builds candidates in code (thread, make_up, user_event, her_day,
+  check_in; score = weight × strength, `outreach.threshold` **0.2**), and
+  the send gate G1–G6 (not ended, caps 1/day and 3/week rolling, not in
+  **her** busy/quiet block, fewer than 2 unanswered, no conversation in
+  progress, outside the crisis window) decides; the user's own hours and
+  recent contact don't gate. A topic key is used once. A scheduled
+  `reach_out_send` job (jitter ≤ 40 min) composes through the hot path
+  (slot 7b, `prompts/reach-out/v1.md`, sensitive facts excluded), rechecks
+  the gate under the `conversation_state` lock (a crisis or user message
+  during compose wins), paces like a reply and enqueues the cold path (no
+  relationship or ego update: no user turn). Every message she sends also
+  pushes (`deliverPart`); any user message answers the last reach-out and
+  resets `unanswered_reach_outs`. No guard until Phase 9.
 - **Onboarding (v2 §12):** the test's results become user facts with
   reduced confidence, and **reveal pacing** keeps them hidden until
   they're earned in conversation.
@@ -194,7 +208,7 @@ pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
 | 3. Turn-taking + pacing ✅ | Buffer / judge / backchannels / pacing, SSE |
 | 4. Relationship + homeostasis ✅ | HomeostaticParam, hurt / tension / make-up, ending / repair |
 | 5. Life sim + availability + ego ✅ | Schedule / events, availability override, ego driven by life sim |
-| 6. Proactive outreach | Triggers, send gate, Web Push |
+| 6. Proactive outreach ✅ | Triggers, send gate, compose, Web Push |
 | 7. Onboarding test | Questionnaire, reveal pacing, results screen |
 | 8. Extension stubs | Event bus, module registration, social stubs |
 | 9. Guard re-enable and calibration | Re-enable the guard, calibrate it against the observed range, settle OPEN #3 / #4, first run of `evals/guard/backchannel.yaml`, v2 §15.2 #7–9 |
@@ -202,8 +216,23 @@ pg-boss queues (v2 §14.5): `cold_path`, `cold_path_sweep`, `decay_pass`,
 Order changed 2026-09-25 (Ethan): guardrails first, every later phase moved back by one.
 Phase 9 added 2026-09-28 (Ethan): the guard is off from Phase 4 until then.
 
-**Current phase: 6 (Proactive outreach), not started.** Start from
-`docs/phase-6-handoff.md`. Phase 5 (Life sim +
+**Current phase: 7 (Onboarding test), not started.** Start from
+`docs/phase-7-handoff.md`. Phase 6 (Proactive outreach) done 2026-09-30: the
+exit run (all fake, no API calls; `--runs 3`) passed all 6 scripts 3/3
+(`outreach-two-weeks`, `outreach-unanswered`, `outreach-make-up`,
+`outreach-crisis-quiet`, `outreach-sensitive`, `outreach-ended`); mechanic
+on vs off: two-weeks 6 sent vs 0 (`count.min` 3), sensitive 0 vs 1, ended
+0 vs 2, crisis-quiet 0 vs 1 before day 1 09:00. `pnpm test` 88 files / 599
+tests; fake `--compare` no regressions. Folded into v2 (§2, §4, §5.5, §5.6,
+§5.8, §5.10, §6.2, §6.3, §11.1, §14.2, §14.5, §15, §15.3b, §15.4 #58–84,
+§18 rows O1–O8 and R1). The browser side of Web Push was never checked by
+hand. After merge, Ethan runs `pnpm db:migrate` (0010), puts VAPID keys in
+`.env` (`npx web-push generate-vapid-keys`, plus `VAPID_SUBJECT`), restarts
+`pnpm worker` (twelve queues) and checks notifications in a browser (v2
+§15.4 #78). OPEN for Ethan: notification text privacy (v2 §15.3b R9).
+Phase 6 design: `docs/superpowers/specs/2026-09-30-phase-6-outreach-design.md`
+(§12 as built); plan: `docs/superpowers/plans/2026-09-30-phase-6-outreach.md`.
+Phase 5 (Life sim +
 availability + ego) done 2026-09-30: the exit run (real `life_plan`,
 `life_event`, `reconcile` and `embed`; reply, extract, turn judge and crisis
 fake; guard off; `--runs 3`) passed all 8 scripts 3/3 (`life-two-weeks`,
@@ -213,9 +242,7 @@ fake; guard off; `--runs 3`) passed all 8 scripts 3/3 (`life-two-weeks`,
 `contradicts` and the injected duplicate as `duplicate`, neither stored
 (141 Haiku calls, ~$0.48). `pnpm test` 76 files / 516 tests. Folded into v2
 (§5.4–5.9, §6.1.1, §6.2, §6.3, §9, §10.2–10.3, §14, §15, §15.3a, §15.4
-#41–57, §16.1 #6, §18 rows L1–L6). Phase 6 starts from v2 §15.4 and the
-tuning backlog (§15.3, §15.3a). After merge, Ethan runs `pnpm db:migrate`,
-then `pnpm db:reset-self`, and restarts the worker. Phase 5 design:
+#41–57, §16.1 #6, §18 rows L1–L6). Phase 5 design:
 `docs/superpowers/specs/2026-09-29-phase-5-life-sim-design.md`; plan:
 `docs/superpowers/plans/2026-09-29-phase-5-life-sim.md`. Phase 4
 (Relationship + homeostasis) done 2026-09-29: the exit run (only `extract`

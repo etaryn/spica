@@ -23,7 +23,8 @@ export async function outreachTickUser(deps: Deps, userId: string, now: Date): P
   if (!cfg.enabled) return "skipped";
   const row = await getRelationshipRow(db, userId);
   if (!row || row.status === "ended_by_user" || row.unanswered_reach_outs >= cfg.max_unanswered) return "skipped";
-  if (row.crisis_quiet_until && row.crisis_quiet_until > now) return "skipped";
+  const quiet = await inputs.effectiveCrisisQuietUntil(deps, userId, row.crisis_quiet_until, now); // rule 7, as the gate
+  if (quiet && quiet > now) return "skipped";
   if (await hasPendingScheduled(db, userId, new Date(now.getTime() - cfg.pending_max_age_minutes * MIN))) return "skipped";
 
   const cands = buildCandidates(await inputs.loadCandidateInputs(deps, userId, now), cfg, now);

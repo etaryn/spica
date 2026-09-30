@@ -51,9 +51,11 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
     await setTimezone(db, userId, input.timezone).catch((e) => log.error("timezone update failed", { userId, error: errorName(e) }));
   }
 
-  // Phase 6 (D5): any NEW user message, crisis included (before every early return), answers her latest reach-out.
-  // Own short transaction on relationship + reach_out_log only; never holds the conversation_state lock.
-  if (!existed) await markReachOutAnswered(deps, userId, turn.created_at);
+  // Phase 6 (D5): any NEW user message, crisis included, answers her latest reach-out. Own short transaction on
+  // relationship + reach_out_log only; never holds the conversation_state lock. Run after the crisis decision so a
+  // lock wait here never delays a crisis reply (rule 7: crisis bypasses waits); a crisis runs it once replied.
+  // Retries (`existed`) return before either call site, and never re-mark.
+  const markAnswered = () => (existed ? Promise.resolve() : markReachOutAnswered(deps, userId, turn.created_at));
 
   // Retries (design §5.1 step 1): no second judge call.
   let rebuffer = false;
@@ -96,7 +98,17 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
 
   // Rule 7: a flagged message doesn't wait for the judge's verdict, which it would discard anyway.
   const flag = await crisis;
-  if (flag?.flagged) return sendCrisisReply(deps, userId, turn, flag);
+  if (flag?.flagged) {
+    try {
+      return await sendCrisisReply(deps, userId, turn, flag);
+    } finally {
+      // After the reply is sent (or failed). Bounded so the POST carrying the card never waits on a lock; a timed-out
+      // update still commits in the background (markReachOutAnswered never throws).
+      await withTimeout(markAnswered(), config.hot_path.db_timeout_ms)
+        .catch((e) => log.error("reach-out answered update slow", { userId, error: errorName(e) }));
+    }
+  }
+  await markAnswered();
   const verdict = await judging;
 
   const complete = verdict?.complete ?? true;

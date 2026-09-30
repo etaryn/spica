@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { loadCandidateInputs, loadGateInputs } from "@/core/outreach/inputs";
 import { insertFact } from "@/db/repos/facts";
@@ -6,6 +7,7 @@ import { insertLifeDay } from "@/db/repos/life-day";
 import { ensureRelationship } from "@/db/repos/relationship";
 import { insertReachOutLog } from "@/db/repos/reach-out";
 import { insertThread } from "@/db/repos/threads";
+import { insertTurn } from "@/db/repos/session-log";
 import { ensureIdentity, updateIdentity } from "@/db/repos/identity";
 import { relationship, conversation_state } from "@/db/schema";
 import { lifeTickUser } from "@/core/life/tick";
@@ -94,6 +96,25 @@ test("gate inputs: her block on her clock, sent times, in-progress, crisis, unan
   const g = await loadGateInputs(deps, u, now);
   expect(g).toMatchObject({ status: "active", unanswered: 1, inProgress: true, herBlock: { block: "busy", label: "film" }, sentAt: [ago(30)] });
   expect(g!.crisisQuietUntil).toEqual(ago(-1));
+});
+
+test("I2: a safety-flagged turn inside crisis_quiet_hours opens the crisis window before the cold path sets it", async () => {
+  const { deps, u } = await setup();
+  const hours = deps.config.relationship.crisis_quiet_hours;
+  const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+  const turn = (at: Date, safety_flag: typeof flag | null) =>
+    insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "x", created_at: at, safety_flag });
+  await turn(ago(hours + 1), flag); // too old: outside the window
+  await turn(ago(0.5), null); // unflagged
+  expect((await loadGateInputs(deps, u, now))!.crisisQuietUntil).toBeNull();
+
+  await turn(ago(2), flag);
+  expect((await loadGateInputs(deps, u, now))!.crisisQuietUntil).toEqual(new Date(ago(2).getTime() + hours * H));
+  // The later of the stored value and the flagged turn's window wins.
+  await deps.db.update(relationship).set({ crisis_quiet_until: ago(-hours) }).where(eq(relationship.user_id, u));
+  expect((await loadGateInputs(deps, u, now))!.crisisQuietUntil).toEqual(ago(-hours));
+  await deps.db.update(relationship).set({ crisis_quiet_until: ago(-1) }).where(eq(relationship.user_id, u));
+  expect((await loadGateInputs(deps, u, now))!.crisisQuietUntil).toEqual(new Date(ago(2).getTime() + hours * H));
 });
 
 test("gate inputs are null without a relationship row", async () => {

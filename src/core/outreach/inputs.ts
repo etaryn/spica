@@ -3,6 +3,7 @@ import { getState, type ConvState } from "@/db/repos/conversation-state";
 import { getFact, getPreoccupationFact, listOutreachHerDay, listOutreachUserEvents } from "@/db/repos/facts";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/relationship";
 import { sentReachOutTimes, usedTopics } from "@/db/repos/reach-out";
+import { latestFlaggedTurnAt } from "@/db/repos/session-log";
 import { dueThreads } from "@/db/repos/threads";
 import type { Deps } from "../deps";
 import { blockAt, listLifeBlocks } from "../life/blocks";
@@ -43,6 +44,21 @@ export async function loadCandidateInputs(deps: Pick<Deps, "db" | "config">, use
   };
 }
 
+/**
+ * Rule 7 (G6): the crisis window is the later of the stored `crisis_quiet_until` (set by the crisis exchange's cold
+ * path) and the latest safety-flagged turn + `crisis_quiet_hours`, so it holds before that cold path commits, or if it
+ * never does.
+ */
+export async function effectiveCrisisQuietUntil(
+  deps: Pick<Deps, "db" | "config">, userId: string, stored: Date | null, now: Date, db: Db = deps.db,
+): Promise<Date | null> {
+  const window = deps.config.relationship.crisis_quiet_hours * HOUR;
+  const flagged = await latestFlaggedTurnAt(db, userId, new Date(now.getTime() - window));
+  const fromTurn = flagged ? new Date(flagged.getTime() + window) : null;
+  if (!fromTurn) return stored;
+  return !stored || fromTurn > stored ? fromTurn : stored;
+}
+
 /** Spec §5: gate inputs, or null when the user has no relationship row yet. */
 export async function loadGateInputs(
   deps: Pick<Deps, "db" | "config">, userId: string, now: Date, db: Db = deps.db, conv?: ConvState | null,
@@ -57,6 +73,6 @@ export async function loadGateInputs(
     herBlock: block ? { block: block.block, label: block.label } : null,
     unanswered: row.unanswered_reach_outs,
     inProgress: !!s && (s.buffer_turn_ids.length > 0 || s.inflight_turn_ids.length > 0 || s.sending_since !== null),
-    crisisQuietUntil: row.crisis_quiet_until,
+    crisisQuietUntil: await effectiveCrisisQuietUntil(deps, userId, row.crisis_quiet_until, now, db),
   };
 }

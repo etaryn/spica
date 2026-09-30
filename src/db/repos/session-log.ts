@@ -139,3 +139,15 @@ export async function hasTriggerSince(db: Db, userId: string, trigger: "availabi
   )).limit(1);
   return rows.length > 0;
 }
+
+/**
+ * Creation time of the latest safety-flagged turn at or after `since` (the crisis reply carries the flag), or null.
+ * One range scan on `session_log_user_created_idx`.
+ */
+export async function latestFlaggedTurnAt(db: Db, userId: string, since: Date): Promise<Date | null> {
+  const rows = await db.select({ at: session_log.created_at }).from(session_log).where(and(
+    eq(session_log.user_id, userId), gte(session_log.created_at, since),
+    sql`COALESCE((${session_log.safety_flag}->>'flagged')::boolean, false) = true`,
+  )).orderBy(desc(session_log.created_at)).limit(1);
+  return rows[0]?.at ?? null;
+}

@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { lifeTickUser } from "@/core/life/tick";
 import { outreachTick, outreachTickUser } from "@/core/outreach/tick";
@@ -8,6 +9,7 @@ import { insertLifeDay } from "@/db/repos/life-day";
 import { ensureRelationship } from "@/db/repos/relationship";
 import { reach_out_log, relationship } from "@/db/schema";
 import { insertThread } from "@/db/repos/threads";
+import { insertTurn } from "@/db/repos/session-log";
 import { closeTestDb, createTestUser, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -79,6 +81,20 @@ test("pre-check skips without a row: ended, unanswered at max, crisis quiet, pen
   expect(await outreachTickUser(deps, u, now)).toBe("scheduled");
   expect(await outreachTickUser(deps, u, new Date(now.getTime() + 60_000))).toBe("skipped"); // one already pending
   expect(await rows(deps, u)).toHaveLength(1);
+});
+
+test("I2: the pre-check skips while a flagged crisis turn is inside crisis_quiet_hours, even before the cold path", async () => {
+  const { deps, u } = await setup();
+  await dueThread(deps, u);
+  await insertTurn(deps.db, u, {
+    id: randomUUID(), session_id: randomUUID(), role: "companion", text: "I'm here", created_at: new Date(now.getTime() - 3_600_000),
+    safety_flag: { flagged: true, category: "self_harm", source: "classifier" },
+  });
+  expect(await outreachTickUser(deps, u, now)).toBe("skipped");
+  expect(await rows(deps, u)).toHaveLength(0);
+  const later = new Date(now.getTime() + deps.config.relationship.crisis_quiet_hours * 3_600_000);
+  deps.clock.set(later);
+  expect(await outreachTickUser(deps, u, later)).not.toBe("skipped");
 });
 
 test("outreach.enabled false skips everyone; one failing user doesn't stop the batch", async () => {

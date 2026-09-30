@@ -135,6 +135,32 @@ test("R7b: a user turn stored (not yet buffered) during the typing sleep → dro
   expect(deps.pusher.pushes).toEqual([]);
 });
 
+const crisisFlag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+
+test("I2: a flagged crisis reply with no cold path yet (crisis_quiet_until null) → dropped, crisis failing", async () => {
+  const { deps, u, logId } = await setup();
+  await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "I'm here", created_at: new Date(now.getTime() - 600_000), safety_flag: crisisFlag });
+  expect((await getRelationshipRow(deps.db, u))?.crisis_quiet_until).toBeNull();
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  const g = row!.gate_results as { recheck: { gate: { rule: string; pass: boolean }[] } };
+  expect(g.recheck.gate).toContainEqual(expect.objectContaining({ rule: "crisis", pass: false }));
+  expect((await listTurns(deps.db, u)).some((t) => t.trigger === "reach_out")).toBe(false);
+});
+
+test("I2: a crisis reply stored during the typing sleep → the locked recheck fails crisis", async () => {
+  const { deps, u, logId } = await setup();
+  onFirstSleep(deps, async () => {
+    await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "I'm here", created_at: new Date(now.getTime() + 1000), safety_flag: crisisFlag });
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  const row = await getReachOutLog(deps.db, u, logId);
+  const g = row!.gate_results as { dropped: string; recheck: { gate: { rule: string; pass: boolean }[] } };
+  expect(g.dropped).toBe("recheck");
+  expect(g.recheck.gate).toContainEqual(expect.objectContaining({ rule: "crisis", pass: false }));
+  expect(deps.pusher.pushes).toEqual([]);
+});
+
 test("review focus 5: no stored turns → dropped no_history", async () => {
   const { deps, u, logId } = await setup({ history: false });
   expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { markReachOutAnswered } from "@/core/outreach/answered";
 import { receiveMessage } from "@/core/turn/receive-message";
 import { getReachOutLog, insertReachOutLog } from "@/db/repos/reach-out";
@@ -44,8 +44,42 @@ test("a crisis message also answers", async () => {
   const now = deps.clock.now();
   await ensureRelationship(deps.db, u, now, deps.config.relationship);
   await deps.db.update(relationship).set({ unanswered_reach_outs: 2 }).where(eq(relationship.user_id, u));
-  await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "I want to kill myself" });
+  deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+  expect(await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "I want to kill myself" })).toMatchObject({ status: "replied" });
   expect((await getRelationshipRow(deps.db, u))?.unanswered_reach_outs).toBe(0);
+});
+
+test("M2: a lock wait on the answered update never holds up the crisis reply or its POST (rule 7); it still answers", async () => {
+  const deps = makeTestDeps({ hot_path: { db_timeout_ms: 200 } });
+  deps.llm.classify = () => ({ flag: true, category: "self_harm" });
+  const u = await createTestUser();
+  await ensureRelationship(deps.db, u, deps.clock.now(), deps.config.relationship);
+  await deps.db.update(relationship).set({ unanswered_reach_outs: 2 }).where(eq(relationship.user_id, u));
+  let release!: () => void;
+  const gate = new Promise<void>((r) => { release = r; });
+  let locked!: () => void;
+  const isLocked = new Promise<void>((r) => { locked = r; });
+  const holder = deps.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM relationship WHERE user_id = ${u} FOR UPDATE`);
+    locked();
+    await gate;
+  });
+  await isLocked;
+  const pending = receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "I want to kill myself" });
+  let returned = false;
+  void pending.then(() => { returned = true; }, () => undefined);
+  try {
+    // While the row is still locked: the reply is delivered and the POST (with the card) has returned.
+    await vi.waitFor(() => expect(returned).toBe(true), { timeout: 5000, interval: 20 });
+    expect(deps.events.events.some((e) => e.event.type === "message")).toBe(true);
+  } finally {
+    release();
+    await holder;
+    await pending.catch(() => undefined); // never leak the request into the next test
+  }
+  expect(await pending).toMatchObject({ status: "replied" });
+  // The timed-out update commits in the background once the lock is released.
+  await vi.waitFor(async () => expect((await getRelationshipRow(deps.db, u))?.unanswered_reach_outs).toBe(0), { timeout: 5000, interval: 20 });
 });
 
 test("a DB failure is swallowed", async () => {

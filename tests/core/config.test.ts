@@ -79,3 +79,10 @@ test("phase 5 config: life, ego and availability load with her fixed zone", () =
 test("life.timezone must be a real IANA zone", () => {
   expect(() => loadConfig({ life: { timezone: "Mars/Olympus" } })).toThrow();
 });
+
+test("outreach, push and reach_out prompt defaults", () => {
+  const c = loadConfig();
+  expect(c.outreach).toMatchObject({ cap_per_day: 1, cap_per_week: 3, max_unanswered: 2, threshold: 0.2, tick_cron: "20 * * * *" });
+  expect(c.push).toEqual({ enabled: true, timeout_ms: 5000, ttl_seconds: 86400 });
+  expect(c.prompts.reach_out).toBe("v1");
+});

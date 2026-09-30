@@ -115,3 +115,15 @@ export async function listRelationshipEvents(db: Db, userId: string, limit: numb
 export async function adminListRelationshipUsers(db: Db): Promise<string[]> {
   return (await db.select({ id: relationship.user_id }).from(relationship)).map((r) => r.id);
 }
+
+/** Phase 6: one more reach-out the user hasn't answered yet (spec §6.2). Returns the new count. */
+export async function incrementUnanswered(db: Db, userId: string): Promise<number> {
+  const rows = await db.update(relationship).set({ unanswered_reach_outs: sql`${relationship.unanswered_reach_outs} + 1` })
+    .where(eq(relationship.user_id, userId)).returning({ n: relationship.unanswered_reach_outs });
+  return rows[0]?.n ?? 0;
+}
+
+/** Phase 6 D5: any user message answers. */
+export async function resetUnanswered(db: Db, userId: string): Promise<void> {
+  await db.update(relationship).set({ unanswered_reach_outs: 0 }).where(eq(relationship.user_id, userId));
+}

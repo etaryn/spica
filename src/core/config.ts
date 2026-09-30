@@ -235,7 +235,30 @@ export const ConfigSchema = z.object({
     note_min_closeness: unit,
     note_read_delay_ms: z.number().int().min(0),
   }),
+  outreach: z.object({
+    enabled: z.boolean(),
+    tick_cron: z.string().min(1),
+    cap_per_day: z.number().int().min(0),
+    cap_per_week: z.number().int().min(0),
+    max_unanswered: z.number().int().min(1),
+    threshold: z.number().min(0),
+    weights: z.object({ thread: unit, make_up: unit, user_event: unit, her_day: unit, check_in: unit }),
+    stakes_strength: z.object({ high: unit, med: unit }),
+    user_event_lookback_hours: z.number().positive(),
+    her_day_lookback_hours: z.number().positive(),
+    check_in_gap_factor: z.number().positive(),
+    jitter_max_minutes: z.number().min(0),
+    due_threads_limit: z.number().int().positive(),
+    pending_max_age_minutes: z.number().positive(),
+    log_list_limit: z.number().int().positive(),
+  }),
+  push: z.object({
+    enabled: z.boolean(),
+    timeout_ms: z.number().int().positive(),
+    ttl_seconds: z.number().int().positive(),
+  }),
   prompts: z.object({
+    reach_out: z.string().regex(/^v\d+$/),
     reply: z.string().regex(/^v\d+$/),
     persona: z.string().regex(/^v\d+$/),
     crisis_classifier: z.string().regex(/^v\d+$/),
@@ -264,6 +287,7 @@ export type TurnConfig = Config["turn"];
 export type LifeConfig = Config["life"];
 export type EgoConfig = Config["ego"];
 export type AvailabilityConfig = Config["availability"];
+export type OutreachConfig = Config["outreach"];
 
 /** The dimension baked into the `fact.embedding` column. Changing it needs a migration + re-embed. */
 export const EMBEDDING_DIMENSIONS: number = defaults.embedding.dimensions;

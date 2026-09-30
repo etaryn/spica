@@ -166,7 +166,8 @@
     "life_plan": "v1",
     "life_event": "v1",
     "life_availability": "v1",
-    "ego_line": "v1"
+    "ego_line": "v1",
+    "reach_out": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -268,5 +269,23 @@
     "note_min_delay_ms": 600000,
     "note_min_closeness": 0.4,
     "note_read_delay_ms": 20000
-  }
+  },
+  "outreach": {
+    "enabled": true,
+    "tick_cron": "20 * * * *",
+    "cap_per_day": 1,
+    "cap_per_week": 3,
+    "max_unanswered": 2,
+    "threshold": 0.2,
+    "weights": { "thread": 1.0, "make_up": 0.9, "user_event": 0.8, "her_day": 0.6, "check_in": 0.5 },
+    "stakes_strength": { "high": 1.0, "med": 0.6 },
+    "user_event_lookback_hours": 72,
+    "her_day_lookback_hours": 24,
+    "check_in_gap_factor": 2,
+    "jitter_max_minutes": 40,
+    "due_threads_limit": 5,
+    "pending_max_age_minutes": 120,
+    "log_list_limit": 200
+  },
+  "push": { "enabled": true, "timeout_ms": 5000, "ttl_seconds": 86400 }
 }

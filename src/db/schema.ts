@@ -75,7 +75,8 @@ export const sessionTrigger = pgEnum("session_trigger", ["reach_out", "backchann
 export const judgeKind = pgEnum("judge_kind", ["guard", "turn"]);
 export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable", "guard_disabled"]);
 export const relationshipStatus = pgEnum("relationship_status", ["active", "ended_by_user", "repairing"]);
-export const makeUpState = pgEnum("make_up_state", ["none", "due", "offered"]);
+export const reachOutStatus = pgEnum("reach_out_status", ["none", "blocked", "scheduled", "sent", "dropped"]);
+export const makeUpState =pgEnum("make_up_state", ["none", "due", "offered"]);
 export const relationshipCause = pgEnum("relationship_cause", ["signal", "frequency", "absence", "fade", "make_up", "apology", "ending", "repair", "crisis", "scar", "baseline"]);
 
 const userRef = () => uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" });
@@ -320,6 +321,7 @@ export const life_event_log = pgTable("life_event_log", {
   created_at: ts("created_at").notNull(),
 }, (t) => [index("life_event_log_user_created_idx").on(t.user_id, t.created_at)]);
 
+/** Phase 6 (spec §3.1): one row per outreach evaluation that got past the pre-check. `send_at` is the actual send time once `sent`. */
 export const reach_out_log = pgTable("reach_out_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),
@@ -328,8 +330,25 @@ export const reach_out_log = pgTable("reach_out_log", {
   gate_results: jsonb("gate_results").notNull(),
   sent: boolean("sent").notNull(),
   turn_id: uuid("turn_id").references(() => session_log.id, { onDelete: "set null" }),
+  topic: text("topic"),
+  status: reachOutStatus("status").notNull().default("none"),
+  send_at: ts("send_at"),
+  answered_at: ts("answered_at"),
   created_at: ts("created_at").notNull(),
-}, (t) => [index("reach_out_log_user_created_idx").on(t.user_id, t.created_at)]);
+}, (t) => [
+  index("reach_out_log_user_created_idx").on(t.user_id, t.created_at),
+  index("reach_out_log_user_sent_idx").on(t.user_id, t.send_at).where(sql`${t.status} = 'sent'`),
+]);
+
+/** Web Push subscriptions (spec §3.1). One row per browser endpoint; the endpoint moves to whoever subscribed last. */
+export const push_subscription = pgTable("push_subscription", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  user_id: userRef(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  created_at: ts("created_at").notNull(),
+}, (t) => [index("push_subscription_user_idx").on(t.user_id)]);
 
 /** Every guard decision (Phase 2) and turn-taking judge decision (Phase 3), v2 §5.8. Never read by the chat loop. */
 export const judge_log = pgTable("judge_log", {

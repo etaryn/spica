@@ -71,6 +71,13 @@
       "when": 1790698339008,
       "tag": "0009_needy_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790752945405,
+      "tag": "0010_steep_thor_girl",
+      "breakpoints": true
     }
   ]
 }

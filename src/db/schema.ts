@@ -76,7 +76,7 @@ export const judgeKind = pgEnum("judge_kind", ["guard", "turn"]);
 export const guardOutcome = pgEnum("guard_outcome", ["passed", "regenerated", "sent_with_violation", "fallback", "guard_unavailable", "guard_disabled"]);
 export const relationshipStatus = pgEnum("relationship_status", ["active", "ended_by_user", "repairing"]);
 export const reachOutStatus = pgEnum("reach_out_status", ["none", "blocked", "scheduled", "sent", "dropped"]);
-export const makeUpState =pgEnum("make_up_state", ["none", "due", "offered"]);
+export const makeUpState = pgEnum("make_up_state", ["none", "due", "offered"]);
 export const relationshipCause = pgEnum("relationship_cause", ["signal", "frequency", "absence", "fade", "make_up", "apology", "ending", "repair", "crisis", "scar", "baseline"]);
 
 const userRef = () => uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" });

@@ -10,6 +10,7 @@ import { receiveTurn, type UserMessageInput } from "../chat/receive";
 import type { CrisisCard } from "../config";
 import type { Deps } from "../deps";
 import { ConflictError, errorName, isUniqueViolation } from "../errors";
+import { deliverPart } from "../delivery";
 import { emit } from "../events";
 import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
@@ -170,7 +171,7 @@ export async function sendCrisisReply(deps: Deps, userId: string, userTurn: Turn
     return { status: "replied", turnId: winner.id, text: winner.text, parts: winnerParts, crisisCard: crisisCardFor(winner.safety_flag, config) };
   }
   const parts = composed.parts;
-  for (let i = 0; i < parts.length; i++) await emit(deps, userId, { type: "message", turnId: companion.id, part: i });
+  for (let i = 0; i < parts.length; i++) await deliverPart(deps, userId, { turnId: companion.id, part: i, parts });
   // A paced reply this abandoned may still show typing until its next epoch check; rule 7: no lingering dots.
   await emit(deps, userId, { type: "typing", on: false });
 

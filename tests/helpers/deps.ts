@@ -5,6 +5,7 @@ import { FakeEmbedder } from "@/core/embed/fake";
 import { RecordingEventBus } from "@/core/events";
 import { FakeLLMProvider } from "@/core/llm/fake";
 import { silentLogger } from "@/core/log";
+import { RecordingPusher } from "@/core/push";
 import { RecordingQueue } from "@/core/queue";
 import { getTestDb } from "./db";
 
@@ -19,5 +20,6 @@ export function makeTestDeps(configOverrides: unknown = {}) {
     config,
     log: silentLogger,
     events: new RecordingEventBus(),
+    pusher: new RecordingPusher(),
   } satisfies Deps;
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import type { Deps } from "../deps";
-import { emit } from "../events";
+import { deliverPart } from "../delivery";
 import { guardOutgoing } from "../guard/outgoing";
 import { loadPrompt } from "../prompts";
 import type { BackchannelJob } from "../queue";
@@ -46,6 +46,6 @@ export async function runAvailabilityNote(deps: Deps, job: BackchannelJob): Prom
   });
   await guarded.writeLog();
   if (!row) return "skipped";
-  await emit(deps, job.userId, { type: "message", turnId: row.id, part: 0 });
+  await deliverPart(deps, job.userId, { turnId: row.id, part: 0, parts: [row.text] });
   return "sent";
 }

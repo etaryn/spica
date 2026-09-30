@@ -4,6 +4,7 @@ import { and, eq, notInArray } from "drizzle-orm";
 import { SimClock } from "@/core/clock";
 import { deepMerge, loadConfig, type Config } from "@/core/config";
 import type { Deps } from "@/core/deps";
+import { RecordingPusher } from "@/core/push";
 import { FakeEmbedder } from "@/core/embed/fake";
 import type { Embedder } from "@/core/embed/types";
 import { RecordingEventBus } from "@/core/events";
@@ -216,10 +217,12 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   // Scripted signals stand in for the extractor unless this run's extract is real and the script asks for the model's.
   const useScripted = byText.size > 0 && !(opts.extractReal && script.signal_source === "model");
   const llm = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
+  const pusher = new RecordingPusher();
   const deps: Deps = {
     db, clock, config, queue, log: silentLogger, llm,
     embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
     events: new RecordingEventBus(),
+    pusher,
   };
   const lifeLoop = script.life ? makeLifeLoop(deps, clock, script.life, first) : null;
   const lifeSnaps = async () => script.life

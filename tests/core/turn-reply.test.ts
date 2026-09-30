@@ -73,6 +73,7 @@ describe("runTurnTimer", () => {
       { type: "message", turnId: reply.id, part: 1 },
       { type: "typing", on: false },
     ]);
+    expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id)).toHaveLength(2);
     expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({ turnIds: [...ids, reply.id], replyTurnId: reply.id });
     expect((await getState(getTestDb(), u))!).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [] });
   });
@@ -340,6 +341,7 @@ describe("runBackchannel", () => {
     const bc = (await listTurns(getTestDb(), u)).find((t) => t.trigger === "backchannel")!;
     expect(bc).toMatchObject({ role: "companion", text: "huh", reply_to: null, extracted: true });
     expect(deps.events.events.at(-1)!.event).toEqual({ type: "message", turnId: bc.id, part: 0 });
+    expect(deps.pusher.pushes.filter((p) => p.msg.tag === bc.id)).toHaveLength(1);
   });
 
   test("a newer message makes it stale; a keyword hit drops it", async () => {

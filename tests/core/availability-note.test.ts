@@ -26,6 +26,7 @@ test("sends one note while the deferral is pending, stored as availability, neve
   expect(await runBackchannel(deps, job)).toBe("sent");
   const note = (await listTurns(deps.db, u)).find((t) => t.trigger === "availability")!;
   expect(note).toMatchObject({ role: "companion", reply_to: null, extracted: true });
+  expect(deps.pusher.pushes.filter((p) => p.msg.tag === note.id)).toHaveLength(1);
   expect(await runBackchannel(deps, job)).toBe("skipped"); // once per block
 });
 

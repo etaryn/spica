@@ -7,6 +7,7 @@ import { assertEmbedderMatchesSchema } from "@/core/embed/types";
 import { VoyageEmbedder } from "@/core/embed/voyage";
 import { AnthropicProvider } from "@/core/llm/anthropic";
 import { consoleLogger } from "@/core/log";
+import { noopPusher } from "@/core/push";
 import { createDb } from "@/db/client";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import type { Env } from "./env";
@@ -37,6 +38,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     config,
     log: consoleLogger,
     events: new PgEventBus(db, config.events.channel),
+    pusher: noopPusher,
   };
   return { deps, boss };
 }

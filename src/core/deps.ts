@@ -5,6 +5,7 @@ import type { Embedder } from "./embed/types";
 import type { EventBus } from "./events";
 import type { LLMProvider } from "./llm/types";
 import type { Logger } from "./log";
+import type { Pusher } from "./push";
 import type { JobQueue } from "./queue";
 
 export interface Deps {
@@ -16,4 +17,5 @@ export interface Deps {
   config: Config;
   log: Logger;
   events: EventBus;
+  pusher: Pusher;
 }

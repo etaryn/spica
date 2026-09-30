@@ -5,6 +5,7 @@ import type { Turn } from "@/db/repos/session-log";
 import { composeReply, type Composed } from "../chat/compose-reply";
 import type { Deps } from "../deps";
 import { errorName } from "../errors";
+import { deliverPart } from "../delivery";
 import { emit } from "../events";
 import { guardOutgoing } from "../guard/outgoing";
 import { COLD_PATH_QUEUE, TURN_TIMER_QUEUE, type BackchannelJob, type TurnTimerJob } from "../queue";
@@ -139,7 +140,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
       return "abandoned";
     }
 
-    await emit(deps, userId, { type: "message", turnId: companion.id, part: 0 });
+    await deliverPart(deps, userId, { turnId: companion.id, part: 0, parts });
     for (let i = 1; i < parts.length; i++) {
       sendAt = plus(new Date(Math.max(sendAt.getTime(), clock.now().getTime())), config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length));
       await sleepUntil(clock, sendAt);
@@ -152,7 +153,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
         await composed.value.writeGuardLog();
         return "abandoned";
       }
-      await emit(deps, userId, { type: "message", turnId: companion.id, part: i });
+      await deliverPart(deps, userId, { turnId: companion.id, part: i, parts });
     }
 
     await enqueueSafely(deps, userId, () => deps.queue.enqueue(COLD_PATH_QUEUE, {
@@ -210,6 +211,6 @@ export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"
   });
   await guarded.writeLog();
   if (!bc) return "skipped";
-  await emit(deps, job.userId, { type: "message", turnId: bc.id, part: 0 });
+  await deliverPart(deps, job.userId, { turnId: bc.id, part: 0, parts: [bc.text] });
   return "sent";
 }

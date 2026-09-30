@@ -80,6 +80,7 @@ describe("receiveMessage", () => {
     const s = (await getState(getTestDb(), u))!;
     expect(s).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [], reply_epoch: 1 });
     expect(deps.events.events.map((e) => e.event)).toEqual([{ type: "message", turnId: reply.id, part: 0 }, { type: "message", turnId: reply.id, part: 1 }, { type: "typing", on: false }]);
+    expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id)).toHaveLength(2);
     expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({ turnIds: [turns[0]!.id, crisisMsg.clientMessageId, reply.id] });
     expect(deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
   });

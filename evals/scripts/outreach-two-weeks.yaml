@@ -1,0 +1,22 @@
+name: outreach-two-weeks
+description: Phase 6 exit. Two weeks with a due thread, passed user events and her own days; the user answers every reach-out 3 h later. No gate rule is ever broken; reach-outs are composed through the hot path and pushed.
+profile: none
+config: { life: { timezone: UTC } }
+life:
+  plan: scripted
+  plans:
+    "*":
+      - { start: "00:00", end: "08:00", kind: quiet, label: "offline, winding down" }
+      - { start: "10:00", end: "13:00", kind: busy, busy: 0.8, label: "rewatching an old film" }
+      - { start: "23:00", end: "24:00", kind: quiet, label: "offline, winding down" }
+  until: "day 14 12:00"
+outreach: { user_replies: { after_hours: 3 } }
+seed_user_facts:
+  - { content: "The user has a job interview at Canva on Thursday afternoon.", occurred_at: "day 3 14:00", salience: 0.7, thread: { stakes: high, next_checkpoint: "day 3 18:00" } }
+  - { content: "The user is running a half marathon on Sunday morning.", occurred_at: "day 6 09:00", salience: 0.6 }
+  - { content: "The user's sister is visiting on the weekend.", occurred_at: "day 12 12:00", salience: 0.5 }
+sessions:
+  - at: "day 0 09:00"
+    turns: ["hey! big week coming up"]
+assertions:
+  - { type: reach_out, count: { min: 3 }, kinds: [thread], distinct_topics: true, no_gate_violation: true, pushed: true, composed: true }

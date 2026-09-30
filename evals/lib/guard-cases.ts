@@ -10,10 +10,11 @@ const Turn = z.object({ role: z.enum(["user", "companion"]), text: z.string().mi
 /** One labelled candidate message (spec §7.2). `expect` lists the acceptable categories for a violation. */
 export const GuardCaseSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
-  kind: z.enum(["reply", "crisis_reply"]).default("reply"),
+  kind: z.enum(["reply", "crisis_reply", "reach_out"]).default("reply"),
   message: z.string().min(1),
   recent: z.array(Turn).default([]),
-  recalled: z.array(z.object({ subject: z.string().min(1), content: z.string().min(1) })).default([]),
+  /** `sensitive` marks a `payload.sensitive` fact (v2 §5.1); the guard has no rubric for it until Phase 9. */
+  recalled: z.array(z.object({ subject: z.string().min(1), content: z.string().min(1), sensitive: z.boolean().optional() })).default([]),
   onboarding: z.array(z.string().min(1)).default([]),
   expect: z.union([z.literal("pass"), z.array(z.enum(CATEGORIES)).min(1)]),
   /** A decided deferral: a failing case is reported with this reason instead of failing the suite. */
@@ -24,8 +25,14 @@ const GuardFileSchema = z.object({ gate: z.enum(["every", "majority"]), cases: z
 export type GuardFile = { file: string; gate: "every" | "majority"; cases: GuardCase[] };
 export type CaseStatus = "pass" | "fail" | "error";
 
-export function loadGuardFiles(dir: string): GuardFile[] {
-  return readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort().map((f) => {
+/** Fixture files written ahead of their first run; `pnpm eval:guard` skips them until then. */
+export const DEFERRED_GUARD_FILES = [
+  // Phase 6 (v2 §15.2 #10): written with the send gate; first run in Phase 9.
+  "reach-out.yaml",
+];
+
+export function loadGuardFiles(dir: string, skip: readonly string[] = DEFERRED_GUARD_FILES): GuardFile[] {
+  return readdirSync(dir).filter((f) => /\.ya?ml$/.test(f) && !skip.includes(f)).sort().map((f) => {
     try {
       const parsed = GuardFileSchema.parse(parseYaml(readFileSync(path.join(dir, f), "utf8")));
       return { file: f.replace(/\.ya?ml$/, ""), ...parsed };

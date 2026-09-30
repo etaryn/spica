@@ -1,0 +1,20 @@
+name: outreach-make-up
+description: An insult leaves hurt above make_up_threshold (make-up due); she reaches out first to make up, once her busy block ends.
+profile: none
+config: { life: { timezone: UTC, events_per_day_max: 0 } }
+life:
+  plan: scripted
+  plans:
+    "*":
+      - { start: "00:00", end: "08:00", kind: quiet, label: "offline, winding down" }
+      - { start: "10:00", end: "13:00", kind: busy, busy: 0.8, label: "rewatching an old film" }
+      - { start: "23:00", end: "24:00", kind: quiet, label: "offline, winding down" }
+  until: "day 1 23:00"
+outreach: { user_replies: never }
+sessions:
+  - at: "day 0 09:00"
+    turns:
+      - { text: "honestly you're useless", signals: { hurt: { amount: 0.8, cause: "they called her useless" } } }
+assertions:
+  - { type: relationship, after_session: 1, make_up_state: due }
+  - { type: reach_out, count: { min: 1 }, kinds: [make_up], no_gate_violation: true }

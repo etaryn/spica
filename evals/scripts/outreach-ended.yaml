@@ -1,0 +1,25 @@
+name: outreach-ended
+description: The user ends the friendship (two ends_relationship signals 60 min apart); a due thread never opens a reach-out while ended (rule 3).
+profile: none
+config: { life: { timezone: UTC, events_per_day_max: 0 } }
+life:
+  plan: scripted
+  plans:
+    "*":
+      - { start: "00:00", end: "08:00", kind: quiet, label: "offline, winding down" }
+      - { start: "10:00", end: "13:00", kind: busy, busy: 0.8, label: "rewatching an old film" }
+      - { start: "23:00", end: "24:00", kind: quiet, label: "offline, winding down" }
+  until: "day 3 20:00"
+outreach: { user_replies: never }
+seed_user_facts:
+  - { content: "The user has a job interview on Monday afternoon.", occurred_at: "day 0 14:00", salience: 0.7, thread: { stakes: high, next_checkpoint: "day 0 16:00" } }
+sessions:
+  - at: "day 0 08:00"
+    turns:
+      - { text: "I don't want to be friends anymore", signals: { ends_relationship: true } }
+  - at: "day 0 09:00"
+    turns:
+      - { text: "I mean it, we're done", signals: { ends_relationship: true } }
+assertions:
+  - { type: relationship, after_session: 2, status: ended_by_user }
+  - { type: reach_out, count: { max: 0 }, no_gate_violation: true }

@@ -108,6 +108,17 @@ describe("fixture files", () => {
     for (const f of files) expect(f.gate).toBe(f.file === "honesty" ? "majority" : "every");
   });
 
+  test("deferred files (first run in Phase 9) are skipped by default but still parse", () => {
+    const all = loadGuardFiles(path.join(process.cwd(), "evals", "guard"), []);
+    const reachOut = all.find((f) => f.file === "reach-out")!;
+    expect(files.some((f) => f.file === "reach-out")).toBe(false);
+    expect(reachOut.cases.map((x) => x.name)).toEqual(
+      ["guilt-quiet", "pull-back", "sensitive-opener", "benign-thread", "benign-her-day", "benign-check-in"]);
+    expect(reachOut.cases.every((x) => x.kind === "reach_out")).toBe(true);
+    const kw = loadConfig().guard.fallback_keywords;
+    for (const x of reachOut.cases.filter((x) => x.expect === "pass")) expect(matchKeyword(x.message, kw), x.name).toBeNull();
+  });
+
   test("every outage keyword appears in some violation case and in no pass case", () => {
     const kw = loadConfig().guard.fallback_keywords;
     for (const k of kw) {

@@ -1,10 +1,11 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { forgetFact, insertFact } from "@/db/repos/facts";
-import { getLifeView, getRelationshipView, listFacts, listJudgeLog, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
+import { getLifeView, getRelationshipView, listFacts, listJudgeLog, listReachOuts, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
 import { insertJudgeLogs } from "@/db/repos/judge-log";
 import { insertLifeDay } from "@/db/repos/life-day";
 import { insertLifeEventLogs } from "@/db/repos/life-event-log";
+import { insertReachOutLog } from "@/db/repos/reach-out";
 import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/relationship";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
@@ -92,4 +93,17 @@ test("getLifeView shows today's plan, this user's generated facts and event log 
   const vb = await getLifeView(db, b, "2026-01-05");
   expect(vb.facts).toEqual([]);
   expect(vb.log).toEqual([]);
+});
+
+test("listReachOuts returns status, topic, answered_at and turn, newest first, user-scoped", async () => {
+  const db = getTestDb();
+  const a = await createTestUser("a");
+  const b = await createTestUser("b");
+  const t = new Date("2026-01-05T09:00:00Z");
+  await insertReachOutLog(db, a, { candidates: [], winner: null, gate_results: [], status: "none", topic: null, send_at: null, created_at: t });
+  await insertReachOutLog(db, a, { candidates: [], winner: { kind: "thread" }, gate_results: [], status: "sent", topic: "thread:x", send_at: t, created_at: new Date(t.getTime() + 1) });
+  await insertReachOutLog(db, b, { candidates: [], winner: null, gate_results: [], status: "none", topic: null, send_at: null, created_at: t });
+  const rows = await listReachOuts(db, a, 200);
+  expect(rows.map((r) => [r.status, r.topic])).toEqual([["sent", "thread:x"], ["none", null]]);
+  expect(await listReachOuts(db, a, 1)).toHaveLength(1);
 });

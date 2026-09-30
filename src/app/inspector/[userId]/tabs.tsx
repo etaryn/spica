@@ -128,7 +128,7 @@ export async function RelationshipTab({ db, userId, now, cfg }: { db: Db; userId
       {json({
         status: row.status, make_up_state: row.make_up_state, make_up_replies: row.make_up_replies, hurt_cause_fact: row.hurt_cause_fact,
         end_pending_since: row.end_pending_since, ended_at: row.ended_at, repair_started_at: row.repair_started_at,
-        crisis_quiet_until: row.crisis_quiet_until, last_contact: row.last_contact, last_tick: row.last_tick, cadence: row.cadence,
+        crisis_quiet_until: row.crisis_quiet_until, unanswered_reach_outs: row.unanswered_reach_outs, last_contact: row.last_contact, last_tick: row.last_tick, cadence: row.cadence,
       })}
       <h3>Params</h3>
       <table className={styles.table}><tbody>
@@ -175,16 +175,55 @@ export async function RetrievalTab({ db, userId }: { db: Db; userId: string }) {
   );
 }
 
-export async function ReachOutsTab({ db, userId }: { db: Db; userId: string }) {
-  const rows = await r.listReachOuts(db, userId);
-  if (!rows.length) return <Empty phase={3} />;
+type GateRes = { rule: string; pass: boolean; detail?: string };
+type DropShape = { tick?: GateRes[]; dropped?: string; recheck?: { gate?: GateRes[]; topicUsed?: boolean; epochChanged?: boolean; newTurn?: boolean } };
+
+const Gate = ({ results }: { results: unknown }) => (
+  <>
+    {Array.isArray(results) && results.length
+      ? (results as GateRes[]).map((g) => <span key={g.rule} title={g.detail} style={{ marginRight: 6 }}>{g.pass ? "✓" : "✗"}{g.rule}</span>)
+      : "—"}
+  </>
+);
+
+/** `gate_results` is the tick's array, or (after a send-job drop) `{ tick, dropped, recheck? }`. */
+function GateCell({ value }: { value: unknown }) {
+  if (Array.isArray(value)) return <Gate results={value} />;
+  const d = (value ?? {}) as DropShape;
+  return (
+    <>
+      <div>dropped: {d.dropped ?? "—"}</div>
+      <div>tick: <Gate results={d.tick} /></div>
+      {d.recheck && (
+        <div>
+          recheck: <Gate results={d.recheck.gate} />
+          {" "}topicUsed {String(!!d.recheck.topicUsed)} · epochChanged {String(!!d.recheck.epochChanged)} · newTurn {String(!!d.recheck.newTurn)}
+        </div>
+      )}
+    </>
+  );
+}
+
+export async function ReachOutsTab({ db, userId, limit }: { db: Db; userId: string; limit: number }) {
+  const rows = await r.listReachOuts(db, userId, limit);
+  if (!rows.length) return <Empty phase={6} />;
   return (
     <table className={styles.table}>
-      <thead><tr><th>at</th><th>sent</th><th>winner</th><th>gate</th><th>candidates</th></tr></thead>
+      <thead><tr><th>at</th><th>status</th><th>winner</th><th>topic</th><th>gate</th><th>send at</th><th>answered</th><th>turn</th><th>candidates</th></tr></thead>
       <tbody>
-        {rows.map((x) => (
-          <tr key={x.id}><td>{iso(x.created_at)}</td><td>{x.sent ? "yes" : "no"}</td><td>{json(x.winner)}</td><td>{json(x.gate_results)}</td><td>{json(x.candidates)}</td></tr>
-        ))}
+        {rows.map((x) => {
+          const w = x.winner as { kind?: string; score?: number } | null;
+          return (
+            <tr key={x.id}>
+              <td>{iso(x.created_at)}</td><td>{x.status}</td>
+              <td>{w ? `${w.kind ?? "?"} ${typeof w.score === "number" ? w.score.toFixed(2) : ""}` : "—"}</td>
+              <td>{x.topic ?? "—"}</td><td><GateCell value={x.gate_results} /></td>
+              <td>{iso(x.send_at)}</td><td>{iso(x.answered_at)}</td>
+              <td>{x.turn_id ? x.turn_id.slice(0, 8) : "—"}</td>
+              <td><details><summary>{Array.isArray(x.candidates) ? x.candidates.length : 0}</summary>{json(x.candidates)}</details></td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

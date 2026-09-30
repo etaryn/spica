@@ -76,8 +76,8 @@ export const listRetrievalTraces = (db: Db, userId: string) =>
     .orderBy(desc(retrieval_trace.created_at), desc(retrieval_trace.score))
     .limit(500);
 
-export const listReachOuts = (db: Db, userId: string) =>
-  db.select().from(reach_out_log).where(eq(reach_out_log.user_id, userId)).orderBy(desc(reach_out_log.created_at)).limit(200);
+export const listReachOuts = (db: Db, userId: string, limit: number) =>
+  db.select().from(reach_out_log).where(eq(reach_out_log.user_id, userId)).orderBy(desc(reach_out_log.created_at)).limit(limit);
 
 export const getConversationState = async (db: Db, userId: string) =>
   (await db.select().from(conversation_state).where(eq(conversation_state.user_id, userId)).limit(1))[0] ?? null;

@@ -42,7 +42,7 @@ export default async function InspectUser({ params, searchParams }: {
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
       {tab === "turn" && <TurnStateTab db={db} userId={userId} />}
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}
-      {tab === "reachouts" && <ReachOutsTab db={db} userId={userId} />}
+      {tab === "reachouts" && <ReachOutsTab db={db} userId={userId} limit={config.outreach.log_list_limit} />}
     </>
   );
 }

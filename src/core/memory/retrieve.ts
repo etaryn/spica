@@ -1,4 +1,4 @@
-import { candidateFacts, getPreoccupationFact } from "@/db/repos/facts";
+import { candidateFacts, getFact, getPreoccupationFact } from "@/db/repos/facts";
 import type { Turn } from "@/db/repos/session-log";
 import { dueThreads } from "@/db/repos/threads";
 import { emptyRetrieval, type RetrievalResult } from "../chat/assemble";
@@ -16,7 +16,7 @@ const errName = (e: unknown) => String((e as Error)?.name ?? "Error");
 export async function retrieve(
   deps: Pick<Deps, "db" | "embedder" | "config" | "log">,
   userId: string,
-  input: { answering: Turn[]; context: Turn[]; now: Date },
+  input: { answering: Turn[]; context: Turn[]; now: Date; queryText?: string; forceFactIds?: string[] },
 ): Promise<RetrievalResult> {
   const { db, embedder, config, log } = deps;
   const result = emptyRetrieval();
@@ -24,10 +24,13 @@ export async function retrieve(
 
   let scored: Scored[] = [];
   try {
-    const text = [...input.context, ...input.answering].map((t) => t.text).join("\n");
-    const [q] = await withTimeout(embedder.embed([text], "query"), config.retrieval.embed_timeout_ms);
-    if (!q) throw new Error("embedder returned no vector");
-    scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now), input.now, config.retrieval);
+    const text = input.queryText ?? [...input.context, ...input.answering].map((t) => t.text).join("\n");
+    // An empty query (a check-in with no turns) has nothing to rank against: skip the embed.
+    if (text.trim() !== "") {
+      const [q] = await withTimeout(embedder.embed([text], "query"), config.retrieval.embed_timeout_ms);
+      if (!q) throw new Error("embedder returned no vector");
+      scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now), input.now, config.retrieval);
+    }
   } catch (e) {
     log.error("retrieval degraded", { userId, error: errName(e) });
   }
@@ -41,6 +44,14 @@ export async function retrieve(
   }
 
   try {
+    for (const id of input.forceFactIds ?? []) {
+      if (seen.has(id)) continue;
+      const f = await getFact(db, userId, id);
+      if (!f || f.status === "superseded" || f.status === "stale") continue;
+      seen.add(id);
+      result.facts[f.subject].push({ id: f.id, content: f.content, when: f.occurred_at ?? f.created_at });
+      result.recalled.push({ factId: f.id, sim: 0, fact_salience: f.salience, entity_salience: 1, recency: 1, score: 0, forced: true });
+    }
     for (const t of await dueThreads(db, userId, input.now, config.retrieval.max_due_threads)) {
       result.dueThreads.push({ id: t.id, title: t.title, detail: t.content });
       if (t.fact_id && !seen.has(t.fact_id)) {

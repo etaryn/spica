@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { ScriptedEmbedder } from "@/core/embed/scripted";
 import { retrieve } from "@/core/memory/retrieve";
 import * as facts from "@/db/repos/facts";
@@ -93,4 +93,25 @@ test("a generated fact dated in the future stays hidden (retrieval and preoccupa
   const r = await retrieve(d, u, { answering: [q], context: [], now: after });
   expect(r.facts.self).toEqual([expect.objectContaining({ id: gen.id, onMind: true })]);
   expect((await facts.getPreoccupationFact(getTestDb(), u, after))?.id).toBe(gen.id);
+});
+
+test("queryText replaces the turns as the query, and forceFactIds pulls facts in as forced", async () => {
+  const u = await createTestUser();
+  const e = new ScriptedEmbedder(D);
+  const b = await facts.insertFact(getTestDb(), u, { subject: "user", kind: "event", content: "interview at Canva", embedding: ScriptedEmbedder.axis(D, 4),
+    created_at: now, status: "open", salience: 0.7, valence: 0, confidence: 1, source: "turn" });
+  e.failNext = true; // the ranked path degrades, so b can only arrive through forceFactIds
+  const spy = vi.spyOn(e, "embed");
+  const r = await retrieve(deps(e), u, { answering: [], context: [], now, queryText: "the interview", forceFactIds: [b.id] });
+  expect(spy.mock.calls[0]![0]).toEqual(["the interview"]);
+  expect(r.recalled.find((x) => x.factId === b.id)?.forced).toBe(true);
+  expect(r.facts.user.map((f) => f.id)).toEqual([b.id]);
+});
+
+test("an empty query (check-in with no turns) skips the embed", async () => {
+  const u = await createTestUser();
+  const e = new ScriptedEmbedder(D);
+  const spy = vi.spyOn(e, "embed");
+  await retrieve(deps(e), u, { answering: [], context: [], now, queryText: "" });
+  expect(spy).not.toHaveBeenCalled();
 });

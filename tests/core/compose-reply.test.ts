@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { composeReply } from "@/core/chat/compose-reply";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { composeReachOut, composeReply, renderReachOut } from "@/core/chat/compose-reply";
+import { loadPrompt } from "@/core/prompts";
 import { ReplyFailedError } from "@/core/errors";
 import { messageToCheck } from "@/core/guard/guard";
 import { insertFact } from "@/db/repos/facts";
@@ -189,5 +190,31 @@ describe("composeReply", () => {
     const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
     await composeReply(deps, u, { turns: [await userTurn(deps, u, "i don't want to be here anymore")], openQuestions: [], flag });
     expect(deps.llm.calls[1]!.system).not.toContain("## How you're feeling");
+  });
+});
+
+describe("composeReachOut", () => {
+  test("slot 7b with the candidate, candidate text as the query, guard kind reach_out", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "wish me luck");
+    const spy = vi.spyOn(deps.embedder, "embed");
+    const out = await composeReachOut(deps, u, { kind: "thread", text: "interview at Canva", factId: null, threadId: null }, [turn]);
+    const prompt = deps.llm.calls.at(-1)!;
+    expect(prompt.system).toContain("## Why you're writing");
+    expect(prompt.system).toContain("On your mind: interview at Canva");
+    expect(prompt.system).toContain("how it went");
+    expect(prompt.messages.at(-1)!.content).toContain("[You're texting them first. Write only your message.]");
+    expect(spy.mock.calls[0]![0]).toEqual(["interview at Canva"]);
+    expect(out.parts.length).toBeGreaterThan(0);
+    await out.writeGuardLog();
+    const logs = await listJudgeLogs(getTestDb(), u, 10);
+    expect((logs[0]!.input as { kind: string }).kind).toBe("reach_out");
+  });
+
+  test("renderReachOut: check-in has no topic text", () => {
+    const r = renderReachOut(loadPrompt("reach-out", "v1"), { kind: "check_in", text: "", factId: null, threadId: null });
+    expect(r.slot).toContain("On your mind: just saying hi");
+    expect(r.slot).not.toContain("{{");
   });
 });

@@ -158,3 +158,20 @@ test("slot 4 'Your day' sits after 'You and them'; the preoccupation is labelled
   expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## What you remember"));
   expect(system).toContain("Spica got the telescope images. (today) (on your mind lately)");
 });
+
+describe("reach-out slot 7b", () => {
+  test("slot 7b sits after open questions and a trailing user cue ends the messages", () => {
+    const p = assemblePrompt({
+      ...base, openQuestions: ["q?"], reachOut: { slot: "S", cue: "[cue]" },
+      recentTurns: [{ role: "user", text: "hi" }, { role: "companion", text: "hey" }],
+    });
+    expect(p.system.indexOf("## Why you're writing\nS")).toBeGreaterThan(p.system.indexOf("## They asked"));
+    expect(p.messages.at(-1)).toEqual({ role: "user", content: "[cue]" });
+  });
+
+  test("the cue merges into a trailing user turn and stands alone with no history", () => {
+    const b = { ...base, reachOut: { slot: "S", cue: "[cue]" } };
+    expect(assemblePrompt({ ...b, recentTurns: [{ role: "user", text: "hi" }] }).messages).toEqual([{ role: "user", content: "hi\n\n[cue]" }]);
+    expect(assemblePrompt({ ...b, recentTurns: [] }).messages).toEqual([{ role: "user", content: "[cue]" }]);
+  });
+});

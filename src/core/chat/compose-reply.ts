@@ -11,7 +11,8 @@ import { loadLifeState } from "../life/state";
 import type { RecalledFact } from "../memory/types";
 import { retrieve } from "../memory/retrieve";
 import { loadPrompt } from "../prompts";
-import { loadRelationshipSummary } from "../relationship/summary";
+import type { Candidate } from "../outreach/types";
+import { loadRelationshipSummary, parseSummaryPhrases } from "../relationship/summary";
 import { crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
 import { withTimeout } from "../timeout";
@@ -35,8 +36,18 @@ function guardFacts(r: RetrievalResult): { id: string; subject: string; content:
  * inserts the reply, sends it, enqueues the cold path and then calls `writeGuardLog` (judge_log after the send).
  * Called by the turn timer, the crisis path and (Phase 6) reach-outs.
  */
+export type ReachOutTrigger = Pick<Candidate, "kind" | "text" | "factId" | "threadId">;
+
+type ComposeInput = {
+  recent: Turn[]; earlier: Turn[]; answering: Turn[];
+  gapTo: Date; // first.created_at for a reply; now for a reach-out
+  anchor: Turn; // guard turn id and stats cut-off
+  openQuestions: string[]; flag: SafetyFlag | null; deferredFact?: string | null;
+  reachOut: ReachOutTrigger | null;
+};
+
 export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[]; openQuestions: string[]; flag: SafetyFlag | null; deferredFact?: string | null }): Promise<Composed> {
-  const { db, clock, config, llm, log } = deps;
+  const { db, config } = deps;
   const last = a.turns.at(-1);
   if (!last) throw new Error("composeReply needs at least one turn");
   const first = a.turns[0]!;
@@ -45,6 +56,33 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
   const recent = await sessionLog.turnsUpTo(db, userId, last, config.chat.recent_turns);
   const firstIdx = recent.findIndex((t) => t.id === first.id);
   const earlier = firstIdx === -1 ? recent.slice(0, -a.turns.length) : recent.slice(0, firstIdx);
+  return composeFrom(deps, userId, {
+    recent, earlier, answering: a.turns, gapTo: first.created_at, anchor: last,
+    openQuestions: a.openQuestions, flag: a.flag, deferredFact: a.deferredFact, reachOut: null,
+  });
+}
+
+/** Phase 6 (spec §7): a reach-out through the same hot path. `recent` is the prompt window, oldest first. */
+export async function composeReachOut(deps: Deps, userId: string, trigger: ReachOutTrigger, recent: Turn[]): Promise<Composed> {
+  const anchor = recent.at(-1);
+  if (!anchor) throw new Error("composeReachOut needs history");
+  return composeFrom(deps, userId, {
+    recent, earlier: recent, answering: [], gapTo: deps.clock.now(), anchor,
+    openQuestions: [], flag: null, reachOut: trigger,
+  });
+}
+
+export function renderReachOut(md: string, t: ReachOutTrigger): { slot: string; cue: string } {
+  const p = parseSummaryPhrases(md);
+  const topic = t.text || "just saying hi";
+  const guidance = (p[t.kind] ?? []).join(" ");
+  const slot = (p.slot ?? []).map((l) => l.replace("{{topic}}", () => topic).replace("{{guidance}}", () => guidance)).join("\n");
+  return { slot, cue: (p.cue ?? []).join(" ") };
+}
+
+async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise<Composed> {
+  const { db, clock, config, llm, log } = deps;
+  const { recent, earlier } = a;
 
   const loadOnboarding = (deps as { onboardingFacts?: typeof listOnboardingFacts }).onboardingFacts ?? listOnboardingFacts;
   const onboarding = withTimeout(Promise.resolve().then(() => loadOnboarding(db, userId)), config.hot_path.db_timeout_ms).catch((e) => {
@@ -56,7 +94,7 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
     ? (async () => {
         try {
           const tz = await getTimezone(db, userId);
-          const stats = await sessionLog.userTurnStats(db, userId, last.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
+          const stats = await sessionLog.userTurnStats(db, userId, a.anchor.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
           return relationshipLine(stats, clock.now());
         } catch (e) {
           log.error("relationship line unavailable", { userId, error: errName(e) });
@@ -88,9 +126,15 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
       });
 
   const retrieval = await retrieve(deps, userId, {
-    answering: a.turns,
+    answering: a.answering,
     context: config.retrieval.context_turns > 0 ? earlier.slice(-config.retrieval.context_turns) : [],
     now: clock.now(),
+    ...(a.reachOut
+      ? {
+          queryText: a.reachOut.text || recent.slice(-Math.max(1, config.retrieval.context_turns)).map((t) => t.text).join("\n"),
+          forceFactIds: a.reachOut.factId ? [a.reachOut.factId] : [],
+        }
+      : {}),
   });
   const relLine = await relLinePromise;
 
@@ -98,7 +142,7 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
     valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     egoLine: await egoPromise,
     relationshipSummary: [
-      [relLine, gapLine(earlier.at(-1)?.created_at ?? null, first.created_at, config.chat.gap_line_min_hours)].filter((x): x is string => !!x).join(" "),
+      [relLine, gapLine(earlier.at(-1)?.created_at ?? null, a.gapTo, config.chat.gap_line_min_hours)].filter((x): x is string => !!x).join(" "),
       await relSummaryPromise,
     ].filter((x): x is string => !!x).join("\n") || null,
     lifeState: await lifePromise,
@@ -107,21 +151,22 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     now: clock.now(),
+    reachOut: a.reachOut ? renderReachOut(loadPrompt("reach-out", config.prompts.reach_out), a.reachOut) : null,
   });
 
   let firstText: string;
   try {
     firstText = await llm.generateReply(prompt);
   } catch (e) {
-    log.error("reply generation failed", { userId, turnId: last.id, error: errName(e) });
+    log.error("reply generation failed", { userId, turnId: a.anchor.id, error: errName(e) });
     throw new ReplyFailedError("reply generation failed", crisisCardFor(a.flag, config), { cause: e });
   }
 
   const guarded = await guardOutgoing(deps, {
-    userId, turnId: last.id, first: firstText,
+    userId, turnId: a.anchor.id, first: firstText,
     regenerate: (note) => llm.generateReply({ system: `${prompt.system}\n\n${note}`, messages: prompt.messages }),
     input: {
-      kind: a.flag?.flagged ? "crisis_reply" : "reply",
+      kind: a.flag?.flagged ? "crisis_reply" : a.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
       recalledFacts: guardFacts(retrieval),
       onboardingFacts: await onboarding,

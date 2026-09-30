@@ -30,6 +30,8 @@ export interface AssembleInput {
   gapMarkerMinHours?: number;
   /** The user's unanswered questions (v2 §6.2 slot 7). */
   openQuestions?: string[];
+  /** Phase 6 slot 7b: why she's writing first, and the trailing user-role cue the model answers. */
+  reachOut?: { slot: string; cue: string } | null;
 }
 
 const DAY = 86_400_000;
@@ -72,6 +74,7 @@ ${input.lifeState}` : null,
     input.openQuestions?.length
       ? `## They asked and you haven't answered yet\n${input.openQuestions.map((q) => `- ${q}`).join("\n")}`
       : null,
+    input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
   ].filter((s): s is string => s !== null);
 
   const firstUser = input.recentTurns.findIndex((t) => t.role === "user");
@@ -83,6 +86,12 @@ ${input.lifeState}` : null,
     const marked = t.role === "user" && input.gapMarkerMinHours !== undefined && gapHours >= input.gapMarkerMinHours;
     return { role: t.role === "user" ? "user" : "assistant", content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text };
   });
+
+  if (input.reachOut) {
+    const last = messages.at(-1);
+    if (last?.role === "user") messages[messages.length - 1] = { role: "user", content: `${last.content}\n\n${input.reachOut.cue}` };
+    else messages.push({ role: "user", content: input.reachOut.cue });
+  }
 
   return { system: slots.join("\n\n"), messages };
 }

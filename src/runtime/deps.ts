@@ -10,13 +10,18 @@ import { consoleLogger } from "@/core/log";
 import { noopPusher } from "@/core/push";
 import { createDb } from "@/db/client";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
-import type { Env } from "./env";
+import { vapidPublicKey, type Env } from "./env";
 import { PgEventBus } from "./pg-event-bus";
+import { WebPushPusher } from "./web-push";
 
 /** Production wiring shared by the Next.js server and the worker. */
 export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
   const config = loadConfig(env.configOverrides);
   const { db } = createDb(env.DATABASE_URL);
+  const pusher = config.push.enabled && vapidPublicKey(env)
+    ? new WebPushPusher(db, { publicKey: env.VAPID_PUBLIC_KEY!, privateKey: env.VAPID_PRIVATE_KEY!, subject: env.VAPID_SUBJECT!, ttlSeconds: config.push.ttl_seconds, timeoutMs: config.push.timeout_ms }, consoleLogger)
+    : noopPusher;
+  if (pusher === noopPusher) consoleLogger.info("web push disabled", { reason: config.push.enabled ? "no VAPID keys" : "push.enabled false" });
   const embedder = new VoyageEmbedder({
     apiKey: env.VOYAGE_API_KEY,
     model: config.embedding.model,
@@ -38,7 +43,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     config,
     log: consoleLogger,
     events: new PgEventBus(db, config.events.channel),
-    pusher: noopPusher,
+    pusher,
   };
   return { deps, boss };
 }

@@ -23,6 +23,18 @@ test("a rejected or hanging push never fails or delays delivery", async () => {
   expect(Date.now() - started).toBeLessThan(50); // not awaited in the pacing path
 });
 
+test("M3: the push body is capped at push.body_max_chars with an ellipsis (Web Push payload limit); SSE is untouched", async () => {
+  const deps = makeTestDeps({ push: { body_max_chars: 10 } });
+  await deliverPart(deps, "u1", { turnId: "t", part: 1, parts: ["hey there", "how did it go?"] });
+  expect(deps.pusher.pushes[0]!.msg.body).toBe("hey there…");
+  expect([...deps.pusher.pushes[0]!.msg.body].length).toBe(10);
+  await deliverPart(deps, "u1", { turnId: "u", part: 0, parts: ["😀😀😀😀😀😀😀😀😀😀😀😀"] }); // never splits a surrogate pair
+  expect(deps.pusher.pushes[1]!.msg.body).toBe("😀😀😀😀😀😀😀😀😀…");
+  await deliverPart(deps, "u1", { turnId: "v", part: 0, parts: ["short"] });
+  expect(deps.pusher.pushes[2]!.msg.body).toBe("short");
+  expect(deps.events.events).toHaveLength(3);
+});
+
 test("push.enabled false: SSE only", async () => {
   const deps = makeTestDeps({ push: { enabled: false } });
   await deliverPart(deps, "u1", { turnId: "t", part: 0, parts: ["a"] });

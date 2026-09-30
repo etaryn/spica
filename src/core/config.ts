@@ -256,6 +256,7 @@ export const ConfigSchema = z.object({
     enabled: z.boolean(),
     timeout_ms: z.number().int().positive(),
     ttl_seconds: z.number().int().positive(),
+    body_max_chars: z.number().int().min(2), // Web Push payloads are limited to about 4 KB
   }),
   prompts: z.object({
     reach_out: z.string().regex(/^v\d+$/),

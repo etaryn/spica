@@ -287,5 +287,5 @@
     "pending_max_age_minutes": 120,
     "log_list_limit": 200
   },
-  "push": { "enabled": true, "timeout_ms": 5000, "ttl_seconds": 86400, "body_max_chars": 1000 }
+  "push": { "enabled": true, "timeout_ms": 5000, "ttl_seconds": 86400, "body_max_chars": 1000, "generic_body": "Spica sent you a message" }
 }

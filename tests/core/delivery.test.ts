@@ -13,6 +13,13 @@ test("emits the SSE part, then pushes with the parts so far under one tag", asyn
   ]);
 });
 
+test("generic: the push body is push.generic_body, never the message text; SSE is unchanged", async () => {
+  const deps = makeTestDeps();
+  await deliverPart(deps, "u1", { turnId: "t1", part: 0, parts: ["please call 988"], generic: true });
+  expect(deps.events.events.map((e) => e.event)).toEqual([{ type: "message", turnId: "t1", part: 0 }]);
+  expect(deps.pusher.pushes).toEqual([{ userId: "u1", msg: { tag: "t1", body: deps.config.push.generic_body, url: "/chat" } }]);
+});
+
 test("a rejected or hanging push never fails or delays delivery", async () => {
   const deps = makeTestDeps({ push: { timeout_ms: 10 } });
   deps.pusher.failNext = true;

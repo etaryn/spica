@@ -83,6 +83,6 @@ test("life.timezone must be a real IANA zone", () => {
 test("outreach, push and reach_out prompt defaults", () => {
   const c = loadConfig();
   expect(c.outreach).toMatchObject({ cap_per_day: 1, cap_per_week: 3, max_unanswered: 2, threshold: 0.2, tick_cron: "20 * * * *" });
-  expect(c.push).toEqual({ enabled: true, timeout_ms: 5000, ttl_seconds: 86400, body_max_chars: 1000 });
+  expect(c.push).toEqual({ enabled: true, timeout_ms: 5000, ttl_seconds: 86400, body_max_chars: 1000, generic_body: "Spica sent you a message" });
   expect(c.prompts.reach_out).toBe("v1");
 });

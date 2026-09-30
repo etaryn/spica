@@ -22,9 +22,9 @@ Written 2026-09-30 at the close of Phase 6, for a fresh Claude session starting 
 
 ## Open decisions
 
-- **OPEN for Ethan (new, v2 §15.3b R9): notification text privacy.** Every message pushes with its text (crisis replies included), so a lock screen can show anything she says. Options: a generic body, generic only for sensitive or crisis turns, or a setting. Not changed in Phase 6 (ruling R13). Ask before building anything that changes what a push says; Phase 7 doesn't need it decided.
+- **Settled 2026-10-01 (v2 §18 O9): notification text.** Crisis replies push the generic `push.generic_body` ("Spica sent you a message") via `deliverPart(..., { generic: true })`; every other message pushes its text. No setting.
 - **Still open, both decided in Phase 9:** #3 ceilings (hurt and tension uncapped for now) and #4 the jab/contempt line (rules 1, 4, 6 and 8 suspended for now).
-- **Flagged for Ethan:** `outreach.threshold` is 0.2, not the design's 0.4 (v2 §18 row R1); one config value.
+- **Confirmed 2026-10-01:** `outreach.threshold` 0.2, not the design's 0.4 (v2 §18 row R1).
 - Nothing else is open for Phase 7 itself. v2 §12 is still marked LEANING (hybrid); with #1 settled as fixed Spica, the test calibrates the user only (`test_calibrates: user`).
 
 ## Guard and behaviour rules (test phase, unchanged)
@@ -80,7 +80,7 @@ Written 2026-09-30 at the close of Phase 6, for a fresh Claude session starting 
 - **Workflow:** brainstorming (one question at a time, Ethan answers) → spec → plan → subagent-driven execution in a worktree with a review after each task, then a final whole-branch review on the most capable model and one fix wave, **before** the docs fold-back.
   - The final review again found real cross-task bugs (I1–I4) that the task reviews couldn't see, and the exit run found a production gap (R10) the unit tests didn't.
 - **Ledger:** `.superpowers/sdd/<plan>/progress.md` in the worktree holds every ruling (R1–R13) and deferred minor. A usage-limit stop mid-task was recovered from its uncommitted edits.
-- **Rulings:** record each in the ledger and list them for Ethan at the end. Phase 6's that need his eye: R1 (threshold 0.2), R7 (new turn or crisis during compose wins), R8 (per-browser opt-out), R12 and R13 (make-up `offered`, stale rows, crisis card and notification privacy not changed).
+- **Rulings:** record each in the ledger and list them for Ethan at the end. Phase 6's that need his eye: R1 (threshold 0.2), R7 (new turn or crisis during compose wins), R8 (per-browser opt-out), R12 (make-up `offered`, stale rows, crisis card). R1 and R13 were settled by Ethan on 2026-10-01.
 - **Exit scripts must be checked against the real code path:** the checker's first crisis rule read a flag production never sets on user turns (R9). Verify what production writes before asserting on it.
 - **Merging into `main`** (Ethan's uncommitted v2 edit is always there):
   1. back up his diff;

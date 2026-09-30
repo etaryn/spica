@@ -229,7 +229,9 @@ tests; fake `--compare` no regressions. Folded into v2 (§2, §4, §5.5, §5.6,
 hand. After merge, Ethan runs `pnpm db:migrate` (0010), puts VAPID keys in
 `.env` (`npx web-push generate-vapid-keys`, plus `VAPID_SUBJECT`), restarts
 `pnpm worker` (twelve queues) and checks notifications in a browser (v2
-§15.4 #78). OPEN for Ethan: notification text privacy (v2 §15.3b R9).
+§15.4 #78). Settled 2026-10-01: crisis replies push a generic body
+(`push.generic_body`), other messages push their text (v2 §18 O9); threshold
+0.2 confirmed (R1).
 Phase 6 design: `docs/superpowers/specs/2026-09-30-phase-6-outreach-design.md`
 (§12 as built); plan: `docs/superpowers/plans/2026-09-30-phase-6-outreach.md`.
 Phase 5 (Life sim +

@@ -13,11 +13,12 @@ function capChars(text: string, max: number): string {
  * One bubble of one of her messages (spec §8.1, D7): SSE first, then a Web Push carrying the parts sent so far
  * under the turn's tag (one notification per message, updated per bubble). The push is not awaited: pacing
  * never waits on a push service, and a push failure never fails the send (the message is already in history).
+ * `generic` (crisis replies, v2 §18 O9) pushes `push.generic_body` instead of her words, so a lock screen never shows them.
  */
-export async function deliverPart(deps: Pick<Deps, "events" | "log" | "pusher" | "config">, userId: string, a: { turnId: string; part: number; parts: string[] }): Promise<void> {
+export async function deliverPart(deps: Pick<Deps, "events" | "log" | "pusher" | "config">, userId: string, a: { turnId: string; part: number; parts: string[]; generic?: boolean }): Promise<void> {
   await emit(deps, userId, { type: "message", turnId: a.turnId, part: a.part });
   if (!deps.config.push.enabled) return;
-  const body = capChars(a.parts.slice(0, a.part + 1).join("\n"), deps.config.push.body_max_chars);
+  const body = a.generic ? deps.config.push.generic_body : capChars(a.parts.slice(0, a.part + 1).join("\n"), deps.config.push.body_max_chars);
   let pushing: Promise<void>;
   try {
     pushing = deps.pusher.push(userId, { tag: a.turnId, body, url: "/chat" });

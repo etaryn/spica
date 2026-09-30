@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getVapidPublicKey } from "@/lib/deps";
+import { getDeps, getVapidPublicKey } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
 import { deleteAccountAction } from "./actions";
 import { NotificationsSwitch } from "./notifications-switch";
@@ -16,7 +16,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h1 style={{ fontSize: 24 }}>Settings</h1>
         <p>Signed in as {user.email}</p>
         <p><Link href="/memory">What Spica remembers about you</Link></p>
-        <SignOutButton />
+        <SignOutButton pushTimeoutMs={getDeps().config.push.timeout_ms} />
       </section>
       {vapidKey && (
         <section>

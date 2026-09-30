@@ -2,8 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { releasePush } from "../push-client";
 
-export function SignOutButton() {
+/** Detaches this browser's push subscription first (while the session still authorizes the DELETE), best-effort. */
+export function SignOutButton({ pushTimeoutMs }: { pushTimeoutMs: number }) {
   const router = useRouter();
-  return <button onClick={async () => { await authClient.signOut(); router.push("/login"); }}>Sign out</button>;
+  return (
+    <button onClick={async () => {
+      await releasePush(pushTimeoutMs); // never throws, bounded
+      await authClient.signOut();
+      router.push("/login");
+    }}>Sign out</button>
+  );
 }

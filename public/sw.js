@@ -1,7 +1,12 @@
 // public/sw.js: Phase 6 (spec §8.3). Shows her message only when no Spica tab is visible.
 self.addEventListener("push", (event) => {
-  const data = event.data ? event.data.json() : null;
-  if (!data) return;
+  let data = null;
+  try {
+    data = event.data ? event.data.json() : null;
+  } catch {
+    return; // malformed payload: nothing to show, and never throw in the worker
+  }
+  if (!data || typeof data !== "object") return;
   event.waitUntil((async () => {
     const tabs = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     if (tabs.some((c) => c.visibilityState === "visible")) return;

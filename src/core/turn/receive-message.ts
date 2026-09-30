@@ -12,6 +12,7 @@ import type { Deps } from "../deps";
 import { ConflictError, errorName, isUniqueViolation } from "../errors";
 import { deliverPart } from "../delivery";
 import { emit } from "../events";
+import { markReachOutAnswered } from "../outreach/answered";
 import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "../queue";
 import { checkCrisis, crisisCardFor } from "../safety/crisis";
 import { isValidTimeZone } from "../timezone";
@@ -49,6 +50,10 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
   if (input.timezone && isValidTimeZone(input.timezone)) {
     await setTimezone(db, userId, input.timezone).catch((e) => log.error("timezone update failed", { userId, error: errorName(e) }));
   }
+
+  // Phase 6 (D5): any NEW user message, crisis included (before every early return), answers her latest reach-out.
+  // Own short transaction on relationship + reach_out_log only; never holds the conversation_state lock.
+  if (!existed) await markReachOutAnswered(deps, userId, turn.created_at);
 
   // Retries (design §5.1 step 1): no second judge call.
   let rebuffer = false;

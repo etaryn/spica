@@ -1149,6 +1149,11 @@ Quality issues found in review runs, manual chats and earlier evals collect here
 - T5. After a reload mid-reply, history catch-up returns the whole stored reply, so bubbles not yet sent appear at once and skip their pacing. Nothing is lost or duplicated.
 - The six checks passed: a burst of 5 got one reply (typing about 6 s after the last message); a slow story got one reply and no backchannel (still rate-limited from the burst); reload mid-reply lost and duplicated nothing; a message sent with the worker stopped was answered about 3 s after restart; crisis mid-story returned `200` with the card in 7.7 s and dropped the pending story reply; `judge_log` held 12 `turn` rows.
 
+**Voice and register.** From Ethan's manual chat (2026-09-28). The replies read as robotic, but this is design, not a bug: splitting and delivery work (6 of the 9 non-backchannel replies checked split into separate texts, and they render as separate bubbles). Persona v1 + `reply` v6, Sonnet 5 at `reply_effort: low`, no thinking.
+- T6. Memory as justification: she follows up her own question with a comment whose job is to show that she remembers. Example: "morning. sleep okay…" → user: "i had such a good night sleep" → "oh nice, that's actually rare for you to report so enthusiastically lol". The claimed pattern also isn't in the log, so it borders on false familiarity (§15.2 #17, recall style).
+- T7. Length doesn't match the input: her sentences are long compared with the user's, and full stops and commas are uncommon in casual human texting, where people just end the message. Example: "idk" → "fair. no pressure to have a plan at whatever-time-this-is-for-you-o'clock". The target length and punctuation should follow the user's own style (short in, short out), not a fixed register.
+- T8. No slang or omission (dropped subjects, clipped words, "ngl", "lowkey" and so on), so she reads as formal next to an informal user ("bro / like / its crazy"). She should mirror the user's register within her fixed voice, which is why this shouldn't just be baked into the persona.
+
 ### 15.3a Tuning backlog: Phase 5 (2026-09-30)
 
 Part of the §15.3 backlog (quality only; nothing here blocks a phase), from the Phase 5 exit run and its measurement runs.

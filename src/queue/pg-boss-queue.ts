@@ -5,6 +5,7 @@ import {
   type JobMap,
   type JobName,
   type JobQueue,
+  REACH_OUT_SEND_QUEUE,
   TURN_BACKCHANNEL_QUEUE,
   TURN_TIMER_QUEUE,
 } from "@/core/queue";
@@ -41,6 +42,9 @@ export class PgBossQueue implements JobQueue {
       const bc = { retryLimit: 0, expireInSeconds: this.opts.turnExpireSeconds };
       await this.boss.createQueue(TURN_BACKCHANNEL_QUEUE, bc);
       await this.boss.updateQueue(TURN_BACKCHANNEL_QUEUE, bc);
+      // Phase 6: a retried send could double-send; a lost one is just a skipped hour (spec §6.2).
+      await this.boss.createQueue(REACH_OUT_SEND_QUEUE, bc);
+      await this.boss.updateQueue(REACH_OUT_SEND_QUEUE, bc);
     })().catch((e) => {
       this.ready = null; // allow a later retry
       throw e;

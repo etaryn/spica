@@ -1,20 +1,10 @@
 import type { PgBoss } from "pg-boss";
 import type { Logger } from "@/core/log";
-import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
+import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH_TICK_QUEUE, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
 
-/**
- * The class name of the innermost cause (drizzle wraps pg's DatabaseError in DrizzleQueryError).
- * Only the name: pg `detail` and drizzle's query params hold row contents, which must not reach logs or job output.
- */
-export function errorName(e: unknown): string {
-  let err = e;
-  const seen = new Set<unknown>([err]);
-  while (err instanceof Error && err.cause instanceof Error && !seen.has(err.cause)) {
-    err = err.cause;
-    seen.add(err);
-  }
-  return err instanceof Error ? err.constructor.name : "UnknownError";
-}
+import { errorName } from "@/core/errors";
+
+export { errorName };
 
 /**
  * Wraps a pg-boss work handler so a failure is logged with ids and the error name only, then
@@ -44,8 +34,8 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
   await boss.createQueue(TURN_SWEEP_QUEUE);
   await boss.createQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 });
   await boss.updateQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 }); // a retry would sample the baseline twice
-  // Phase 5: hourly, idempotent jobs; the next hour is the retry.
-  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE]) {
+  // Phase 5-6: hourly, idempotent jobs; the next hour is the retry.
+  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE, OUTREACH_TICK_QUEUE]) {
     await boss.createQueue(q, { retryLimit: 0 });
     await boss.updateQueue(q, { retryLimit: 0 });
   }

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PgBoss } from "pg-boss";
 import { afterAll, expect, test } from "vitest";
-import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
+import { COLD_PATH_QUEUE, REACH_OUT_SEND_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import { testDbUrl } from "../helpers/db";
 
@@ -36,4 +36,9 @@ test("turn_timer jobs carry startAfter and the turn queues exist with their poli
   // Not fetchable before startAfter: whatever is currently due must not include ours.
   const due = await boss.fetch<{ userId: string; version: number }>(TURN_TIMER_QUEUE, { batchSize: 50 });
   expect(due.some((j) => j.data.userId === userId)).toBe(false);
+});
+
+test("reach_out_send never retries and shares the backchannel queue's options", async () => {
+  await queue.start();
+  expect(await boss.getQueue(REACH_OUT_SEND_QUEUE)).toMatchObject({ retryLimit: 0, expireInSeconds: 180 });
 });

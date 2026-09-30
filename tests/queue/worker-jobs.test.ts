@@ -2,7 +2,7 @@ import { PgBoss } from "pg-boss";
 import { afterAll, expect, test } from "vitest";
 import { LockBusyError } from "@/core/cold-path";
 import type { Logger } from "@/core/log";
-import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
+import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH_TICK_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
 import { ensureSystemQueues, errorName, scrubErrors } from "@/worker/jobs";
 import { testDbUrl } from "../helpers/db";
 
@@ -77,4 +77,11 @@ test("ensureSystemQueues creates the phase 5 queues without retries", async () =
   started = true;
   await ensureSystemQueues(boss);
   for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE]) expect(await boss.getQueue(q)).toMatchObject({ retryLimit: 0 });
+});
+
+test("ensureSystemQueues creates outreach_tick without retries", async () => {
+  await boss.start();
+  started = true;
+  await ensureSystemQueues(boss);
+  expect(await boss.getQueue(OUTREACH_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
 });

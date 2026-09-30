@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { HistoryMessage } from "@/app/api/chat/history/handler";
 import styles from "./chat.module.css";
+import { NotificationsBanner } from "./notifications";
 import { applyPart, catchUpAnchor, markFailed, mergeHistory, type UiMessage } from "./merge";
 
 export type { UiMessage };
 
-export function ChatClient({ initial }: { initial: UiMessage[] }) {
+export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; vapidPublicKey: string | null }) {
   const [messages, setMessages] = useState<UiMessage[]>(initial);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
@@ -101,6 +102,7 @@ export function ChatClient({ initial }: { initial: UiMessage[] }) {
 
   return (
     <>
+      <NotificationsBanner publicKey={vapidPublicKey} />
       <main className={styles.log} aria-live="polite">
         {messages.length === 0 && <p className={styles.empty}>Say hi. This is the start of your conversation.</p>}
         {messages.map((m) => {

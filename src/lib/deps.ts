@@ -1,7 +1,7 @@
 import "server-only";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import { buildRuntime } from "@/runtime/deps";
-import { readEnv } from "@/runtime/env";
+import { readEnv, vapidPublicKey } from "@/runtime/env";
 
 const g = globalThis as unknown as { __spicaRuntime?: ReturnType<typeof buildRuntime> };
 
@@ -20,3 +20,4 @@ export function getRuntime() {
 }
 
 export const getDeps = () => getRuntime().deps;
+export const getVapidPublicKey = () => vapidPublicKey(readEnv());

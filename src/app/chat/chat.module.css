@@ -19,3 +19,5 @@
 .composer textarea { flex: 1; resize: none; border-radius: var(--radius); border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent); background: transparent; color: var(--fg); padding: 9px 14px; }
 .composer button { border: none; border-radius: var(--radius); padding: 0 18px; background: var(--fg); color: var(--bg); cursor: pointer; }
 .composer button:disabled { opacity: 0.4; cursor: default; }
+.banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid color-mix(in srgb, var(--fg) 10%, transparent); font-size: 14px; }
+.banner span { flex: 1 1 200px; }

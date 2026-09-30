@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { toHistoryMessage } from "@/app/api/chat/history/handler";
 import { recentTurns } from "@/db/repos/session-log";
-import { getDeps } from "@/lib/deps";
+import { getDeps, getVapidPublicKey } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
 import { ChatClient, type UiMessage } from "./chat-client";
 import styles from "./chat.module.css";
@@ -20,7 +20,7 @@ export default async function ChatPage() {
         <Link href="/memory" className={styles.settings}>Memory</Link>
         <Link href="/settings" className={styles.settings}>Settings</Link>
       </header>
-      <ChatClient initial={initial} />
+      <ChatClient initial={initial} vapidPublicKey={getVapidPublicKey()} />
     </div>
   );
 }

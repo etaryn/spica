@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { getVapidPublicKey } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
 import { deleteAccountAction } from "./actions";
+import { NotificationsSwitch } from "./notifications-switch";
 import { SignOutButton } from "./sign-out-button";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const user = await requireUser();
   const { error } = await searchParams;
+  const vapidKey = getVapidPublicKey();
   return (
     <main style={{ maxWidth: 480, margin: "8vh auto", padding: "0 16px", display: "grid", gap: 24 }}>
       <Link href="/chat">← Back to chat</Link>
@@ -15,6 +18,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p><Link href="/memory">What Spica remembers about you</Link></p>
         <SignOutButton />
       </section>
+      {vapidKey && (
+        <section>
+          <h2 style={{ fontSize: 18 }}>Notifications</h2>
+          <NotificationsSwitch publicKey={vapidKey} />
+        </section>
+      )}
       <section>
         <h2 style={{ fontSize: 18 }}>Delete account</h2>
         <p>This permanently deletes your account, your conversations and everything your friend remembers about you.</p>

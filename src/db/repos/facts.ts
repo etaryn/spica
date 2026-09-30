@@ -189,3 +189,27 @@ export async function listRecentSelfFacts(db: Db, userId: string, limit: number)
   )).orderBy(desc(fact.created_at)).limit(limit);
   return rows.map((r) => ({ content: r.content, when: r.occurred_at ?? r.created_at }));
 }
+
+export type OutreachFact = { id: string; content: string; salience: number; sensitive: boolean };
+const sensitiveCol = sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`;
+const outreachCols = { id: fact.id, content: fact.content, salience: fact.salience, sensitive: sensitiveCol };
+
+/** Spec §4.1 `user_event`: the user's events/promises whose time passed in (from, to], not talked about since. */
+export async function listOutreachUserEvents(db: Db, userId: string, from: Date, to: Date): Promise<OutreachFact[]> {
+  return db.select(outreachCols).from(fact).where(and(
+    eq(fact.user_id, userId), eq(fact.subject, "user"), eq(fact.scope, "private"), eq(fact.status, "open"),
+    inArray(fact.kind, ["event", "promise"]),
+    sql`${fact.occurred_at} > ${from.toISOString()}::timestamptz AND ${fact.occurred_at} <= ${to.toISOString()}::timestamptz`,
+    sql`(${fact.last_recalled_at} IS NULL OR ${fact.last_recalled_at} < ${fact.occurred_at})`,
+  ));
+}
+
+/** Spec §4.1 `her_day`: her generated personal events (not day blocks) whose time passed in (from, to]. */
+export async function listOutreachHerDay(db: Db, userId: string, from: Date, to: Date): Promise<OutreachFact[]> {
+  return db.select(outreachCols).from(fact).where(and(
+    eq(fact.user_id, userId), eq(fact.subject, "self"), eq(fact.source, "generated"), eq(fact.scope, "private"),
+    notInArray(fact.status, [...INACTIVE]),
+    sql`(${fact.payload} IS NULL OR ${fact.payload}->>'block' IS NULL)`,
+    sql`${fact.occurred_at} > ${from.toISOString()}::timestamptz AND ${fact.occurred_at} <= ${to.toISOString()}::timestamptz`,
+  ));
+}

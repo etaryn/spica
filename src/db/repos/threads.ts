@@ -54,15 +54,16 @@ export async function resolveThread(db: Db, userId: string, id: string, now: Dat
 
 export type DueThread = {
   id: string; title: string; next_checkpoint: Date; fact_id: string | null; content: string | null; salience: number | null;
+  stakes: "low" | "med" | "high"; sensitive: boolean;
 };
 
 /** Open threads whose checkpoint has passed, each with its latest active fact (v2 §6.2 force-include). */
 export async function dueThreads(db: Db, userId: string, now: Date, limit: number): Promise<DueThread[]> {
   const res = await db.execute(sql`
-    SELECT t.id, t.title, t.next_checkpoint, lf.id AS fact_id, lf.content, lf.salience
+    SELECT t.id, t.title, t.next_checkpoint, t.stakes, lf.id AS fact_id, lf.content, lf.salience, lf.sensitive
     FROM thread t
     LEFT JOIN LATERAL (
-      SELECT f.id, f.content, f.salience FROM fact f
+      SELECT f.id, f.content, f.salience, COALESCE((f.payload->>'sensitive')::boolean, false) AS sensitive FROM fact f
       WHERE f.user_id = t.user_id AND f.thread_id = t.id AND f.scope = 'private'
         AND f.status NOT IN ('superseded', 'stale')
       ORDER BY f.created_at DESC LIMIT 1
@@ -75,5 +76,6 @@ export async function dueThreads(db: Db, userId: string, now: Date, limit: numbe
     id: String(r.id), title: String(r.title), next_checkpoint: toDate(r.next_checkpoint),
     fact_id: r.fact_id ? String(r.fact_id) : null, content: r.content ? String(r.content) : null,
     salience: r.salience == null ? null : Number(r.salience),
+    stakes: r.stakes as DueThread["stakes"], sensitive: r.sensitive === true,
   }));
 }

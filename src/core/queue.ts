@@ -10,6 +10,11 @@ export const RELATIONSHIP_TICK_QUEUE = "relationship_tick";
 export const LIFE_PLAN_QUEUE = "life_plan";
 export const LIFE_TICK_QUEUE = "life_tick";
 export const EGO_TICK_QUEUE = "ego_tick";
+export const OUTREACH_TICK_QUEUE = "outreach_tick";
+export const REACH_OUT_SEND_QUEUE = "reach_out_send";
+
+/** Phase 6 (spec §6.2): send the reach-out scheduled in `reach_out_log` row `logId`. */
+export type ReachOutSendJob = { userId: string; logId: string };
 
 /** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
 export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };
@@ -28,6 +33,7 @@ export type JobMap = {
   [COLD_PATH_QUEUE]: ColdPathJob;
   [TURN_TIMER_QUEUE]: TurnTimerJob;
   [TURN_BACKCHANNEL_QUEUE]: BackchannelJob;
+  [REACH_OUT_SEND_QUEUE]: ReachOutSendJob;
 };
 export type JobName = keyof JobMap;
 export type EnqueueOptions = { startAfter?: Date };

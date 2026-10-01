@@ -14,8 +14,7 @@ export type CandidateInputs = {
   usedTopics: string[];
 };
 
-export const GATE_RULES = ["status", "caps", "her_day", "unanswered", "in_progress", "crisis"] as const;
-export type GateRule = (typeof GATE_RULES)[number];
+export type GateRule = "status" | "caps" | "her_day" | "unanswered" | "in_progress" | "crisis";
 export type GateResult = { rule: GateRule; pass: boolean; detail?: string };
 export type GateInputs = {
   status: "active" | "ended_by_user" | "repairing";

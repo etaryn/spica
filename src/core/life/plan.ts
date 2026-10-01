@@ -28,7 +28,7 @@ export function validatePlan(raw: RawPlan, cfg: LifeConfig): PlanCheck {
     if (!label || label.length > 80) { v.push(`block ${i + 1}: label must be 1-80 characters`); continue; }
     const busy = b.kind === "quiet" ? cfg.quiet_busy
       : b.kind === "downtime" ? 0
-        : Math.min(1, Math.max(0.3, Number.isFinite(b.busy) ? b.busy : 0.3));
+        : Math.min(1, Math.max(cfg.min_busy, Number.isFinite(b.busy) ? b.busy : cfg.min_busy));
     blocks.push({ start: b.start, end: b.end, kind: b.kind, busy, label });
   }
   blocks.sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
@@ -44,7 +44,7 @@ export function validatePlan(raw: RawPlan, cfg: LifeConfig): PlanCheck {
 
 /** `life.fallback_plan` with busy levels filled in: she always has a day, even when generation fails. */
 export function fallbackPlan(cfg: LifeConfig): LifePlan {
-  return { blocks: cfg.fallback_plan.map((b) => ({ ...b, busy: b.kind === "quiet" ? cfg.quiet_busy : b.kind === "busy" ? 0.5 : 0 })) };
+  return { blocks: cfg.fallback_plan.map((b) => ({ ...b, busy: b.kind === "quiet" ? cfg.quiet_busy : b.kind === "busy" ? cfg.fallback_busy : 0 })) };
 }
 
 function describe(plan: LifePlan): string {

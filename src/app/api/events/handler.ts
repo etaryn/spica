@@ -1,5 +1,6 @@
 import { splitParts } from "@/core/chat/parts";
 import type { Deps } from "@/core/deps";
+import { errorName } from "@/core/errors";
 import type { ChatEvent } from "@/core/events";
 import { crisisCardFor } from "@/core/safety/crisis";
 import { getTurn } from "@/db/repos/session-log";
@@ -50,7 +51,7 @@ export function createEventsHandler(opts: {
         // EventSource reconnects and the client runs history catch-up on the new connection.
         const unsubscribe = opts.subscribe(userId, (e) => {
           chain = chain.then(() => forward(deps, userId, e, send)).catch((err) =>
-            deps.log.error("sse forward failed", { userId, type: e.type, error: err instanceof Error ? err.constructor.name : "UnknownError" }));
+            deps.log.error("sse forward failed", { userId, type: e.type, error: errorName(err) }));
         }, () => cleanup());
         const heartbeat = setInterval(() => write(": hb\n\n"), deps.config.events.heartbeat_ms);
         write(": connected\n\n");

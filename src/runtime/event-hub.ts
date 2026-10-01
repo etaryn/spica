@@ -1,5 +1,6 @@
 import { Client } from "pg";
 import { isChatEvent, type ChatEvent } from "@/core/events";
+import { errorName } from "@/core/errors";
 import type { Logger } from "@/core/log";
 
 type Listener = (e: ChatEvent) => void;
@@ -74,7 +75,7 @@ export class EventHub {
       this.client = c;
       this.backoffMs = 1000;
     } catch (e) {
-      this.log.error("event hub connect failed", { error: e instanceof Error ? e.constructor.name : "UnknownError" });
+      this.log.error("event hub connect failed", { error: errorName(e) });
       this.connecting = null;
       await c.end().catch(() => {});
       this.retryLater();

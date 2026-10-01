@@ -3,7 +3,8 @@ import { afterAll, expect, test } from "vitest";
 import { LockBusyError } from "@/core/cold-path";
 import type { Logger } from "@/core/log";
 import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH_TICK_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
-import { ensureSystemQueues, errorName, scrubErrors } from "@/worker/jobs";
+import { errorName } from "@/core/errors";
+import { ensureSystemQueues, scrubErrors } from "@/worker/jobs";
 import { testDbUrl } from "../helpers/db";
 
 const boss = new PgBoss(testDbUrl);

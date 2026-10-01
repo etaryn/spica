@@ -16,17 +16,16 @@ export class PgBossQueue implements JobQueue {
 
   constructor(
     private readonly boss: PgBoss,
-    private readonly opts: { retryLimit: number; retryDelaySeconds: number; turnExpireSeconds: number } = {
-      retryLimit: 3,
-      retryDelaySeconds: 30,
-      turnExpireSeconds: 180,
+    private readonly opts: {
+      retryLimit: number; retryDelaySeconds: number; turnExpireSeconds: number;
+      timerRetryLimit: number; timerRetryDelaySeconds: number;
     },
   ) {}
 
   start(): Promise<void> {
     this.ready ??= (async () => {
       await this.boss.start();
-      // Failed cold-path jobs retry with backoff; turns stay extracted=false until one succeeds (v2 §6.3).
+      // Failed cold-path jobs retry with backoff; turns stay extracted=false until one succeeds.
       // createQueue is create-only (ON CONFLICT DO NOTHING), so a queue created by an earlier
       // deploy keeps its old policy unless we also updateQueue it here; updateQueue is a safe
       // no-op WHERE-matched UPDATE when the queue doesn't exist yet.
@@ -35,14 +34,14 @@ export class PgBossQueue implements JobQueue {
       await this.boss.updateQueue(COLD_PATH_QUEUE, policy);
 
       // Turn jobs: a timer may be retried (a stale or duplicate one is a no-op thanks to the version check);
-      // a backchannel never is (a late "huh" is worse than none). Design §5.2, §5.5.
-      const turn = { retryLimit: 2, retryDelay: 1, expireInSeconds: this.opts.turnExpireSeconds };
+      // a backchannel never is (a late "huh" is worse than none).
+      const turn = { retryLimit: this.opts.timerRetryLimit, retryDelay: this.opts.timerRetryDelaySeconds, expireInSeconds: this.opts.turnExpireSeconds };
       await this.boss.createQueue(TURN_TIMER_QUEUE, turn);
       await this.boss.updateQueue(TURN_TIMER_QUEUE, turn);
       const bc = { retryLimit: 0, expireInSeconds: this.opts.turnExpireSeconds };
       await this.boss.createQueue(TURN_BACKCHANNEL_QUEUE, bc);
       await this.boss.updateQueue(TURN_BACKCHANNEL_QUEUE, bc);
-      // Phase 6: a retried send could double-send; a lost one is just a skipped hour (spec §6.2).
+      // A retried reach-out send could double-send; a lost one is just a skipped hour.
       await this.boss.createQueue(REACH_OUT_SEND_QUEUE, bc);
       await this.boss.updateQueue(REACH_OUT_SEND_QUEUE, bc);
     })().catch((e) => {

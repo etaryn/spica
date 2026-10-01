@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { forgetFact, insertFact } from "@/db/repos/facts";
-import { getLifeView, getRelationshipView, listFacts, listJudgeLog, listReachOuts, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
+import { getLifeView, getRelationshipView, listFacts, listReachOuts, parseFactFilters, resolveFactContents } from "@/db/repos/inspector";
+import { listJudgeLogs } from "@/db/repos/judge-log";
 import { insertJudgeLogs } from "@/db/repos/judge-log";
 import { insertLifeDay } from "@/db/repos/life-day";
 import { insertLifeEventLogs } from "@/db/repos/life-event-log";
@@ -61,7 +62,7 @@ test("resolveFactContents: user-scoped and view-time; a forgotten fact's judge_l
   expect(await forgetFact(getTestDb(), a, f.id)).toBe(true);
 
   // The judge_log row is untouched by the delete (no FK to fact); the resolver just can't find the id any more.
-  const rows = await listJudgeLog(getTestDb(), a);
+  const rows = await listJudgeLogs(getTestDb(), a);
   expect(rows).toHaveLength(1);
   expect(await resolveFactContents(getTestDb(), a, [f.id])).toEqual(new Map());
 });

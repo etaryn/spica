@@ -4,8 +4,6 @@ import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH
 
 import { errorName } from "@/core/errors";
 
-export { errorName };
-
 /**
  * Wraps a pg-boss work handler so a failure is logged with ids and the error name only, then
  * rethrown as a bare `Error(name)`: pg-boss persists the thrown error in the job's output.

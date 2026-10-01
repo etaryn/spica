@@ -1,4 +1,5 @@
 name: backchannel-rate-limit
+profile: none
 description: >
   Two unfolding stories back to back: at most one backchannel per buffer, and none within
   turn.backchannel_min_interval_ms (90 s) of the last.

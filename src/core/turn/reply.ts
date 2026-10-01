@@ -155,23 +155,26 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
       }
       await deliverPart(deps, userId, { turnId: companion.id, part: i, parts });
     }
+    await stopTyping(); // emit typing:off right after the last bubble, before the cold-path enqueue and guard log
 
     await enqueueSafely(deps, userId, () => deps.queue.enqueue(COLD_PATH_QUEUE, {
       userId, turnIds: [...c.turnIds, companion.id], replyTurnId: companion.id, recalled: composed.value.recalled,
     }), "cold_path");
-    await composed.value.writeGuardLog(); // judge_log after the send (§15.2 #1)
-    await stopTyping(); // on the happy path, emit typing:off right after the last bubble rather than in finally
+    await composed.value.writeGuardLog(); // judge_log after the send
     return "sent";
   } finally {
-    await stopTyping();
-    if (sending) {
-      // Release the sending marker on every exit, errors included; if this fails, turn_sweep clears it after
-      // turn.job_expire_seconds (the reply row already exists, so nothing is re-buffered).
-      try {
-        const at = clock.now();
-        await mutateState(db, userId, at, (s) => T.release(s, { epoch: c.epoch, now: at }));
-      } catch (e) {
-        log.error("turn release failed", { userId, error: errorName(e) });
+    try {
+      await stopTyping();
+    } finally {
+      if (sending) {
+        // Release the sending marker on every exit, errors included; if this fails, turn_sweep clears it after
+        // turn.job_expire_seconds (the reply row already exists, so nothing is re-buffered).
+        try {
+          const at = clock.now();
+          await mutateState(db, userId, at, (s) => T.release(s, { epoch: c.epoch, now: at }));
+        } catch (e) {
+          log.error("turn release failed", { userId, error: errorName(e) });
+        }
       }
     }
   }

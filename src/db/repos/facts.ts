@@ -154,7 +154,7 @@ export async function listRememberedFacts(db: Db, userId: string) {
 export async function listOnboardingFacts(db: Db, userId: string): Promise<{ id: string; content: string }[]> {
   return db.select({ id: fact.id, content: fact.content }).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.source, "onboarding"), eq(fact.scope, "private"),
-    notInArray(fact.status, ["superseded", "stale"]),
+    notInArray(fact.status, [...INACTIVE]),
   )).orderBy(asc(fact.created_at));
 }
 

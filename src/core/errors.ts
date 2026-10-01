@@ -30,7 +30,6 @@ export function isUniqueViolation(e: unknown): boolean {
 /**
  * The class name of the innermost cause (e.g. drizzle wraps pg's DatabaseError in DrizzleQueryError).
  * Only the name: pg `detail` and drizzle's query params can hold row contents, which must not reach logs.
- * Shared home for the `errName`/`errorName` helper duplicated across src/core (v2 §15.4 minors, wrap-up).
  */
 export function errorName(e: unknown): string {
   let err = e;

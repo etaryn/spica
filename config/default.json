@@ -143,6 +143,8 @@
     "worker_concurrency": 10,
     "worker_polling_interval_seconds": 0.5,
     "job_expire_seconds": 180,
+    "timer_job_retry_limit": 2,
+    "timer_job_retry_delay_seconds": 1,
     "sweep_cron": "* * * * *",
     "sweep_grace_ms": 60000,
     "sweep_batch": 500
@@ -223,6 +225,8 @@
     "max_busy_blocks": 3,
     "min_quiet_hours": 6,
     "quiet_busy": 0.9,
+    "min_busy": 0.3,
+    "fallback_busy": 0.5,
     "fallback_plan": [
       { "start": "00:00", "end": "08:00", "kind": "quiet", "label": "offline, winding down" },
       { "start": "23:30", "end": "24:00", "kind": "quiet", "label": "offline, winding down" }

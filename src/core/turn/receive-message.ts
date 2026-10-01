@@ -92,7 +92,7 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
   })().catch((e: unknown) => {
     // Settled so a failure here (a DB read; judgeTurn itself never throws) can't reject past the crisis check.
     // A null verdict is treated as complete, like the cue fallback.
-    log.error("turn judge input failed", { userId, turnId: turn.id, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    log.error("turn judge input failed", { userId, turnId: turn.id, error: errorName(e) });
     return null;
   });
 

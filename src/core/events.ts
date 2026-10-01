@@ -1,4 +1,5 @@
 import type { Deps } from "./deps";
+import { errorName } from "./errors";
 
 /**
  * Server → client notifications (v2 §4: SSE fed by LISTEN/NOTIFY). Never message text: the SSE route
@@ -23,7 +24,7 @@ export async function emit(deps: Pick<Deps, "events" | "log">, userId: string, e
   try {
     await deps.events.publish(userId, event);
   } catch (e) {
-    deps.log.error("event publish failed", { userId, type: event.type, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+    deps.log.error("event publish failed", { userId, type: event.type, error: errorName(e) });
   }
 }
 

@@ -4,7 +4,7 @@ import { effect, fadeParams } from "@/core/relationship/homeostasis";
 import { PARAM_NAMES, type RelConfig } from "@/core/relationship/types";
 import type { Db } from "../client";
 import {
-  conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, judge_log, reach_out_log, retrieval_trace, thread,
+  conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, reach_out_log, retrieval_trace, thread,
 } from "../schema";
 import { getLifeDay } from "./life-day";
 import { listLifeEventLogs } from "./life-event-log";
@@ -82,21 +82,19 @@ export const listReachOuts = (db: Db, userId: string, limit: number) =>
 export const getConversationState = async (db: Db, userId: string) =>
   (await db.select().from(conversation_state).where(eq(conversation_state.user_id, userId)).limit(1))[0] ?? null;
 
-export const listJudgeLog = (db: Db, userId: string) =>
-  db.select().from(judge_log).where(eq(judge_log.user_id, userId))
-    .orderBy(desc(judge_log.created_at), desc(judge_log.attempt)).limit(200);
-
 /**
- * View-time resolution of the fact ids `judge_log.input` holds (v2 §5.8: the log never stores fact
- * content). User-scoped, so a deleted or foreign id never resolves. Missing ids mean the fact was
- * hard-deleted since (`forgetFact`) — the caller shows "(deleted)".
+ * View-time resolution of the ids `judge_log.input` holds (the log never stores memory content): fact
+ * ids resolve to their content, due-thread ids to the thread's title. User-scoped, so a deleted or
+ * foreign id never resolves. A missing id was hard-deleted since (`forgetFact`) — the caller shows "(deleted)".
  */
 export async function resolveFactContents(db: Db, userId: string, ids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(ids)];
   if (!unique.length) return new Map();
-  const rows = await db.select({ id: fact.id, content: fact.content }).from(fact)
-    .where(and(eq(fact.user_id, userId), inArray(fact.id, unique)));
-  return new Map(rows.map((r) => [r.id, r.content]));
+  const [facts, threads] = await Promise.all([
+    db.select({ id: fact.id, content: fact.content }).from(fact).where(and(eq(fact.user_id, userId), inArray(fact.id, unique))),
+    db.select({ id: thread.id, content: thread.title }).from(thread).where(and(eq(thread.user_id, userId), inArray(thread.id, unique))),
+  ]);
+  return new Map([...facts, ...threads].map((r) => [r.id, r.content]));
 }
 
 /** The Life tab (Phase 5 design §9.2). The plan is global; facts and the event log are this user's. */

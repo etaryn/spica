@@ -3,10 +3,9 @@ import type { Turn } from "@/db/repos/session-log";
 import { dueThreads } from "@/db/repos/threads";
 import { emptyRetrieval, type RetrievalResult } from "../chat/assemble";
 import type { Deps } from "../deps";
+import { errorName } from "../errors";
 import { withTimeout } from "../timeout";
 import { rankCandidates, type Scored } from "./score";
-
-const errName = (e: unknown) => String((e as Error)?.name ?? "Error");
 
 /**
  * Hot-path retrieval (v2 §6.2 step 1). Read-only and never throws: any failure
@@ -35,7 +34,7 @@ export async function retrieve(
       scored = rankCandidates(await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now, { excludeSensitive: excl }), input.now, config.retrieval);
     }
   } catch (e) {
-    log.error("retrieval degraded", { userId, error: errName(e) });
+    log.error("retrieval degraded", { userId, error: errorName(e) });
   }
   for (const s of scored) {
     seen.add(s.id);
@@ -47,6 +46,7 @@ export async function retrieve(
   }
 
   try {
+    // No future-dated filter here: the only caller (a reach-out's candidate) passes facts whose time has come.
     for (const id of input.forceFactIds ?? []) {
       if (seen.has(id)) continue;
       const f = await getFact(db, userId, id);
@@ -74,7 +74,7 @@ export async function retrieve(
       }
     }
   } catch (e) {
-    log.error("forced retrieval failed", { userId, error: errName(e) });
+    log.error("forced retrieval failed", { userId, error: errorName(e) });
   }
   return result;
 }

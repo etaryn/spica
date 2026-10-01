@@ -117,14 +117,17 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
     await composed.writeGuardLog();
     return "sent";
   } finally {
-    await stopTyping();
-    if (epoch !== null) {
-      const e = epoch;
-      try {
-        const at = clock.now();
-        await mutateState(db, userId, at, (s) => T.release(s, { epoch: e, now: at }));
-      } catch (err) {
-        log.error("reach-out release failed", { userId, error: errorName(err) });
+    try {
+      await stopTyping();
+    } finally {
+      if (epoch !== null) {
+        const e = epoch;
+        try {
+          const at = clock.now();
+          await mutateState(db, userId, at, (s) => T.release(s, { epoch: e, now: at }));
+        } catch (err) {
+          log.error("reach-out release failed", { userId, error: errorName(err) });
+        }
       }
     }
   }

@@ -5,6 +5,7 @@ import { EMBEDDING_DIMENSIONS, loadConfig } from "@/core/config";
 import type { Deps } from "@/core/deps";
 import { assertEmbedderMatchesSchema } from "@/core/embed/types";
 import { VoyageEmbedder } from "@/core/embed/voyage";
+import { errorName } from "@/core/errors";
 import { AnthropicProvider } from "@/core/llm/anthropic";
 import { consoleLogger } from "@/core/log";
 import { noopPusher } from "@/core/push";
@@ -29,7 +30,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
   });
   assertEmbedderMatchesSchema(embedder, EMBEDDING_DIMENSIONS);
   const boss = new PgBoss(env.DATABASE_URL);
-  boss.on("error", (e) => consoleLogger.error("pg-boss error", { error: String((e as Error)?.name ?? "Error") }));
+  boss.on("error", (e) => consoleLogger.error("pg-boss error", { error: errorName(e) }));
   const deps: Deps = {
     db,
     clock: systemClock,
@@ -39,6 +40,8 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
       retryLimit: config.cold_path.retry_limit,
       retryDelaySeconds: config.cold_path.retry_delay_seconds,
       turnExpireSeconds: config.turn.job_expire_seconds,
+      timerRetryLimit: config.turn.timer_job_retry_limit,
+      timerRetryDelaySeconds: config.turn.timer_job_retry_delay_seconds,
     }),
     config,
     log: consoleLogger,

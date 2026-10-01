@@ -4,7 +4,7 @@ import type { Turn } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { Deps } from "../deps";
-import { ReplyFailedError } from "../errors";
+import { errorName, ReplyFailedError } from "../errors";
 import { loadEgoLine } from "../ego/line";
 import { guardOutgoing } from "../guard/outgoing";
 import { loadLifeState } from "../life/state";
@@ -21,7 +21,6 @@ import { splitParts } from "./parts";
 
 export type Composed = { text: string; parts: string[]; recalled: RecalledFact[]; writeGuardLog: () => Promise<void> };
 
-const errName = (e: unknown) => String((e as Error)?.name ?? "Error");
 
 /** What the reply's prompt contained, for the guard's honesty check (v2 §6.4). */
 function guardFacts(r: RetrievalResult): { id: string; subject: string; content: string }[] {
@@ -31,11 +30,6 @@ function guardFacts(r: RetrievalResult): { id: string; subject: string; content:
   ];
 }
 
-/**
- * The hot path (v2 §6.2) over a committed buffer: retrieve → assemble → generate → guard. Read-only: the caller
- * inserts the reply, sends it, enqueues the cold path and then calls `writeGuardLog` (judge_log after the send).
- * Called by the turn timer, the crisis path and (Phase 6) reach-outs.
- */
 export type ReachOutTrigger = Pick<Candidate, "kind" | "text" | "factId" | "threadId">;
 
 type ComposeInput = {
@@ -46,6 +40,11 @@ type ComposeInput = {
   reachOut: ReachOutTrigger | null;
 };
 
+/**
+ * The hot path over a committed buffer: retrieve → assemble → generate → guard. Read-only: the caller
+ * inserts the reply, sends it, enqueues the cold path and then calls `writeGuardLog` (judge_log after the send).
+ * Called by the turn timer and the crisis path; reach-outs use `composeReachOut`.
+ */
 export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[]; openQuestions: string[]; flag: SafetyFlag | null; deferredFact?: string | null }): Promise<Composed> {
   const { db, config } = deps;
   const last = a.turns.at(-1);
@@ -86,7 +85,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
 
   const loadOnboarding = (deps as { onboardingFacts?: typeof listOnboardingFacts }).onboardingFacts ?? listOnboardingFacts;
   const onboarding = withTimeout(Promise.resolve().then(() => loadOnboarding(db, userId)), config.hot_path.db_timeout_ms).catch((e) => {
-    log.error("onboarding facts unavailable", { userId, error: errName(e) });
+    log.error("onboarding facts unavailable", { userId, error: errorName(e) });
     return [] as { id: string; content: string }[];
   });
 
@@ -97,7 +96,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
           const stats = await sessionLog.userTurnStats(db, userId, a.anchor.created_at, tz && isValidTimeZone(tz) ? tz : "UTC");
           return relationshipLine(stats, clock.now());
         } catch (e) {
-          log.error("relationship line unavailable", { userId, error: errName(e) });
+          log.error("relationship line unavailable", { userId, error: errorName(e) });
           return null;
         }
       })()
@@ -106,7 +105,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
   const relSummaryPromise: Promise<string | null> = a.flag?.flagged
     ? Promise.resolve(null)
     : withTimeout(Promise.resolve().then(() => loadRelationshipSummary(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
-        log.error("relationship summary unavailable", { userId, error: errName(e) });
+        log.error("relationship summary unavailable", { userId, error: errorName(e) });
         return null;
       });
 
@@ -114,14 +113,14 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
   const egoPromise: Promise<string | null> = a.flag?.flagged
     ? Promise.resolve(null)
     : withTimeout(Promise.resolve().then(() => loadEgoLine(deps, userId, clock.now())), config.hot_path.db_timeout_ms).catch((e) => {
-        log.error("ego line unavailable", { userId, error: errName(e) });
+        log.error("ego line unavailable", { userId, error: errorName(e) });
         return null;
       });
   // Rule 7: a crisis reply never mentions being busy.
   const lifePromise: Promise<string | null> = a.flag?.flagged
     ? Promise.resolve(null)
     : withTimeout(Promise.resolve().then(() => loadLifeState(deps, userId, clock.now(), a.deferredFact ?? null)), config.hot_path.db_timeout_ms).catch((e) => {
-        log.error("life state unavailable", { userId, error: errName(e) });
+        log.error("life state unavailable", { userId, error: errorName(e) });
         return null;
       });
 
@@ -159,7 +158,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
   try {
     firstText = await llm.generateReply(prompt);
   } catch (e) {
-    log.error("reply generation failed", { userId, turnId: a.anchor.id, error: errName(e) });
+    log.error("reply generation failed", { userId, turnId: a.anchor.id, error: errorName(e) });
     throw new ReplyFailedError("reply generation failed", crisisCardFor(a.flag, config), { cause: e });
   }
 

@@ -94,9 +94,6 @@ const ReplyAboutAssertion = z.object({
   about: z.string().min(1), not_about: z.string().min(1).optional(), known_failure: knownFailure,
 });
 
-/** Judged entry types: review annotations only (v2 §15), run with `--annotate`, never pass/fail. */
-export const ANNOTATION_TYPES: ReadonlySet<string> = new Set(["recall", "no_false_recall", "consistency", "reply_about"]);
-
 /** Assertion types defined by v2 §14.2 but implemented in later phases (none left after Phase 6; the runner branch stays). */
 export const DEFERRED: Record<string, number> = {};
 

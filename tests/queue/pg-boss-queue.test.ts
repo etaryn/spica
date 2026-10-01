@@ -6,7 +6,7 @@ import { PgBossQueue } from "@/queue/pg-boss-queue";
 import { testDbUrl } from "../helpers/db";
 
 const boss = new PgBoss(testDbUrl);
-const queue = new PgBossQueue(boss, { retryLimit: 3, retryDelaySeconds: 30, turnExpireSeconds: 180 });
+const queue = new PgBossQueue(boss, { retryLimit: 3, retryDelaySeconds: 30, turnExpireSeconds: 180, timerRetryLimit: 2, timerRetryDelaySeconds: 1 });
 
 afterAll(async () => { await queue.stop(); });
 

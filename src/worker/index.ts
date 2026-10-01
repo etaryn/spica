@@ -2,10 +2,10 @@ import { handleColdPath } from "@/core/cold-path";
 import { egoTick } from "@/core/ego/tick";
 import { ensurePlans } from "@/core/life/plan";
 import { lifeTick } from "@/core/life/tick";
-import { outreachTick } from "@/core/outreach/tick";
-import { runReachOutSend } from "@/core/outreach/send";
 import { decayPass } from "@/core/memory/decay";
 import { sweepUnextracted } from "@/core/memory/sweep";
+import { runReachOutSend } from "@/core/outreach/send";
+import { outreachTick } from "@/core/outreach/tick";
 import {
   type BackchannelJob, COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH_TICK_QUEUE, REACH_OUT_SEND_QUEUE, type ReachOutSendJob, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE,
   TURN_BACKCHANNEL_QUEUE, TURN_SWEEP_QUEUE, TURN_TIMER_QUEUE, type TurnTimerJob,

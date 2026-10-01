@@ -4,6 +4,7 @@ import { lifeDate } from "@/core/life/clock";
 import type { RelConfig } from "@/core/relationship/types";
 import type { Db } from "@/db/client";
 import * as r from "@/db/repos/inspector";
+import { listJudgeLogs } from "@/db/repos/judge-log";
 import { listTurns } from "@/db/repos/session-log";
 import styles from "../inspector.module.css";
 
@@ -266,7 +267,7 @@ function resolveJudgeInput(input: unknown, facts: Map<string, string>): unknown 
 }
 
 export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
-  const rows = await r.listJudgeLog(db, userId);
+  const rows = await listJudgeLogs(db, userId);
   if (!rows.length) return <Empty phase={2} />;
   const ids = rows.flatMap((x) => {
     const i = x.input as { recalledFacts?: FactRef[]; onboardingFacts?: FactRef[] };

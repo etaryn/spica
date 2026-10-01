@@ -108,9 +108,11 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
       out.factIds.push(target.id);
     } else if (relation === "resolves" && target) {
       // A late job must not resolve a truth stated after this exchange (§15.1 #9, mirrors contradicts).
-      if (target.created_at <= input.exchangeAt) await setFactStatus(db, userId, target.id, "resolved");
+      if (target.created_at <= input.exchangeAt) {
+        await setFactStatus(db, userId, target.id, "resolved");
+        out.resolved += 1;
+      }
       const row = await insertFact(db, userId, { ...base, status: "resolved" });
-      out.resolved += 1;
       out.inserted += 1;
       out.factIds.push(row.id);
     } else if (relation === "contradicts" && target) {

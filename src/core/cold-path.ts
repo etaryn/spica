@@ -68,7 +68,7 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     const applied = await applyExtraction(tx, config, {
       userId: job.userId,
       now: clock.now(),
-      exchangeAt: turns[0]!.created_at, // getTurnsByIds sorts oldest first: the exchange's user turn
+      exchangeAt: turns[0]!.created_at, // getTurnsByIds sorts oldest first: the exchange's first turn (hers, for a reach-out)
       entities: extraction.entities,
       facts: planned,
       threads: extraction.threads,
@@ -86,7 +86,7 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
       try {
         await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
       } catch (e) {
-        log.error("relationship update failed", { userId: job.userId, error: e instanceof Error ? e.constructor.name : "UnknownError" });
+        log.error("relationship update failed", { userId: job.userId, error: errorName(e) });
       }
     }
 

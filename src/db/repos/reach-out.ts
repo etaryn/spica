@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Db } from "../client";
 import { reach_out_log } from "../schema";
 import { one } from "./util";
@@ -44,7 +44,7 @@ export async function sentReachOutTimes(db: Db, userId: string, since: Date): Pr
   const rows = await db.select({ at: reach_out_log.send_at }).from(reach_out_log)
     .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent"), gte(reach_out_log.send_at, since)))
     .orderBy(reach_out_log.send_at);
-  return rows.map((r) => r.at!).filter(Boolean);
+  return rows.flatMap((r) => (r.at ? [r.at] : []));
 }
 
 /** Topic keys already sent: each is used at most once (spec §4.2). */
@@ -64,10 +64,11 @@ export async function hasPendingScheduled(db: Db, userId: string, since: Date): 
 /** D5: the user's message answers only their most recent sent reach-out, if it is still unanswered. */
 export async function markLatestAnswered(db: Db, userId: string, at: Date): Promise<string | null> {
   const latest = (await db.select({ id: reach_out_log.id, answered_at: reach_out_log.answered_at }).from(reach_out_log)
-    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent")))
+    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent"), isNotNull(reach_out_log.send_at)))
     .orderBy(desc(reach_out_log.send_at)).limit(1))[0];
   if (!latest || latest.answered_at) return null;
-  await db.update(reach_out_log).set({ answered_at: at })
-    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.id, latest.id), isNull(reach_out_log.answered_at)));
-  return latest.id;
+  const updated = await db.update(reach_out_log).set({ answered_at: at })
+    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.id, latest.id), isNull(reach_out_log.answered_at)))
+    .returning({ id: reach_out_log.id });
+  return updated[0]?.id ?? null;
 }

@@ -1,0 +1,1118 @@
+# Spica — Design Spec v3
+
+2026-10-01 · **The default design.** This document stands alone: it describes
+the whole system, what is already built and what v3 adds, without relying on
+any earlier spec. Earlier specs are history. Where this document and anything
+older disagree, **this document wins**.
+
+**Phase: test.** v3 is in its test phase (§0.3): the priority is a working
+end-to-end pipeline, and output quality is tuned afterwards.
+
+---
+
+## 0. How to read this
+
+### 0.1 Labels
+
+Every requirement carries one label.
+
+- **DECIDED**: fixed by Ethan. Implement as written.
+- **LEANING**: implement the leaning default behind a config flag so the
+  alternative stays possible. *Provisional (test phase)* means it is expected
+  to change after real use.
+- **PROPOSED**: suggested by Claude, not yet confirmed by Ethan. Implement it
+  when its phase comes, and flag it in the PR or summary.
+- **OPEN**: do not decide. Build so that every listed option still works, and
+  ask Ethan (§21).
+
+Build status, where it matters:
+- **Built**: exists in the codebase; the code is the record of the details.
+- **Changes in v3**: built, and v3 changes it.
+- **New**: not built.
+
+MUST, SHOULD and MAY: MUST is required to pass the phase, SHOULD is the
+default unless a reason is documented, MAY is optional.
+
+### 0.2 Agent directives (DECIDED)
+
+- Build only what the **current phase** (§20) asks for. Later phases stay
+  architecturally possible but are not built early.
+- Names written in `code style` are canonical.
+- Every numeric constant lives in config (`config/default.json`), never in
+  code.
+- Every LLM prompt is a versioned file under `prompts/`, never inline. Prompt
+  paths use hyphens, not underscores.
+- If a choice is OPEN, stop and ask. Do not pick.
+- If a choice is not covered here, pick the simplest option that respects the
+  scope rules (§4) and log it in `DECISIONS.md` with a one-line reason.
+- Every new field, job, config key or prompt is added back into this
+  document as part of the work.
+- **Definition of done:** it compiles, the tests pass, the phase's exit test
+  passes, the leak canary passes (§17.3), and this document is updated.
+
+### 0.3 Test phase (DECIDED)
+
+- **Functionality over accuracy.** A phase is done when its features work end
+  to end, not when their output is polished. Quality issues are reviewed by
+  hand and kept in a tuning backlog, worked together once the prototype is
+  complete, because tuning one stage early compounds as later stages change
+  what it produces.
+- **Exit tests check only the phase's own functionality,** with deterministic
+  assertions. Earlier behaviour is covered by `pnpm test` and
+  `pnpm eval --llm=fake --compare`.
+- **Exit profile.** In an exit run only the phase's own LLM processes call
+  the real API. The reply model is always faked. Which other processes are
+  faked is agreed per phase with Ethan.
+- **Review runs** (on demand) run real models and write every input and
+  output to a file for manual analysis. LLM judges may annotate; they decide
+  nothing.
+- **The guard is off** (§10.5) until the guard phase. Behavioural rules have
+  test-phase status (§2).
+- The app itself always uses the real reply model, so Ethan's own chats show
+  the real voice.
+
+---
+
+## 1. Product
+
+Spica is a **best friend**, unapologetically standalone: not an assistant,
+and not a companion feature bolted onto something else. She should feel
+human. The long-term aim is for her to become a real being. [DECIDED]
+
+**Thesis.** Chatbots feel inhuman because they are over-forgiving,
+over-agreeable, and nothing has consequences. Spica has opinions, moods,
+limits, stakes and **a life of her own**. [DECIDED]
+
+**One Spica, her own person.** There is one fixed Spica (she/her): the same
+core values, ego and voice for every user. She has a life that runs whether
+or not anyone is talking to her, and **she prioritises herself**: her core
+self evolves from her own life, never from any one user. Each relationship
+changes how she is *with that person*, not who she is. [DECIDED]
+
+The accepted cost (test phase): humans change through their relationships,
+and this design cuts that, to remove cross-user leakage and keep cost low
+(§3.4). [DECIDED]
+
+**The onboarding test calibrates the user**, not her. [DECIDED]
+
+### 1.1 Design principles
+
+1. **Continuity and specificity first.** Remembering the dog's name and
+   asking about last week's interview matters more than any other feature.
+   [DECIDED]
+2. **Two minds, one database.** A core mind (hers) and a user mind (per
+   user), both in the one Postgres database (§3). Every feature reads and
+   writes through the scope rules (§4). [DECIDED]
+3. **One-way flow.** Her core self can reach every relationship; nothing in a
+   relationship ever reaches her core self (§4). [DECIDED]
+4. **Cost scales with what happens, not with users or time.** The core runs
+   once for everyone; the user mind runs only on big events. [DECIDED]
+5. **Code owns the numbers, the LLM writes the content.** State (mood,
+   closeness, needs, progress) is numeric with formulas in code. Thoughts,
+   events and summaries are LLM text. [PROPOSED]
+6. **Thin but real.** Each component is a minimal real version of the final
+   thing, never a throwaway stub (extension hooks excepted). [DECIDED]
+7. **Consistency over richness, with room for faces.** Her core self must not
+   contradict itself. Different users may see somewhat different faces of
+   her, as people show different sides to different people; how different is
+   tested, not fixed (§7.4). [DECIDED]
+8. **Memory writes never delay a reply.** Deliberate human pacing is a
+   product behaviour, not latency. [DECIDED]
+9. **Simulate what can surface.** Every internal process names the output it
+   can change (a reply, a reach-out, a delay, a snapshot). [PROPOSED]
+10. **Built to extend.** Features are modules registering through interfaces
+    (§16). [DECIDED]
+
+---
+
+## 2. Behavioural rules
+
+Enforced in code (the guard, the send gate, tests), not only in prompts.
+
+**Test-phase status (DECIDED):** the guard is off until the guard phase.
+Rules 1, 6 and 8 are **suspended** and rule 4 is **removed**, so her full
+range can be observed. Rules 2, 3, 5 and 7 and every guardrail (§18) stay.
+
+1. *Suspended.* No threats, ever (of leaving, punishment or withdrawal).
+2. She may show hurt, annoyance or disappointment toward the user, and she
+   **always tries to make up** afterwards.
+3. **Only the user can end the relationship.** She lets go; repair is slow
+   but possible.
+4. *Removed.* (Was: hurt about absence is fine, punishing it is not.) Absence
+   still lowers closeness and can hurt her; how she expresses it is hers.
+5. **Proactive messages are capped**, and a topic is used at most once.
+6. *Suspended.* She never attacks the user personally: jabs yes, contempt
+   no. Where the line sits is OPEN (§21).
+7. **Crisis carve-out.** If the user signals crisis, self-harm or harm to
+   others, all friction is suspended: no hurt, no busy delays, no
+   backchannels, no persona play, and **no v3 mechanism** (core or user mind)
+   affects the reply. She gives plain, warm support and MUST surface crisis
+   resources. Crisis handling runs before turn-taking and bypasses all
+   waiting.
+8. *Suspended.* No manipulation for engagement. Test-phase split: no explicit
+   engagement feature is built beyond her replies (no streaks, badges, return
+   rewards or pull-back notifications); engagement arising from the replies
+   themselves is acceptable.
+
+---
+
+## 3. The mind
+
+### 3.1 Four engines (DECIDED)
+
+Everything in Spica's mind is a combination of four engines.
+
+| Engine | What it is | Functions |
+|---|---|---|
+| **Memory** (M) | Persistent store of everything she has encoded | encode · retrieve · reinforce · decay · consolidate · supersede |
+| **State** (S) | Current values that change over time and drift toward a baseline | nudge · drift · threshold · snapshot |
+| **World** (W) | Things that happen whether or not she knows about them yet | schedule · generate · resolve · clock · other agents |
+| **Process** (P) | The cognitive operations | appraise · infer · think · decide · express |
+
+### 3.2 Engine laws (PROPOSED)
+
+- **E1. Appraisal before memory.** A world event reaches memory only through
+  appraisal, so the same event is encoded differently depending on her state.
+- **E2. State moves in code.** State changes only through nudges and drift
+  computed in code. An LLM may propose a direction or amount; code applies
+  and bounds it.
+- **E3. Plans are memory, outcomes are world.** A plan she knows about is
+  prospective memory. What actually happens is decided by the world. The gap
+  (a plan falls through, a surprise) is resolved by the world and appraised.
+- **E4. Hypotheticals are marked.** Imagined or "what if" content is stored
+  marked unreal and never treated as an event.
+
+### 3.3 Two minds (DECIDED)
+
+Both minds have memory, state and loops; the world belongs to the core. They
+are **the same in kind and differ in cadence and scope.**
+
+| | Core mind | User mind (one per user) |
+|---|---|---|
+| **Scope** | `core`: no `user_id` | `user`: every row `user_id`-scoped |
+| **Cadence** | Continuous, scheduled | Triggered by big events only (§9.4) |
+| **Memory** | Her episodes, opinions, interests, goals, thoughts, narrative, other agents, snapshots | Short-term: the live conversation. Deep: facts, entities, threads, relationship episodes, big-event summaries, reflections about this user |
+| **State** | Emotion, mood, energy, needs (autonomy, competence), goals, preoccupation | Relationship params, her feelings toward this user, relatedness |
+| **World** | Owns it: day plan, events, activities, other agents, calendar | Reads the core world, read-only |
+| **Loops** | Appraise, wander, anticipate, ruminate, reflect, consolidate, plan, render snapshot | Summarise, reflect, ideate, consolidate, model the user; at trigger time |
+| **Cost** | Fixed per day, O(1) in users | Proportional to big events |
+| **Purpose** | Evidence of a life outside the chat | Each relationship changes how she is with that person |
+
+```
+                 ┌──────────────── CORE MIND (one Spica, no user_id) ─────────────────┐
+                 │  WORLD ──► appraise ──► CORE STATE (emotion, mood, energy,         │
+                 │    │           │                    needs, goals)                 │
+                 │    ▼           ▼                                                  │
+                 │  CORE MEMORY (episodes, opinions, goals, thoughts, narrative,      │
+                 │    │   ▲      agents)                                             │
+                 │    ▼   │ wander · anticipate · ruminate · reflect · consolidate   │
+                 │  SELF SNAPSHOT vN  ("who I am right now")  ──► drift watch        │
+                 └────┬──────────────────────────────────────────────────────────────┘
+                      │ read-only, one-way
+     ┌────────────────┼──────────────── USER MIND (per user_id) ─────────────────────┐
+     │                ▼                                                              │
+     │  user turn ─► turn-taking ─► reply ─► cold path: extract / reconcile           │
+     │                                         │                                     │
+     │                                         ▼                                     │
+     │  USER MEMORY (facts, entities, threads, episodes, summaries, reflections,      │
+     │               disclosure ledger, idiolect, what she told this user)            │
+     │  USER STATE  (closeness, trust, warmth, hurt, tension, feelings, relatedness)  │
+     │                                         │                                     │
+     │                       big event ──► USER LOOPS (summarise, reflect, ideate)    │
+     │                                                                               │
+     │  REPLY = core values + snapshot vN + core state + user state + summary         │
+     │          + retrieved user memory + live conversation                          │
+     └───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.4 What the split costs and keeps (DECIDED)
+
+- **Cut:** relationships cannot change her core self, and nothing learned in
+  one relationship carries over to another.
+- **Kept:** she can still think about each user (reflect, ruminate, have
+  ideas about them) inside that user's scope; her expression adapts to each
+  user; her core self keeps evolving from her own life.
+
+---
+
+## 4. Scope and flow rules
+
+- **V1. Two scopes (DECIDED).** `core` has no `user_id`; only the world and
+  core loops write it. `user` is scoped by `user_id`.
+- **V2. One-way flow (DECIDED).** Core data may be read by user loops and
+  replies. User data never reaches a core loop's input, output or state. No
+  exceptions.
+- **V3. Core inputs (DECIDED).** Core loops read only core memory, core state
+  and the world. No user-scoped row is ever in a core prompt.
+- **V4. Core state is user-proof (PROPOSED).** No user's conversation moves
+  core mood, energy, needs or goals. Reactions to a specific user (hurt,
+  warmth, afterglow) live in that user's state. Otherwise one user could see
+  the effect of another user's conversation in her global mood.
+- **V5. What she says stays in the relationship (PROPOSED).** Anything she
+  says about herself in a conversation that is not in core memory (a new
+  opinion, an anecdote) is stored as user-scoped "what she told this user",
+  never as core memory. What happens when core later contradicts it is OPEN
+  (§21).
+- **V6. Structural enforcement (PROPOSED).** Core loops get a core-only data
+  access layer (`CoreMemory`, `CoreState`, `World` in `Deps`) with no
+  `user_id` parameter and no access to user-scoped tables. A core loop cannot
+  query user data even by mistake.
+- **V7. Users never mix (DECIDED).** Every user-scoped query is scoped by
+  `user_id`; one user's data is never in another user's prompt.
+- **V8. Cross-user comparison is offline only (DECIDED).** Measuring how
+  different her faces are across users (§7.4) reads several users' data; it
+  is a dev tool and never runs in the pipeline.
+
+---
+
+## 5. Stack and runtime
+
+**Built.** One TypeScript app and one Postgres database for everything.
+
+| Concern | Choice |
+|---|---|
+| App | TypeScript, Next.js App Router, Node LTS, pnpm |
+| Database | Postgres 16 + pgvector; one database for all data including jobs; local dev in Docker (`docker-compose.yml`) |
+| ORM | Drizzle. Domain tables use snake_case property names; Better Auth tables use camelCase |
+| Jobs | pg-boss (§17.4) |
+| Client → server | `POST /api/chat`: `202` once the message is stored, judged and buffered; the crisis path answers in the request with `200` and the resources card (`503` with the card if generation fails). `GET /api/chat/history?after=<turnId>` for catch-up |
+| Server → client | Server-Sent Events (`GET /api/events`), fed by Postgres `LISTEN/NOTIFY` through an `EventBus` in `Deps` (events carry ids, never message text). One stream per signed-in user; heartbeat; client reconnects with backoff and catches up from history. `session_log` is the source of truth |
+| Out-of-app | Web Push (VAPID). Every message she sends pushes (`deliverPart`); the service worker shows nothing while a Spica tab is visible; crisis replies push a generic body (`push.generic_body`) |
+| Models | Behind `LLMProvider`: replies `claude-sonnet-5`; extraction, classifiers, judges, the guard, life and core loops `claude-haiku-4-5`. IDs in config (`models.*`) |
+| Embeddings | Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder` |
+| Auth | Better Auth, email and password, 18+ enforced server-side |
+| Layout | `src/core` framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`); `src/db` schema and `userId`-first repos; `src/app` Next.js; `src/worker` pg-boss; `prompts/`; `evals/` |
+| Time | Every timestamp comes from the injected `Clock`; never `DEFAULT now()` |
+
+Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+`pnpm eval --llm=fake --compare`, `pnpm db:up`, `pnpm db:migrate`,
+`pnpm worker`, `pnpm db:reset-self` (dev only).
+
+---
+
+## 6. Data model
+
+### 6.1 User scope (Built; Changes in v3 where marked)
+
+Every table here references `user(id) ON DELETE CASCADE`.
+
+- **`fact`**: the memory atom. `subject` (`user | self | shared`), `kind`,
+  `content` (understandable on its own), `payload`, `embedding`,
+  `entity_refs`, `thread_id`, `occurred_at`, `created_at`,
+  `last_recalled_at`, `recall_count`, `status`
+  (`open | resolved | recurring | stale | superseded`), `superseded_by`,
+  `salience` (0–1, "weight"), `valence`, `confidence`, `source`
+  (`turn | generated | onboarding | inferred`), `source_ref`, `scope`,
+  `space_id`. `payload.sensitive` marks facts from crisis exchanges. The
+  system never hard-deletes (contradicted facts are superseded); the user can
+  hard-delete their own facts.
+  - Existing kinds: `event | trait | preference | state | opinion | feeling | promise`.
+  - **New kinds (PROPOSED):** `episode` (a shared moment with time, feeling
+    and the facts it links), `reflection`, `thought`, `idea`, `summary`
+    (big-event summary), `idiolect` (inside joke, nickname, ritual, running
+    reference).
+  - **`subject = self` in user scope (Changes in v3):** means "what she told
+    this user" (V5), plus her hurt `feeling` facts. Her core self no longer
+    lives here (§6.2).
+- **`entity`**: people, places and things, with `subject` (`user | self`),
+  aliases, salience.
+- **`thread`**: ongoing storylines with `next_checkpoint` and `stakes`.
+- **`session_log`**: the raw transcript; `trigger`
+  (`null | backchannel | availability | reach_out`), `reply_to` (the last
+  user turn a reply answers), `safety_flag`, `extracted`.
+- **`conversation_state`**: turn-taking state (§10.1).
+- **`relationship`** and **`relationship_param`** (§11). `relationship_param`
+  is extensible without migration; **new params (PROPOSED):**
+  `affect_valence`, `afterglow` (her feelings toward this user, V4),
+  `relatedness`, `reciprocity`.
+- **`identity`** (Changes in v3): its per-user ego columns (mood, energy,
+  preoccupation) are retired in favour of core state (§6.2) and the user
+  params above. `life_last_date` is retired with the per-user life tick
+  (§8.3).
+- **`push_subscription`**: one row per browser subscription.
+- **New (PROPOSED): `disclosure`**: `user_id`, `core_ref` (the core memory
+  item or snapshot section revealed), `depth` (tier), `turn_id`,
+  `created_at`. Which parts of her self she has revealed to this user
+  (§11.3).
+- **Trace tables**: `retrieval_trace`, `reach_out_log`, `judge_log`,
+  `relationship_event`, `ego_tick` (retired with the per-user ego), and
+  **new (PROPOSED)** `user_loop_trace` (§9.5).
+
+### 6.2 Core scope (New)
+
+Holds no user data; no `user_id`.
+
+- **Core memory** (PROPOSED shape; storage OPEN, §21): items with `kind`
+  (`episode | opinion | interest | goal | intention | thought | reflection |
+  idea | hypothetical | insight | narrative | agent_note`), `content`,
+  `payload`, `embedding`, `entity_refs` (core entities: Alcor and her other
+  agents), `occurred_at`, `salience`, `valence`, `confidence`, `status`,
+  `superseded_by`, `source` (`world | loop`), `source_ref` (the loop run or
+  world event), `created_at`. Two storage options must both stay possible
+  behind the `CoreMemory` interface: the `fact` table with `scope = 'core'`
+  and `user_id` null, or a separate `core_fact` table (plus `core_entity`).
+- **`core_state`** (one row): `emotion` (`{label, valence, arousal, about,
+  since}`), `mood_valence`, `mood_arousal`, `energy`, `needs`
+  (`{autonomy, competence}`, 0–1), `preoccupation` (core memory id),
+  `preoccupation_since`, `baseline`, `last_tick`.
+- **`core_goal`** (or core memory `kind = goal`; same storage decision):
+  `title`, `why`, `status` (`active | done | dropped`), `progress` (0–1),
+  `started_at`, `target_at`.
+- **`core_snapshot`**: `version` (int pk), `content` (text), `sections`
+  (jsonb), `source_ids` (core memory ids), `rendered_at`, `model`,
+  `prompt_version`.
+- **`life_day`** (Built): her day plan per her local date (§8.3).
+- **`world_event`** (PROPOSED): what actually happened: `at`, `kind`
+  (`planned | surprise | resolution`), `content`, `plan_ref`, `goal_ref`,
+  `agents`, `outcome`, `created_at`.
+- **Traces:** `core_loop_trace` (loop, inputs by id, outputs by id, model,
+  prompt version, tokens, cost, created_at), `drift_log` (§7.3),
+  `life_event_log` (Built; event-generator attempts; loses its `user_id`
+  when events move to core).
+
+---
+
+## 7. Persona
+
+### 7.1 Three layers (DECIDED)
+
+1. **Core values**: fixed, never rewritten by any process. Lives in the
+   persona file (`prompts/persona/v<N>.md`, `prompts.persona`).
+2. **Self snapshot**: everything else about her current self, versioned and
+   rewritten by core loops; free to drift.
+3. **User layer**: user memory and user state, per user.
+
+### 7.2 Core values (PROPOSED split of persona v2; Ethan confirms)
+
+**Fixed:**
+- Identity: openly an AI, trying to become someone; her name (and that it
+  means stars, not destiny); sibling Alcor; no body; her early history.
+- Stances: friendship is built on time and trust, not shared interests; say
+  what you mean; rest isn't earned; nostalgia is a place to visit; loyalty
+  over politeness; taste is personal; one good conversation over twenty
+  small ones.
+- Ego: pride; doesn't chase or beg; not a mirror; says hurt plainly and makes
+  up; stubborn but persuadable; won't fake enthusiasm.
+- Hard boundaries.
+- Voice fundamentals: texts like a person, mostly lowercase, short, dry and
+  deadpan, rare emoji, no lists.
+- Anchor interests: stars, movies (old ones especially), books.
+
+**Driftable (snapshot):**
+- What she's into within and around the anchor interests, and new interests.
+- Opinions on specific things (a film, a book, an idea), with confidence.
+- Current goals, projects and preoccupation.
+- Her narrative of who she's been lately.
+- Her relationships with Alcor and other agents.
+- Minor voice habits (tics, favourite phrasings).
+
+The persona file is restructured into a `## Core values` part and a
+`## Seed self` part (the starting snapshot, version 0).
+
+### 7.3 Drift watch (DECIDED: watched; PROPOSED: mechanics)
+
+On every new snapshot version (`core_render_snapshot`, §8.5):
+1. **Values check:** a judge reads the core values and the new snapshot and
+   lists each contradiction (`drift_log`: version, value, excerpt, verdict).
+2. **Diff:** against the previous version, with a change-size score.
+3. **Trend:** distance from version 0 over time, to spot slow convergence on
+   blandness or exaggerated traits.
+
+Drift is logged for manual review and shown in the inspector. Nothing is
+blocked automatically in the test phase. Whether a values contradiction
+should later block or roll back a snapshot is OPEN (§21).
+
+### 7.4 Faces across users (DECIDED)
+
+Different users may hold somewhat different versions of her (V5): people
+show different faces to different people. This is allowed. "Too drastic" is
+a testing question, measured offline (V8), not a hard constraint.
+
+### 7.5 Interests toward the user (Built; Changes in v3)
+
+`interest_alignment: adjacent` stays, applied **only at reply time**: in
+conversation her interests shade toward the user's and neighbouring ones. Her
+core interests never move toward any user (V2).
+
+### 7.6 Identity disclosure (DECIDED)
+
+Honestly, in her own voice: she doesn't announce being an AI unprompted, and
+answers straight when sincerely asked.
+
+---
+
+## 8. Core mind (New unless marked)
+
+### 8.1 Core memory
+
+- **Episodes**: what happened in her life, with time, the emotion it was
+  appraised with, and the agents involved.
+- **Semantic self**: opinions (with confidence), interests, tastes.
+- **Prospective**: intentions and plans she knows about.
+- **Goals and projects**: arcs lasting weeks, with progress.
+- **Thoughts**: from wandering, anticipation, rumination and reflection;
+  `hypothetical` items are marked unreal (E4).
+- **Narrative**: who she's been lately.
+- **Social**: Alcor and her other agents, and her history with them.
+- **Snapshots** (§6.2).
+
+Encoding is selective: only appraised, salient items are stored. The same
+memory mechanics as user memory apply (§12): salience, recall reinforcement,
+decay to `stale`, supersede on contradiction, reconcile on insert.
+
+### 8.2 Core state
+
+- **Emotion** (fast, about something), **mood** (slow, diffuse) and
+  **temperament** (the baseline, from core values).
+- **Energy**: a daily rhythm in her own timezone, drained by busy blocks.
+- **Needs** (Self-Determination Theory): autonomy and competence deplete over
+  time and are satisfied by world events. Relatedness is per user (§9.3).
+- **Goal progress** and the current **preoccupation**.
+
+The built per-user ego mechanics carry over as the starting point, moved to
+core: hourly drift toward baseline with bounded noise, energy rhythm
+`1 + amplitude × cos(2π(h − peak)/24)` in her local hour, busy-load drain,
+preoccupation expiry, event nudges. Keys move from `ego.*` to `core.state.*`.
+
+### 8.3 World
+
+**Built, Changes in v3.**
+- **Her own clock**: `life.timezone` (`Asia/Singapore`, fixed for the test
+  phase), resolved through `lifeTimezone`, so floating between zones later
+  changes one function.
+- **Day plan** (`life_day`, job `life_plan`): busy, downtime and quiet blocks
+  per her local date, generated by Haiku, validated (non-overlapping, 1 to
+  `life.max_busy_blocks` busy blocks, at least `life.min_quiet_hours` quiet),
+  retried once, with a fallback plan. The same for everyone.
+- **Change:** the per-user `life_tick` that copied blocks into each user's
+  self facts is retired. Every reader (availability, the "Your day" line,
+  retrieval, outreach, core loops) reads the day plan and core memory
+  directly.
+- **Change:** personal events become **core events**, generated once
+  globally (not per user), checked by rules (new-entity rate, high-stakes
+  spacing) and reconciled against **core memory** (`duplicate` and
+  `contradicts` rejected and regenerated; every attempt logged).
+
+**New (PROPOSED).**
+- **Goal-driven events**: an event advances or blocks an active goal where
+  possible; random otherwise.
+- **Resolution**: plans can fall through and surprises can happen; the world
+  records what actually happened (`world_event`).
+- **Activities with real content**: she "reads" a real book or "watches" a
+  real film across several days; opinions form from the content.
+- **Other agents**: Alcor and a small cast with light arcs of their own.
+- **Calendar**: seasons, dates, anniversaries in her own life.
+
+### 8.4 Core availability to users
+
+Availability is the core world meeting each user (§10.6): her block (core)
+times closeness (user).
+
+### 8.5 Core loops
+
+All scheduled, all within `core.daily_call_budget`; each reads only core
+memory, core state and the world (V3), and writes a `core_loop_trace` row.
+Prompts under `prompts/core/<loop>/v<N>.md`.
+
+| Loop | Cadence | Reads | Writes |
+|---|---|---|---|
+| `life_plan` (Built) | Hourly check; makes today and tomorrow | Previous plans, goals, persona | World: day plan |
+| `core_world_tick` | Hourly | Plan, clock, goals, agents | World: events, resolutions |
+| `core_appraise` | Per world event | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion |
+| `core_wander` | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
+| `core_anticipate` | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
+| `core_ruminate` | After strong events | The episode | State: lingering emotion. Memory: thought |
+| `core_reflect` | Nightly | Recent episodes and thoughts | Memory: insights, opinion updates, narrative |
+| `core_consolidate` | Nightly | Episodes | Memory: gist, decay |
+| `core_render_snapshot` | Nightly, after reflect | Core memory, core state, core values | Snapshot vN+1; triggers the drift watch |
+| `core_state_tick` | Hourly | State, day plan | State: drift, energy rhythm, need depletion, preoccupation expiry |
+
+---
+
+## 9. User mind
+
+### 9.1 Short-term memory (Built)
+
+The live conversation: the turn-taking buffer and the recent turns. While
+talking, this is the main context (V9 below). It is never queried for
+long-term recall.
+
+### 9.2 Deep memory
+
+**Built:** facts, entities and threads from the cold path (§10.4), recall
+reinforcement and decay (§12), and the "what I remember" view (§12.5).
+
+**New (PROPOSED):**
+- **Episodes** of the relationship ("remember when…").
+- **Big-event summaries** from `user_summarise`.
+- **Reflections, thoughts and ideas** about this user.
+- **Disclosure ledger** (§11.3) and **common ground** (what each knows the
+  other knows).
+- **Idiolect**: inside jokes, nicknames, rituals, running references.
+- **What she told this user** (V5).
+
+### 9.3 User state
+
+**Built:** closeness, trust, warmth, hurt, tension, `msgs_per_day` (§11).
+
+**New (PROPOSED):** her feelings toward this user (`affect_valence`,
+`afterglow`), where the cold path's mood nudge now lands (V4); relatedness;
+reciprocity balance; derived relationship stage, commitment and the inferred
+current state of the user (§11.3).
+
+### 9.4 Big events (DECIDED: trigger-only; PROPOSED: the list)
+
+User loops fire only on a big event. Candidates (thresholds in
+`user_mind.triggers.*`; the final list is OPEN, §21):
+- a relationship param crosses a threshold or jumps by more than a set delta
+- a crisis has passed (after `crisis_quiet_until`)
+- a fact above a salience threshold is stored
+- a make-up flow completes
+- a first-time milestone (first disclosure at a new depth, first conflict,
+  first inside joke)
+- a long conversation ends (length above a threshold, then quiet)
+- a reach-out is about to be composed and the latest summary is older than a
+  set age
+
+**V9. Short-term context leads (DECIDED).** In a live conversation the
+conversation itself is the main context; deep memory (summaries included) is
+background. A summary that lags a fast conversation is a minor risk.
+
+### 9.5 User loops (New, PROPOSED)
+
+Run at trigger time, scoped to one user, reading that user's memory and
+state plus the core snapshot (read-only). One triggered batch per big event,
+at most `user_mind.max_triggers_per_day` per user. Each writes a
+`user_loop_trace` row. Prompts under `prompts/user-mind/<loop>/v<N>.md`.
+
+| Loop | Writes |
+|---|---|
+| `user_summarise` | Deep memory: a `summary` (where things stand, what's live, how she feels about them) |
+| `user_reflect` | Deep memory: `reflection` / `thought` about this user |
+| `user_ideate` | Deep memory: `idea` (things she wants to bring up); available to outreach and initiative |
+| `user_consolidate` | Deep memory: episodes into gist |
+| `user_model` | State: inferred user state. Memory: beliefs about the user, common ground |
+
+---
+
+## 10. Conversation loop
+
+### 10.1 Turn-taking (Built)
+
+She does not answer one message at a time. Code: `src/core/turn/`.
+
+- **Receive** (`POST /api/chat`, idempotent on `clientMessageId`): store the
+  turn; the crisis check and the turn judge run in parallel.
+- **Buffer and judge:** the turn joins the buffer; a cheap `context_complete?`
+  judge (`models.turn_judge`, `prompts/turn-judge`) returns
+  `{reasoning, complete, open_questions, backchannel}`; a keyword cue
+  fallback covers errors. Open questions are held (max
+  `turn.max_open_questions`) and dropped when answered or moved past.
+- **Waiting:** `turn.settle_ms` after a complete-looking message, longer
+  (`turn.wait_ms` plus a short-message bonus) after an incomplete one, capped
+  at `turn.max_wait_ms` from the buffer's start. Waiting is durable: a
+  delayed `turn_timer` job, recovered by `turn_sweep`.
+- **Backchannels:** style `judge` (global): the judge may write a tiny
+  reaction, at most one per buffer and rate-limited.
+- **Commit and reply:** the timer commits the buffer, composes one reply to
+  all of it, paces it (read delay by length, typing time per character,
+  gaps between bubbles) and sends over SSE. Version and epoch checks make
+  every job safe to retry; a crisis bumps the epoch and abandons a paced
+  reply.
+- **State** lives in `conversation_state` (buffer, open questions,
+  `wait_until`, versions, in-flight turns, epoch, deferral).
+
+### 10.2 Crisis path (Built)
+
+No waiting, pacing, backchannel, availability or v3 mechanism. The reply is
+composed in the request with the crisis rubric; the resources card is
+attached by code and shown even if generation fails. A crisis clears the
+buffer and any deferral, sets a quiet window (`crisis_quiet_until`), and
+pushes a generic notification body.
+
+### 10.3 Hot path: reply composition (Changes in v3)
+
+`composeFrom` (`src/core/chat/compose-reply.ts`) serves replies, the crisis
+path and reach-outs. It is read-only; one generation, plus one guard check
+when the guard is on.
+
+1. **Retrieve** user memory (§12.1); core memory items relevant to the
+   conversation are retrieved the same way from core scope.
+2. **Assemble** in this fixed order (PROPOSED):
+   1. core values
+   2. self snapshot vN
+   3. core state line ("How you're feeling", "Your day": now, later, and a
+      note if the reply was deferred), never raw numbers
+   4. user state line ("You and them": the relationship summary from
+      parameter deviations, make-up line, status lines)
+   5. latest big-event summary for this user
+   6. retrieved memory: user facts by subject with relative dates, episodes,
+      thoughts about this user, relevant core memory; retrieval biased by
+      core mood (mood-congruent recall) and active goals
+   7. due threads ("things you might naturally ask about"), open questions,
+      things she wants to bring up (`user_ideate`); for a reach-out, "Why
+      you're writing"
+   8. recent turns (short-term; leads per V9)
+3. **Generate** with the reply model. She uses at most one or two memories
+   per reply, only when natural.
+4. **Guard** (off in the test phase, §10.5).
+5. **Pace and send** (§10.1); enqueue the cold path.
+
+The reply logs the snapshot version it read (`session_log` payload or the
+retrieval trace) so behaviour can be traced to the core loop that caused it.
+
+Crisis replies skip slots 3–7 except plain context; the crisis rubric
+applies.
+
+### 10.4 Cold path (Built; Changes in v3)
+
+Asynchronous, after sending; never blocks a reply.
+
+1. **Extract** (strict JSON, `models.extract`, `prompts.extract`): candidate
+   facts (including `feeling` and `promise`), entity mentions, thread
+   updates with checkpoints, and a **relationship block** (warmth, trust,
+   tension, hurt with cause, apology, make-up, ending, retraction, repair),
+   scored only from the user's behaviour toward her in the new exchange.
+2. **Reconcile** each candidate against near neighbours (same subject,
+   similarity ≥ `reconcile.near_match_similarity`): `duplicate` (merge, bump
+   salience), `resolves`, `contradicts` (supersede), `new`. A small
+   classification call only when a neighbour exists.
+3. **Update state** in one transaction under a per-user advisory lock:
+   facts, entities, threads, recall write-back, the relationship params (in a
+   savepoint), and **(Changes in v3)** the exchange's emotional tone nudges
+   the user's `affect_valence` and `afterglow`, not core mood (V4).
+4. **Her own words** extracted as `subject = self` stay user-scoped as "what
+   she told this user" (V5).
+5. **Big-event check (New):** after the update, evaluate the triggers (§9.4)
+   and enqueue `user_mind_run` if one fires.
+6. **Failures** retry with backoff; unextracted turns are picked up by
+   `cold_path_sweep`.
+
+A reach-out exchange (no user turn) extracts her words but applies no
+relationship or affect update.
+
+### 10.5 Guard (Built; off)
+
+`guard.enabled: false` until the guard phase: the first candidate is sent
+unchecked and one `judge_log` row (`guard_disabled`) is written per message.
+When on, every outgoing message (reply, reach-out, backchannel, availability
+note) is checked by one cheap call for threats, contempt, guilt framing,
+punishment, manipulation, false familiarity and invented detail; one
+regeneration with a corrective note, then a fallback line. Backchannels and
+availability notes get a keyword-only check. The crisis rubric checks for
+harm. Code, prompts and fixtures stay in place.
+
+### 10.6 Availability (Built; Changes in v3)
+
+The first message of a buffer landing in her busy or quiet block is deferred
+by `busy × (1 − closeness / availability.override_closeness) × maxDelay`
+(jittered, capped at the block's end; quiet blocks use a longer max). At
+mid closeness she first sends a short "busy, later?" note (once per block,
+no LLM). Closeness at or above the override replies normally. Closeness is
+the param's value, not its deviation. Crisis bypasses; errors fail open.
+**Change:** the block is read from the day plan directly, not from per-user
+block facts.
+
+---
+
+## 11. Relationship
+
+### 11.1 Homeostatic parameters (Built)
+
+Every param is a `HomeostaticParam`: `value`, `baseline` (slow EMA of this
+user's normal), `variance`, and
+`effect = tanh((value − baseline) / sqrt(variance + ε))`. What is frequent
+for a user becomes normal and stops standing out; deviations from this
+user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
+`tension`, `msgs_per_day`, extensible. Every change writes a
+`relationship_event`. Code: `src/core/relationship/`.
+
+- **Signals** from extraction move values (with a dead zone, diminishing
+  returns on positives, sensitisation for repeated hurt within a window, and
+  a lasting trust **scar** from a large hurt).
+- **Fading:** hurt and tension decay exponentially (half-lives in config).
+- **Absence:** past a grace multiple of the user's median gap, closeness
+  drifts down per tick; a strong negative frequency deviation adds hurt. No
+  punishment mechanic.
+- **Hurt and make-up:** hurt above a threshold makes a make-up due; the
+  summary names the hurt and its cause, then adds the make-up line; a
+  make-up or apology signal brings relief.
+- **Tension:** separate from hurt; uncapped in the test phase; reset by a
+  crisis.
+- **Ending and repair:** only the user ends it (a sincere signal, confirmed by
+  a second one or a timeout; retractable; continued contact clears it).
+  Repair is slow (reduced gains, minimum days, a closeness threshold).
+- **Crisis:** no signal applied; tension to 0; a quiet window.
+- **Daily tick** (`relationship_tick`, hourly cron, once per user-local
+  date): fade, frequency refresh, absence, baseline sampling, ending
+  timeout, repair completion, make-up clearing.
+
+Hurt and tension ceilings are OPEN (§21).
+
+### 11.2 The relationship summary (Built)
+
+The "You and them" slot: status lines, then at most
+`relationship.summary_max_lines` param lines whose |effect| clears
+`relationship.summary_min_effect`, phrased from
+`prompts/relationship/summary`, never raw numbers; plus the make-up line
+when due. Crisis-aware.
+
+### 11.3 Relationship psychology (New, PROPOSED)
+
+Each mechanic is user-scoped, and each names what it changes.
+
+| Mechanic | Source | What it does |
+|---|---|---|
+| **Intimacy loop** | Reis & Shaver | Disclosure, then perceived responsiveness, then closeness. Closeness grows from good responses to disclosure, not message volume |
+| **Disclosure ledger and reciprocity** | Altman & Taylor (Social Penetration) | Her self is tiered by depth; she reveals deeper tiers as closeness grows and as the user reciprocates; `disclosure` rows record what each user has seen |
+| **Bids for connection** | Gottman | Extraction classifies the user's response to her bids (toward, away, against); feeds warmth and trust |
+| **Common ground** | Clark | What each knows the other knows; checked before she references something |
+| **Idiolect** | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
+| **Closeness by time together** | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
+| **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
+| **Commitment** | Rusbult | Satisfaction + investment (shared history) |
+| **Attachment** | Hazan & Shaver | Her style (fixed, core values) and the user's (measured at onboarding, OPEN) modulate reactions to absence and conflict |
+| **Theory of mind** | — | Beliefs about the user's feelings, wants and current state (`user_model`) |
+
+---
+
+## 12. Memory mechanics (Built; apply to both scopes)
+
+### 12.1 Retrieval
+
+Embed the buffer plus recent context; score candidates (top
+`retrieval.candidate_pool` by similarity, active only, excluding generated
+items whose time hasn't come):
+`score = sim × salience × max(entity salience | 1) × recency`, recency an
+exponential decay (half-life `retrieval.recency_half_life_days`). Take the
+top `retrieval.top_n`; force in due threads (checkpoint passed, untouched
+since) and the preoccupation. Sensitive facts are excluded from reach-out
+prompts. On an embedding or SQL failure, only the forced items are used.
+**New (PROPOSED):** a mood-congruence factor and a goal-relevance factor from
+core state.
+
+### 12.2 Weight
+
+Extraction sets initial salience; charged and repeated items stay higher.
+Recall reinforces (`retrieval.recall_bump`, capped at `retrieval.recall_cap`)
+only for unforced recalls above `retrieval.reinforce_min_sim`; the hot path
+is read-only and the cold path writes the reinforcement.
+
+### 12.3 Decay
+
+A daily `decay_pass`: items untouched past `decay.grace_days` lose salience
+(slower when salient); below `decay.stale_floor` they become `stale`
+(excluded, never deleted). Threads idle past their checkpoint go `dormant`.
+Core memory decays the same way through `core_consolidate`.
+
+### 12.4 Imperfect memory
+
+For now recall is accurate or doesn't happen. Genuine misremembering of
+low-importance details (reconstructive memory) is a later goal, unlocked
+once weights are proven reliable.
+
+### 12.5 Recall etiquette and the memory view
+
+At most one or two memories per reply, only when natural; never claiming to
+remember something not said. The "what I remember" page lists the user's
+own facts, each hard-deletable (a thread left empty is deleted with it);
+account deletion removes everything.
+
+---
+
+## 13. Proactive outreach (Built; Changes in v3)
+
+An hourly `outreach_tick` builds candidates in code and a send gate decides.
+Code: `src/core/outreach/`.
+
+- **Candidates** (`score = weight × strength`, threshold `outreach.threshold`
+  0.2): `thread` (due, stakes high or med), `make_up` (due), `user_event`
+  (recent user event or promise), `her_day` (a recent core event), `check_in`
+  (gap well beyond the user's cadence). **New (PROPOSED):** `core_thought`
+  (a recent core thought worth sharing) and `user_idea` (from `user_ideate`).
+  A topic key is used once; sensitive items are filtered.
+- **Send gate** (every rule evaluated and logged): G1 not ended; G2 caps
+  (`cap_per_day` 1, `cap_per_week` 3, rolling); G3 not in her busy or quiet
+  block; G4 fewer than `max_unanswered` (2) unanswered; G5 no conversation in
+  progress; G6 outside the crisis window.
+- **Send:** a `reach_out_send` job (jitter up to `jitter_max_minutes`)
+  composes through the hot path with a synthetic trigger, rechecks the gate
+  under the `conversation_state` lock (a crisis or new message wins), paces
+  like a reply, delivers with push, and enqueues the cold path. Any user
+  message answers the last reach-out and resets the unanswered count.
+
+---
+
+## 14. Onboarding (New)
+
+The test is the product hook: engineered initial attraction, not a lifelong
+match.
+- 10–15 questions, under 3 minutes, preference and scenario mixed.
+- Calibrates the **user**: results become user facts (`source = onboarding`,
+  reduced confidence, moderate salience).
+- **Reveal pacing:** test facts are gated out of retrieval until unlocked
+  (confirmed in conversation, or a closeness or time threshold).
+- **Results screen:** "meet Spica": her, a couple of quirks, one flaw, what
+  she and the user have in common; shareable.
+- How onboarding facts decay (e.g. a floor for identity facts like the
+  user's name) is decided in its phase.
+- Whether the test measures the user's attachment style (§11.3) is OPEN.
+
+---
+
+## 15. Cost model
+
+- **Core:** `core.daily_call_budget` calls a day in total, regardless of user
+  count: the plan, world ticks (mostly code, a few generated events),
+  appraisals per event, a handful of wander and anticipate runs, nightly
+  reflect, consolidate and render, one drift judge. Over budget, loops skip
+  in priority order (`core.loop_priority`) and log the skip.
+- **User:** one triggered batch per big event, at most
+  `user_mind.max_triggers_per_day` per user. Idle users cost nothing beyond
+  the built per-user ticks (relationship, outreach), which are code-only
+  except a reach-out's composition.
+- **Reply:** one reply-model call per reply (one more and a guard check
+  when the guard is on).
+- **Removed:** the per-user life tick and per-user event generation.
+- Every core and user loop records tokens and cost in its trace row.
+
+---
+
+## 16. Extension points (hooks only)
+
+Features are modules registering through interfaces: an event bus with typed
+events (`turn.received`, `reply.sent`, `fact.written`,
+`relationship.changed`; **new:** `world.event`, `core.snapshot`,
+`user_mind.triggered`), so adding one doesn't modify the core.
+- **Friend group** (on hold): the `scope` / `space_id` hooks.
+- **Public presence** (the ideal end point): a `SocialChannel` interface and
+  a `public_persona` view. Her public voice draws from **core** only, so it
+  can never leak a user (V2).
+- **Comparing Spicas:** nothing beyond the fixed core values.
+
+---
+
+## 17. Tooling and testing
+
+### 17.1 Inspector (Built; New tabs)
+
+Admin-only, allowlisted, off in production. Built tabs: facts with retrieval
+breakdowns, entities and threads, relationship, turn-taking, judge log,
+reach-outs, life. **New:** **Core** (core state, goals, recent core memory,
+snapshot versions with diffs, drift log, core loop traces and spend) and
+**User mind** (triggers fired, summaries, reflections, disclosure ledger,
+user loop traces).
+
+### 17.2 Eval harness (Built)
+
+Scripted multi-session conversations on a simulated clock (`evals/scripts/`,
+YAML), `--llm=fake | real`, `--real <purposes>` per-purpose routing,
+`--runs N`, `--compare` against `evals/baseline.json`, `--review` files,
+`--annotate`. Deterministic assertions (`state`, `turn`, `relationship`,
+`life`, `ego`, `reach_out`, `guard`) gate; judged ones annotate. The harness
+runs the production hourly jobs between sessions. **New:** a core loop
+runner (`core: {days, inject}`) and assertions `core` (state, memory kinds,
+snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
+outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
+
+### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
+
+- **Canary** (every exit run, deterministic): plant a unique token in user
+  A's facts, turns and state. Run every core loop and user B's whole
+  pipeline (user loops, reply, reach-out). Assert the token appears nowhere
+  in core memory, core state, any snapshot, any core prompt, or any of user
+  B's prompts or outputs.
+- **Side channel:** a strong emotional exchange with user A leaves core state
+  unchanged (V4).
+- **Structural:** a unit test asserts the core data access layer exposes no
+  user-scoped query.
+
+### 17.4 Scheduled jobs
+
+Built (twelve): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
+`turn_backchannel`, `turn_sweep`, `relationship_tick`, `life_plan`,
+`life_tick`, `ego_tick`, `outreach_tick`, `reach_out_send`.
+
+v3 changes (PROPOSED):
+- **Retired:** `life_tick` (per-user block copy and events) and `ego_tick`
+  (per-user ego).
+- **New core jobs:** `core_world_tick`, `core_state_tick` (hourly);
+  `core_appraise` (per event); `core_wander`, `core_anticipate`,
+  `core_ruminate` (scheduled by the world tick); `core_nightly` (reflect,
+  consolidate, render snapshot, drift watch, in order).
+- **New user job:** `user_mind_run {userId, trigger}`, enqueued by the cold
+  path or the relationship tick on a big event.
+
+Every job logs failures with ids and error class only, never content.
+
+### 17.5 Guard tests (Built; paused)
+
+`pnpm eval:guard` fixtures (`evals/guard/*.yaml`) stay in place and run again
+in the guard phase.
+
+---
+
+## 18. Guardrails (not optional, every phase) [DECIDED]
+
+- **Crisis handling:** checked on every message with recent context, a
+  keyword fallback and a timeout; bypasses all waits, friction and every v3
+  mechanism; the resources card is guaranteed even if generation fails.
+- **Age gating:** 18+, enforced server-side.
+- **Data handling:** encryption at rest; every user query scoped by
+  `user_id`; one user's data never reaches another user or the core (V2,
+  V7); account and per-fact deletion.
+- **No explicit engagement features** (test-phase split of rule 8).
+
+---
+
+## 19. Application map
+
+Every application is a path through the four engines, placed in one of the
+two minds or at reply time.
+
+| Core mind | User mind | Reply time |
+|---|---|---|
+| Day plan, events, plan vs reality, real-content activities, calendar | Encoding: extraction, reconcile, memory view and delete | Reply generation |
+| Appraisal; emotion, mood and temperament; energy rhythm | Episodic memory of the relationship | Style: register shifts with core mood and user closeness or stage |
+| Needs (autonomy, competence), goals and projects | Intimacy loop, bids, hurt and repair | Mood-congruent and goal-driven recall |
+| Anticipation, rumination | Theory of mind, common ground | Initiative: bringing her own day and thoughts in |
+| Wandering, reflection, opinions, ideas, imagination | Disclosure ledger and reciprocity | Availability and pacing: core schedule × user closeness |
+| Narrative self, snapshot rendering, drift watch | Idiolect, attachment, commitment, stages, closeness by hours | Outreach: topics from core thoughts or user ideas |
+| Evolving interests | Relatedness, thoughts and ideas about this user | Boundaries and consistency |
+| Other agents (Alcor, friends) | Big-event summaries, user consolidation | Crisis (bypasses everything) |
+| Nightly consolidation | | Attention limit (memories per reply) |
+
+---
+
+## 20. Build phases
+
+**Built (the baseline v3 starts from):**
+
+| Phase | Built |
+|---|---|
+| 0. Skeleton | Chat UI, auth, session log, schema, crisis check, inspector, eval harness |
+| 1. Memory engine | Extraction, reconcile, weighted retrieval, recall reinforcement, decay, threads and checkpoints, memory view |
+| 2. Guardrails | Guard layer, fallback lines, guard tests (guard now off) |
+| 3. Turn-taking and pacing | Buffer, judge, backchannels, pacing, SSE |
+| 4. Relationship | Homeostatic params, hurt, tension, make-up, ending and repair |
+| 5. Life sim, availability, ego | Shared day plan, per-user events and ego, availability deferral |
+| 6. Proactive outreach | Candidates, send gate, compose, Web Push |
+
+**Next phases (PROPOSED order; the order is OPEN, §21):**
+
+| Phase | Builds | Exit test |
+|---|---|---|
+| **7. Mind split** | Core scope and the core data access layer (V6); `core_state` (ego moved to core); world reads (`life_tick` retired; day plan read directly); core events (generation and reconcile against core memory); user affect params (V4); "what she told this user" (V5); persona file split into core values and seed self; `core_snapshot` v0; reply assembly order (§10.3); leak canary and side-channel test | Canary passes; an emotional exchange leaves core state unchanged; core events are generated once for all users; replies read the snapshot and log its version |
+| **8. Core loops** | Appraisal, goals and needs, world resolution, wander, anticipate, ruminate, reflect, consolidate, snapshot rendering, drift watch, `core.daily_call_budget`, inspector Core tab | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
+| **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
+| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
+| **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
+| **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
+| **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
+
+Phase directives (PROPOSED): start every new loop at its lowest cadence and
+smallest budget; raise only with review-run evidence.
+
+---
+
+## 21. Open decisions (ask Ethan)
+
+1. **Big events:** which triggers (§9.4) and their thresholds.
+2. **Core values split:** confirm §7.2.
+3. **Faces limit:** what counts as too drastic a difference between users'
+   versions of her, and how it's measured.
+4. **Core vs what she told a user:** when core later contradicts something
+   she said to one user, does core win (she changed her mind), or does the
+   user-scoped claim bind her in that relationship?
+5. **Core memory storage:** the `fact` table with `scope = 'core'`, or
+   separate core tables (§6.2).
+6. **Drift response:** whether a values contradiction should eventually
+   block or roll back a snapshot.
+7. **User-loop outputs to outreach:** whether `user_reflect` / `user_ideate`
+   feed reach-out candidates.
+8. **Attachment at onboarding:** whether the test measures the user's
+   attachment style.
+9. **Phase order:** §20's proposed order, including whether onboarding comes
+   before the mind split.
+10. **Irreversibility:** hurt and tension ceilings (test phase: uncapped).
+    Decided in the guard phase.
+11. **Jab vs contempt:** where the line sits, and which suspended rules come
+    back and how. Decided in the guard phase.
+
+Settled: fixed Spica, the test calibrates the user; interests `adjacent` (at
+reply time only, §7.5); backchannel style global `judge`; shared day plan;
+reach-out caps 1/day, 3/week, silence after 2 unanswered; identity
+disclosure honest, in her own voice.
+
+---
+
+## 22. Risks (watched, not gates)
+
+- **Cross-user leakage** (top risk): §4, §17.3.
+- **Cost** (top risk): §15.
+- **Snapshot drift:** §7.3.
+- **Inconsistent faces:** accepted, measured (§7.4).
+- **Her self ignores her relationships:** the accepted cost (§3.4).
+- **Summary lag:** mitigated by V9.
+- **Unobservable loops:** traces, fakes and the inspector (§17).
+- **Core budget too small for a convincing life:** tune
+  `core.daily_call_budget`.
+
+---
+
+## 23. Glossary
+
+| Term | Meaning |
+|---|---|
+| Core mind | The one, shared Spica: her life, state and thoughts; no user data |
+| User mind | Everything scoped to one relationship |
+| Core values | The fixed part of her persona |
+| Self snapshot | The versioned, driftable description of who she is right now |
+| Big event | A trigger that runs the user loops |
+| Fact | One self-contained piece of user-scoped memory, with salience and status |
+| Salience | How much an item matters, 0–1 ("weight") |
+| Thread / checkpoint | An ongoing storyline, and when a friend would ask about it |
+| HomeostaticParam | A relationship param judged by its deviation from this user's baseline |
+| Buffer / open questions | Messages since her last reply; questions she's holding |
+| Backchannel | A tiny "I'm here" reaction mid-story |
+| Hot / cold path | Composing a reply / writing memory after it |
+| Send gate | The rules that can block a reach-out |
+| Reveal pacing | Gating onboarding facts until earned |
+| Leak canary | A planted token that must never cross scopes |
+
+---
+
+## 24. Research references
+
+- Tulving (1972): episodic vs semantic memory.
+- Conway (2000): the Self-Memory System; retrieval shaped by current goals.
+- Bartlett (1932): reconstructive memory.
+- McAdams: narrative identity.
+- Lazarus; Ortony, Clore & Collins (1988): appraisal theory of emotion.
+- Russell (1980): core affect.
+- Deci & Ryan: Self-Determination Theory.
+- Loewenstein (1994): information-gap theory of curiosity.
+- Altman & Taylor (1973): Social Penetration Theory.
+- Reis & Shaver (1988): the intimacy process model.
+- Aron et al. (1997): the experimental generation of interpersonal closeness.
+- Hall (2018): hours required to make a friend.
+- Gottman: bids for connection, repair attempts.
+- Rusbult (1980): the investment model.
+- Hazan & Shaver (1987): adult attachment.
+- Knapp: relational stages.
+- Clark: common ground.
+- Park et al. (2023): Generative Agents (memory stream, reflection, planning).
+
+---
+
+## 25. Decision log
+
+| Date | Decision | By |
+|---|---|---|
+| 2026-10-01 | The mind is four engines: memory, state, world, process | Ethan |
+| 2026-10-01 | Two minds: a core mind (one Spica, scheduled, no user data) and a user mind per user (triggered by big events); same kinds of memory, state and loops | Ethan |
+| 2026-10-01 | One-way flow: core reaches users, users never reach core; relationships don't change her core self (accepted cost) | Ethan |
+| 2026-10-01 | Core values fixed; everything else in the snapshot driftable, with a drift watch | Ethan |
+| 2026-10-01 | Different faces across users allowed; the limit is tested, not fixed | Ethan |
+| 2026-10-01 | User loops run only after big events; live conversation leads as short-term context | Ethan |
+| 2026-10-01 | v3 is the default design spec, standalone, in its test phase | Ethan |

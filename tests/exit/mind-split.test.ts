@@ -28,6 +28,7 @@ const CORE_TABLES = [
   "world_event",
   "life_event_log",
   "core_loop_trace",
+  "life_day",
 ];
 const BOB_TABLES = [
   "fact",
@@ -48,13 +49,7 @@ function script(aText: string) {
     },
     relationship_seed: {},
     life: {
-      plan: "scripted",
-      plans: {
-        "*": [
-          { start: "00:00", end: "07:00", kind: "quiet", label: "offline" },
-          { start: "13:00", end: "15:00", kind: "busy", busy: 0.6, label: "reading" },
-        ],
-      },
+      plan: "model",
       inject: [{ day: 1, content: "Spica finally got the telescope images.", valence: 0.8 }],
       until: "day 3 20:00",
     },
@@ -128,6 +123,12 @@ describe("leak canary", () => {
         CORE_PURPOSES.has(c.purpose) || (c.purpose === "reconcile" && c.text.includes("(episode)")),
     );
     expect(corePrompts.length).toBeGreaterThan(0);
+    // Each core generator ran, so none of these checks passes vacuously.
+    for (const purpose of CORE_PURPOSES)
+      expect(
+        corePrompts.some((c) => c.purpose === purpose),
+        purpose,
+      ).toBe(true);
     for (const c of corePrompts) expect(c.text).not.toMatch(CANARY);
   });
 

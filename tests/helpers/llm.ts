@@ -20,7 +20,7 @@ export const CANARY = /CANARY-[a-z0-9]+/;
 
 /**
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
- * into what it writes back, so a canary that reaches any input spreads to that step's output.
+ * into what it writes back (a reply, a fact, a plan label, an event), so a canary that reaches any input spreads to that step's output.
  */
 export class CapturingLLM extends FakeLLMProvider {
   seen: { kind: "reply" | "structured"; purpose: string; text: string }[] = [];
@@ -59,6 +59,14 @@ export class CapturingLLM extends FakeLLMProvider {
         entities: [{ name: canary, aliases: [], type: "other", subject: "user", relation: null }],
         threads: [],
         relationship: null,
+      });
+    }
+    if (canary && request.purpose === "life_plan" && handler) {
+      const out = (await handler(request.input)) as { blocks: { label: string }[] };
+      const [first, ...rest] = out.blocks;
+      return request.schema.parse({
+        ...out,
+        blocks: [{ ...first!, label: `${first!.label} ${canary}` }, ...rest],
       });
     }
     if (canary && request.purpose === "life_event" && handler) {

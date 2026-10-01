@@ -1,8 +1,9 @@
 /**
  * The mind split's exit run, all fake. Two users over three of her days, with every hourly world
- * job, replies, the cold path and a reach-out. A canary in user A's data must never reach the core
- * or user B; A's emotional exchange must leave core state untouched; her events happen once for
- * both; every reply reads snapshot v0.
+ * job, replies, the cold path and a reach-out. A canary in user A's data (a fact, and the cause of
+ * a hurt in A's relationship) must never reach the core or user B; A's emotional exchange must
+ * leave core state and her core loops' traces untouched; her events happen once for both; every
+ * reply reads snapshot v0.
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -35,6 +36,10 @@ const BOB_TABLES = [
   "entity",
   "thread",
   "session_log",
+  "conversation_state",
+  "judge_log",
+  "retrieval_trace",
+  "relationship_param",
   "relationship_event",
   "reach_out_log",
 ];
@@ -113,6 +118,25 @@ describe("leak canary", () => {
     expect(facts.rows.some((r) => String(r.content).includes(TOKEN))).toBe(true);
   });
 
+  test("the canary reached A's relationship: her hurt and its cause", async () => {
+    const alice = await userIdByName("alice");
+    const cause = await getTestDb().execute(
+      sql`SELECT f.content FROM relationship r JOIN fact f ON f.id = r.hurt_cause_fact
+          WHERE r.user_id = ${alice}`,
+    );
+    expect(String(cause.rows[0]?.content ?? "")).toContain(TOKEN);
+    const hurt = await getTestDb().execute(
+      sql`SELECT count(*)::int AS n FROM relationship_event
+          WHERE user_id = ${alice} AND param = 'hurt' AND cause = 'signal'`,
+    );
+    expect(Number(hurt.rows[0]!.n)).toBeGreaterThan(0);
+    // A's next reply carries the hurt line, so the relationship path really feeds a prompt.
+    const aliceReply = llm.seen.find(
+      (c) => c.kind === "reply" && c.text.includes("ALICE-SAYS anything new"),
+    );
+    expect(aliceReply?.text).toContain(`the user kept ${TOKEN} from her`);
+  });
+
   test("no core table holds it", async () => {
     expect(await dumpTables(CORE_TABLES)).not.toMatch(CANARY);
   });
@@ -138,6 +162,11 @@ describe("leak canary", () => {
     for (const c of bobPrompts) expect(c.text).not.toMatch(CANARY);
 
     const bob = await userIdByName("bob");
+    // A reach-out to B is one of the paths a leak could take, so it must have run.
+    const reachOuts = await getTestDb().execute(
+      sql`SELECT count(*)::int AS n FROM session_log WHERE user_id = ${bob} AND trigger = 'reach_out'`,
+    );
+    expect(Number(reachOuts.rows[0]!.n)).toBeGreaterThan(0);
     for (const table of BOB_TABLES) {
       for (const row of await rowsOf(table, `WHERE user_id = '${bob}'`))
         expect(row, table).not.toMatch(CANARY);
@@ -176,14 +205,29 @@ describe("leak canary", () => {
 });
 
 describe("side channel", () => {
-  test("A's emotional exchange leaves core state exactly as without it", async () => {
-    // Ids are random per run, so every uuid (a row's own id, or one pointing at another row) is
-    // masked and rows are sorted; everything else (mood, energy, timestamps, contents) must match.
+  test("A's emotional exchange leaves core state and her loops' traces exactly as without it", async () => {
+    // Ids are random per run, so every uuid is replaced by what it points at (a memory or event by
+    // its content, a person by name): her preoccupation and each trace's outputs are compared by
+    // the memory they name. Rows are sorted; everything else (mood, energy, timestamps) must match.
     const coreAfter = async (aText: string) => {
       await run(aText);
+      const labels = new Map<string, string>();
+      const label = async (table: string, column: string, tag: string) => {
+        const res = await getTestDb().execute(
+          sql.raw(`SELECT id::text AS id, ${column} AS v FROM "${table}"`),
+        );
+        for (const r of res.rows) labels.set(String(r.id), `<${tag}:${String(r.v)}>`);
+      };
+      await label("core_memory", "content", "memory");
+      await label("world_event", "content", "event");
+      await label("core_entity", "name", "person");
       const rows: string[] = [];
-      for (const t of ["core_state", "core_memory", "world_event"])
-        rows.push(...(await rowsOf(t)).map((r) => `${t} ${r.replace(UUID, "<id>")}`));
+      for (const t of ["core_state", "core_memory", "world_event", "core_loop_trace"])
+        rows.push(
+          ...(await rowsOf(t)).map(
+            (r) => `${t} ${r.replace(UUID, (id) => labels.get(id) ?? "<id>")}`,
+          ),
+        );
       return rows.sort().join("\n");
     };
     const affectOf = async () => {

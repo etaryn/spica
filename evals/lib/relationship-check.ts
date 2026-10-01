@@ -1,17 +1,17 @@
-import { effect, fadeParams } from "@/mind/state/user/relationship/params";
+import { deviationOf, fadeParams } from "@/mind/state/user/relationship/params";
 import {
   PARAM_NAMES,
   type ParamName,
   type Params,
-  type RelConfig,
-  type RelState,
+  type RelationshipConfig,
+  type RelationshipState,
 } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
 import * as rel from "@/db/repos/relationship";
 import type { RelationshipAssertion } from "./script";
 
 export type RelSnapshot = {
-  state: RelState;
+  state: RelationshipState;
   params: Params;
   effects: Record<ParamName, number>;
   events: { cause: string; param: string | null; detail: Record<string, unknown> }[];
@@ -21,20 +21,20 @@ export async function relationshipSnapshot(
   db: Db,
   userId: string,
   now: Date,
-  cfg: RelConfig,
+  cfg: RelationshipConfig,
 ): Promise<RelSnapshot | null> {
   const row = await rel.getRelationshipRow(db, userId);
   if (!row) return null;
   const params = fadeParams(await rel.getParams(db, userId), now, cfg);
   const effects = Object.fromEntries(
-    PARAM_NAMES.map((n) => [n, effect(params[n], cfg.variance_epsilon)]),
+    PARAM_NAMES.map((n) => [n, deviationOf(params[n], cfg.variance_epsilon)]),
   ) as Record<ParamName, number>;
   const events = (await rel.listRelationshipEvents(db, userId, 100_000)).map((e) => ({
     cause: e.cause,
     param: e.param,
     detail: e.detail as Record<string, unknown>,
   }));
-  return { state: rel.toRelState(row), params, effects, events };
+  return { state: rel.toRelationshipState(row), params, effects, events };
 }
 
 export function checkRelationship(

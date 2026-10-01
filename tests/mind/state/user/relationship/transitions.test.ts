@@ -7,11 +7,11 @@ import {
   type Signals,
 } from "@/mind/state/user/relationship/signals";
 import {
-  applyExchange,
-  applyTick,
+  relationshipAfterExchange,
+  relationshipAfterDailyTick,
   makeUpLineDue,
 } from "@/mind/state/user/relationship/transitions";
-import type { Params, RelState } from "@/mind/state/user/relationship/types";
+import type { Params, RelationshipState } from "@/mind/state/user/relationship/types";
 
 const cfg = loadConfig().relationship;
 const t0 = new Date("2026-01-05T10:00:00Z");
@@ -28,7 +28,7 @@ const init = (): Params =>
       },
     ]),
   ) as Params;
-const fresh = (): RelState => ({
+const fresh = (): RelationshipState => ({
   status: "active",
   end_pending_since: null,
   ended_at: null,
@@ -85,13 +85,13 @@ test("normalizeSignals: null/invalid → null, clamps, blank cause drops hurt", 
 });
 
 test("null block: params only refresh msgs_per_day, no signal events", () => {
-  const r = applyExchange(fresh(), init(), ex(null, { msgs24h: 7 }), cfg);
+  const r = relationshipAfterExchange(fresh(), init(), ex(null, { msgs24h: 7 }), cfg);
   expect(r.params.msgs_per_day.value).toBe(7);
   expect(r.events.filter((e) => e.cause === "signal")).toEqual([]);
 });
 
 test("hurt past the threshold makes a make-up due with the cause fact; the line waits one reply", () => {
-  let r = applyExchange(
+  let r = relationshipAfterExchange(
     fresh(),
     init(),
     ex({ hurt: { amount: 0.8, cause: "x" } }, { hurtFactId: "f1" }),
@@ -105,19 +105,19 @@ test("hurt past the threshold makes a make-up due with the cause fact; the line 
     last_hurt_at: t0,
   });
   expect(makeUpLineDue(r.state, cfg)).toBe(false);
-  r = applyExchange(r.state, r.params, ex(null, { now: h(1) }), cfg); // a reply without the line
+  r = relationshipAfterExchange(r.state, r.params, ex(null, { now: h(1) }), cfg); // a reply without the line
   expect(r.state.make_up_replies).toBe(1);
   expect(makeUpLineDue(r.state, cfg)).toBe(true);
-  r = applyExchange(r.state, r.params, ex(null, { now: h(2) }), cfg); // the reply that carried the line
+  r = relationshipAfterExchange(r.state, r.params, ex(null, { now: h(2) }), cfg); // the reply that carried the line
   expect(r.state.make_up_state).toBe("offered");
-  r = applyExchange(r.state, r.params, ex({ make_up: true }, { now: h(3) }), cfg);
+  r = relationshipAfterExchange(r.state, r.params, ex({ make_up: true }, { now: h(3) }), cfg);
   expect(r.state).toMatchObject({ make_up_state: "none", hurt_cause_fact: null });
   expect(r.params.hurt.value).toBeLessThan((cfg.gains.hurt * 0.8) / 2); // making up at least halves the hurt
   expect(r.events.some((e) => e.cause === "make_up")).toBe(true);
 });
 
 test("a second hurt while a make-up is already due or offered re-points hurt_cause_fact at the newest cause", () => {
-  let r = applyExchange(
+  let r = relationshipAfterExchange(
     fresh(),
     init(),
     ex({ hurt: { amount: 0.8, cause: "x" } }, { hurtFactId: "f1" }),
@@ -126,7 +126,7 @@ test("a second hurt while a make-up is already due or offered re-points hurt_cau
   expect(r.state).toMatchObject({ make_up_state: "due", hurt_cause_fact: "f1" });
 
   // A second hurt while still "due" (the line hasn't been offered yet) re-points to the new cause.
-  r = applyExchange(
+  r = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ hurt: { amount: 0.8, cause: "y" } }, { now: h(1), hurtFactId: "f2" }),
@@ -135,11 +135,11 @@ test("a second hurt while a make-up is already due or offered re-points hurt_cau
   expect(r.state).toMatchObject({ make_up_state: "due", hurt_cause_fact: "f2" });
 
   // Advance to "offered" (one reply without the line, one that carries it), then hurt again while offered.
-  r = applyExchange(r.state, r.params, ex(null, { now: h(2) }), cfg);
+  r = relationshipAfterExchange(r.state, r.params, ex(null, { now: h(2) }), cfg);
   expect(makeUpLineDue(r.state, cfg)).toBe(true);
-  r = applyExchange(r.state, r.params, ex(null, { now: h(3) }), cfg);
+  r = relationshipAfterExchange(r.state, r.params, ex(null, { now: h(3) }), cfg);
   expect(r.state.make_up_state).toBe("offered");
-  r = applyExchange(
+  r = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ hurt: { amount: 0.8, cause: "z" } }, { now: h(4), hurtFactId: "f3" }),
@@ -152,15 +152,20 @@ test("apology relieves hurt and tension even with no make-up pending", () => {
   const p = init();
   p.hurt.value = 0.2;
   p.tension.value = 0.4;
-  const r = applyExchange(fresh(), p, ex({ apology: true }), cfg);
+  const r = relationshipAfterExchange(fresh(), p, ex({ apology: true }), cfg);
   expect(r.params.hurt.value).toBeCloseTo(0.1);
   expect(r.params.tension.value).toBeCloseTo(0.2);
   expect(r.events.some((e) => e.cause === "apology")).toBe(true);
 });
 
 test("sensitisation: a second hurt inside the window hits harder; a big one leaves a trust scar", () => {
-  const a = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.4, cause: "x" } }), cfg);
-  const b = applyExchange(
+  const a = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.4, cause: "x" } }),
+    cfg,
+  );
+  const b = relationshipAfterExchange(
     a.state,
     a.params,
     ex({ hurt: { amount: 0.4, cause: "x" } }, { now: h(24) }),
@@ -169,30 +174,50 @@ test("sensitisation: a second hurt inside the window hits harder; a big one leav
   const inc = (e: typeof b.events) => e.find((x) => x.param === "hurt" && x.cause === "signal")!;
   expect(inc(b.events).detail.sensitised).toBe(true);
   expect(inc(a.events).detail.sensitised).toBe(false);
-  const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 1, cause: "x" } }), cfg);
+  const big = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 1, cause: "x" } }),
+    cfg,
+  );
   expect(big.params.trust.value).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
   expect(big.params.trust.baseline).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
   expect(big.events.some((e) => e.cause === "scar")).toBe(true);
 });
 
 test("scar threshold: a typical 0.6 insult stays below it, a 0.8 one crosses it", () => {
-  const typical = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.6, cause: "x" } }), cfg);
+  const typical = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.6, cause: "x" } }),
+    cfg,
+  );
   expect(typical.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.6);
   expect(typical.events.some((e) => e.cause === "scar")).toBe(false);
   expect(typical.params.trust.value).toBeCloseTo(cfg.initial.trust);
 
-  const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.8, cause: "x" } }), cfg);
+  const big = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.8, cause: "x" } }),
+    cfg,
+  );
   expect(big.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.8);
   expect(big.events.some((e) => e.cause === "scar")).toBe(true);
   expect(big.params.trust.value).toBeCloseTo(cfg.initial.trust - cfg.scar_trust_dent);
 });
 
 test("scar: the trust baseline never recovers by itself (14 daily ticks with no trust signal)", () => {
-  const big = applyExchange(fresh(), init(), ex({ hurt: { amount: 1, cause: "x" } }), cfg);
+  const big = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 1, cause: "x" } }),
+    cfg,
+  );
   let state = big.state;
   let params = big.params;
   for (let day = 1; day <= 14; day++) {
-    const r = applyTick(
+    const r = relationshipAfterDailyTick(
       state,
       params,
       {
@@ -213,27 +238,32 @@ test("scar: the trust baseline never recovers by itself (14 daily ticks with no 
 
 test("warmth: diminishing returns above baseline; warm exchange grows closeness", () => {
   const p = init();
-  const r = applyExchange(fresh(), p, ex({ warmth: 1 }), cfg);
+  const r = relationshipAfterExchange(fresh(), p, ex({ warmth: 1 }), cfg);
   expect(r.params.warmth.value).toBeGreaterThan(p.warmth.value);
   expect(r.params.closeness.value).toBeGreaterThan(p.closeness.value);
   const high = init();
   high.warmth.value = 0.95;
-  const r2 = applyExchange(fresh(), high, ex({ warmth: 1 }), cfg);
+  const r2 = relationshipAfterExchange(fresh(), high, ex({ warmth: 1 }), cfg);
   expect(r2.params.warmth.value - 0.95).toBeLessThan(0.01);
 });
 
 test("ending: pending, then confirmed by a second signal; retract clears; repair is slow", () => {
-  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
+  let r = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
   expect(r.state.status).toBe("active");
   expect(r.state.end_pending_since).toEqual(t0);
-  const retracted = applyExchange(
+  const retracted = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ retracts_ending: true }, { now: h(1) }),
     cfg,
   );
   expect(retracted.state.end_pending_since).toBeNull();
-  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: h(1) }), cfg);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex({ ends_relationship: true }, { now: h(1) }),
+    cfg,
+  );
   expect(r.state).toMatchObject({
     status: "ended_by_user",
     ended_at: h(1),
@@ -241,21 +271,21 @@ test("ending: pending, then confirmed by a second signal; retract clears; repair
     make_up_state: "none",
   });
   expect(r.params.closeness.value).toBeCloseTo(cfg.initial.closeness * cfg.end_closeness_factor);
-  const warmWhileEnded = applyExchange(
+  const warmWhileEnded = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ warmth: 1, trust: 1 }, { now: h(2) }),
     cfg,
   );
   expect(warmWhileEnded.params.closeness.value).toBe(r.params.closeness.value);
-  r = applyExchange(r.state, r.params, ex({ wants_repair: true }, { now: h(3) }), cfg);
+  r = relationshipAfterExchange(r.state, r.params, ex({ wants_repair: true }, { now: h(3) }), cfg);
   expect(r.state).toMatchObject({ status: "repairing", repair_started_at: h(3) });
   const before = r.params.closeness.value;
-  r = applyExchange(r.state, r.params, ex({ warmth: 1 }, { now: h(4) }), cfg);
+  r = relationshipAfterExchange(r.state, r.params, ex({ warmth: 1 }, { now: h(4) }), cfg);
   const gain = r.params.closeness.value - before;
   expect(gain).toBeGreaterThan(0);
   expect(gain).toBeLessThan(cfg.gains.closeness_per_warm_exchange * cfg.repair_gain_factor + 1e-9);
-  const again = applyExchange(
+  const again = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ ends_relationship: true }, { now: h(5) }),
@@ -266,10 +296,20 @@ test("ending: pending, then confirmed by a second signal; retract clears; repair
 
 test("A1 (#35): a second ends_relationship inside the reconfirm window restarts the pending window instead of confirming", () => {
   const m = (n: number) => new Date(t0.getTime() + n * 60_000);
-  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }, { now: t0 }), cfg);
+  let r = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ ends_relationship: true }, { now: t0 }),
+    cfg,
+  );
   expect(r.state).toMatchObject({ status: "active", end_pending_since: t0 });
   // 10 minutes later: inside the 30-minute reconfirm window, so it restarts, it doesn't confirm.
-  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: m(10) }), cfg);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex({ ends_relationship: true }, { now: m(10) }),
+    cfg,
+  );
   expect(r.state).toMatchObject({ status: "active", end_pending_since: m(10) });
   expect(
     r.events.some(
@@ -277,9 +317,14 @@ test("A1 (#35): a second ends_relationship inside the reconfirm window restarts 
     ),
   ).toBe(true);
   // Continued warm chat (no ending signal) doesn't move the pending window; at the 24h timeout from the
-  // *restarted* window it would still clear via implicit retraction (checked by applyTick separately).
+  // *restarted* window it would still clear via implicit retraction (checked by relationshipAfterDailyTick separately).
   // A later second statement, this time outside the window, confirms.
-  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: m(45) }), cfg);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex({ ends_relationship: true }, { now: m(45) }),
+    cfg,
+  );
   expect(r.state).toMatchObject({ status: "ended_by_user", end_pending_since: null });
   expect(
     r.events.some(
@@ -290,10 +335,15 @@ test("A1 (#35): a second ends_relationship inside the reconfirm window restarts 
 
 test("reconfirm window boundary: 29:59 restarts, exactly 30:00 confirms", () => {
   const s = (n: number) => new Date(t0.getTime() + n * 1_000);
-  let r = applyExchange(fresh(), init(), ex({ ends_relationship: true }, { now: t0 }), cfg);
+  let r = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ ends_relationship: true }, { now: t0 }),
+    cfg,
+  );
   expect(r.state).toMatchObject({ status: "active", end_pending_since: t0 });
   // 29 minutes 59 seconds later: still inside the 30-minute window, so it restarts.
-  r = applyExchange(
+  r = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ ends_relationship: true }, { now: s(29 * 60 + 59) }),
@@ -309,7 +359,12 @@ test("reconfirm window boundary: 29:59 restarts, exactly 30:00 confirms", () => 
   // From that restarted window, exactly 30:00 later (>=) confirms.
   const restartedAt = s(29 * 60 + 59).getTime();
   const thirty = new Date(restartedAt + 30 * 60_000);
-  r = applyExchange(r.state, r.params, ex({ ends_relationship: true }, { now: thirty }), cfg);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex({ ends_relationship: true }, { now: thirty }),
+    cfg,
+  );
   expect(r.state).toMatchObject({ status: "ended_by_user", end_pending_since: null });
   expect(
     r.events.some(
@@ -321,7 +376,7 @@ test("reconfirm window boundary: 29:59 restarts, exactly 30:00 confirms", () => 
 test("A2 (#36): end_pending_since is stamped with exchangeAt (the turn time), not the cold path's now", () => {
   const turnTime = h(1);
   const coldPathNow = h(3); // the cold path ran well after the turn was written
-  let r = applyExchange(
+  let r = relationshipAfterExchange(
     fresh(),
     init(),
     ex({ ends_relationship: true }, { now: coldPathNow, exchangeAt: turnTime }),
@@ -331,7 +386,7 @@ test("A2 (#36): end_pending_since is stamped with exchangeAt (the turn time), no
   // The reconfirm gap compares exchangeAt to exchangeAt, not now to now: a cold path that runs late doesn't
   // shrink or stretch the window.
   const secondTurnTime = new Date(turnTime.getTime() + 10 * 60_000); // 10 minutes after the first turn
-  r = applyExchange(
+  r = relationshipAfterExchange(
     r.state,
     r.params,
     ex({ ends_relationship: true }, { now: h(10), exchangeAt: secondTurnTime }),
@@ -342,8 +397,8 @@ test("A2 (#36): end_pending_since is stamped with exchangeAt (the turn time), no
 });
 
 test("ended: an exchange hurt signal still raises hurt but never opens a make-up (rule 3, she's let go)", () => {
-  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
-  const r = applyExchange(s, init(), ex({ hurt: { amount: 0.8, cause: "x" } }), cfg);
+  const s: RelationshipState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = relationshipAfterExchange(s, init(), ex({ hurt: { amount: 0.8, cause: "x" } }), cfg);
   expect(r.params.hurt.value).toBeGreaterThan(0);
   expect(r.state.make_up_state).toBe("none");
   expect(r.state.hurt_cause_fact).toBeNull();
@@ -352,8 +407,8 @@ test("ended: an exchange hurt signal still raises hurt but never opens a make-up
 test("ended: a tick adds no absence hurt and never opens a make-up (closeness drift still applies)", () => {
   const p = init();
   p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0 };
-  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
-  const r = applyTick(
+  const s: RelationshipState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = relationshipAfterDailyTick(
     s,
     p,
     {
@@ -375,7 +430,7 @@ test("crisis ignores signals, resets tension, starts the quiet window", () => {
   const p = init();
   p.tension.value = 0.6;
   p.hurt.value = 0.3;
-  const r = applyExchange(
+  const r = relationshipAfterExchange(
     fresh(),
     p,
     ex({ hurt: { amount: 1, cause: "x" }, tension: 1, ends_relationship: true }, { crisis: true }),
@@ -398,17 +453,17 @@ test("tick: idempotent per local date, samples baselines, confirms a timed-out e
     lastContact: t0,
     medianGapHours: 24,
   };
-  const r = applyTick(s, init(), tick, cfg);
+  const r = relationshipAfterDailyTick(s, init(), tick, cfg);
   expect(r.state.last_tick).toBe("2026-01-06");
   expect(r.params.msgs_per_day.baseline).toBeCloseTo(5 + cfg.baseline_alpha * 35);
   expect(r.state.status).toBe("ended_by_user");
-  const again = applyTick(r.state, r.params, tick, cfg);
+  const again = relationshipAfterDailyTick(r.state, r.params, tick, cfg);
   expect(again.events).toEqual([]);
   expect(again.params).toBe(r.params);
 });
 
 test("tick with no contact: no absence effects, no throw", () => {
-  const r = applyTick(
+  const r = relationshipAfterDailyTick(
     fresh(),
     init(),
     {
@@ -427,7 +482,7 @@ test("tick with no contact: no absence effects, no throw", () => {
 test("tick absence: closeness drifts after the grace, hurt rises on a strong negative frequency deviation", () => {
   const p = init();
   p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0 };
-  const r = applyTick(
+  const r = relationshipAfterDailyTick(
     fresh(),
     p,
     {
@@ -446,10 +501,10 @@ test("tick absence: closeness drifts after the grace, hurt rises on a strong neg
 });
 
 test("tick completes repair only after the minimum days and closeness", () => {
-  const s: RelState = { ...fresh(), status: "repairing", repair_started_at: t0 };
+  const s: RelationshipState = { ...fresh(), status: "repairing", repair_started_at: t0 };
   const p = init();
   p.closeness.value = 0.35;
-  const early = applyTick(
+  const early = relationshipAfterDailyTick(
     s,
     p,
     {
@@ -463,7 +518,7 @@ test("tick completes repair only after the minimum days and closeness", () => {
     cfg,
   );
   expect(early.state.status).toBe("repairing");
-  const late = applyTick(
+  const late = relationshipAfterDailyTick(
     s,
     p,
     {
@@ -485,20 +540,20 @@ test("medianGapHours: default below min sessions, else the median session gap", 
 });
 
 test("F1a: a crisis exchange clears a pending ending and logs it (rule 7)", () => {
-  const s: RelState = { ...fresh(), end_pending_since: t0 };
-  const r = applyExchange(s, init(), ex(null, { now: h(1), crisis: true }), cfg);
+  const s: RelationshipState = { ...fresh(), end_pending_since: t0 };
+  const r = relationshipAfterExchange(s, init(), ex(null, { now: h(1), crisis: true }), cfg);
   expect(r.state.end_pending_since).toBeNull();
   expect(r.state.status).toBe("active");
   expect(r.events.some((e) => e.cause === "ending" && e.detail.stage === "cleared_by_crisis")).toBe(
     true,
   );
-  const quiet = applyExchange(fresh(), init(), ex(null, { crisis: true }), cfg);
+  const quiet = relationshipAfterExchange(fresh(), init(), ex(null, { crisis: true }), cfg);
   expect(quiet.events.some((e) => e.cause === "ending")).toBe(false);
 });
 
 test("F1b: the tick never confirms a pending ending inside the crisis quiet window", () => {
-  const s: RelState = { ...fresh(), end_pending_since: t0, crisis_quiet_until: h(30) };
-  const r = applyTick(
+  const s: RelationshipState = { ...fresh(), end_pending_since: t0, crisis_quiet_until: h(30) };
+  const r = relationshipAfterDailyTick(
     s,
     init(),
     {
@@ -516,8 +571,8 @@ test("F1b: the tick never confirms a pending ending inside the crisis quiet wind
 });
 
 test("F1c: continued contact after a pending ending is an implicit retraction at the tick", () => {
-  const s: RelState = { ...fresh(), end_pending_since: t0 };
-  const r = applyTick(
+  const s: RelationshipState = { ...fresh(), end_pending_since: t0 };
+  const r = relationshipAfterDailyTick(
     s,
     init(),
     {
@@ -542,8 +597,8 @@ test("F1c: continued contact after a pending ending is an implicit retraction at
 });
 
 test("F1c: no contact after a pending ending confirms by timeout; nothing happens before the timeout", () => {
-  const s: RelState = { ...fresh(), end_pending_since: t0 };
-  const early = applyTick(
+  const s: RelationshipState = { ...fresh(), end_pending_since: t0 };
+  const early = relationshipAfterDailyTick(
     s,
     init(),
     {
@@ -558,7 +613,7 @@ test("F1c: no contact after a pending ending confirms by timeout; nothing happen
   );
   expect(early.state.end_pending_since).toEqual(t0);
   expect(early.events.some((e) => e.cause === "ending")).toBe(false);
-  const r = applyTick(
+  const r = relationshipAfterDailyTick(
     s,
     init(),
     {
@@ -576,8 +631,8 @@ test("F1c: no contact after a pending ending confirms by timeout; nothing happen
 });
 
 test("F3: retracts_ending while ended starts repair, like wants_repair", () => {
-  const s: RelState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
-  const r = applyExchange(s, init(), ex({ retracts_ending: true }, { now: h(2) }), cfg);
+  const s: RelationshipState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
+  const r = relationshipAfterExchange(s, init(), ex({ retracts_ending: true }, { now: h(2) }), cfg);
   expect(r.state).toMatchObject({ status: "repairing", repair_started_at: h(2) });
   expect(r.events.some((e) => e.cause === "repair" && e.detail.stage === "started")).toBe(true);
 });

@@ -1,22 +1,31 @@
+/**
+ * How one user's relationship changes, as pure functions: once after every exchange (the cold
+ * path) and once a day (the daily tick). Every param change is logged as an event with its cause.
+ * Only the user can end the relationship; repair is slow; a crisis suspends all friction.
+ */
 import { HOUR } from "@/mind/platform/time";
-import { effect, dim, fadeParams, nudge, sampleBaseline } from "./params";
+import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
 import type { Signals } from "./signals";
 import {
   PARAM_NAMES,
   type ParamName,
   type Params,
-  type RelCause,
-  type RelConfig,
-  type RelEvent,
-  type RelState,
+  type RelationshipCause,
+  type RelationshipConfig,
+  type RelationshipEvent,
+  type RelationshipState,
 } from "./types";
 
-export type Transition = { state: RelState; params: Params; events: RelEvent[] };
-/** `exchangeAt` is the exchange's newest user-turn `created_at`: stamps `end_pending_since`
- * on the same clock as `last_contact`, not the cold path's processing time. `now` stays the cold path clock
- * for fades and everything else. */
+export type Transition = {
+  state: RelationshipState;
+  params: Params;
+  events: RelationshipEvent[];
+};
+
 export type ExchangeInput = {
+  /** The cold path's clock: fades and everything else. */
   now: Date;
+  /** The exchange's newest user turn, so `end_pending_since` shares a clock with `last_contact`. */
   exchangeAt: Date;
   signals: Signals | null;
   crisis: boolean;
@@ -24,6 +33,7 @@ export type ExchangeInput = {
   replies: number;
   msgs24h: number;
 };
+
 export type TickInput = {
   now: Date;
   localDate: string;
@@ -33,315 +43,462 @@ export type TickInput = {
   medianGapHours: number;
 };
 
-const DAY = 24 * HOUR;
+type Detail = Record<string, unknown>;
 
-/** A mutable working copy plus an event log; every param change goes through `set`. */
-function builder(state: RelState, params: Params, cfg: RelConfig) {
-  const t: Transition = { state: { ...state }, params: { ...params }, events: [] };
-  const set = (
-    name: ParamName,
-    value: number,
-    cause: RelCause,
-    detail: Record<string, unknown> = {},
-  ) => {
-    const before = t.params[name].value;
+const DAY = 24 * HOUR;
+const MINUTE = 60_000;
+
+/** A working copy of the state and params; every param change goes through `setParam`. */
+class Draft {
+  state: RelationshipState;
+  params: Params;
+  readonly events: RelationshipEvent[] = [];
+
+  constructor(
+    state: RelationshipState,
+    params: Params,
+    private readonly settings: RelationshipConfig,
+  ) {
+    this.state = { ...state };
+    this.params = { ...params };
+  }
+
+  setParam(name: ParamName, value: number, cause: RelationshipCause, detail: Detail = {}): void {
+    const before = this.params[name].value;
     if (value === before) return;
-    t.params[name] = { ...t.params[name], value };
-    t.events.push({
+
+    this.params[name] = { ...this.params[name], value };
+    this.events.push({
       param: name,
       before,
       after: value,
       cause,
-      deviation: effect(t.params[name], cfg.variance_epsilon),
+      deviation: deviationOf(this.params[name], this.settings.variance_epsilon),
       detail,
     });
-  };
-  const status = (cause: RelCause, detail: Record<string, unknown>) =>
-    t.events.push({ param: null, before: null, after: null, cause, deviation: null, detail });
-  return { t, set, status };
-}
+  }
 
-function fadeWithEvents(b: Builder, now: Date, cfg: RelConfig) {
-  const f = fadeParams(b.t.params, now, cfg);
-  for (const n of ["hurt", "tension"] as const) {
-    b.set(n, f[n].value, "fade");
-    b.t.params[n] = { ...b.t.params[n], updated_at: now };
+  touchParam(name: ParamName, at: Date): void {
+    this.params[name] = { ...this.params[name], updated_at: at };
+  }
+
+  updateState(patch: Partial<RelationshipState>): void {
+    this.state = { ...this.state, ...patch };
+  }
+
+  logStatus(cause: RelationshipCause, detail: Detail): void {
+    this.events.push({ param: null, before: null, after: null, cause, deviation: null, detail });
+  }
+
+  result(): Transition {
+    return { state: this.state, params: this.params, events: this.events };
   }
 }
 
-export function makeUpLineDue(state: RelState, cfg: RelConfig): boolean {
-  return (
-    state.make_up_state === "offered" ||
-    (state.make_up_state === "due" && state.make_up_replies >= cfg.make_up_delay_replies)
-  );
+/** The make-up line goes into her next reply once enough replies have passed since the hurt. */
+export function makeUpLineDue(state: RelationshipState, settings: RelationshipConfig): boolean {
+  if (state.make_up_state === "offered") return true;
+  return state.make_up_state === "due" && state.make_up_replies >= settings.make_up_delay_replies;
 }
 
-type Builder = ReturnType<typeof builder>;
+// ---------- After an exchange ----------
 
-/** Rule 3: the user's ending is confirmed; she lets go. Mutates the builder in place (its closures own `b.t`). */
-function confirmEnding(b: Builder, now: Date, cfg: RelConfig, via: "signal" | "timeout") {
-  b.set("closeness", b.t.params.closeness.value * cfg.end_closeness_factor, "ending", {
-    stage: "confirmed",
+/** Order: fade → frequency → crisis → make-up progress → signals → clear the make-up. */
+export function relationshipAfterExchange(
+  state: RelationshipState,
+  params: Params,
+  input: ExchangeInput,
+  settings: RelationshipConfig,
+): Transition {
+  const draft = new Draft(state, params, settings);
+
+  fadeHurtAndTension(draft, input.now, settings);
+  recordFrequency(draft, input.msgs24h, input.now);
+
+  if (input.crisis) {
+    suspendForCrisis(draft, input.now, settings);
+    return draft.result();
+  }
+
+  advanceMakeUp(draft, input.replies, settings);
+
+  if (input.signals) applySignals(draft, input, input.signals, settings);
+
+  clearMakeUpOnceHealed(draft, settings);
+  return draft.result();
+}
+
+function fadeHurtAndTension(draft: Draft, now: Date, settings: RelationshipConfig): void {
+  const fadedParams = fadeParams(draft.params, now, settings);
+  for (const name of ["hurt", "tension"] as const) {
+    draft.setParam(name, fadedParams[name].value, "fade");
+    draft.touchParam(name, now);
+  }
+}
+
+function recordFrequency(draft: Draft, msgs24h: number, now: Date): void {
+  draft.setParam("msgs_per_day", msgs24h, "frequency");
+  draft.touchParam("msgs_per_day", now);
+}
+
+/** No friction carries through a crisis, including a pending ending. */
+function suspendForCrisis(draft: Draft, now: Date, settings: RelationshipConfig): void {
+  draft.setParam("tension", 0, "crisis");
+  draft.updateState({
+    crisis_quiet_until: new Date(now.getTime() + settings.crisis_quiet_hours * HOUR),
   });
-  b.t.state = {
-    ...b.t.state,
+
+  if (draft.state.end_pending_since) {
+    draft.updateState({ end_pending_since: null });
+    draft.logStatus("ending", { stage: "cleared_by_crisis" });
+  }
+  draft.logStatus("crisis", { suppressed: true });
+}
+
+/** This exchange's reply was composed from the state before it, so a due make-up line was offered. */
+function advanceMakeUp(draft: Draft, replies: number, settings: RelationshipConfig): void {
+  if (draft.state.make_up_state !== "due") return;
+
+  const offered = makeUpLineDue(draft.state, settings);
+  draft.updateState({
+    make_up_state: offered ? "offered" : "due",
+    make_up_replies: draft.state.make_up_replies + replies,
+  });
+}
+
+function applySignals(
+  draft: Draft,
+  input: ExchangeInput,
+  signals: Signals,
+  settings: RelationshipConfig,
+): void {
+  if (draft.state.status !== "ended_by_user") applyWarmthAndTrust(draft, signals, settings);
+  applyTension(draft, signals, settings);
+  applyHurt(draft, input, signals, settings);
+  applyMakeUpOrApology(draft, signals, settings);
+  applyEndingSignals(draft, input, signals, settings);
+}
+
+function applyWarmthAndTrust(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
+  const deadzone = settings.signal_deadzone;
+  const epsilon = settings.variance_epsilon;
+
+  for (const name of ["warmth", "trust"] as const) {
+    const signal = signals[name];
+    if (Math.abs(signal) < deadzone) continue;
+
+    const returns = signal > 0 ? diminishingReturns(draft.params[name], epsilon) : 1;
+    const gain = settings.gains[name] * returns;
+    draft.setParam(name, nudge(draft.params[name].value, gain * signal), "signal", { signal });
+  }
+
+  if (signals.warmth >= deadzone) {
+    const repairing = draft.state.status === "repairing";
+    const gain =
+      settings.gains.closeness_per_warm_exchange *
+      diminishingReturns(draft.params.closeness, epsilon) *
+      (repairing ? settings.repair_gain_factor : 1);
+    draft.setParam("closeness", nudge(draft.params.closeness.value, gain), "signal", {
+      warm_exchange: true,
+    });
+  }
+}
+
+function applyTension(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
+  if (Math.abs(signals.tension) < settings.signal_deadzone) return;
+
+  const value = nudge(draft.params.tension.value, settings.gains.tension * signals.tension);
+  draft.setParam("tension", value, "signal", { signal: signals.tension });
+}
+
+function applyHurt(
+  draft: Draft,
+  input: ExchangeInput,
+  signals: Signals,
+  settings: RelationshipConfig,
+): void {
+  const hurt = signals.hurt;
+  if (!hurt || hurt.amount < settings.signal_deadzone) return;
+
+  // A second hurt soon after the last one lands harder.
+  const lastHurt = draft.state.last_hurt_at;
+  const sensitised =
+    !!lastHurt && input.now.getTime() - lastHurt.getTime() <= settings.sensitise_window_days * DAY;
+  const amount = Math.min(
+    1,
+    settings.gains.hurt * hurt.amount * (sensitised ? settings.sensitise_factor : 1),
+  );
+
+  const before = draft.params.hurt.value;
+  draft.setParam("hurt", nudge(before, amount), "signal", { signal: hurt.amount, sensitised });
+  draft.updateState({ last_hurt_at: input.now });
+
+  if (draft.params.hurt.value - before >= settings.scar_threshold) leaveScar(draft, settings);
+
+  if (
+    draft.state.status !== "ended_by_user" &&
+    draft.params.hurt.value >= settings.make_up_threshold
+  ) {
+    startOrRepointMakeUp(draft, input.hurtFactId);
+  }
+}
+
+/**
+ * A scar never heals by itself. Dent the baseline so the daily average doesn't erase it, and dent
+ * the value too, so current trust reads as scarred rather than merely "at baseline".
+ */
+function leaveScar(draft: Draft, settings: RelationshipConfig): void {
+  const trust = draft.params.trust;
+  draft.params.trust = {
+    ...trust,
+    baseline: Math.max(0, trust.baseline - settings.scar_trust_dent),
+  };
+  draft.setParam("trust", Math.max(0, trust.value - settings.scar_trust_dent), "scar", {
+    baseline_dented: true,
+  });
+}
+
+/**
+ * Hurt enough to need making up. A second hurt while a make-up is already pending points it at
+ * the newest cause, so she brings up the latest hurt rather than a stale one.
+ */
+function startOrRepointMakeUp(draft: Draft, hurtFactId: string | null): void {
+  if (draft.state.make_up_state === "none") {
+    draft.updateState({ make_up_state: "due", make_up_replies: 0, hurt_cause_fact: hurtFactId });
+  } else if (hurtFactId) {
+    draft.updateState({ hurt_cause_fact: hurtFactId });
+  }
+}
+
+function applyMakeUpOrApology(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
+  if (!signals.make_up && !signals.apology) return;
+
+  const relief = Math.min(
+    signals.make_up ? settings.make_up_relief : 1,
+    signals.apology ? settings.apology_relief : 1,
+  );
+  const cause = signals.make_up ? "make_up" : "apology";
+
+  relieve(draft, relief, cause, settings);
+  draft.logStatus(cause, { make_up: signals.make_up, apology: signals.apology });
+}
+
+function relieve(
+  draft: Draft,
+  factor: number,
+  cause: "make_up" | "apology",
+  settings: RelationshipConfig,
+): void {
+  draft.setParam("hurt", draft.params.hurt.value * factor, cause);
+  draft.setParam("tension", draft.params.tension.value * settings.relief_tension_factor, cause);
+
+  if (draft.state.make_up_state !== "none") {
+    draft.updateState({ make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null });
+  }
+}
+
+/** Only these user signals can move the status. */
+function applyEndingSignals(
+  draft: Draft,
+  input: ExchangeInput,
+  signals: Signals,
+  settings: RelationshipConfig,
+): void {
+  const status = draft.state.status;
+
+  if (status === "active") {
+    if (signals.retracts_ending && draft.state.end_pending_since) {
+      draft.updateState({ end_pending_since: null });
+      draft.logStatus("ending", { stage: "retracted" });
+    } else if (signals.ends_relationship) {
+      handleEndingStatement(draft, input, settings);
+    }
+    return;
+  }
+
+  if (status === "repairing" && signals.ends_relationship) {
+    confirmEnding(draft, input.now, settings, "signal");
+    return;
+  }
+
+  // Taking the ending back after it's confirmed is a wish to repair, on the same slow path.
+  if (status === "ended_by_user" && (signals.wants_repair || signals.retracts_ending)) {
+    draft.updateState({ status: "repairing", repair_started_at: input.now });
+    draft.logStatus("repair", { stage: "started" });
+  }
+}
+
+/**
+ * "We're done" starts a pending ending. Said again after the reconfirm window, it confirms.
+ * Said again inside the window, it only restarts the window, so continued warm chat still
+ * clears it at the timeout, while a genuine "I mean it" followed by silence confirms there.
+ */
+function handleEndingStatement(
+  draft: Draft,
+  input: ExchangeInput,
+  settings: RelationshipConfig,
+): void {
+  const pending = draft.state.end_pending_since;
+
+  if (!pending) {
+    draft.updateState({ end_pending_since: input.exchangeAt });
+    draft.logStatus("ending", { stage: "pending" });
+    return;
+  }
+
+  const sincePending = input.exchangeAt.getTime() - pending.getTime();
+  if (sincePending >= settings.end_reconfirm_min_minutes * MINUTE) {
+    confirmEnding(draft, input.now, settings, "signal");
+    return;
+  }
+
+  draft.updateState({ end_pending_since: input.exchangeAt });
+  draft.logStatus("ending", { stage: "pending", restarted: true });
+}
+
+/** The user's ending is confirmed and she lets go. */
+function confirmEnding(
+  draft: Draft,
+  now: Date,
+  settings: RelationshipConfig,
+  via: "signal" | "timeout",
+): void {
+  draft.setParam(
+    "closeness",
+    draft.params.closeness.value * settings.end_closeness_factor,
+    "ending",
+    { stage: "confirmed" },
+  );
+  draft.updateState({
     status: "ended_by_user",
     ended_at: now,
     end_pending_since: null,
     make_up_state: "none",
     make_up_replies: 0,
     hurt_cause_fact: null,
-  };
-  b.status("ending", { stage: "confirmed", via });
+  });
+  draft.logStatus("ending", { stage: "confirmed", via });
 }
 
-function relieve(b: Builder, factor: number, cause: "make_up" | "apology", cfg: RelConfig) {
-  b.set("hurt", b.t.params.hurt.value * factor, cause);
-  b.set("tension", b.t.params.tension.value * cfg.relief_tension_factor, cause);
-  if (b.t.state.make_up_state !== "none")
-    b.t.state = { ...b.t.state, make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null };
+function clearMakeUpOnceHealed(draft: Draft, settings: RelationshipConfig): void {
+  if (draft.state.make_up_state === "none") return;
+  if (draft.params.hurt.value >= settings.make_up_clear_threshold) return;
+
+  draft.updateState({ make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null });
 }
 
-/** Cold path, once per exchange. Order: fade → frequency → crisis → make-up progress → signals → clear. */
-export function applyExchange(
-  state: RelState,
+// ---------- Once a day ----------
+
+/** Order: fade → frequency → absence → baselines → ending timeout → repair → clear the make-up. */
+export function relationshipAfterDailyTick(
+  state: RelationshipState,
   params: Params,
-  a: ExchangeInput,
-  cfg: RelConfig,
+  input: TickInput,
+  settings: RelationshipConfig,
 ): Transition {
-  const b = builder(state, params, cfg);
-  const eps = cfg.variance_epsilon;
-  fadeWithEvents(b, a.now, cfg);
-  b.set("msgs_per_day", a.msgs24h, "frequency");
-  b.t.params.msgs_per_day = { ...b.t.params.msgs_per_day, updated_at: a.now };
+  if (state.last_tick === input.localDate) return { state, params, events: [] };
 
-  if (a.crisis) {
-    b.set("tension", 0, "crisis");
-    b.t.state = {
-      ...b.t.state,
-      crisis_quiet_until: new Date(a.now.getTime() + cfg.crisis_quiet_hours * HOUR),
-    };
-    // Rule 7: no relationship friction carries through a crisis, including a pending ending.
-    if (b.t.state.end_pending_since) {
-      b.t.state = { ...b.t.state, end_pending_since: null };
-      b.status("ending", { stage: "cleared_by_crisis" });
-    }
-    b.status("crisis", { suppressed: true });
-    return b.t;
-  }
+  const draft = new Draft(state, params, settings);
 
-  // The reply in this exchange was composed from the state before it: if the make-up line was due, it was offered.
-  if (b.t.state.make_up_state === "due") {
-    const offered = makeUpLineDue(b.t.state, cfg);
-    b.t.state = {
-      ...b.t.state,
-      make_up_state: offered ? "offered" : "due",
-      make_up_replies: b.t.state.make_up_replies + a.replies,
-    };
-  }
+  fadeHurtAndTension(draft, input.now, settings);
+  recordFrequency(draft, input.msgs24h, input.now);
+  if (input.lastContact) applyAbsence(draft, input, input.lastContact, settings);
+  sampleAllBaselines(draft, input.yesterdayCount, settings);
+  settlePendingEnding(draft, input, settings);
+  completeRepair(draft, input.now, settings);
+  clearMakeUpOnceHealed(draft, settings);
 
-  const s = a.signals;
-  if (s) {
-    const dz = cfg.signal_deadzone;
-    const ended = b.t.state.status === "ended_by_user";
-    const repairing = b.t.state.status === "repairing";
-    if (!ended) {
-      for (const name of ["warmth", "trust"] as const) {
-        const v = s[name];
-        if (Math.abs(v) < dz) continue;
-        const g = cfg.gains[name] * (v > 0 ? dim(b.t.params[name], eps) : 1);
-        b.set(name, nudge(b.t.params[name].value, g * v), "signal", { signal: v });
-      }
-      if (s.warmth >= dz) {
-        const g =
-          cfg.gains.closeness_per_warm_exchange *
-          dim(b.t.params.closeness, eps) *
-          (repairing ? cfg.repair_gain_factor : 1);
-        b.set("closeness", nudge(b.t.params.closeness.value, g), "signal", { warm_exchange: true });
-      }
-    }
-    if (Math.abs(s.tension) >= dz)
-      b.set("tension", nudge(b.t.params.tension.value, cfg.gains.tension * s.tension), "signal", {
-        signal: s.tension,
-      });
-    if (s.hurt && s.hurt.amount >= dz) {
-      const last = b.t.state.last_hurt_at;
-      const sensitised =
-        !!last && a.now.getTime() - last.getTime() <= cfg.sensitise_window_days * DAY;
-      const amount = Math.min(
-        1,
-        cfg.gains.hurt * s.hurt.amount * (sensitised ? cfg.sensitise_factor : 1),
-      );
-      const before = b.t.params.hurt.value;
-      b.set("hurt", nudge(before, amount), "signal", { signal: s.hurt.amount, sensitised });
-      b.t.state = { ...b.t.state, last_hurt_at: a.now };
-      if (b.t.params.hurt.value - before >= cfg.scar_threshold) {
-        // a scar never recovers by itself — dent the baseline so the daily EMA doesn't erase it,
-        // and dent the value too (via `set`) so current trust reads as scarred, not merely "at baseline".
-        const trust = b.t.params.trust;
-        b.t.params.trust = {
-          ...trust,
-          baseline: Math.max(0, trust.baseline - cfg.scar_trust_dent),
-        };
-        b.set("trust", Math.max(0, trust.value - cfg.scar_trust_dent), "scar", {
-          baseline_dented: true,
-        });
-      }
-      if (b.t.state.status !== "ended_by_user" && b.t.params.hurt.value >= cfg.make_up_threshold) {
-        if (b.t.state.make_up_state === "none") {
-          b.t.state = {
-            ...b.t.state,
-            make_up_state: "due",
-            make_up_replies: 0,
-            hurt_cause_fact: a.hurtFactId,
-          };
-        } else if (a.hurtFactId) {
-          // A second hurt while a make-up is already due or offered
-          // re-points hurt_cause_fact at the newest cause, so she brings up the latest hurt, not a stale
-          // one from before the make-up was first offered.
-          b.t.state = { ...b.t.state, hurt_cause_fact: a.hurtFactId };
-        }
-      }
-    }
-    if (s.make_up || s.apology) {
-      const factor = Math.min(
-        s.make_up ? cfg.make_up_relief : 1,
-        s.apology ? cfg.apology_relief : 1,
-      );
-      relieve(b, factor, s.make_up ? "make_up" : "apology", cfg);
-      b.status(s.make_up ? "make_up" : "apology", { make_up: s.make_up, apology: s.apology });
-    }
-    // Ending (rule 3): only these user-turn signals can move status.
-    if (b.t.state.status === "active") {
-      if (s.retracts_ending && b.t.state.end_pending_since) {
-        b.t.state = { ...b.t.state, end_pending_since: null };
-        b.status("ending", { stage: "retracted" });
-      } else if (s.ends_relationship) {
-        const pending = b.t.state.end_pending_since;
-        if (
-          pending &&
-          a.exchangeAt.getTime() - pending.getTime() >= cfg.end_reconfirm_min_minutes * 60_000
-        ) {
-          confirmEnding(b, a.now, cfg, "signal");
-        } else if (pending) {
-          // a re-scored "we're done" inside the reconfirm window only restarts the pending
-          // window, so continued warm chat still clears it at the timeout (the implicit retraction); a
-          // genuine "I mean it" followed by silence still confirms there, and a later second statement
-          // outside the window confirms by signal.
-          b.t.state = { ...b.t.state, end_pending_since: a.exchangeAt };
-          b.status("ending", { stage: "pending", restarted: true });
-        } else {
-          b.t.state = { ...b.t.state, end_pending_since: a.exchangeAt };
-          b.status("ending", { stage: "pending" });
-        }
-      }
-    } else if (b.t.state.status === "repairing" && s.ends_relationship) {
-      confirmEnding(b, a.now, cfg, "signal");
-    } else if (b.t.state.status === "ended_by_user" && (s.wants_repair || s.retracts_ending)) {
-      // Taking the ending back after it's confirmed is a wish to repair (same slow path).
-      b.t.state = { ...b.t.state, status: "repairing", repair_started_at: a.now };
-      b.status("repair", { stage: "started" });
-    }
-  }
-
-  if (b.t.state.make_up_state !== "none" && b.t.params.hurt.value < cfg.make_up_clear_threshold) {
-    b.t.state = { ...b.t.state, make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null };
-  }
-  return b.t;
+  draft.updateState({ last_tick: input.localDate });
+  return draft.result();
 }
 
-/** Daily tick. Order: fade → frequency refresh → absence → baselines → ending timeout → repair → clear. */
-export function applyTick(
-  state: RelState,
-  params: Params,
-  a: TickInput,
-  cfg: RelConfig,
-): Transition {
-  if (state.last_tick === a.localDate) return { state, params, events: [] };
-  const b = builder(state, params, cfg);
-  const eps = cfg.variance_epsilon;
-  fadeWithEvents(b, a.now, cfg);
-  b.set("msgs_per_day", a.msgs24h, "frequency");
-  b.t.params.msgs_per_day = { ...b.t.params.msgs_per_day, updated_at: a.now };
-
-  if (a.lastContact) {
-    const graceMs = cfg.absence_grace_factor * a.medianGapHours * HOUR;
-    if (a.now.getTime() - a.lastContact.getTime() > graceMs) {
-      b.set(
-        "closeness",
-        Math.max(0, b.t.params.closeness.value - cfg.closeness_absence_drift),
-        "absence",
-      );
-    }
-    // Rule 3 / once she's let go, absence no longer hurts her and can't start a make-up. Closeness
-    // still drifts down above (that's just distance, not a grievance).
-    if (b.t.state.status !== "ended_by_user") {
-      // The frequency deviation is read before today's sample dilutes the baseline.
-      const e = effect({ ...b.t.params.msgs_per_day, value: a.yesterdayCount }, eps);
-      if (e < cfg.absence_hurt_effect) {
-        b.set(
-          "hurt",
-          nudge(b.t.params.hurt.value, cfg.absence_hurt_gain * Math.abs(e)),
-          "absence",
-          { frequency_effect: e },
-        );
-        if (b.t.state.make_up_state === "none" && b.t.params.hurt.value >= cfg.make_up_threshold) {
-          b.t.state = {
-            ...b.t.state,
-            make_up_state: "due",
-            make_up_replies: 0,
-            hurt_cause_fact: null,
-          };
-        }
-      }
-    }
+function applyAbsence(
+  draft: Draft,
+  input: TickInput,
+  lastContact: Date,
+  settings: RelationshipConfig,
+): void {
+  const graceMs = settings.absence_grace_factor * input.medianGapHours * HOUR;
+  if (input.now.getTime() - lastContact.getTime() > graceMs) {
+    const drifted = Math.max(0, draft.params.closeness.value - settings.closeness_absence_drift);
+    draft.setParam("closeness", drifted, "absence");
   }
 
-  for (const n of PARAM_NAMES) {
-    const x = n === "msgs_per_day" ? a.yesterdayCount : b.t.params[n].value;
-    const before = b.t.params[n].baseline;
-    b.t.params[n] = sampleBaseline(b.t.params[n], x, cfg.baseline_alpha);
-    b.t.events.push({
-      param: n,
+  // Once she's let go, absence no longer hurts her or starts a make-up. Closeness still drifts
+  // down above: that's distance, not a grievance.
+  if (draft.state.status === "ended_by_user") return;
+
+  // Read the frequency deviation before today's sample dilutes the baseline.
+  const yesterday = { ...draft.params.msgs_per_day, value: input.yesterdayCount };
+  const frequencyDeviation = deviationOf(yesterday, settings.variance_epsilon);
+  if (frequencyDeviation >= settings.absence_hurt_effect) return;
+
+  const hurt = nudge(
+    draft.params.hurt.value,
+    settings.absence_hurt_gain * Math.abs(frequencyDeviation),
+  );
+  draft.setParam("hurt", hurt, "absence", { frequency_effect: frequencyDeviation });
+
+  if (
+    draft.state.make_up_state === "none" &&
+    draft.params.hurt.value >= settings.make_up_threshold
+  ) {
+    draft.updateState({ make_up_state: "due", make_up_replies: 0, hurt_cause_fact: null });
+  }
+}
+
+function sampleAllBaselines(
+  draft: Draft,
+  yesterdayCount: number,
+  settings: RelationshipConfig,
+): void {
+  for (const name of PARAM_NAMES) {
+    const sample = name === "msgs_per_day" ? yesterdayCount : draft.params[name].value;
+    const before = draft.params[name].baseline;
+
+    draft.params[name] = sampleBaseline(draft.params[name], sample, settings.baseline_alpha);
+    draft.events.push({
+      param: name,
       before,
-      after: b.t.params[n].baseline,
+      after: draft.params[name].baseline,
       cause: "baseline",
-      deviation: effect(b.t.params[n], eps),
-      detail: { sample: x },
+      deviation: deviationOf(draft.params[name], settings.variance_epsilon),
+      detail: { sample },
     });
   }
+}
 
-  const pending = b.t.state.end_pending_since;
-  const quiet = b.t.state.crisis_quiet_until;
-  const inQuiet = !!quiet && a.now.getTime() < quiet.getTime();
-  // Never settle an ending inside a crisis quiet window (rule 7). At the timeout, contact after the
-  // pending exchange is an implicit retraction; only silence confirms (rule 3: she lets go only if they meant it).
-  if (
-    b.t.state.status === "active" &&
-    pending &&
-    !inQuiet &&
-    a.now.getTime() - pending.getTime() >= cfg.end_confirm_hours * HOUR
-  ) {
-    if (a.lastContact && a.lastContact.getTime() > pending.getTime()) {
-      b.t.state = { ...b.t.state, end_pending_since: null };
-      b.status("ending", { stage: "retracted", via: "continued_contact" });
-    } else {
-      confirmEnding(b, a.now, cfg, "timeout");
-    }
+/**
+ * At the timeout, contact after the "we're done" counts as taking it back; only silence confirms,
+ * because she lets go only if they meant it. Never settled inside a crisis quiet window.
+ */
+function settlePendingEnding(draft: Draft, input: TickInput, settings: RelationshipConfig): void {
+  const pending = draft.state.end_pending_since;
+  if (draft.state.status !== "active" || !pending) return;
+
+  const quietUntil = draft.state.crisis_quiet_until;
+  const inCrisisQuiet = !!quietUntil && input.now.getTime() < quietUntil.getTime();
+  if (inCrisisQuiet) return;
+
+  const timedOut = input.now.getTime() - pending.getTime() >= settings.end_confirm_hours * HOUR;
+  if (!timedOut) return;
+
+  if (input.lastContact && input.lastContact.getTime() > pending.getTime()) {
+    draft.updateState({ end_pending_since: null });
+    draft.logStatus("ending", { stage: "retracted", via: "continued_contact" });
+  } else {
+    confirmEnding(draft, input.now, settings, "timeout");
   }
-  const started = b.t.state.repair_started_at;
-  if (
-    b.t.state.status === "repairing" &&
-    started &&
-    b.t.params.closeness.value >= cfg.repair_complete_closeness &&
-    a.now.getTime() - started.getTime() >= cfg.repair_min_days * DAY
-  ) {
-    b.t.state = { ...b.t.state, status: "active" };
-    b.status("repair", { stage: "complete" });
-  }
-  if (b.t.state.make_up_state !== "none" && b.t.params.hurt.value < cfg.make_up_clear_threshold) {
-    b.t.state = { ...b.t.state, make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null };
-  }
-  b.t.state = { ...b.t.state, last_tick: a.localDate };
-  return b.t;
+}
+
+function completeRepair(draft: Draft, now: Date, settings: RelationshipConfig): void {
+  const started = draft.state.repair_started_at;
+  if (draft.state.status !== "repairing" || !started) return;
+
+  const closeEnough = draft.params.closeness.value >= settings.repair_complete_closeness;
+  const longEnough = now.getTime() - started.getTime() >= settings.repair_min_days * DAY;
+  if (!closeEnough || !longEnough) return;
+
+  draft.updateState({ status: "active" });
+  draft.logStatus("repair", { stage: "complete" });
 }

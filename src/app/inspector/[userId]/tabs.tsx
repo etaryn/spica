@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { LifeConfig } from "@/mind/platform/config";
 import { lifeDate } from "@/mind/world/her-clock";
-import type { RelConfig } from "@/mind/state/user/relationship/types";
+import type { RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
 import * as r from "@/db/repos/inspector";
 import { listJudgeLogs } from "@/db/repos/judge-log";
@@ -227,7 +227,7 @@ export async function RelationshipTab({
   db: Db;
   userId: string;
   now: Date;
-  cfg: RelConfig;
+  cfg: RelationshipConfig;
 }) {
   const v = await r.getRelationshipView(db, userId, now, cfg);
   if (!v) return <Empty phase={4} />;

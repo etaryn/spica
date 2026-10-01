@@ -13,7 +13,7 @@ import { silentLogger } from "@/mind/platform/log";
 import { decayPass } from "@/mind/memory/user/decay";
 import { RecordingQueue } from "@/mind/platform/jobs";
 import type { Signals } from "@/mind/state/user/relationship/signals";
-import { relationshipTick } from "@/mind/state/user/relationship/daily-tick";
+import { relationshipDailyTick } from "@/mind/state/user/relationship/daily-tick";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertUserRow, truncateAll } from "@/db/admin";
@@ -523,7 +523,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         if (at > clock.now().getTime()) clock.set(new Date(at)); // never move the clock backwards
         await decayPass(deps, clock.now());
         meta.decayPasses += 1;
-        const tick = await relationshipTick(deps, clock.now());
+        const tick = await relationshipDailyTick(deps, clock.now());
         meta.ticks += 1;
         if (tick.failed > 0)
           throw new Error(`relationship tick failed for ${tick.failed} of ${tick.users} user(s)`);

@@ -10,7 +10,7 @@ import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { nudgeEgoForExchange } from "@/mind/state/legacy-ego/nudge";
 import { errorName } from "@/mind/platform/errors";
-import { applyRelationship } from "@/mind/state/user/relationship/update";
+import { updateRelationship } from "@/mind/state/user/relationship/update";
 import { hurtFactContent } from "@/mind/state/user/relationship/signals";
 
 export class LockBusyError extends Error {}
@@ -116,8 +116,8 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
 
     const hurtFactId = hurt ? (applied.factIds.at(-1) ?? null) : null;
     const applyRel =
-      (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ??
-      applyRelationship;
+      (deps as { updateRelationship?: typeof updateRelationship }).updateRelationship ??
+      updateRelationship;
     if (hasUserTurn) {
       try {
         await tx.transaction(async (sp) => {

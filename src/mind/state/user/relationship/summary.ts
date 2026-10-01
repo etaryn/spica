@@ -1,97 +1,123 @@
+/**
+ * The relationship summary: the "You and them" section of her reply prompt. It turns the params'
+ * deviations from this user's baseline into a few phrases (never numbers): status first, then
+ * the strongest deviations, then the make-up line. The phrases live in a prompt file.
+ */
 import { getFact } from "@/db/repos/facts";
-import * as rel from "@/db/repos/relationship";
+import * as relationshipRepo from "@/db/repos/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { effect, fadeParams } from "./params";
+import { deviationOf, fadeParams } from "./params";
 import { makeUpLineDue } from "./transitions";
-import { PARAM_NAMES, type Params, type RelConfig, type RelState } from "./types";
+import {
+  PARAM_NAMES,
+  type ParamName,
+  type Params,
+  type RelationshipConfig,
+  type RelationshipState,
+} from "./types";
 
+/** Phrase lists by heading, parsed from a prompt file of `## heading` and `- phrase` lines. */
 export type Phrases = Record<string, string[]>;
 
-export function parseSummaryPhrases(md: string): Phrases {
-  const out: Phrases = {};
-  let cur: string | null = null;
-  for (const raw of md.split(/\r?\n/)) {
-    const line = raw.trim();
-    const h = /^##\s+(.+)$/.exec(line);
-    if (h) {
-      cur = h[1]!.trim();
-      out[cur] = [];
+export function parseSummaryPhrases(markdown: string): Phrases {
+  const phrases: Phrases = {};
+  let heading: string | null = null;
+
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const line = rawLine.trim();
+
+    const headingMatch = /^##\s+(.+)$/.exec(line);
+    if (headingMatch) {
+      heading = headingMatch[1]!.trim();
+      phrases[heading] = [];
       continue;
     }
-    const item = /^-\s+(.+)$/.exec(line);
-    if (cur && item) out[cur]!.push(item[1]!.trim());
+
+    const itemMatch = /^-\s+(.+)$/.exec(line);
+    if (heading && itemMatch) phrases[heading]!.push(itemMatch[1]!.trim());
   }
-  return out;
+  return phrases;
 }
 
-const first = (p: Phrases, key: string): string | null => p[key]?.[0] ?? null;
+function firstPhrase(phrases: Phrases, key: string): string | null {
+  return phrases[key]?.[0] ?? null;
+}
 
-/** Slot 3 lines: status first, then the strongest deviations, then the make-up line.
- * Until `crisis_quiet_until` passes, hurt, tension, make-up and ending lines are all omitted. */
+/**
+ * Until `crisis_quiet_until` passes, every hurt, tension, make-up and ending line is left out.
+ */
 export function summaryLines(
-  v: { state: RelState; params: Params; cause: string | null },
+  view: { state: RelationshipState; params: Params; cause: string | null },
   now: Date,
-  cfg: RelConfig,
+  settings: RelationshipConfig,
   phrases: Phrases,
 ): string[] {
-  const { state } = v;
-  const quiet = !!state.crisis_quiet_until && now < state.crisis_quiet_until;
+  const { state } = view;
+  const inCrisisQuiet = !!state.crisis_quiet_until && now < state.crisis_quiet_until;
+
   if (state.status === "ended_by_user") {
-    if (quiet) return [];
-    const line = first(phrases, "ended");
+    if (inCrisisQuiet) return [];
+    const line = firstPhrase(phrases, "ended");
     return line ? [line] : [];
   }
-  const out: string[] = [];
-  if (state.status === "repairing") {
-    const line = first(phrases, "repairing");
-    if (line) out.push(line);
-  }
-  if (!quiet && state.end_pending_since) {
-    const line = first(phrases, "end_pending");
-    if (line) out.push(line);
-  }
 
-  const notable = PARAM_NAMES.filter((n) => !(quiet && (n === "hurt" || n === "tension")))
-    .map((n) => ({ n, e: effect(v.params[n], cfg.variance_epsilon) }))
-    .filter((x) => Math.abs(x.e) >= cfg.summary_min_effect)
-    .sort((a, b) => Math.abs(b.e) - Math.abs(a.e))
-    .slice(0, cfg.summary_max_lines);
-  for (const { n, e } of notable) {
-    if (n === "hurt" && e > 0 && v.cause) {
-      const line = first(phrases, "hurt_cause");
-      if (line) out.push(line.replace("{cause}", v.cause));
+  const lines: string[] = [];
+  const add = (line: string | null) => {
+    if (line) lines.push(line);
+  };
+
+  if (state.status === "repairing") add(firstPhrase(phrases, "repairing"));
+  if (!inCrisisQuiet && state.end_pending_since) add(firstPhrase(phrases, "end_pending"));
+
+  for (const { name, deviation } of notableDeviations(view.params, inCrisisQuiet, settings)) {
+    if (name === "hurt" && deviation > 0 && view.cause) {
+      add(firstPhrase(phrases, "hurt_cause")?.replace("{cause}", view.cause) ?? null);
       continue;
     }
-    const line = first(
-      phrases,
-      `${n} ${e > 0 ? "above" : "below"} ${Math.abs(e) >= cfg.summary_strong_effect ? "strong" : "mild"}`,
-    );
-    if (line) out.push(line);
+    const direction = deviation > 0 ? "above" : "below";
+    const strength = Math.abs(deviation) >= settings.summary_strong_effect ? "strong" : "mild";
+    add(firstPhrase(phrases, `${name} ${direction} ${strength}`));
   }
-  if (!quiet && makeUpLineDue(state, cfg)) {
-    const line = first(phrases, "make_up");
-    if (line) out.push(line);
-  }
-  return out;
+
+  if (!inCrisisQuiet && makeUpLineDue(state, settings)) add(firstPhrase(phrases, "make_up"));
+  return lines;
 }
 
-/** Hot path, read-only: fades in memory, never writes. Null when there's no row or nothing notable. */
+/** The params furthest from baseline, strongest first, capped at `summary_max_lines`. */
+function notableDeviations(
+  params: Params,
+  inCrisisQuiet: boolean,
+  settings: RelationshipConfig,
+): { name: ParamName; deviation: number }[] {
+  const hiddenInCrisis = (name: ParamName) => name === "hurt" || name === "tension";
+
+  return PARAM_NAMES.filter((name) => !(inCrisisQuiet && hiddenInCrisis(name)))
+    .map((name) => ({ name, deviation: deviationOf(params[name], settings.variance_epsilon) }))
+    .filter((p) => Math.abs(p.deviation) >= settings.summary_min_effect)
+    .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
+    .slice(0, settings.summary_max_lines);
+}
+
+/** Read-only for the hot path: fades are applied in memory, never written. Null when nothing is notable. */
 export async function loadRelationshipSummary(
   deps: Pick<Deps, "db" | "config">,
   userId: string,
   now: Date,
 ): Promise<string | null> {
-  const cfg = deps.config.relationship;
-  const row = await rel.getRelationshipRow(deps.db, userId);
+  const settings = deps.config.relationship;
+  const row = await relationshipRepo.getRelationshipRow(deps.db, userId);
   if (!row) return null;
-  const params = fadeParams(await rel.getParams(deps.db, userId), now, cfg);
+
+  const params = fadeParams(await relationshipRepo.getParams(deps.db, userId), now, settings);
   const cause = row.hurt_cause_fact
     ? ((await getFact(deps.db, userId, row.hurt_cause_fact))?.content ?? null)
     : null;
   const phrases = parseSummaryPhrases(
     loadPrompt("relationship/summary", deps.config.prompts.relationship_summary),
   );
-  const lines = summaryLines({ state: rel.toRelState(row), params, cause }, now, cfg, phrases);
+
+  const state = relationshipRepo.toRelationshipState(row);
+  const lines = summaryLines({ state, params, cause }, now, settings, phrases);
   return lines.length ? lines.join("\n") : null;
 }

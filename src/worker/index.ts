@@ -24,7 +24,7 @@ import {
   TURN_TIMER_QUEUE,
   type TurnTimerJob,
 } from "@/mind/platform/jobs";
-import { relationshipTick } from "@/mind/state/user/relationship/daily-tick";
+import { relationshipDailyTick } from "@/mind/state/user/relationship/daily-tick";
 import { runBackchannel, runTurnTimer } from "@/mind/process/turn-taking/commit-and-reply";
 import { sweepTurns } from "@/mind/process/turn-taking/sweep";
 import { PgBossQueue } from "@/runtime/pg-boss-jobs";
@@ -87,7 +87,7 @@ await boss.schedule(TURN_SWEEP_QUEUE, deps.config.turn.sweep_cron);
 await boss.work(
   RELATIONSHIP_TICK_QUEUE,
   scrubErrors(RELATIONSHIP_TICK_QUEUE, deps.log, async () => {
-    await relationshipTick(deps, deps.clock.now());
+    await relationshipDailyTick(deps, deps.clock.now());
   }),
 );
 await boss.schedule(RELATIONSHIP_TICK_QUEUE, deps.config.relationship.tick_cron);

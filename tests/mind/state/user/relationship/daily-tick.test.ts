@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import type { Logger } from "@/mind/platform/log";
-import { relationshipTick, tickUser } from "@/mind/state/user/relationship/daily-tick";
+import { relationshipDailyTick, tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { localMidnight } from "@/mind/platform/timezone";
 import * as rel from "@/db/repos/relationship";
 import { insertTurn } from "@/db/repos/session-log";
@@ -55,8 +55,8 @@ test("samples yesterday's count once per local date, per user", async () => {
       created_at: new Date(day1.getTime() + i * 60_000),
     });
   const day2 = new Date("2026-01-06T10:00:00Z");
-  expect(await relationshipTick(deps, day2)).toEqual({ users: 1, failed: 0 });
-  await relationshipTick(deps, new Date("2026-01-06T11:00:00Z")); // same local date: no-op
+  expect(await relationshipDailyTick(deps, day2)).toEqual({ users: 1, failed: 0 });
+  await relationshipDailyTick(deps, new Date("2026-01-06T11:00:00Z")); // same local date: no-op
   const p = await rel.getParams(db, u);
   expect(p.msgs_per_day.baseline).toBeCloseTo(5 + deps.config.relationship.baseline_alpha * 35);
   expect((await rel.getRelationshipRow(db, u))?.last_tick).toBe("2026-01-06");
@@ -69,7 +69,7 @@ test("one failing user doesn't stop the batch", async () => {
   const now = new Date("2026-01-06T10:00:00Z");
   for (const u of [a, b]) await rel.ensureRelationship(db, u, now, deps.config.relationship);
   const spy = vi.spyOn(rel, "getParams").mockRejectedValueOnce(new Error("boom"));
-  expect(await relationshipTick(deps, now)).toEqual({ users: 2, failed: 1 });
+  expect(await relationshipDailyTick(deps, now)).toEqual({ users: 2, failed: 1 });
   spy.mockRestore();
 });
 
@@ -84,7 +84,7 @@ test("a failure wrapped by an infrastructure error still logs the innermost caus
   const spy = vi
     .spyOn(rel, "getParams")
     .mockRejectedValueOnce(new DrizzleQueryError("wrapped", { cause: new TypeError("boom") }));
-  expect(await relationshipTick(deps, now)).toEqual({ users: 1, failed: 1 });
+  expect(await relationshipDailyTick(deps, now)).toEqual({ users: 1, failed: 1 });
   spy.mockRestore();
   expect(lines).toEqual([
     { msg: "relationship tick failed", meta: { userId: u, error: "TypeError" } },

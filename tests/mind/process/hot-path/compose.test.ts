@@ -257,7 +257,7 @@ describe("composeReply", () => {
     const row = await rel.getRelationshipRow(getTestDb(), u);
     const params = await rel.getParams(getTestDb(), u);
     params.msgs_per_day = { ...params.msgs_per_day, value: 40 };
-    await rel.saveRelationship(getTestDb(), u, { state: rel.toRelState(row!), params });
+    await rel.saveRelationship(getTestDb(), u, { state: rel.toRelationshipState(row!), params });
 
     const turns = [await userTurn(deps, u, "hi")];
     await composeReply(deps, u, { turns, openQuestions: [], flag: null });

@@ -265,7 +265,7 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
     created_at: at(0),
     trigger: "reach_out",
   });
-  const applyRelationship = vi.fn();
+  const updateRelationship = vi.fn();
   deps.llm.handlers.extract = () => ({
     facts: [],
     entities: [],
@@ -282,14 +282,14 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
       wants_repair: false,
     },
   });
-  const out = await handleColdPath({ ...deps, applyRelationship } as never, {
+  const out = await handleColdPath({ ...deps, updateRelationship } as never, {
     userId: u,
     turnIds: [c.id],
     replyTurnId: c.id,
     recalled: [],
   });
   expect(out.status).toBe("done");
-  expect(applyRelationship).not.toHaveBeenCalled();
+  expect(updateRelationship).not.toHaveBeenCalled();
   expect(await getIdentityRow(getTestDb(), u)).toBeNull();
   expect((await getTurn(getTestDb(), u, c.id))?.extracted).toBe(true);
 });

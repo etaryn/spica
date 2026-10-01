@@ -15,3 +15,12 @@ design doc's layout section.
 | `RetrievedFact`, `DueThread`, `RetrievalResult`, `emptyRetrieval` (process/hot-path/assemble) | same names (memory/shared/types) | `src/mind/memory/shared/types.ts` |
 | (inline input type) | `RetrieveInput` | `src/mind/memory/user/retrieve.ts` |
 | (inline return type) | `AgeCheck` | `src/mind/platform/age-gate.ts` |
+| `Param` | `HomeostaticParam` (the spec's name) | `src/mind/state/user/relationship/types.ts` |
+| `RelState`, `RelConfig`, `RelEvent`, `RelCause`, `RelStatus` | `RelationshipState`, `RelationshipConfig`, `RelationshipEvent`, `RelationshipCause`, `RelationshipStatus` | `src/mind/state/user/relationship/types.ts` |
+| `effect` | `deviationOf` | `src/mind/state/user/relationship/params.ts` |
+| `dim` | `diminishingReturns` | `src/mind/state/user/relationship/params.ts` |
+| `applyExchange` (relationship) | `relationshipAfterExchange` | `src/mind/state/user/relationship/transitions.ts` |
+| `applyTick` | `relationshipAfterDailyTick` | `src/mind/state/user/relationship/transitions.ts` |
+| `applyRelationship` | `updateRelationship` | `src/mind/state/user/relationship/update.ts` |
+| `relationshipTick` | `relationshipDailyTick` | `src/mind/state/user/relationship/daily-tick.ts` |
+| `toRelState` | `toRelationshipState` | `src/db/repos/relationship.ts` |

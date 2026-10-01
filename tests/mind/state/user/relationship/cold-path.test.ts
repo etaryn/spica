@@ -152,7 +152,7 @@ test("exchangeAt wiring: end_pending_since is stamped with the user turn's creat
 
 test("savepoint: a relationship failure rolls back only the relationship part", async () => {
   const deps = Object.assign(makeTestDeps(), {
-    applyRelationship: async (
+    updateRelationship: async (
       sp: Db,
       deps2: ReturnType<typeof makeTestDeps>,
       a: { userId: string },

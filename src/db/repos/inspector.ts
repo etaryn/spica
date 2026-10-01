@@ -1,7 +1,7 @@
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { effect, fadeParams } from "@/mind/state/user/relationship/params";
-import { PARAM_NAMES, type RelConfig } from "@/mind/state/user/relationship/types";
+import { deviationOf, fadeParams } from "@/mind/state/user/relationship/params";
+import { PARAM_NAMES, type RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
 import {
   conversation_state,
@@ -66,7 +66,12 @@ export async function getIdentity(db: Db, userId: string) {
   return (await db.select().from(identity).where(eq(identity.user_id, userId)))[0] ?? null;
 }
 
-export async function getRelationshipView(db: Db, userId: string, now: Date, cfg: RelConfig) {
+export async function getRelationshipView(
+  db: Db,
+  userId: string,
+  now: Date,
+  cfg: RelationshipConfig,
+) {
   const row = await getRelationshipRow(db, userId);
   if (!row) return null;
   const params = fadeParams(await getParams(db, userId), now, cfg);
@@ -75,7 +80,7 @@ export async function getRelationshipView(db: Db, userId: string, now: Date, cfg
     params: PARAM_NAMES.map((name) => ({
       name,
       ...params[name],
-      effect: effect(params[name], cfg.variance_epsilon),
+      effect: deviationOf(params[name], cfg.variance_epsilon),
     })),
     events: await listRelationshipEvents(db, userId, cfg.event_list_limit),
   };

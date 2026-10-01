@@ -1,75 +1,116 @@
+/**
+ * The cold path's relationship step: applies one exchange's signals to this user's relationship
+ * and saves the result with its events and a refreshed cadence. Runs after memory is encoded,
+ * inside the cold path's transaction (in its own savepoint).
+ */
 import type { Db } from "@/db/client";
-import * as rel from "@/db/repos/relationship";
+import * as relationshipRepo from "@/db/repos/relationship";
 import type { Turn } from "@/db/repos/session-log";
 import { getTimezone } from "@/db/repos/users";
 import type { Deps } from "@/mind/platform/deps";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
-import { applyExchange } from "./transitions";
+import { relationshipAfterExchange } from "./transitions";
 
 const DAY = 86_400_000;
+const WEEK = 7 * DAY;
 
-/** Cold path, after encodeExtraction, inside the job's transaction (a savepoint). */
-export async function applyRelationship(
+export type RelationshipUpdate = {
+  userId: string;
+  turns: Turn[];
+  signals: Signals | null;
+  crisis: boolean;
+  hurtFactId: string | null;
+};
+
+export async function updateRelationship(
   tx: Db,
   deps: Pick<Deps, "config" | "clock">,
-  a: {
-    userId: string;
-    turns: Turn[];
-    signals: Signals | null;
-    crisis: boolean;
-    hurtFactId: string | null;
-  },
+  update: RelationshipUpdate,
 ): Promise<void> {
-  const cfg = deps.config.relationship;
+  const settings = deps.config.relationship;
   const now = deps.clock.now();
-  await rel.ensureRelationship(tx, a.userId, now, cfg);
-  const row = await rel.lockRelationship(tx, a.userId);
-  const params = await rel.getParams(tx, a.userId);
-  const tzRaw = await getTimezone(tx, a.userId);
-  const tz = tzRaw && isValidTimeZone(tzRaw) ? tzRaw : "UTC";
-  const msgs24h = await rel.countUserTurnsBetween(tx, a.userId, new Date(now.getTime() - DAY), now);
-  const replies = a.turns.filter((t) => t.role === "companion" && t.reply_to).length;
-  const userTurns = a.turns.filter((x) => x.role === "user");
-  const lastUser = userTurns.at(-1);
-  // stamp end_pending_since with the exchange's own turn time, the same clock last_contact
-  // uses below, not the cold path's processing clock. Falls back to `now` when the exchange has no user
-  // turn (shouldn't happen for a scored exchange, but keeps this total).
-  const exchangeAt = lastUser?.created_at ?? now;
-  const t = applyExchange(
-    rel.toRelState(row),
+  const { userId } = update;
+
+  await relationshipRepo.ensureRelationship(tx, userId, now, settings);
+  const row = await relationshipRepo.lockRelationship(tx, userId);
+  const params = await relationshipRepo.getParams(tx, userId);
+
+  const msgs24h = await relationshipRepo.countUserTurnsBetween(
+    tx,
+    userId,
+    new Date(now.getTime() - DAY),
+    now,
+  );
+  const replies = update.turns.filter((t) => t.role === "companion" && t.reply_to).length;
+  const lastUserTurn = update.turns.filter((t) => t.role === "user").at(-1);
+  // The exchange's own time, on the same clock as last_contact below. `now` only covers an
+  // exchange with no user turn, which a scored exchange never is.
+  const exchangeAt = lastUserTurn?.created_at ?? now;
+
+  const transition = relationshipAfterExchange(
+    relationshipRepo.toRelationshipState(row),
     params,
     {
       now,
       exchangeAt,
-      signals: a.signals,
-      crisis: a.crisis,
-      hurtFactId: a.hurtFactId,
+      signals: update.signals,
+      crisis: update.crisis,
+      hurtFactId: update.hurtFactId,
       replies,
       msgs24h,
     },
-    cfg,
+    settings,
   );
-  const since = new Date(now.getTime() - cfg.history_days * DAY);
-  const cadence = buildCadence(
-    {
-      msgs24h,
-      msgs7d: await rel.countUserTurnsBetween(tx, a.userId, new Date(now.getTime() - 7 * DAY), now),
-      starts: await rel.userSessionStarts(tx, a.userId, cfg.cadence_sessions + 1, since),
-      activeHours: await rel.userActiveHours(tx, a.userId, tz, since),
-    },
-    cfg,
-  );
+
+  const cadence = await currentCadence(tx, userId, now, msgs24h, deps);
   const lastContact =
-    lastUser && (!row.last_contact || lastUser.created_at > row.last_contact)
-      ? lastUser.created_at
+    lastUserTurn && (!row.last_contact || lastUserTurn.created_at > row.last_contact)
+      ? lastUserTurn.created_at
       : row.last_contact;
-  await rel.saveRelationship(tx, a.userId, {
-    state: t.state,
-    params: t.params,
+
+  await relationshipRepo.saveRelationship(tx, userId, {
+    state: transition.state,
+    params: transition.params,
     cadence,
     last_contact: lastContact,
   });
-  await rel.insertRelationshipEvents(tx, a.userId, t.events, { turnId: lastUser?.id ?? null, now });
+  await relationshipRepo.insertRelationshipEvents(tx, userId, transition.events, {
+    turnId: lastUserTurn?.id ?? null,
+    now,
+  });
+}
+
+async function currentCadence(
+  tx: Db,
+  userId: string,
+  now: Date,
+  msgs24h: number,
+  deps: Pick<Deps, "config">,
+): Promise<relationshipRepo.Cadence> {
+  const settings = deps.config.relationship;
+  const rawZone = await getTimezone(tx, userId);
+  const zone = rawZone && isValidTimeZone(rawZone) ? rawZone : "UTC";
+  const since = new Date(now.getTime() - settings.history_days * DAY);
+
+  return buildCadence(
+    {
+      msgs24h,
+      msgs7d: await relationshipRepo.countUserTurnsBetween(
+        tx,
+        userId,
+        new Date(now.getTime() - WEEK),
+        now,
+      ),
+      starts: await relationshipRepo.userSessionStarts(
+        tx,
+        userId,
+        settings.cadence_sessions + 1,
+        since,
+      ),
+      activeHours: await relationshipRepo.userActiveHours(tx, userId, zone, since),
+    },
+    settings,
+  );
 }

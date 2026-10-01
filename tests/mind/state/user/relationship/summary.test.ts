@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { parseSummaryPhrases, summaryLines } from "@/mind/state/user/relationship/summary";
-import type { Params, RelState } from "@/mind/state/user/relationship/types";
+import type { Params, RelationshipState } from "@/mind/state/user/relationship/types";
 
 const cfg = loadConfig().relationship;
 const phrases = parseSummaryPhrases(loadPrompt("relationship/summary", "v1"));
@@ -19,7 +19,7 @@ const init = (): Params =>
       },
     ]),
   ) as Params;
-const fresh = (): RelState => ({
+const fresh = (): RelationshipState => ({
   status: "active",
   end_pending_since: null,
   ended_at: null,

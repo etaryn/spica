@@ -1,6 +1,10 @@
+/**
+ * Relationship signals: what extraction read from how the user treated her in one exchange.
+ * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair.
+ */
 import { z } from "zod";
 
-/** The extraction's relationship block. No numeric bounds (unsupported by structured outputs). */
+/** The extraction's relationship block. No numeric bounds (structured outputs don't support them). */
 export const RelationshipSignalsSchema = z.object({
   warmth: z.number(),
   trust: z.number(),
@@ -12,6 +16,7 @@ export const RelationshipSignalsSchema = z.object({
   retracts_ending: z.boolean(),
   wants_repair: z.boolean(),
 });
+
 export type Signals = {
   warmth: number;
   trust: number;
@@ -24,33 +29,43 @@ export type Signals = {
   wants_repair: boolean;
 };
 
-const clamp = (x: number, lo: number, hi: number) =>
-  Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : 0;
+/** Clamps into [low, high]; anything not finite becomes 0 (no signal). */
+function clamp(value: number, low: number, high: number): number {
+  return Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : 0;
+}
 
+/** Tidies the cause into a phrase that reads inside "Spica felt hurt because …". */
+function tidyCause(cause: string): string {
+  return cause
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[.\s]+$/, "");
+}
+
+/** Anything that doesn't validate becomes null, so a bad block never fails the memory write. */
 export function normalizeSignals(raw: unknown): Signals | null {
   if (raw === null || raw === undefined) return null;
-  const r = RelationshipSignalsSchema.safeParse(raw);
-  if (!r.success) return null;
-  const s = r.data;
-  const cause =
-    s.hurt?.cause
-      .trim()
-      .replace(/\s+/g, " ")
-      .replace(/[.\s]+$/, "") ?? "";
+
+  const parsed = RelationshipSignalsSchema.safeParse(raw);
+  if (!parsed.success) return null;
+
+  const signals = parsed.data;
+  const cause = signals.hurt ? tidyCause(signals.hurt.cause) : "";
+
   return {
-    warmth: clamp(s.warmth, -1, 1),
-    trust: clamp(s.trust, -1, 1),
-    tension: clamp(s.tension, -1, 1),
-    hurt: s.hurt && cause ? { amount: clamp(s.hurt.amount, 0, 1), cause } : null,
-    apology: s.apology,
-    make_up: s.make_up,
-    ends_relationship: s.ends_relationship,
-    retracts_ending: s.retracts_ending,
-    wants_repair: s.wants_repair,
+    warmth: clamp(signals.warmth, -1, 1),
+    trust: clamp(signals.trust, -1, 1),
+    tension: clamp(signals.tension, -1, 1),
+    hurt: signals.hurt && cause ? { amount: clamp(signals.hurt.amount, 0, 1), cause } : null,
+    apology: signals.apology,
+    make_up: signals.make_up,
+    ends_relationship: signals.ends_relationship,
+    retracts_ending: signals.retracts_ending,
+    wants_repair: signals.wants_repair,
   };
 }
 
-/** The `feeling` fact that holds why she's hurt (the reason lives in the fact store, not the relationship row). */
+/** Why she's hurt lives in memory as a `feeling` fact, not on the relationship row. */
 export function hurtFactContent(cause: string): string {
   return `Spica felt hurt because ${cause}.`;
 }

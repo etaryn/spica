@@ -1,4 +1,10 @@
-import * as rel from "@/db/repos/relationship";
+/**
+ * The relationship's daily tick, run per user: hurt and tension fade, absence pulls closeness
+ * down, baselines learn from yesterday, and a pending ending or repair settles. The job runs
+ * hourly, and each user ticks once per local date, on the first run at or after
+ * `tick_local_hour` in their own zone (DST included).
+ */
+import * as relationshipRepo from "@/db/repos/relationship";
 import { getTimezone } from "@/db/repos/users";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
@@ -8,68 +14,84 @@ import {
   localHour,
   previousLocalDate,
 } from "@/mind/platform/timezone";
-import { applyTick } from "./transitions";
+import { relationshipAfterDailyTick } from "./transitions";
 
 const DAY = 86_400_000;
 
-/** Not yet due for `localDate`'s tick: before `tick_local_hour` local, or already ticked today or later. */
-const notDue = (lastTick: string | null, localDate: string) =>
-  lastTick !== null && lastTick >= localDate;
+/** Already ticked on `localDate` or later. */
+function alreadyTicked(lastTick: string | null, localDate: string): boolean {
+  return lastTick !== null && lastTick >= localDate;
+}
 
 /**
- * The hourly cron (`relationship.tick_cron`) calls this once per user per run; it ticks a user only on the
- * first run at or after `tick_local_hour` local on a local date they haven't ticked yet, so
- * every local date gets exactly one tick, DST included. A cheap unlocked pre-check (read, not `for update`)
- * answers "not due" without ever taking the row lock; the semantics of the tick itself (what a tick on
- * local date D samples and processes) are unchanged from the daily-cron version.
+ * A cheap unlocked read answers "not due" without taking the row lock; the check is repeated
+ * under the lock, because a concurrent run may have just ticked this user.
  */
 export async function tickUser(
   deps: Pick<Deps, "db" | "config">,
   userId: string,
   now: Date,
 ): Promise<void> {
-  const cfg = deps.config.relationship;
-  const tzRaw = await getTimezone(deps.db, userId);
-  const tz = tzRaw && isValidTimeZone(tzRaw) ? tzRaw : "UTC";
-  if (localHour(now, tz) < cfg.tick_local_hour) return;
-  const localDate = localDateString(now, tz);
-  const pre = await rel.getRelationshipRow(deps.db, userId);
-  if (!pre || notDue(pre.last_tick, localDate)) return;
+  const settings = deps.config.relationship;
+  const rawZone = await getTimezone(deps.db, userId);
+  const zone = rawZone && isValidTimeZone(rawZone) ? rawZone : "UTC";
+
+  if (localHour(now, zone) < settings.tick_local_hour) return;
+  const localDate = localDateString(now, zone);
+
+  const unlocked = await relationshipRepo.getRelationshipRow(deps.db, userId);
+  if (!unlocked || alreadyTicked(unlocked.last_tick, localDate)) return;
+
   await deps.db.transaction(async (tx) => {
-    const row = await rel.lockRelationship(tx, userId);
-    if (notDue(row.last_tick, localDate)) return; // re-checked under the lock: a concurrent run may have just ticked it
-    const params = await rel.getParams(tx, userId);
-    const cadence = row.cadence as Partial<rel.Cadence>;
-    const t = applyTick(
-      rel.toRelState(row),
+    const row = await relationshipRepo.lockRelationship(tx, userId);
+    if (alreadyTicked(row.last_tick, localDate)) return;
+
+    const params = await relationshipRepo.getParams(tx, userId);
+    const cadence = row.cadence as Partial<relationshipRepo.Cadence>;
+
+    const transition = relationshipAfterDailyTick(
+      relationshipRepo.toRelationshipState(row),
       params,
       {
         now,
         localDate,
-        yesterdayCount: await rel.countUserTurnsOnLocalDate(
+        yesterdayCount: await relationshipRepo.countUserTurnsOnLocalDate(
           tx,
           userId,
           previousLocalDate(localDate),
-          tz,
+          zone,
         ),
-        msgs24h: await rel.countUserTurnsBetween(tx, userId, new Date(now.getTime() - DAY), now),
+        msgs24h: await relationshipRepo.countUserTurnsBetween(
+          tx,
+          userId,
+          new Date(now.getTime() - DAY),
+          now,
+        ),
         lastContact: row.last_contact,
-        medianGapHours: cadence.median_gap_hours ?? cfg.default_median_gap_hours,
+        medianGapHours: cadence.median_gap_hours ?? settings.default_median_gap_hours,
       },
-      cfg,
+      settings,
     );
-    await rel.saveRelationship(tx, userId, { state: t.state, params: t.params });
-    await rel.insertRelationshipEvents(tx, userId, t.events, { turnId: null, now });
+
+    await relationshipRepo.saveRelationship(tx, userId, {
+      state: transition.state,
+      params: transition.params,
+    });
+    await relationshipRepo.insertRelationshipEvents(tx, userId, transition.events, {
+      turnId: null,
+      now,
+    });
   });
 }
 
-/** Daily tick over every user; per-user isolation, never retried. */
-export async function relationshipTick(
+/** Every user, each isolated so one failure doesn't stop the rest. Never retried. */
+export async function relationshipDailyTick(
   deps: Pick<Deps, "db" | "config" | "log">,
   now: Date,
 ): Promise<{ users: number; failed: number }> {
-  const users = await rel.adminListRelationshipUsers(deps.db);
+  const users = await relationshipRepo.adminListRelationshipUsers(deps.db);
   let failed = 0;
+
   for (const userId of users) {
     try {
       await tickUser(deps, userId, now);
@@ -78,6 +100,7 @@ export async function relationshipTick(
       deps.log.error("relationship tick failed", { userId, error: errorName(e) });
     }
   }
+
   deps.log.info("relationship tick", { users: users.length, failed });
   return { users: users.length, failed };
 }

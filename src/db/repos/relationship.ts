@@ -3,9 +3,9 @@ import {
   PARAM_NAMES,
   type Params,
   type ParamName,
-  type RelConfig,
-  type RelEvent,
-  type RelState,
+  type RelationshipConfig,
+  type RelationshipEvent,
+  type RelationshipState,
 } from "@/mind/state/user/relationship/types";
 import { localMidnight, nextLocalDate } from "@/mind/platform/timezone";
 import type { Db } from "@/db/client";
@@ -24,7 +24,7 @@ export async function ensureRelationship(
   tx: Db,
   userId: string,
   now: Date,
-  cfg: RelConfig,
+  cfg: RelationshipConfig,
 ): Promise<void> {
   await tx.insert(relationship).values({ user_id: userId, cadence: {} }).onConflictDoNothing();
   await tx
@@ -74,7 +74,7 @@ export async function getParams(db: Db, userId: string): Promise<Params> {
   return out as Params;
 }
 
-export function toRelState(r: RelationshipRow): RelState {
+export function toRelationshipState(r: RelationshipRow): RelationshipState {
   return {
     status: r.status,
     end_pending_since: r.end_pending_since,
@@ -92,7 +92,7 @@ export function toRelState(r: RelationshipRow): RelState {
 export async function saveRelationship(
   tx: Db,
   userId: string,
-  a: { state: RelState; params: Params; cadence?: Cadence; last_contact?: Date | null },
+  a: { state: RelationshipState; params: Params; cadence?: Cadence; last_contact?: Date | null },
 ): Promise<void> {
   await tx
     .update(relationship)
@@ -114,7 +114,7 @@ export async function saveRelationship(
 export async function insertRelationshipEvents(
   tx: Db,
   userId: string,
-  events: RelEvent[],
+  events: RelationshipEvent[],
   a: { turnId: string | null; now: Date },
 ): Promise<void> {
   if (events.length === 0) return;

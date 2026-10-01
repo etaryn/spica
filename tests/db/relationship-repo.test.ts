@@ -32,7 +32,7 @@ test("save + events round-trip, user-scoped", async () => {
     const params = await rel.getParams(tx, a);
     params.hurt = { ...params.hurt, value: 0.4, updated_at: now };
     await rel.saveRelationship(tx, a, {
-      state: { ...rel.toRelState(row), make_up_state: "due" },
+      state: { ...rel.toRelationshipState(row), make_up_state: "due" },
       params,
     });
     await rel.insertRelationshipEvents(

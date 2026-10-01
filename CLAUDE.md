@@ -235,7 +235,8 @@ only); backchannel style global `judge`; shared day plan; reach-out caps
   no `process.env`; use injected `Deps`), organised by engine: `memory/`,
   `state/`, `world/`, `process/`, plus `platform/` (LLM, embedder, clock,
   config, jobs). Each engine splits into `core/` and `user/`; ESLint stops
-  core and world code importing user code. `src/db` schema + repos in
+  core, world and shared code importing user,
+  process or admin-repo code. `src/db` schema + repos in
   `user/` (`userId`-first), `world/`, `admin/` (cross-user); `src/runtime`
   Node implementations; `src/server` Next server helpers; `src/app`
   Next.js; `src/worker` pg-boss, one file per engine; `prompts/`; `evals/`.

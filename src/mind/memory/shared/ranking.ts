@@ -2,11 +2,21 @@
  * Memory ranking: scores each candidate memory by similarity × weight × entity weight × recency
  * and keeps the best few. Pure maths with no data access, so both minds can share it.
  */
-import type { CandidateFact } from "@/db/repos/user/facts";
-
 const DAY_MS = 86_400_000;
 
-export type Scored = CandidateFact & { recency: number; score: number };
+/** What ranking needs from a candidate memory, from either mind. */
+export type RankableMemory = {
+  sim: number;
+  salience: number;
+  entity_salience: number;
+  created_at: Date;
+  last_recalled_at: Date | null;
+};
+
+export type Scored<M extends RankableMemory = RankableMemory> = M & {
+  recency: number;
+  score: number;
+};
 
 /** Halves every `halfLifeDays`; never above 1, even for a memory dated in the future. */
 export function recencyFactor(ageDays: number, halfLifeDays: number): number {
@@ -17,12 +27,12 @@ export function recencyFactor(ageDays: number, halfLifeDays: number): number {
  * score = similarity × salience × entity salience × recency. Recency counts from the later of
  * when the memory was made and when it was last recalled, so recalling a memory keeps it fresh.
  */
-export function rankMemories(
-  candidates: CandidateFact[],
+export function rankMemories<M extends RankableMemory>(
+  candidates: M[],
   now: Date,
   settings: { top_n: number; recency_half_life_days: number },
-): Scored[] {
-  const scored = candidates.map((candidate) => {
+): Scored<M>[] {
+  const scored = candidates.map((candidate): Scored<M> => {
     const lastTouched = Math.max(
       candidate.created_at.getTime(),
       candidate.last_recalled_at?.getTime() ?? 0,

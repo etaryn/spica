@@ -4,7 +4,12 @@
  * preoccupation. Read-only, and it never throws: a failure degrades to whatever could still be
  * found, so a memory problem never costs the user their reply.
  */
-import { candidateFacts, getFact, getPreoccupationFact } from "@/db/repos/user/facts";
+import {
+  candidateFacts,
+  getFact,
+  getPreoccupationFact,
+  type CandidateFact,
+} from "@/db/repos/user/facts";
 import type { Turn } from "@/db/repos/user/session-log";
 import { dueThreads } from "@/db/repos/user/threads";
 import { rankMemories, type Scored } from "@/mind/memory/shared/ranking";
@@ -72,7 +77,7 @@ async function rankAgainstConversation(
   deps: RetrieveDeps,
   userId: string,
   input: RetrieveInput,
-): Promise<Scored[]> {
+): Promise<Scored<CandidateFact>[]> {
   const { db, embedder, config, log } = deps;
 
   try {
@@ -102,7 +107,11 @@ async function rankAgainstConversation(
   }
 }
 
-function addRanked(result: RetrievalResult, seen: Set<string>, ranked: Scored[]): void {
+function addRanked(
+  result: RetrievalResult,
+  seen: Set<string>,
+  ranked: Scored<CandidateFact>[],
+): void {
   for (const memory of ranked) {
     seen.add(memory.id);
     result.facts[memory.subject].push({

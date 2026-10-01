@@ -1,6 +1,7 @@
 /**
  * The one-way flow is enforced by ESLint. These cases prove the rule fires for core and world
- * code, and that the per-user legacy folders are exempt until they are deleted.
+ * code (and the shared code both minds use), however the import is written, and that the per-user
+ * legacy folders are exempt until they are deleted.
  */
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
@@ -10,7 +11,7 @@ const importsUserRepo = 'import { insertFact } from "@/db/repos/user/facts";\nvo
 const importsUserMemory =
   'import { retrieve } from "@/mind/memory/user/retrieve";\nvoid retrieve;\n';
 
-const BOUNDARY = "Core and world code never reads user data";
+const BOUNDARY = "Core, world and shared code never read user data";
 
 async function errorsFor(code: string, filePath: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath });
@@ -40,5 +41,31 @@ describe("one-way flow", () => {
   it("exempts the legacy per-user folders", async () => {
     const errors = await errorsFor(importsUserRepo, "src/mind/world/legacy-life-tick/tick.ts");
     expect(hitsBoundary(errors)).toBe(false);
+  });
+
+  it("stops a relative import of user code", async () => {
+    const code =
+      'import type { Params } from "../user/relationship/types";\nexport type X = Params;\n';
+    const errors = await errorsFor(code, "src/mind/state/core/mood.ts");
+    expect(hitsBoundary(errors)).toBe(true);
+  });
+
+  it("stops core and world code using the cross-user admin repos", async () => {
+    const code =
+      'import { adminListLifeUsers } from "@/db/repos/admin/life";\nvoid adminListLifeUsers;\n';
+    const errors = await errorsFor(code, "src/mind/world/day-plan.ts");
+    expect(hitsBoundary(errors)).toBe(true);
+  });
+
+  it("stops world code importing process code, which reads user data", async () => {
+    const code =
+      'import { composeReply } from "@/mind/process/hot-path/compose";\nvoid composeReply;\n';
+    const errors = await errorsFor(code, "src/mind/world/day-plan.ts");
+    expect(hitsBoundary(errors)).toBe(true);
+  });
+
+  it("stops shared code, which both minds use, importing a user repo", async () => {
+    const errors = await errorsFor(importsUserRepo, "src/mind/memory/shared/ranking.ts");
+    expect(hitsBoundary(errors)).toBe(true);
   });
 });

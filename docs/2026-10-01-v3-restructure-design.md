@@ -76,8 +76,10 @@ The rest of `src/`:
 
 **One-way import rule** (ESLint `no-restricted-imports`, or an equivalent
 boundary rule):
-- nothing under a `core/` folder, and nothing in `world/`, imports a
-  `user/` folder or `src/db/repos/user/`
+- nothing under a `core/` or `shared/` folder, and nothing in `world/`,
+  imports a `user/` folder, `process/`, `src/db/repos/user/` or
+  `src/db/repos/admin/`, whether by `@/` or relative path (hardened after
+  the final review found these gaps)
 - `legacy-ego/` and `legacy-life-tick/` are exempt by name, because they are
   per-user by design and Phase 7 deletes them. The exemption goes with them.
 

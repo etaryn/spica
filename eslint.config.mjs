@@ -61,8 +61,10 @@ export default tseslint.config(
     rules: { "no-restricted-properties": "off", "no-restricted-syntax": "off" },
   },
   {
-    // One-way flow: her core self and her world never read a user's data.
-    files: ["src/mind/*/core/**/*.ts", "src/mind/world/**/*.ts"],
+    // One-way flow: her core self, her world and the code both minds share never read a user's
+    // data. Process code reads user data, and the admin repos are cross-user, so both are off
+    // limits too. Relative paths are matched as well as `@/` ones.
+    files: ["src/mind/*/core/**/*.ts", "src/mind/*/shared/**/*.ts", "src/mind/world/**/*.ts"],
     ignores: legacy,
     rules: {
       "no-restricted-imports": [
@@ -74,8 +76,19 @@ export default tseslint.config(
               message: "src/mind must stay framework-free.",
             },
             {
-              group: ["@/mind/*/user", "@/mind/*/user/*", "@/mind/*/user/**", "@/db/repos/user/*"],
-              message: "Core and world code never reads user data.",
+              group: [
+                "@/mind/*/user",
+                "@/mind/*/user/**",
+                "@/mind/process",
+                "@/mind/process/**",
+                "@/db/repos/user/**",
+                "@/db/repos/admin/**",
+                "**/user",
+                "**/user/**",
+                "**/process/**",
+                "**/repos/admin/**",
+              ],
+              message: "Core, world and shared code never read user data.",
             },
           ],
         },

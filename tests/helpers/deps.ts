@@ -1,12 +1,12 @@
-import { SimClock } from "@/core/clock";
-import { loadConfig } from "@/core/config";
-import type { Deps } from "@/core/deps";
-import { FakeEmbedder } from "@/core/embed/fake";
-import { RecordingEventBus } from "@/core/events";
-import { FakeLLMProvider } from "@/core/llm/fake";
-import { silentLogger } from "@/core/log";
-import { RecordingPusher } from "@/core/push";
-import { RecordingQueue } from "@/core/queue";
+import { SimClock } from "@/mind/platform/clock";
+import { loadConfig } from "@/mind/platform/config";
+import type { Deps } from "@/mind/platform/deps";
+import { FakeEmbedder } from "@/mind/platform/embedder/fake";
+import { RecordingEventBus } from "@/mind/platform/events";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
+import { silentLogger } from "@/mind/platform/log";
+import { RecordingPusher } from "@/mind/platform/push";
+import { RecordingQueue } from "@/mind/platform/jobs";
 import { getTestDb } from "./db";
 
 export function makeTestDeps(configOverrides: unknown = {}) {

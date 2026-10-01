@@ -1,7 +1,7 @@
 import webpush from "web-push";
-import type { Pusher, PushMessage } from "@/core/push";
-import type { Logger } from "@/core/log";
-import { errorName } from "@/core/errors";
+import type { Pusher, PushMessage } from "@/mind/platform/push";
+import type { Logger } from "@/mind/platform/log";
+import { errorName } from "@/mind/platform/errors";
 import type { Db } from "@/db/client";
 import { deletePushSubscription, listPushSubscriptions } from "@/db/repos/push";
 

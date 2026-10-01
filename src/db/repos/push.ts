@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
-import type { Db } from "../client";
-import { push_subscription } from "../schema";
+import type { Db } from "@/db/client";
+import { push_subscription } from "@/db/schema";
 
 export type PushSubscriptionRow = typeof push_subscription.$inferSelect;
 export type PushKeys = { endpoint: string; p256dh: string; auth: string };

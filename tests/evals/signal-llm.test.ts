@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { z } from "zod";
-import { FakeLLMProvider } from "@/core/llm/fake";
-import { ExtractionSchema } from "@/core/memory/extract";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
+import { ExtractionSchema } from "@/mind/memory/user/extract";
 import { SignalLLM } from "../../evals/lib/signal-llm";
 
 const req = (input: string) => ({

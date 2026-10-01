@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { Deps } from "@/core/deps";
-import { ConflictError, InputError, ReplyFailedError } from "@/core/errors";
-import { receiveMessage } from "@/core/turn/receive-message";
+import type { Deps } from "@/mind/platform/deps";
+import { ConflictError, InputError, ReplyFailedError } from "@/mind/platform/errors";
+import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 
 const Body = z.object({
   clientMessageId: z.uuid(),

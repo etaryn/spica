@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { FakeLLMProvider } from "@/core/llm/fake";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { RecordingLLM } from "../../evals/lib/recording-llm";
 
 test("records the system prompt and user messages, not Spica's own earlier replies", async () => {

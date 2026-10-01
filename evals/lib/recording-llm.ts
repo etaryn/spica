@@ -1,4 +1,4 @@
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
+import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/mind/platform/llm/types";
 
 /**
  * Records every reply prompt (system + user messages) so evals can check what each user's model saw.

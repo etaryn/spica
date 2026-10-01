@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
-import { FakeLLMProvider, keywordClassifier } from "@/core/llm/fake";
-import { messageToJudge } from "@/core/safety/crisis";
+import { loadConfig } from "@/mind/platform/config";
+import { FakeLLMProvider, keywordClassifier } from "@/mind/platform/llm/fake";
+import { messageToJudge } from "@/mind/process/crisis/classifier";
 import { runScript, type RunOptions } from "../../evals/lib/runner";
 import { ScriptSchema } from "../../evals/lib/script";
 import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";

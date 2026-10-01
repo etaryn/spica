@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Deps } from "@/core/deps";
+import type { Deps } from "@/mind/platform/deps";
 import { deletePushSubscription, upsertPushSubscription } from "@/db/repos/push";
 
 const Sub = z.object({

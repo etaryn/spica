@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { ChatEvent, EventBus } from "@/core/events";
+import type { ChatEvent, EventBus } from "@/mind/platform/events";
 import type { Db } from "@/db/client";
 
 /** NOTIFY on the shared channel; every web process's EventHub routes by userId. */

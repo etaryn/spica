@@ -1,5 +1,5 @@
-import type { Signals } from "@/core/relationship/signals";
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
+import type { Signals } from "@/mind/state/user/relationship/signals";
+import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/mind/platform/llm/types";
 
 const NONE: Signals = {
   warmth: 0,

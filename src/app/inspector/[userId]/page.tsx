@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { adminGetUser } from "@/db/repos/users";
-import { getDeps } from "@/lib/deps";
-import { parseUserIdParam } from "@/lib/inspector-access";
-import { assertInspectorAccess } from "@/lib/inspector-guard";
+import { getDeps } from "@/server/deps";
+import { parseUserIdParam } from "@/server/inspector-access";
+import { assertInspectorAccess } from "@/server/inspector-guard";
 import styles from "../inspector.module.css";
 import {
   EntitiesThreadsTab,

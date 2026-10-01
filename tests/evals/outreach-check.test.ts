@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
+import { loadConfig } from "@/mind/platform/config";
 import {
   checkReachOut,
   gateViolations,

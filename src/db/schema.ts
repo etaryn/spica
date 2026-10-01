@@ -17,7 +17,7 @@ import {
   uuid,
   vector,
 } from "drizzle-orm/pg-core";
-import { EMBEDDING_DIMENSIONS } from "../core/config";
+import { EMBEDDING_DIMENSIONS } from "@/mind/platform/config";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const emptyUuidArray = sql`'{}'::uuid[]`;

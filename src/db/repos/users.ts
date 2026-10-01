@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, ne, or } from "drizzle-orm";
-import type { Db } from "../client";
-import { user } from "../schema";
+import type { Db } from "@/db/client";
+import { user } from "@/db/schema";
 
 /** Full account deletion: every domain table cascades from the user row. */
 export async function deleteUser(db: Db, userId: string): Promise<void> {

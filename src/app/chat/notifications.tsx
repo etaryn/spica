@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { pushOptedOut, pushSupported, registerSw, subscribePush } from "../push-client";
+import { pushOptedOut, pushSupported, registerSw, subscribePush } from "@/app/push-client";
 import styles from "./chat.module.css";
 
 const DISMISSED = "spica.notifications.dismissed";

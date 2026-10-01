@@ -1,11 +1,11 @@
-import { effect, fadeParams } from "@/core/relationship/homeostasis";
+import { effect, fadeParams } from "@/mind/state/user/relationship/params";
 import {
   PARAM_NAMES,
   type ParamName,
   type Params,
   type RelConfig,
   type RelState,
-} from "@/core/relationship/types";
+} from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
 import * as rel from "@/db/repos/relationship";
 import type { RelationshipAssertion } from "./script";

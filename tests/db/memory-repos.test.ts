@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { ScriptedEmbedder } from "@/core/embed/scripted";
+import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { findEntityByName, upsertEntityMention } from "@/db/repos/entities";
 import * as facts from "@/db/repos/facts";
 import * as threads from "@/db/repos/threads";

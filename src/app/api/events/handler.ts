@@ -1,8 +1,8 @@
-import { splitParts } from "@/core/chat/parts";
-import type { Deps } from "@/core/deps";
-import { errorName } from "@/core/errors";
-import type { ChatEvent } from "@/core/events";
-import { crisisCardFor } from "@/core/safety/crisis";
+import { splitParts } from "@/mind/process/hot-path/split-parts";
+import type { Deps } from "@/mind/platform/deps";
+import { errorName } from "@/mind/platform/errors";
+import type { ChatEvent } from "@/mind/platform/events";
+import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { getTurn } from "@/db/repos/session-log";
 
 type Send = (event: string, data: unknown) => void;

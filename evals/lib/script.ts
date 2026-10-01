@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { KIND_ORDER } from "@/core/outreach/types";
-import { PARAM_NAMES } from "@/core/relationship/types";
+import { KIND_ORDER } from "@/mind/process/outreach/types";
+import { PARAM_NAMES } from "@/mind/state/user/relationship/types";
 import { guardOutcome, makeUpState, relationshipCause, relationshipStatus } from "@/db/schema";
 
 /** A partial `Signals`: the fake extractor's `relationship` block for a scripted turn. */

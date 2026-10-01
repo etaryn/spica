@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
-import { FakeLLMProvider } from "@/core/llm/fake";
+import { loadConfig } from "@/mind/platform/config";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import {
   gradeConsistency,
   gradeFalseRecall,

@@ -6,10 +6,10 @@ import {
   type RelConfig,
   type RelEvent,
   type RelState,
-} from "@/core/relationship/types";
-import { localMidnight, nextLocalDate } from "@/core/timezone";
-import type { Db } from "../client";
-import { relationship, relationship_event, relationship_param, session_log } from "../schema";
+} from "@/mind/state/user/relationship/types";
+import { localMidnight, nextLocalDate } from "@/mind/platform/timezone";
+import type { Db } from "@/db/client";
+import { relationship, relationship_event, relationship_param, session_log } from "@/db/schema";
 
 export type RelationshipRow = typeof relationship.$inferSelect;
 export type RelationshipEventRow = typeof relationship_event.$inferSelect;

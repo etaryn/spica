@@ -1,8 +1,8 @@
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { effect, fadeParams } from "@/core/relationship/homeostasis";
-import { PARAM_NAMES, type RelConfig } from "@/core/relationship/types";
-import type { Db } from "../client";
+import { effect, fadeParams } from "@/mind/state/user/relationship/params";
+import { PARAM_NAMES, type RelConfig } from "@/mind/state/user/relationship/types";
+import type { Db } from "@/db/client";
 import {
   conversation_state,
   ego_tick,
@@ -14,7 +14,7 @@ import {
   reach_out_log,
   retrieval_trace,
   thread,
-} from "../schema";
+} from "@/db/schema";
 import { getLifeDay } from "./life-day";
 import { listLifeEventLogs } from "./life-event-log";
 import { getParams, getRelationshipRow, listRelationshipEvents } from "./relationship";

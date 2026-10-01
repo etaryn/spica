@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
-import type { Db } from "../client";
-import { conversation_state } from "../schema";
+import type { Db } from "@/db/client";
+import { conversation_state } from "@/db/schema";
 
 export type ConvState = typeof conversation_state.$inferSelect;
 export type StatePatch = Partial<Omit<ConvState, "user_id">>;

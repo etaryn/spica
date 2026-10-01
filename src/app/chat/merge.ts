@@ -1,5 +1,5 @@
 import type { HistoryMessage } from "@/app/api/chat/history/handler";
-import type { CrisisCard } from "@/core/config";
+import type { CrisisCard } from "@/mind/platform/config";
 
 export type UiMessage = {
   id: string;

@@ -1,4 +1,4 @@
-import { assertInspectorAccess } from "@/lib/inspector-guard";
+import { assertInspectorAccess } from "@/server/inspector-guard";
 import styles from "./inspector.module.css";
 
 export default async function InspectorLayout({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
+import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/mind/platform/llm/types";
 
 /**
  * Exit profiles: a call goes to the real provider only when its purpose is listed, so an

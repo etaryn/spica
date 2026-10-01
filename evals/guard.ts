@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
-import { systemClock } from "@/core/clock";
-import { loadConfig, parseConfigOverrides } from "@/core/config";
-import { checkMessage } from "@/core/guard/guard";
-import { AnthropicProvider } from "@/core/llm/anthropic";
+import { systemClock } from "@/mind/platform/clock";
+import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
+import { checkMessage } from "@/mind/process/guard/guard";
+import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { UsageTally } from "./lib/usage";
 import {
   caseResult,

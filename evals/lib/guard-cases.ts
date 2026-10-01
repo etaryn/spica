@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { CATEGORIES, hasSafety } from "@/core/guard/categories";
-import type { GuardInput, GuardVerdict } from "@/core/guard/guard";
+import { CATEGORIES, hasSafety } from "@/mind/process/guard/categories";
+import type { GuardInput, GuardVerdict } from "@/mind/process/guard/guard";
 
 const Turn = z.object({ role: z.enum(["user", "companion"]), text: z.string().min(1) });
 

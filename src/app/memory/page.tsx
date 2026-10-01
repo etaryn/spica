@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listRememberedFacts } from "@/db/repos/facts";
-import { getDeps } from "@/lib/deps";
-import { requireUser } from "@/lib/session";
+import { getDeps } from "@/server/deps";
+import { requireUser } from "@/server/session";
 import { ForgetButton } from "./forget-button";
 import styles from "./memory.module.css";
 

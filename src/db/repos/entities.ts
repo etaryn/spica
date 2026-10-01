@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import type { Db } from "../client";
-import { entity, entityType } from "../schema";
+import type { Db } from "@/db/client";
+import { entity, entityType } from "@/db/schema";
 import { one } from "./util";
 
 export type EntityRow = typeof entity.$inferSelect;

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { getDeps, getVapidPublicKey } from "@/lib/deps";
-import { requireUser } from "@/lib/session";
+import { getDeps, getVapidPublicKey } from "@/server/deps";
+import { requireUser } from "@/server/session";
 import { deleteAccountAction } from "./actions";
 import { NotificationsSwitch } from "./notifications-switch";
 import { SignOutButton } from "./sign-out-button";

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { Config } from "@/core/config";
-import type { LLMProvider } from "@/core/llm/types";
-import { loadPrompt } from "@/core/prompts";
+import type { Config } from "@/mind/platform/config";
+import type { LLMProvider } from "@/mind/platform/llm/types";
+import { loadPrompt } from "@/mind/platform/prompts";
 
 export type Line = { role: "user" | "companion"; text: string };
 const render = (lines: Line[]) =>

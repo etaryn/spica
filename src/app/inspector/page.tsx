@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { adminListUsers } from "@/db/repos/users";
-import { getDeps } from "@/lib/deps";
-import { assertInspectorAccess } from "@/lib/inspector-guard";
+import { getDeps } from "@/server/deps";
+import { assertInspectorAccess } from "@/server/inspector-guard";
 import styles from "./inspector.module.css";
 
 export default async function InspectorHome() {

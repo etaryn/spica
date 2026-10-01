@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
-import type { Db } from "../client";
-import { reach_out_log } from "../schema";
+import type { Db } from "@/db/client";
+import { reach_out_log } from "@/db/schema";
 import { one } from "./util";
 
 export type ReachOutRow = typeof reach_out_log.$inferSelect;

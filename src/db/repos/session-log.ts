@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
-import type { Db } from "../client";
-import { session_log } from "../schema";
+import type { Db } from "@/db/client";
+import { session_log } from "@/db/schema";
 import { one, toDateOrNull } from "./util";
 
 export type Turn = typeof session_log.$inferSelect;

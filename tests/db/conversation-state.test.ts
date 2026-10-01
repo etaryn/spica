@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
-import { mutateState } from "@/core/turn/state";
-import * as T from "@/core/turn/transitions";
+import { loadConfig } from "@/mind/platform/config";
+import { mutateState } from "@/mind/process/turn-taking/state";
+import * as T from "@/mind/process/turn-taking/transitions";
 import { adminFindStuckConversations, getState } from "@/db/repos/conversation-state";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 

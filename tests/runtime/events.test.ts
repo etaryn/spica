@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { afterAll, expect, test, vi } from "vitest";
-import { emit, RecordingEventBus, type ChatEvent } from "@/core/events";
-import { silentLogger } from "@/core/log";
+import { emit, RecordingEventBus, type ChatEvent } from "@/mind/platform/events";
+import { silentLogger } from "@/mind/platform/log";
 import { EventHub } from "@/runtime/event-hub";
 import { PgEventBus } from "@/runtime/pg-event-bus";
 import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";

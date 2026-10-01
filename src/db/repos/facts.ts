@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { RecalledFact } from "@/core/memory/types";
-import type { Db } from "../client";
-import { fact, factStatus, identity, retrieval_trace, thread } from "../schema";
+import type { RecalledFact } from "@/mind/memory/shared/types";
+import type { Db } from "@/db/client";
+import { fact, factStatus, identity, retrieval_trace, thread } from "@/db/schema";
 import { one, toDate, toDateOrNull } from "./util";
 
 export type FactRow = typeof fact.$inferSelect;

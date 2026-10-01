@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { splitParts } from "@/core/chat/parts";
-import type { Config, CrisisCard } from "@/core/config";
-import type { Deps } from "@/core/deps";
-import { crisisCardFor } from "@/core/safety/crisis";
+import { splitParts } from "@/mind/process/hot-path/split-parts";
+import type { Config, CrisisCard } from "@/mind/platform/config";
+import type { Deps } from "@/mind/platform/deps";
+import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { recentTurns, turnsAfter, type Turn } from "@/db/repos/session-log";
 
 export type HistoryMessage = {

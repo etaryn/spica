@@ -1,5 +1,7 @@
 import tseslint from "typescript-eslint";
 
+const legacy = ["src/mind/state/legacy-ego/**", "src/mind/world/legacy-life-tick/**"];
+
 export default tseslint.config(
   {
     ignores: [
@@ -21,15 +23,17 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/core/**/*.ts"],
+    // The mind runs the same in the app, the worker and the evals, so it never touches the
+    // framework, the wall clock or the environment directly.
+    files: ["src/mind/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
             {
-              group: ["next", "next/*", "react", "react-dom", "@/app/*", "@/lib/*"],
-              message: "src/core must stay framework-free.",
+              group: ["next", "next/*", "react", "react-dom", "@/app/*", "@/server/*"],
+              message: "src/mind must stay framework-free.",
             },
           ],
         },
@@ -40,7 +44,7 @@ export default tseslint.config(
         {
           object: "process",
           property: "env",
-          message: "Read env in the app/runtime layer and pass config in.",
+          message: "Read env in the runtime layer and pass config in.",
         },
       ],
       "no-restricted-syntax": [
@@ -53,7 +57,29 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/core/clock.ts"],
+    files: ["src/mind/platform/clock.ts"],
     rules: { "no-restricted-properties": "off", "no-restricted-syntax": "off" },
+  },
+  {
+    // One-way flow: her core self and her world never read a user's data.
+    files: ["src/mind/*/core/**/*.ts", "src/mind/world/**/*.ts"],
+    ignores: legacy,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["next", "next/*", "react", "react-dom", "@/app/*", "@/server/*"],
+              message: "src/mind must stay framework-free.",
+            },
+            {
+              group: ["@/mind/*/user", "@/mind/*/user/*", "@/mind/*/user/**", "@/db/repos/user/*"],
+              message: "Core and world code never reads user data.",
+            },
+          ],
+        },
+      ],
+    },
   },
 );

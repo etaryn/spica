@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseConfigOverrides } from "@/core/config";
+import { parseConfigOverrides } from "@/mind/platform/config";
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),

@@ -1,8 +1,8 @@
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
-import type { GuardVerdict } from "@/core/guard/guard";
-import { matchKeyword } from "@/core/guard/keywords";
+import { loadConfig } from "@/mind/platform/config";
+import type { GuardVerdict } from "@/mind/process/guard/guard";
+import { matchKeyword } from "@/mind/process/guard/keywords";
 import {
   caseResult,
   caseStatus,

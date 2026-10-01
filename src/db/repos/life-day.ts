@@ -1,6 +1,6 @@
 import { desc, eq, lt } from "drizzle-orm";
-import type { Db } from "../client";
-import { life_day } from "../schema";
+import type { Db } from "@/db/client";
+import { life_day } from "@/db/schema";
 
 export type LifeDayRow = typeof life_day.$inferSelect;
 

@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
-import type { Db } from "../client";
-import { ego_tick, identity, relationship } from "../schema";
+import type { Db } from "@/db/client";
+import { ego_tick, identity, relationship } from "@/db/schema";
 
 export type IdentityRow = typeof identity.$inferSelect;
 export type EgoBaseline = { mood_valence: number; mood_arousal: number; energy: number };

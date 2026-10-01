@@ -1,6 +1,6 @@
 import { inArray, sql } from "drizzle-orm";
-import type { Db } from "../client";
-import { session_log } from "../schema";
+import type { Db } from "@/db/client";
+import { session_log } from "@/db/schema";
 
 /** System job, unscoped by design: exchanges whose extraction never completed, with every user turn the reply answered. */
 export async function adminFindUnextractedExchanges(

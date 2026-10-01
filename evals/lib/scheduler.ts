@@ -1,7 +1,7 @@
-import type { SimClock } from "@/core/clock";
-import { handleColdPath } from "@/core/cold-path";
-import type { Deps } from "@/core/deps";
-import { runReachOutSend } from "@/core/outreach/send";
+import type { SimClock } from "@/mind/platform/clock";
+import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import type { Deps } from "@/mind/platform/deps";
+import { runReachOutSend } from "@/mind/process/outreach/send";
 import {
   COLD_PATH_QUEUE,
   REACH_OUT_SEND_QUEUE,
@@ -9,8 +9,8 @@ import {
   TURN_TIMER_QUEUE,
   type QueuedJob,
   type RecordingQueue,
-} from "@/core/queue";
-import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
+} from "@/mind/platform/jobs";
+import { runBackchannel, runTurnTimer } from "@/mind/process/turn-taking/commit-and-reply";
 
 /** Jobs run on simulated time: turn timers, backchannels and reach-out sends. */
 const isTurnJob = (j: QueuedJob) =>

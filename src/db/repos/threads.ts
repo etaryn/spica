@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Db } from "../client";
-import { thread, threadStakes } from "../schema";
+import type { Db } from "@/db/client";
+import { thread, threadStakes } from "@/db/schema";
 import { normalizeName } from "./entities";
 import { one, toDate } from "./util";
 

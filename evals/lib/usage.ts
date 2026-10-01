@@ -1,4 +1,4 @@
-import type { LlmUsage } from "@/core/llm/types";
+import type { LlmUsage } from "@/mind/platform/llm/types";
 
 export type UsageRow = {
   purpose: string;

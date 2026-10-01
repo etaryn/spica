@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
+import { loadConfig } from "@/mind/platform/config";
 import { forgetFact, insertFact } from "@/db/repos/facts";
 import {
   getLifeView,

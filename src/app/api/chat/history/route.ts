@@ -1,5 +1,5 @@
-import { auth } from "@/lib/auth";
-import { getDeps } from "@/lib/deps";
+import { auth } from "@/server/auth";
+import { getDeps } from "@/server/deps";
 import { createHistoryHandler } from "./handler";
 
 export const GET = createHistoryHandler({

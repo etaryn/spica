@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import Anthropic from "@anthropic-ai/sdk";
-import { loadConfig, parseConfigOverrides } from "@/core/config";
-import { AnthropicProvider } from "@/core/llm/anthropic";
+import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
+import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import {
   caseResult,
   findGuardRegressions,

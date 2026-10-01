@@ -1,7 +1,7 @@
 import Link from "next/link";
-import type { LifeConfig } from "@/core/config";
-import { lifeDate } from "@/core/life/clock";
-import type { RelConfig } from "@/core/relationship/types";
+import type { LifeConfig } from "@/mind/platform/config";
+import { lifeDate } from "@/mind/world/her-clock";
+import type { RelConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
 import * as r from "@/db/repos/inspector";
 import { listJudgeLogs } from "@/db/repos/judge-log";

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { loadConfig } from "@/core/config";
+import { loadConfig } from "@/mind/platform/config";
 import * as rel from "@/db/repos/relationship";
 import { insertTurn } from "@/db/repos/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { isSubscribed, pushSupported, subscribePush, unsubscribePush } from "../push-client";
+import { isSubscribed, pushSupported, subscribePush, unsubscribePush } from "@/app/push-client";
 
 export function NotificationsSwitch({ publicKey }: { publicKey: string }) {
   // Both unknown until mounted, so the server render and the first client render match (nothing).

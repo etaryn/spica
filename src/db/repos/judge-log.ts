@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
-import type { Db } from "../client";
-import { guardOutcome, judge_log } from "../schema";
+import type { Db } from "@/db/client";
+import { guardOutcome, judge_log } from "@/db/schema";
 
 export type JudgeLogRow = typeof judge_log.$inferSelect;
 export type NewJudgeLog = Omit<typeof judge_log.$inferInsert, "user_id" | "id">;

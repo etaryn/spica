@@ -1,5 +1,5 @@
 import type { PgBoss } from "pg-boss";
-import type { Logger } from "@/core/log";
+import type { Logger } from "@/mind/platform/log";
 import {
   DECAY_QUEUE,
   EGO_TICK_QUEUE,
@@ -9,9 +9,9 @@ import {
   RELATIONSHIP_TICK_QUEUE,
   SWEEP_QUEUE,
   TURN_SWEEP_QUEUE,
-} from "@/core/queue";
+} from "@/mind/platform/jobs";
 
-import { errorName } from "@/core/errors";
+import { errorName } from "@/mind/platform/errors";
 
 /**
  * Wraps a pg-boss work handler so a failure is logged with ids and the error name only, then

@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import type { Config } from "@/core/config";
-import type { LLMProvider } from "@/core/llm/types";
+import type { Config } from "@/mind/platform/config";
+import type { LLMProvider } from "@/mind/platform/llm/types";
 import type { CaseStatus } from "./guard-cases";
 import {
   FALSE_RECALL_CATEGORIES,

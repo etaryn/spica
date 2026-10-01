@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { z } from "zod";
-import { FakeLLMProvider } from "@/core/llm/fake";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { RoutingLLM } from "../../evals/lib/routing-llm";
 
 test("routes the reply and each structured purpose to real or fake", async () => {

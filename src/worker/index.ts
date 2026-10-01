@@ -1,11 +1,11 @@
-import { handleColdPath } from "@/core/cold-path";
-import { egoTick } from "@/core/ego/tick";
-import { ensurePlans } from "@/core/life/plan";
-import { lifeTick } from "@/core/life/tick";
-import { decayPass } from "@/core/memory/decay";
-import { sweepUnextracted } from "@/core/memory/sweep";
-import { runReachOutSend } from "@/core/outreach/send";
-import { outreachTick } from "@/core/outreach/tick";
+import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import { egoTick } from "@/mind/state/legacy-ego/tick";
+import { ensurePlans } from "@/mind/world/day-plan";
+import { lifeTick } from "@/mind/world/legacy-life-tick/tick";
+import { decayPass } from "@/mind/memory/user/decay";
+import { sweepUnextracted } from "@/mind/process/cold-path/sweep";
+import { runReachOutSend } from "@/mind/process/outreach/send";
+import { outreachTick } from "@/mind/process/outreach/tick";
 import {
   type BackchannelJob,
   COLD_PATH_QUEUE,
@@ -23,11 +23,11 @@ import {
   TURN_SWEEP_QUEUE,
   TURN_TIMER_QUEUE,
   type TurnTimerJob,
-} from "@/core/queue";
-import { relationshipTick } from "@/core/relationship/tick";
-import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
-import { sweepTurns } from "@/core/turn/sweep";
-import { PgBossQueue } from "@/queue/pg-boss-queue";
+} from "@/mind/platform/jobs";
+import { relationshipTick } from "@/mind/state/user/relationship/daily-tick";
+import { runBackchannel, runTurnTimer } from "@/mind/process/turn-taking/commit-and-reply";
+import { sweepTurns } from "@/mind/process/turn-taking/sweep";
+import { PgBossQueue } from "@/runtime/pg-boss-jobs";
 import { buildRuntime } from "@/runtime/deps";
 import { readEnv } from "@/runtime/env";
 import { ensureSystemQueues, scrubErrors } from "./jobs";

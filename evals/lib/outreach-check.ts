@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
-import type { Config } from "@/core/config";
-import { lifeInstant } from "@/core/life/clock";
-import { HOUR } from "@/core/time";
+import type { Config } from "@/mind/platform/config";
+import { lifeInstant } from "@/mind/world/her-clock";
+import { HOUR } from "@/mind/platform/time";
 import type { Db } from "@/db/client";
 import { life_day, reach_out_log, relationship_event, session_log } from "@/db/schema";
 import { parseAt, type ReachOutAssertion } from "./script";

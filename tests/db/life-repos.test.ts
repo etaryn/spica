@@ -12,7 +12,7 @@ import { ensureRelationship } from "@/db/repos/relationship";
 import { getState, lockState, updateState } from "@/db/repos/conversation-state";
 import { fact } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { loadConfig } from "@/core/config";
+import { loadConfig } from "@/mind/platform/config";
 import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl, vec } from "../helpers/db";
 
 const cfg = loadConfig();

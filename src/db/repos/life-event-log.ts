@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { Db } from "../client";
-import { life_event_log } from "../schema";
+import type { Db } from "@/db/client";
+import { life_event_log } from "@/db/schema";
 
 export type LifeEventLogRow = typeof life_event_log.$inferSelect;
 export type NewLifeEventLog = Omit<typeof life_event_log.$inferInsert, "user_id" | "id">;

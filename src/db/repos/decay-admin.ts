@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Db } from "../client";
+import type { Db } from "@/db/client";
 
 /** System job, unscoped by design: one day of decay across all users. */
 export async function adminDecayFacts(

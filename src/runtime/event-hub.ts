@@ -1,7 +1,7 @@
 import { Client } from "pg";
-import { isChatEvent, type ChatEvent } from "@/core/events";
-import { errorName } from "@/core/errors";
-import type { Logger } from "@/core/log";
+import { isChatEvent, type ChatEvent } from "@/mind/platform/events";
+import { errorName } from "@/mind/platform/errors";
+import type { Logger } from "@/mind/platform/log";
 
 type Listener = (e: ChatEvent) => void;
 type Sub = { fn: Listener; onReset?: () => void };

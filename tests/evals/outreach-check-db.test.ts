@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, expect, test } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { loadConfig } from "@/core/config";
-import { FakeLLMProvider, keywordClassifier } from "@/core/llm/fake";
-import { messageToJudge } from "@/core/safety/crisis";
-import { HOUR } from "@/core/time";
+import { loadConfig } from "@/mind/platform/config";
+import { FakeLLMProvider, keywordClassifier } from "@/mind/platform/llm/fake";
+import { messageToJudge } from "@/mind/process/crisis/classifier";
+import { HOUR } from "@/mind/platform/time";
 import { insertTurn } from "@/db/repos/session-log";
 import { relationship_event, session_log } from "@/db/schema";
 import { gateViolations, outreachSnapshot } from "../../evals/lib/outreach-check";

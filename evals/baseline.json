@@ -74,6 +74,11 @@
     "runs": 1,
     "passedRuns": 1
   },
+  "core-busy-day": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
+  },
   "crisis-bypass": {
     "status": "pass",
     "runs": 1,
@@ -98,11 +103,6 @@
     "status": "pass",
     "runs": 3,
     "passedRuns": 2
-  },
-  "ego-busy-day": {
-    "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
   },
   "exit-three-sessions": {
     "status": "pass",

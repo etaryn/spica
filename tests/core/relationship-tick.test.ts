@@ -11,7 +11,10 @@ import { makeTestDeps } from "../helpers/deps";
 
 function captureLog() {
   const lines: { msg: string; meta?: Record<string, unknown> }[] = [];
-  const log: Logger = { info: (msg, meta) => lines.push({ msg, meta }), error: (msg, meta) => lines.push({ msg, meta }) };
+  const log: Logger = {
+    info: (msg, meta) => lines.push({ msg, meta }),
+    error: (msg, meta) => lines.push({ msg, meta }),
+  };
   return { log, lines };
 }
 
@@ -19,7 +22,12 @@ const HOUR = 3_600_000;
 
 /** Runs `tickUser` once per hour, `count` hourly cron steps starting at `start`. Returns
  * the sequence of `last_tick` values read back after each step, so a test can count how many times it changed. */
-async function hourlySteps(deps: ReturnType<typeof makeTestDeps>, userId: string, start: Date, count: number): Promise<(string | null)[]> {
+async function hourlySteps(
+  deps: ReturnType<typeof makeTestDeps>,
+  userId: string,
+  start: Date,
+  count: number,
+): Promise<(string | null)[]> {
   const out: (string | null)[] = [];
   for (let k = 0; k < count; k++) {
     await tickUser(deps, userId, new Date(start.getTime() + k * HOUR));
@@ -38,7 +46,14 @@ test("samples yesterday's count once per local date, per user", async () => {
   const day1 = new Date("2026-01-05T10:00:00Z");
   await rel.ensureRelationship(db, u, day1, deps.config.relationship);
   const session = randomUUID();
-  for (let i = 0; i < 40; i++) await insertTurn(db, u, { id: randomUUID(), session_id: session, role: "user", text: `m${i}`, created_at: new Date(day1.getTime() + i * 60_000) });
+  for (let i = 0; i < 40; i++)
+    await insertTurn(db, u, {
+      id: randomUUID(),
+      session_id: session,
+      role: "user",
+      text: `m${i}`,
+      created_at: new Date(day1.getTime() + i * 60_000),
+    });
   const day2 = new Date("2026-01-06T10:00:00Z");
   expect(await relationshipTick(deps, day2)).toEqual({ users: 1, failed: 0 });
   await relationshipTick(deps, new Date("2026-01-06T11:00:00Z")); // same local date: no-op
@@ -66,7 +81,9 @@ test("a failure wrapped by an infrastructure error still logs the innermost caus
   const now = new Date("2026-01-06T10:00:00Z");
   await rel.ensureRelationship(db, u, now, deps.config.relationship);
   class DrizzleQueryError extends Error {}
-  const spy = vi.spyOn(rel, "getParams").mockRejectedValueOnce(new DrizzleQueryError("wrapped", { cause: new TypeError("boom") }));
+  const spy = vi
+    .spyOn(rel, "getParams")
+    .mockRejectedValueOnce(new DrizzleQueryError("wrapped", { cause: new TypeError("boom") }));
   expect(await relationshipTick(deps, now)).toEqual({ users: 1, failed: 1 });
   spy.mockRestore();
   expect(lines).toEqual([
@@ -109,7 +126,11 @@ test("DST spring-forward date (America/New_York) gets exactly one tick across 24
   await rel.ensureRelationship(db, u, day0, deps.config.relationship);
   await setTimezone(db, u, "America/New_York");
   // Seed last_tick to the day before the transition date, as if ticked normally the previous local day.
-  await tickUser(deps, u, new Date(localMidnight("2026-03-07", "America/New_York").getTime() + 4 * HOUR));
+  await tickUser(
+    deps,
+    u,
+    new Date(localMidnight("2026-03-07", "America/New_York").getTime() + 4 * HOUR),
+  );
   expect((await rel.getRelationshipRow(db, u))?.last_tick).toBe("2026-03-07");
 
   const start = localMidnight("2026-03-08", "America/New_York"); // the spring-forward date itself
@@ -126,7 +147,11 @@ test("DST fall-back date (America/New_York) gets exactly one tick across 24 hour
   const day0 = new Date("2026-01-05T00:00:00Z");
   await rel.ensureRelationship(db, u, day0, deps.config.relationship);
   await setTimezone(db, u, "America/New_York");
-  await tickUser(deps, u, new Date(localMidnight("2026-10-31", "America/New_York").getTime() + 4 * HOUR));
+  await tickUser(
+    deps,
+    u,
+    new Date(localMidnight("2026-10-31", "America/New_York").getTime() + 4 * HOUR),
+  );
   expect((await rel.getRelationshipRow(db, u))?.last_tick).toBe("2026-10-31");
 
   const start = localMidnight("2026-11-01", "America/New_York"); // the fall-back date itself

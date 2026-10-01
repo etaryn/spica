@@ -11,12 +11,24 @@ export async function getLifeDay(db: Db, date: string): Promise<LifeDayRow | nul
 
 /** True when this call inserted the row; a concurrent generator's row wins silently. */
 export async function insertLifeDay(db: Db, row: LifeDayRow): Promise<boolean> {
-  return (await db.insert(life_day).values(row).onConflictDoNothing().returning({ date: life_day.date })).length > 0;
+  return (
+    (await db.insert(life_day).values(row).onConflictDoNothing().returning({ date: life_day.date }))
+      .length > 0
+  );
 }
 
 /** The `limit` plans before `date`, oldest first (the generator's continuity context). */
-export async function listLifeDaysBefore(db: Db, date: string, limit: number): Promise<LifeDayRow[]> {
+export async function listLifeDaysBefore(
+  db: Db,
+  date: string,
+  limit: number,
+): Promise<LifeDayRow[]> {
   if (limit <= 0) return [];
-  const rows = await db.select().from(life_day).where(lt(life_day.date, date)).orderBy(desc(life_day.date)).limit(limit);
+  const rows = await db
+    .select()
+    .from(life_day)
+    .where(lt(life_day.date, date))
+    .orderBy(desc(life_day.date))
+    .limit(limit);
   return rows.reverse();
 }

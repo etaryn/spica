@@ -1,6 +1,13 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
-import { lifeDate, lifeHour, lifeInstant, lifeTimezone, minutesOf, weekday } from "@/core/life/clock";
+import {
+  lifeDate,
+  lifeHour,
+  lifeInstant,
+  lifeTimezone,
+  minutesOf,
+  weekday,
+} from "@/core/life/clock";
 
 const cfg = loadConfig().life; // Asia/Singapore, UTC+8, no DST
 

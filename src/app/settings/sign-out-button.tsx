@@ -8,10 +8,14 @@ import { releasePush } from "../push-client";
 export function SignOutButton({ pushTimeoutMs }: { pushTimeoutMs: number }) {
   const router = useRouter();
   return (
-    <button onClick={async () => {
-      await releasePush(pushTimeoutMs); // never throws, bounded
-      await authClient.signOut();
-      router.push("/login");
-    }}>Sign out</button>
+    <button
+      onClick={async () => {
+        await releasePush(pushTimeoutMs); // never throws, bounded
+        await authClient.signOut();
+        router.push("/login");
+      }}
+    >
+      Sign out
+    </button>
   );
 }

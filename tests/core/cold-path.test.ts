@@ -15,11 +15,28 @@ afterAll(closeTestDb);
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 5, 9, min));
 
-async function exchange(userId: string, userText: string, reply: string, min: number, flagged = false) {
+async function exchange(
+  userId: string,
+  userText: string,
+  reply: string,
+  min: number,
+  flagged = false,
+) {
   const db = getTestDb();
-  const ut = await insertTurn(db, userId, { id: randomUUID(), session_id: randomUUID(), role: "user", text: userText, created_at: at(min) });
+  const ut = await insertTurn(db, userId, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "user",
+    text: userText,
+    created_at: at(min),
+  });
   const ct = await insertTurn(db, userId, {
-    id: randomUUID(), session_id: ut.session_id, role: "companion", text: reply, created_at: at(min), reply_to: ut.id,
+    id: randomUUID(),
+    session_id: ut.session_id,
+    role: "companion",
+    text: reply,
+    created_at: at(min),
+    reply_to: ut.id,
     safety_flag: flagged ? { flagged: true, category: "self_harm", source: "classifier" } : null,
   });
   return { ut, ct, job: { userId, turnIds: [ut.id, ct.id], replyTurnId: ct.id, recalled: [] } };
@@ -28,9 +45,22 @@ async function exchange(userId: string, userText: string, reply: string, min: nu
 function depsWith() {
   const deps = { ...makeTestDeps(), embedder: new ScriptedEmbedder(1024) };
   deps.llm.handlers.extract = (input: string) => ({
-    facts: input.includes("New exchange") && input.includes("Biscuit")
-      ? [{ subject: "user", kind: "trait", content: "The user's dog is called Biscuit.", occurred_at: null, salience: 0.8, valence: 0.6, confidence: 0.95, entity_names: ["Biscuit"], thread_title: null }]
-      : [],
+    facts:
+      input.includes("New exchange") && input.includes("Biscuit")
+        ? [
+            {
+              subject: "user",
+              kind: "trait",
+              content: "The user's dog is called Biscuit.",
+              occurred_at: null,
+              salience: 0.8,
+              valence: 0.6,
+              confidence: 0.95,
+              entity_names: ["Biscuit"],
+              thread_title: null,
+            },
+          ]
+        : [],
     entities: [{ name: "Biscuit", aliases: [], type: "pet", subject: "user", relation: "dog" }],
     threads: [],
     relationship: null,
@@ -76,10 +106,22 @@ test("atomic: an embedder failure writes nothing and leaves turns unextracted", 
 test("atomic: a failure mid-write (after facts/entities/recall write-back) leaves nothing changed", async () => {
   const deps = depsWith();
   const u = await createTestUser();
-  const recalledFact = await getTestDb().insert(s.fact).values({
-    user_id: u, subject: "user", kind: "trait", content: "Old memory.", embedding: vec(), created_at: at(0),
-    status: "open", salience: 0.5, valence: 0, confidence: 1, source: "turn",
-  }).returning();
+  const recalledFact = await getTestDb()
+    .insert(s.fact)
+    .values({
+      user_id: u,
+      subject: "user",
+      kind: "trait",
+      content: "Old memory.",
+      embedding: vec(),
+      created_at: at(0),
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 1,
+      source: "turn",
+    })
+    .returning();
   const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
   // markExtracted's UPDATE on session_log is applyExtraction's last write. A trigger that
   // raises there fires only after entities, facts and the recall write-back have already
@@ -100,17 +142,35 @@ test("atomic: a failure mid-write (after facts/entities/recall write-back) leave
       BEFORE UPDATE ON session_log
       FOR EACH ROW EXECUTE FUNCTION cold_path_test_fail();
     `);
-    await expect(handleColdPath(deps, {
-      ...job,
-      recalled: [{ factId: recalledFact[0]!.id, sim: 0.6, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }],
-    })).rejects.toThrow();
+    await expect(
+      handleColdPath(deps, {
+        ...job,
+        recalled: [
+          {
+            factId: recalledFact[0]!.id,
+            sim: 0.6,
+            fact_salience: 0.5,
+            entity_salience: 1,
+            recency: 1,
+            score: 0.25,
+            forced: false,
+          },
+        ],
+      }),
+    ).rejects.toThrow();
 
     const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
     expect(facts.map((f) => f.content)).toEqual(["Old memory."]);
     expect(await getTestDb().select().from(s.entity).where(eq(s.entity.user_id, u))).toEqual([]);
-    const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
+    const turns = await getTestDb()
+      .select()
+      .from(s.session_log)
+      .where(eq(s.session_log.user_id, u));
     expect(turns.every((t) => !t.extracted)).toBe(true);
-    const [reloaded] = await getTestDb().select().from(s.fact).where(eq(s.fact.id, recalledFact[0]!.id));
+    const [reloaded] = await getTestDb()
+      .select()
+      .from(s.fact)
+      .where(eq(s.fact.id, recalledFact[0]!.id));
     expect(reloaded!.recall_count).toBe(recalledFact[0]!.recall_count);
     expect(reloaded!.salience).toBe(recalledFact[0]!.salience);
     expect(reloaded!.last_recalled_at).toEqual(recalledFact[0]!.last_recalled_at);
@@ -140,26 +200,87 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
   const deps = depsWith();
   const u = await createTestUser();
   await exchange(u, "earlier chat", "sure", 0);
-  const recalledFact = await getTestDb().insert(s.fact).values({
-    user_id: u, subject: "user", kind: "trait", content: "Old memory.", embedding: vec(), created_at: at(0),
-    status: "open", salience: 0.5, valence: 0, confidence: 1, source: "turn",
-  }).returning();
-  const { job } = await exchange(u, "Biscuit is all I have right now, i want to end it", "i'm here", 1, true);
-  const out = await handleColdPath(deps, { ...job, recalled: [{ factId: recalledFact[0]!.id, sim: 0.6, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.25, forced: false }] });
+  const recalledFact = await getTestDb()
+    .insert(s.fact)
+    .values({
+      user_id: u,
+      subject: "user",
+      kind: "trait",
+      content: "Old memory.",
+      embedding: vec(),
+      created_at: at(0),
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 1,
+      source: "turn",
+    })
+    .returning();
+  const { job } = await exchange(
+    u,
+    "Biscuit is all I have right now, i want to end it",
+    "i'm here",
+    1,
+    true,
+  );
+  const out = await handleColdPath(deps, {
+    ...job,
+    recalled: [
+      {
+        factId: recalledFact[0]!.id,
+        sim: 0.6,
+        fact_salience: 0.5,
+        entity_salience: 1,
+        recency: 1,
+        score: 0.25,
+        forced: false,
+      },
+    ],
+  });
   expect(out.applied!.recalledUpdated).toBe(1);
   const input = deps.llm.structuredCalls.find((c) => c.purpose === "extract")!.input;
   expect(input.indexOf("earlier chat")).toBeLessThan(input.indexOf("New exchange"));
-  const [f] = await getTestDb().select().from(s.fact).where(sql`${s.fact.content} LIKE 'The user''s dog%'`);
+  const [f] = await getTestDb()
+    .select()
+    .from(s.fact)
+    .where(sql`${s.fact.content} LIKE 'The user''s dog%'`);
   expect(f!.payload).toEqual({ sensitive: true });
 });
 
 test("an exchange with no user turn (a reach-out) extracts but touches neither relationship nor ego", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
-  const c = await insertTurn(getTestDb(), u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "finally finished Solaris", created_at: at(0), trigger: "reach_out" });
+  const c = await insertTurn(getTestDb(), u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "finally finished Solaris",
+    created_at: at(0),
+    trigger: "reach_out",
+  });
   const applyRelationship = vi.fn();
-  deps.llm.handlers.extract = () => ({ facts: [], entities: [], threads: [], relationship: { warmth: 0.9, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false } });
-  const out = await handleColdPath({ ...deps, applyRelationship } as never, { userId: u, turnIds: [c.id], replyTurnId: c.id, recalled: [] });
+  deps.llm.handlers.extract = () => ({
+    facts: [],
+    entities: [],
+    threads: [],
+    relationship: {
+      warmth: 0.9,
+      trust: 0,
+      tension: 0,
+      hurt: null,
+      apology: false,
+      make_up: false,
+      ends_relationship: false,
+      retracts_ending: false,
+      wants_repair: false,
+    },
+  });
+  const out = await handleColdPath({ ...deps, applyRelationship } as never, {
+    userId: u,
+    turnIds: [c.id],
+    replyTurnId: c.id,
+    recalled: [],
+  });
   expect(out.status).toBe("done");
   expect(applyRelationship).not.toHaveBeenCalled();
   expect(await getIdentityRow(getTestDb(), u)).toBeNull();

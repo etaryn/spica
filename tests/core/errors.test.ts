@@ -7,7 +7,11 @@ class DatabaseError extends Error {
 
 test("errorName reports the innermost cause's class, not the wrapper's", () => {
   class DrizzleQueryError extends Error {}
-  expect(errorName(new DrizzleQueryError("Failed query: params: secret", { cause: new DatabaseError("x") }))).toBe("DatabaseError");
+  expect(
+    errorName(
+      new DrizzleQueryError("Failed query: params: secret", { cause: new DatabaseError("x") }),
+    ),
+  ).toBe("DatabaseError");
 });
 
 test("errorName falls back to UnknownError for a non-Error throw", () => {

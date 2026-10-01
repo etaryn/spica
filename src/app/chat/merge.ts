@@ -25,18 +25,42 @@ export type UiMessage = {
 /** One SSE bubble. Parts arrive in order; a repeat (reconnect, history overlap) is ignored. */
 export function applyPart(
   msgs: UiMessage[],
-  e: { turnId: string; part: number; of: number; text: string; crisisCard: CrisisCard | null; trigger?: string | null },
+  e: {
+    turnId: string;
+    part: number;
+    of: number;
+    text: string;
+    crisisCard: CrisisCard | null;
+    trigger?: string | null;
+  },
 ): UiMessage[] {
   const i = msgs.findIndex((m) => m.id === e.turnId);
   if (i === -1) {
     if (e.part !== 0) return msgs; // a later part without its first: history catch-up will supply it
-    return [...msgs, { id: e.turnId, role: "companion", parts: [e.text], crisisCard: e.crisisCard, status: "sent", of: e.of, trigger: e.trigger ?? null }];
+    return [
+      ...msgs,
+      {
+        id: e.turnId,
+        role: "companion",
+        parts: [e.text],
+        crisisCard: e.crisisCard,
+        status: "sent",
+        of: e.of,
+        trigger: e.trigger ?? null,
+      },
+    ];
   }
   const m = msgs[i]!;
   if (e.part < m.parts.length) return msgs;
   if (e.part !== m.parts.length) return msgs;
   const next = [...msgs];
-  next[i] = { ...m, parts: [...m.parts, e.text], crisisCard: m.crisisCard ?? e.crisisCard, of: e.of, trigger: m.trigger ?? e.trigger ?? null };
+  next[i] = {
+    ...m,
+    parts: [...m.parts, e.text],
+    crisisCard: m.crisisCard ?? e.crisisCard,
+    of: e.of,
+    trigger: m.trigger ?? e.trigger ?? null,
+  };
   return next;
 }
 
@@ -49,11 +73,22 @@ export function mergeHistory(msgs: UiMessage[], incoming: HistoryMessage[]): UiM
   for (const h of incoming) {
     const i = next.findIndex((m) => m.id === h.id);
     const ui: UiMessage = {
-      id: h.id, role: h.role, parts: h.parts, crisisCard: h.crisisCard, status: "sent", trigger: h.trigger ?? null,
+      id: h.id,
+      role: h.role,
+      parts: h.parts,
+      crisisCard: h.crisisCard,
+      status: "sent",
+      trigger: h.trigger ?? null,
       ...(h.role === "companion" ? { of: h.parts.length } : {}),
     };
     if (i === -1) {
-      if (prev === -1) { next.push(ui); prev = next.length - 1; } else { next.splice(prev + 1, 0, ui); prev += 1; }
+      if (prev === -1) {
+        next.push(ui);
+        prev = next.length - 1;
+      } else {
+        next.splice(prev + 1, 0, ui);
+        prev += 1;
+      }
       continue;
     }
     if (h.role === "companion" && h.parts.length > next[i]!.parts.length) next[i] = ui;
@@ -76,7 +111,9 @@ export function markFailed(msgs: UiMessage[], ids: string[]): UiMessage[] {
  * anchors). Returns null when there's nothing usable to anchor on (fetch full history instead).
  */
 export function catchUpAnchor(msgs: UiMessage[]): string | null {
-  const incompleteIdx = msgs.findIndex((m) => m.role === "companion" && m.of !== undefined && m.parts.length < m.of);
+  const incompleteIdx = msgs.findIndex(
+    (m) => m.role === "companion" && m.of !== undefined && m.parts.length < m.of,
+  );
   const end = incompleteIdx === -1 ? msgs.length : incompleteIdx;
   for (let i = end - 1; i >= 0; i--) {
     const m = msgs[i]!;

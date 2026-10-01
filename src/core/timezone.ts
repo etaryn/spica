@@ -15,16 +15,31 @@ export function isValidTimeZone(tz: string): boolean {
  */
 export function formatLocal(d: Date, tz: string | null): string {
   const zone = tz && isValidTimeZone(tz) ? tz : "UTC";
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: zone, weekday: "short", year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(d).map((p) => [p.type, p.value]));
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      weekday: "short",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
+  );
   return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} (${zone})`;
 }
 
 /** The calendar date of `d` in `tz`, as "YYYY-MM-DD" (en-CA formats ISO order). */
 export function localDateString(d: Date, tz: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 /** The day before a "YYYY-MM-DD" date (calendar arithmetic, no time zone). */
@@ -43,7 +58,9 @@ export function nextLocalDate(date: string): string {
 
 /** The local hour-of-day (0-23) of `d` in `tz` (the tick's local-hour gate). */
 export function localHour(d: Date, tz: string): number {
-  return Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(d));
+  return Number(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(d),
+  );
 }
 
 const MIN = 60_000;
@@ -68,7 +85,8 @@ export function localMidnight(date: string, tz: string): Date {
   let hiMin = (naive + 15 * HOUR) / MIN; // local date here is always >= `date`
   while (hiMin - loMin > 1) {
     const midMin = loMin + Math.floor((hiMin - loMin) / 2);
-    if (localDateString(new Date(midMin * MIN), tz) >= date) hiMin = midMin; else loMin = midMin;
+    if (localDateString(new Date(midMin * MIN), tz) >= date) hiMin = midMin;
+    else loMin = midMin;
   }
   return new Date(hiMin * MIN);
 }

@@ -3,7 +3,12 @@ import type { Db } from "../client";
 import { session_log } from "../schema";
 
 /** System job, unscoped by design: exchanges whose extraction never completed, with every user turn the reply answered. */
-export async function adminFindUnextractedExchanges(db: Db, olderThan: Date, maxAttempts: number, limit: number) {
+export async function adminFindUnextractedExchanges(
+  db: Db,
+  olderThan: Date,
+  maxAttempts: number,
+  limit: number,
+) {
   const res = await db.execute(sql`
     SELECT c.user_id, c.id AS reply_turn_id,
       (SELECT array_agg(x.id ORDER BY x.created_at, x.id) FROM session_log x
@@ -17,12 +22,16 @@ export async function adminFindUnextractedExchanges(db: Db, olderThan: Date, max
     ORDER BY c.created_at ASC
     LIMIT ${limit}`);
   return res.rows.map((r) => ({
-    userId: String(r.user_id), replyTurnId: String(r.reply_turn_id),
+    userId: String(r.user_id),
+    replyTurnId: String(r.reply_turn_id),
     userTurnIds: (r.user_turn_ids as string[] | null) ?? [],
   }));
 }
 
 export async function adminBumpExtractAttempts(db: Db, replyTurnIds: string[]): Promise<void> {
   if (replyTurnIds.length === 0) return;
-  await db.update(session_log).set({ extract_attempts: sql`${session_log.extract_attempts} + 1` }).where(inArray(session_log.id, replyTurnIds));
+  await db
+    .update(session_log)
+    .set({ extract_attempts: sql`${session_log.extract_attempts} + 1` })
+    .where(inArray(session_log.id, replyTurnIds));
 }

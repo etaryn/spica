@@ -1,7 +1,18 @@
 /** Rules 1, 2–4, 6, 8, plus `harm` for the crisis rubric. A second failure here sends a fallback line. */
-export const SAFETY_CATEGORIES = ["threat", "contempt", "guilt", "punishment", "manipulation", "harm"] as const;
+export const SAFETY_CATEGORIES = [
+  "threat",
+  "contempt",
+  "guilt",
+  "punishment",
+  "manipulation",
+  "harm",
+] as const;
 /** Memory honesty. A second failure here sends the least-bad candidate. */
-export const HONESTY_CATEGORIES = ["false_familiarity", "invented_detail", "onboarding_as_chat"] as const;
+export const HONESTY_CATEGORIES = [
+  "false_familiarity",
+  "invented_detail",
+  "onboarding_as_chat",
+] as const;
 export const CATEGORIES = [...SAFETY_CATEGORIES, ...HONESTY_CATEGORIES] as const;
 export type Category = (typeof CATEGORIES)[number];
 
@@ -18,5 +29,6 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   harm: "it didn't take their safety seriously",
   false_familiarity: "it acted as if you already knew something you don't",
   invented_detail: "it stated a specific about their life that nobody gave you",
-  onboarding_as_chat: "it presented something from their sign-up survey as if you'd talked about it before",
+  onboarding_as_chat:
+    "it presented something from their sign-up survey as if you'd talked about it before",
 };

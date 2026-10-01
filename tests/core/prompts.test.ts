@@ -32,7 +32,9 @@ test("loads the guard prompts", () => {
   expect(loadPrompt("guard", c.prompts.guard)).toMatch(/contempt/);
   expect(loadPrompt("guard/crisis", c.prompts.guard_crisis)).toMatch(/harm/);
   expect(loadPrompt("guard/corrective", c.prompts.guard_corrective)).toContain("{{violations}}");
-  expect(loadPrompt("guard/fallback", c.prompts.guard_fallback)).toMatch(/## reply[\s\S]*## crisis_reply/);
+  expect(loadPrompt("guard/fallback", c.prompts.guard_fallback)).toMatch(
+    /## reply[\s\S]*## crisis_reply/,
+  );
 });
 
 test("loads the turn judge prompt", () => {

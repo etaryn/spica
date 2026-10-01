@@ -16,11 +16,17 @@ export interface EventBus {
 
 export class RecordingEventBus implements EventBus {
   events: { userId: string; event: ChatEvent }[] = [];
-  async publish(userId: string, event: ChatEvent): Promise<void> { this.events.push({ userId, event }); }
+  async publish(userId: string, event: ChatEvent): Promise<void> {
+    this.events.push({ userId, event });
+  }
 }
 
 /** Best-effort publish: a notification failure never fails a reply (the client catches up from history). */
-export async function emit(deps: Pick<Deps, "events" | "log">, userId: string, event: ChatEvent): Promise<void> {
+export async function emit(
+  deps: Pick<Deps, "events" | "log">,
+  userId: string,
+  event: ChatEvent,
+): Promise<void> {
   try {
     await deps.events.publish(userId, event);
   } catch (e) {
@@ -33,6 +39,7 @@ export function isChatEvent(x: unknown): x is ChatEvent {
   const e = x as Record<string, unknown>;
   if (e.type === "typing") return typeof e.on === "boolean";
   if (e.type === "message") return typeof e.turnId === "string" && Number.isInteger(e.part);
-  if (e.type === "reply_failed") return Array.isArray(e.turnIds) && e.turnIds.every((t) => typeof t === "string");
+  if (e.type === "reply_failed")
+    return Array.isArray(e.turnIds) && e.turnIds.every((t) => typeof t === "string");
   return false;
 }

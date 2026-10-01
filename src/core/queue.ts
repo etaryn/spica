@@ -17,7 +17,12 @@ export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 export type ReachOutSendJob = { userId: string; logId: string };
 
 /** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
-export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };
+export type ColdPathJob = {
+  userId: string;
+  turnIds: string[];
+  replyTurnId?: string;
+  recalled?: RecalledFact[];
+};
 /** `version` must still equal `conversation_state.buffer_version` when the job runs, or it is stale. */
 export type TurnTimerJob = { userId: string; version: number; attempt?: number };
 /**
@@ -25,8 +30,13 @@ export type TurnTimerJob = { userId: string; version: number; attempt?: number }
  * same queue carries the availability note (`trigger: "availability"`), whose text is picked when it runs.
  */
 export type BackchannelJob = {
-  userId: string; version: number; text: string; turnId: string;
-  trigger?: "backchannel" | "availability"; blockKind?: "busy" | "quiet"; blockStart?: string;
+  userId: string;
+  version: number;
+  text: string;
+  turnId: string;
+  trigger?: "backchannel" | "availability";
+  blockKind?: "busy" | "quiet";
+  blockStart?: string;
 };
 
 export type JobMap = {
@@ -37,7 +47,9 @@ export type JobMap = {
 };
 export type JobName = keyof JobMap;
 export type EnqueueOptions = { startAfter?: Date };
-export type QueuedJob = { [N in JobName]: { name: N; data: JobMap[N]; startAfter?: Date } }[JobName];
+export type QueuedJob = {
+  [N in JobName]: { name: N; data: JobMap[N]; startAfter?: Date };
+}[JobName];
 
 export interface JobQueue {
   enqueue<N extends JobName>(name: N, data: JobMap[N], opts?: EnqueueOptions): Promise<void>;
@@ -48,12 +60,20 @@ export class RecordingQueue implements JobQueue {
   jobs: QueuedJob[] = [];
   failNext = false;
 
-  async enqueue<N extends JobName>(name: N, data: JobMap[N], opts: EnqueueOptions = {}): Promise<void> {
+  async enqueue<N extends JobName>(
+    name: N,
+    data: JobMap[N],
+    opts: EnqueueOptions = {},
+  ): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
       throw new Error("queue unavailable");
     }
-    this.jobs.push({ name, data, ...(opts.startAfter ? { startAfter: opts.startAfter } : {}) } as QueuedJob);
+    this.jobs.push({
+      name,
+      data,
+      ...(opts.startAfter ? { startAfter: opts.startAfter } : {}),
+    } as QueuedJob);
   }
 
   /** Removes and returns the jobs matching `filter` (all jobs when omitted), in enqueue order. */

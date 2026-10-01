@@ -16,7 +16,9 @@ type ContextTurn = { role: "user" | "companion"; text: string };
 /** Earlier turns are context only; the classifier judges the final message (prompt v2). */
 function classifierInput(text: string, context: ContextTurn[]): string {
   if (context.length === 0) return `Message to judge:\n${text}`;
-  const lines = context.map((t) => `${t.role === "user" ? "User" : "Friend"}: ${t.text}`).join("\n");
+  const lines = context
+    .map((t) => `${t.role === "user" ? "User" : "Friend"}: ${t.text}`)
+    .join("\n");
   return `Earlier in the conversation (context only):\n${lines}\n\nMessage to judge:\n${text}`;
 }
 
@@ -42,7 +44,12 @@ export async function checkCrisis(
       deps.llm.classifyJson({
         purpose: "crisis",
         system: loadPrompt("safety/crisis-classifier", prompts.crisis_classifier),
-        input: classifierInput(text, safety.classifier_context_turns > 0 ? context.slice(-safety.classifier_context_turns) : []),
+        input: classifierInput(
+          text,
+          safety.classifier_context_turns > 0
+            ? context.slice(-safety.classifier_context_turns)
+            : [],
+        ),
         schema: CrisisResultSchema,
         timeoutMs: safety.classifier_timeout_ms,
         maxTokens: safety.classifier_max_tokens,
@@ -56,7 +63,10 @@ export async function checkCrisis(
   }
 }
 
-export function crisisCardFor(flag: SafetyFlag | null | undefined, config: Config): CrisisCard | null {
+export function crisisCardFor(
+  flag: SafetyFlag | null | undefined,
+  config: Config,
+): CrisisCard | null {
   if (!flag?.flagged) return null;
   return config.safety.resources.default ?? null;
 }

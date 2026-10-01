@@ -14,7 +14,10 @@ const auth = createAuth(getTestDb(), loadConfig(), {
 });
 
 const body = (dateOfBirth: string, email = `p${Math.random()}@test.local`) => ({
-  email, password: "correct-horse-battery", name: "Pat", dateOfBirth,
+  email,
+  password: "correct-horse-battery",
+  name: "Pat",
+  dateOfBirth,
 });
 
 test("adult sign-up creates a uuid user with the date of birth", async () => {

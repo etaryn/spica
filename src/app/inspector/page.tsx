@@ -11,11 +11,19 @@ export default async function InspectorHome() {
     <>
       <h1>Memory inspector</h1>
       <table className={styles.table}>
-        <thead><tr><th>User</th><th>Email</th><th>Created</th></tr></thead>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Created</th>
+          </tr>
+        </thead>
         <tbody>
           {users.map((u) => (
             <tr key={u.id}>
-              <td><Link href={`/inspector/${u.id}`}>{u.name}</Link></td>
+              <td>
+                <Link href={`/inspector/${u.id}`}>{u.name}</Link>
+              </td>
               <td>{u.email}</td>
               <td>{u.createdAt.toISOString()}</td>
             </tr>

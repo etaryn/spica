@@ -4,8 +4,20 @@ import { pushOptedOut, pushSupported, registerSw, subscribePush } from "../push-
 import styles from "./chat.module.css";
 
 const DISMISSED = "spica.notifications.dismissed";
-const read = () => { try { return localStorage.getItem(DISMISSED) === "1"; } catch { return false; } };
-const write = () => { try { localStorage.setItem(DISMISSED, "1"); } catch { /* private window */ } };
+const read = () => {
+  try {
+    return localStorage.getItem(DISMISSED) === "1";
+  } catch {
+    return false;
+  }
+};
+const write = () => {
+  try {
+    localStorage.setItem(DISMISSED, "1");
+  } catch {
+    /* private window */
+  }
+};
 
 /** Spec D7: a one-time banner; once allowed, everything she sends pushes until switched off in /settings. */
 export function NotificationsBanner({ publicKey }: { publicKey: string | null }) {
@@ -43,7 +55,15 @@ export function NotificationsBanner({ publicKey }: { publicKey: string | null })
     <div className={styles.banner} role="region" aria-label="Notifications">
       <span>Get her messages when the app is closed.</span>
       <button onClick={turnOn}>Turn on notifications</button>
-      <button aria-label="Dismiss" onClick={() => { write(); setShow(false); }}>×</button>
+      <button
+        aria-label="Dismiss"
+        onClick={() => {
+          write();
+          setShow(false);
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }

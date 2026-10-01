@@ -1,14 +1,27 @@
 import { randomUUID } from "node:crypto";
 import { PgBoss } from "pg-boss";
 import { afterAll, expect, test } from "vitest";
-import { COLD_PATH_QUEUE, REACH_OUT_SEND_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/core/queue";
+import {
+  COLD_PATH_QUEUE,
+  REACH_OUT_SEND_QUEUE,
+  TURN_BACKCHANNEL_QUEUE,
+  TURN_TIMER_QUEUE,
+} from "@/core/queue";
 import { PgBossQueue } from "@/queue/pg-boss-queue";
 import { testDbUrl } from "../helpers/db";
 
 const boss = new PgBoss(testDbUrl);
-const queue = new PgBossQueue(boss, { retryLimit: 3, retryDelaySeconds: 30, turnExpireSeconds: 180, timerRetryLimit: 2, timerRetryDelaySeconds: 1 });
+const queue = new PgBossQueue(boss, {
+  retryLimit: 3,
+  retryDelaySeconds: 30,
+  turnExpireSeconds: 180,
+  timerRetryLimit: 2,
+  timerRetryDelaySeconds: 1,
+});
 
-afterAll(async () => { await queue.stop(); });
+afterAll(async () => {
+  await queue.stop();
+});
 
 test("enqueue lazily starts pg-boss and stores a cold_path job", async () => {
   await queue.enqueue(COLD_PATH_QUEUE, { userId: "u1", turnIds: ["t1", "t2"] });
@@ -34,11 +47,16 @@ test("turn_timer jobs carry startAfter and the turn queues exist with their poli
   expect(q).toMatchObject({ retryLimit: 2, expireInSeconds: 180 });
   expect(await boss.getQueue(TURN_BACKCHANNEL_QUEUE)).toMatchObject({ retryLimit: 0 });
   // Not fetchable before startAfter: whatever is currently due must not include ours.
-  const due = await boss.fetch<{ userId: string; version: number }>(TURN_TIMER_QUEUE, { batchSize: 50 });
+  const due = await boss.fetch<{ userId: string; version: number }>(TURN_TIMER_QUEUE, {
+    batchSize: 50,
+  });
   expect(due.some((j) => j.data.userId === userId)).toBe(false);
 });
 
 test("reach_out_send never retries and shares the backchannel queue's options", async () => {
   await queue.start();
-  expect(await boss.getQueue(REACH_OUT_SEND_QUEUE)).toMatchObject({ retryLimit: 0, expireInSeconds: 180 });
+  expect(await boss.getQueue(REACH_OUT_SEND_QUEUE)).toMatchObject({
+    retryLimit: 0,
+    expireInSeconds: 180,
+  });
 });

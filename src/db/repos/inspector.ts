@@ -4,7 +4,16 @@ import { effect, fadeParams } from "@/core/relationship/homeostasis";
 import { PARAM_NAMES, type RelConfig } from "@/core/relationship/types";
 import type { Db } from "../client";
 import {
-  conversation_state, ego_tick, entity, fact, factStatus, factSubject, identity, reach_out_log, retrieval_trace, thread,
+  conversation_state,
+  ego_tick,
+  entity,
+  fact,
+  factStatus,
+  factSubject,
+  identity,
+  reach_out_log,
+  retrieval_trace,
+  thread,
 } from "../schema";
 import { getLifeDay } from "./life-day";
 import { listLifeEventLogs } from "./life-event-log";
@@ -39,7 +48,10 @@ export async function listFacts(db: Db, userId: string, f: FactFilters) {
   if (f.entityId) conds.push(arrayContains(fact.entity_refs, [f.entityId]));
   if (f.threadId) conds.push(eq(fact.thread_id, f.threadId));
   const recency = sql`greatest(${fact.created_at}, coalesce(${fact.last_recalled_at}, ${fact.created_at}))`;
-  return db.select(factColumns).from(fact).where(and(...conds))
+  return db
+    .select(factColumns)
+    .from(fact)
+    .where(and(...conds))
     .orderBy(f.sort === "salience" ? desc(fact.salience) : desc(recency))
     .limit(500);
 }
@@ -60,16 +72,26 @@ export async function getRelationshipView(db: Db, userId: string, now: Date, cfg
   const params = fadeParams(await getParams(db, userId), now, cfg);
   return {
     row,
-    params: PARAM_NAMES.map((name) => ({ name, ...params[name], effect: effect(params[name], cfg.variance_epsilon) })),
+    params: PARAM_NAMES.map((name) => ({
+      name,
+      ...params[name],
+      effect: effect(params[name], cfg.variance_epsilon),
+    })),
     events: await listRelationshipEvents(db, userId, cfg.event_list_limit),
   };
 }
 
 export const listEgoTicks = (db: Db, userId: string) =>
-  db.select().from(ego_tick).where(eq(ego_tick.user_id, userId)).orderBy(desc(ego_tick.created_at)).limit(100);
+  db
+    .select()
+    .from(ego_tick)
+    .where(eq(ego_tick.user_id, userId))
+    .orderBy(desc(ego_tick.created_at))
+    .limit(100);
 
 export const listRetrievalTraces = (db: Db, userId: string) =>
-  db.select({ trace: retrieval_trace, content: fact.content })
+  db
+    .select({ trace: retrieval_trace, content: fact.content })
     .from(retrieval_trace)
     .leftJoin(fact, eq(fact.id, retrieval_trace.fact_id))
     .where(eq(retrieval_trace.user_id, userId))
@@ -77,22 +99,43 @@ export const listRetrievalTraces = (db: Db, userId: string) =>
     .limit(500);
 
 export const listReachOuts = (db: Db, userId: string, limit: number) =>
-  db.select().from(reach_out_log).where(eq(reach_out_log.user_id, userId)).orderBy(desc(reach_out_log.created_at)).limit(limit);
+  db
+    .select()
+    .from(reach_out_log)
+    .where(eq(reach_out_log.user_id, userId))
+    .orderBy(desc(reach_out_log.created_at))
+    .limit(limit);
 
 export const getConversationState = async (db: Db, userId: string) =>
-  (await db.select().from(conversation_state).where(eq(conversation_state.user_id, userId)).limit(1))[0] ?? null;
+  (
+    await db
+      .select()
+      .from(conversation_state)
+      .where(eq(conversation_state.user_id, userId))
+      .limit(1)
+  )[0] ?? null;
 
 /**
  * View-time resolution of the ids `judge_log.input` holds (the log never stores memory content): fact
  * ids resolve to their content, due-thread ids to the thread's title. User-scoped, so a deleted or
  * foreign id never resolves. A missing id was hard-deleted since (`forgetFact`) — the caller shows "(deleted)".
  */
-export async function resolveFactContents(db: Db, userId: string, ids: string[]): Promise<Map<string, string>> {
+export async function resolveFactContents(
+  db: Db,
+  userId: string,
+  ids: string[],
+): Promise<Map<string, string>> {
   const unique = [...new Set(ids)];
   if (!unique.length) return new Map();
   const [facts, threads] = await Promise.all([
-    db.select({ id: fact.id, content: fact.content }).from(fact).where(and(eq(fact.user_id, userId), inArray(fact.id, unique))),
-    db.select({ id: thread.id, content: thread.title }).from(thread).where(and(eq(thread.user_id, userId), inArray(thread.id, unique))),
+    db
+      .select({ id: fact.id, content: fact.content })
+      .from(fact)
+      .where(and(eq(fact.user_id, userId), inArray(fact.id, unique))),
+    db
+      .select({ id: thread.id, content: thread.title })
+      .from(thread)
+      .where(and(eq(thread.user_id, userId), inArray(thread.id, unique))),
   ]);
   return new Map([...facts, ...threads].map((r) => [r.id, r.content]));
 }
@@ -101,8 +144,18 @@ export async function resolveFactContents(db: Db, userId: string, ids: string[])
 export async function getLifeView(db: Db, userId: string, day: string) {
   const [plan, facts, log] = await Promise.all([
     getLifeDay(db, day),
-    db.select({ id: fact.id, content: fact.content, status: fact.status, payload: fact.payload, occurred_at: fact.occurred_at })
-      .from(fact).where(and(eq(fact.user_id, userId), eq(fact.source, "generated"))).orderBy(desc(fact.created_at)).limit(200),
+    db
+      .select({
+        id: fact.id,
+        content: fact.content,
+        status: fact.status,
+        payload: fact.payload,
+        occurred_at: fact.occurred_at,
+      })
+      .from(fact)
+      .where(and(eq(fact.user_id, userId), eq(fact.source, "generated")))
+      .orderBy(desc(fact.created_at))
+      .limit(200),
     listLifeEventLogs(db, userId, 200),
   ]);
   return { plan, facts, log };

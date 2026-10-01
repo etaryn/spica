@@ -1,6 +1,15 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
-import { applyEvent, applyExchange, dayLoad, driftStep, energyTarget, exchangeTone, preoccupationExpired, rhythm } from "@/core/ego/ego";
+import {
+  applyEvent,
+  applyExchange,
+  dayLoad,
+  driftStep,
+  energyTarget,
+  exchangeTone,
+  preoccupationExpired,
+  rhythm,
+} from "@/core/ego/ego";
 
 const cfg = loadConfig().ego;
 const H = 3_600_000;
@@ -30,8 +39,14 @@ test("driftStep moves toward the target and clamps", () => {
   const next = driftStep(s, { mood_valence: 1, mood_arousal: 1, energy: 0 }, [0, 0, 0], cfg);
   expect(next.mood_valence).toBeCloseTo(-1 + 2 * cfg.drift_rate);
   expect(next.energy).toBeCloseTo(1 - cfg.drift_rate);
-  expect(driftStep({ mood_valence: 1, mood_arousal: 1, energy: 1 }, { mood_valence: 1, mood_arousal: 1, energy: 1 }, [1, 1, 1], cfg))
-    .toEqual({ mood_valence: 1, mood_arousal: 1, energy: 1 });
+  expect(
+    driftStep(
+      { mood_valence: 1, mood_arousal: 1, energy: 1 },
+      { mood_valence: 1, mood_arousal: 1, energy: 1 },
+      [1, 1, 1],
+      cfg,
+    ),
+  ).toEqual({ mood_valence: 1, mood_arousal: 1, energy: 1 });
 });
 
 test("event and exchange nudges", () => {
@@ -43,7 +58,13 @@ test("event and exchange nudges", () => {
 
 test("exchangeTone is the salience-weighted mean of non-zero valences", () => {
   expect(exchangeTone([{ valence: 0, salience: 1 }])).toBeNull();
-  expect(exchangeTone([{ valence: 1, salience: 0.75 }, { valence: -1, salience: 0.25 }, { valence: 0, salience: 1 }])).toBeCloseTo(0.5);
+  expect(
+    exchangeTone([
+      { valence: 1, salience: 0.75 },
+      { valence: -1, salience: 0.25 },
+      { valence: 0, salience: 1 },
+    ]),
+  ).toBeCloseTo(0.5);
 });
 
 test("preoccupation expires after preoccupation_hours", () => {

@@ -5,6 +5,8 @@ export interface Embedder {
 
 export function assertEmbedderMatchesSchema(embedder: Embedder, schemaDimensions: number): void {
   if (embedder.dimensions !== schemaDimensions) {
-    throw new Error(`embedder produces ${embedder.dimensions}-dim vectors but fact.embedding is ${schemaDimensions}-dim`);
+    throw new Error(
+      `embedder produces ${embedder.dimensions}-dim vectors but fact.embedding is ${schemaDimensions}-dim`,
+    );
   }
 }

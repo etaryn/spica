@@ -21,7 +21,10 @@ export default function LoginPage() {
       password: String(f.get("password") ?? ""),
     });
     setBusy(false);
-    if (error) { setError(error.message ?? "Login failed."); return; }
+    if (error) {
+      setError(error.message ?? "Login failed.");
+      return;
+    }
     router.push("/chat");
   }
 
@@ -29,12 +32,26 @@ export default function LoginPage() {
     <div className={styles.wrap}>
       <h1>Welcome back</h1>
       <form className={styles.form} onSubmit={onSubmit}>
-        <label>Email<input name="email" type="email" required autoComplete="email" /></label>
-        <label>Password<input name="password" type="password" required autoComplete="current-password" /></label>
-        {error && <p className={styles.error} role="alert">{error}</p>}
-        <button type="submit" disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
+        <label>
+          Email
+          <input name="email" type="email" required autoComplete="email" />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" required autoComplete="current-password" />
+        </label>
+        {error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" disabled={busy}>
+          {busy ? "Logging in…" : "Log in"}
+        </button>
       </form>
-      <p className={styles.alt}>New here? <Link href="/signup">Create an account</Link></p>
+      <p className={styles.alt}>
+        New here? <Link href="/signup">Create an account</Link>
+      </p>
     </div>
   );
 }

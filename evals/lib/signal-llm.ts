@@ -1,7 +1,17 @@
 import type { Signals } from "@/core/relationship/signals";
 import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
 
-const NONE: Signals = { warmth: 0, trust: 0, tension: 0, hurt: null, apology: false, make_up: false, ends_relationship: false, retracts_ending: false, wants_repair: false };
+const NONE: Signals = {
+  warmth: 0,
+  trust: 0,
+  tension: 0,
+  hurt: null,
+  apology: false,
+  make_up: false,
+  ends_relationship: false,
+  retracts_ending: false,
+  wants_repair: false,
+};
 const MARKER = "New exchange (extract from this):";
 
 /**
@@ -12,8 +22,13 @@ const MARKER = "New exchange (extract from this):";
  * null` override on a no-hit exchange keeps mechanics scripts deterministic even under a real extractor.
  */
 export class SignalLLM implements LLMProvider {
-  constructor(private readonly inner: LLMProvider, private readonly byText: Map<string, Partial<Signals>>) {}
-  generateReply(req: ReplyRequest): Promise<string> { return this.inner.generateReply(req); }
+  constructor(
+    private readonly inner: LLMProvider,
+    private readonly byText: Map<string, Partial<Signals>>,
+  ) {}
+  generateReply(req: ReplyRequest): Promise<string> {
+    return this.inner.generateReply(req);
+  }
   async classifyJson<T>(req: ClassifyRequest<T>): Promise<T> {
     const out = await this.inner.classifyJson(req);
     if (req.purpose !== "extract") return out;

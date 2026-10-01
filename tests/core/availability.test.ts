@@ -26,8 +26,12 @@ test("delay shrinks with closeness and vanishes at the override", () => {
 test("quiet blocks use the longer maximum; jitter stays within ±jitter", () => {
   const quiet = { busy: 0.9, block: "quiet" as const, end: new Date("2026-01-06T00:00:00Z") };
   expect(availabilityDelay(quiet, 0, now, 0.5, cfg)).toBe(Math.round(0.9 * cfg.quiet_max_delay_ms)); // 7.2 h, below the 13.5 h to midnight
-  expect(availabilityDelay(busy, 0.2, now, 0, cfg)).toBe(Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 - cfg.jitter)));
-  expect(availabilityDelay(busy, 0.2, now, 1, cfg)).toBe(Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 + cfg.jitter)));
+  expect(availabilityDelay(busy, 0.2, now, 0, cfg)).toBe(
+    Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 - cfg.jitter)),
+  );
+  expect(availabilityDelay(busy, 0.2, now, 1, cfg)).toBe(
+    Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 + cfg.jitter)),
+  );
 });
 
 test("never past the block's end (review focus 2)", () => {
@@ -46,8 +50,31 @@ async function busyUser(closeness: number) {
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
   const u = await createTestUser();
   await rel.ensureRelationship(deps.db, u, now, deps.config.relationship);
-  await deps.db.update(relationship_param).set({ value: closeness, baseline: closeness }).where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
-  const f = await insertFact(deps.db, u, { subject: "self", kind: "event", content: "Spica's morning: rewatching an old film.", payload: { start: "2026-01-05T10:00:00.000Z", end: "2026-01-05T13:00:00.000Z", block: "busy", busy: 0.8, label: "rewatching an old film", life_day: "2026-01-05", shared: true }, embedding: vec(), created_at: now, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
+  await deps.db
+    .update(relationship_param)
+    .set({ value: closeness, baseline: closeness })
+    .where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
+  const f = await insertFact(deps.db, u, {
+    subject: "self",
+    kind: "event",
+    content: "Spica's morning: rewatching an old film.",
+    payload: {
+      start: "2026-01-05T10:00:00.000Z",
+      end: "2026-01-05T13:00:00.000Z",
+      block: "busy",
+      busy: 0.8,
+      label: "rewatching an old film",
+      life_day: "2026-01-05",
+      shared: true,
+    },
+    embedding: vec(),
+    created_at: now,
+    status: "open",
+    salience: 0.2,
+    valence: 0,
+    confidence: 1,
+    source: "generated",
+  });
   return { deps, u, f };
 }
 
@@ -56,14 +83,25 @@ test("availabilityFor: delay + note for a mid-closeness user in a busy block", a
   const a = await availabilityFor(deps, u, now, "seed");
   expect(a.delayMs).toBeGreaterThan(cfg.note_min_delay_ms);
   expect(a).toMatchObject({ blockFactId: f.id, blockKind: "busy", note: true });
-  await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "companion", text: "busy, later?", created_at: new Date("2026-01-05T10:10:00Z"), trigger: "availability", extracted: true });
+  await insertTurn(deps.db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "busy, later?",
+    created_at: new Date("2026-01-05T10:10:00Z"),
+    trigger: "availability",
+    extracted: true,
+  });
   expect((await availabilityFor(deps, u, now, "seed")).note).toBe(false);
 });
 
 test("availabilityFor fails open: no block, crisis quiet, or an error", async () => {
   const { deps, u } = await busyUser(0.2);
   expect((await availabilityFor(deps, u, new Date("2026-01-05T14:00:00Z"), "s")).delayMs).toBe(0);
-  await deps.db.update(relationship).set({ crisis_quiet_until: new Date(now.getTime() + 60 * MIN) }).where(eq(relationship.user_id, u));
+  await deps.db
+    .update(relationship)
+    .set({ crisis_quiet_until: new Date(now.getTime() + 60 * MIN) })
+    .where(eq(relationship.user_id, u));
   expect((await availabilityFor(deps, u, now, "s")).delayMs).toBe(0);
   expect((await availabilityFor({ ...deps, db: null as never }, u, now, "s")).delayMs).toBe(0);
 });

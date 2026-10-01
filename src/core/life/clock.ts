@@ -11,7 +11,8 @@ export function lifeTimezone(cfg: LifeConfig, _at: Date): string {
   return cfg.timezone;
 }
 
-export const lifeDate = (cfg: LifeConfig, at: Date): string => localDateString(at, lifeTimezone(cfg, at));
+export const lifeDate = (cfg: LifeConfig, at: Date): string =>
+  localDateString(at, lifeTimezone(cfg, at));
 export const lifeHour = (cfg: LifeConfig, at: Date): number => localHour(at, lifeTimezone(cfg, at));
 
 export function minutesOf(hhmm: string): number {
@@ -31,5 +32,8 @@ export function lifeInstant(cfg: LifeConfig, date: string, hhmm: string): Date {
 }
 
 export function weekday(date: string): string {
-  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "long",
+    timeZone: "UTC",
+  });
 }

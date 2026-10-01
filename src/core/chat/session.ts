@@ -5,6 +5,7 @@ export function resolveSessionId(
   idleGapMinutes: number,
   newId: () => string,
 ): string {
-  if (prev && now.getTime() - prev.created_at.getTime() <= idleGapMinutes * 60_000) return prev.session_id;
+  if (prev && now.getTime() - prev.created_at.getTime() <= idleGapMinutes * 60_000)
+    return prev.session_id;
   return newId();
 }

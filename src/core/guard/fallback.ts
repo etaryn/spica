@@ -13,11 +13,16 @@ export function parseFallbacks(md: string): Record<FallbackKind, string[]> {
   for (const raw of md.split(/\r?\n/)) {
     const line = raw.trim();
     const heading = /^##\s+(\S+)/.exec(line);
-    if (heading) { cur = heading[1]!; out[cur] = []; continue; }
+    if (heading) {
+      cur = heading[1]!;
+      out[cur] = [];
+      continue;
+    }
     const item = /^-\s+(.+)$/.exec(line);
     if (cur && item) out[cur]!.push(item[1]!.trim());
   }
-  for (const k of KINDS) if (!out[k]?.length) throw new Error(`fallback prompt has no "${k}" lines`);
+  for (const k of KINDS)
+    if (!out[k]?.length) throw new Error(`fallback prompt has no "${k}" lines`);
   return out as Record<FallbackKind, string[]>;
 }
 
@@ -29,10 +34,16 @@ export function pickFallback(lines: string[], seed: string | null): string {
 }
 
 export function fallbackLine(config: Config, kind: FallbackKind, seed: string | null): string {
-  return pickFallback(parseFallbacks(loadPrompt("guard/fallback", config.prompts.guard_fallback))[kind], seed);
+  return pickFallback(
+    parseFallbacks(loadPrompt("guard/fallback", config.prompts.guard_fallback))[kind],
+    seed,
+  );
 }
 
 export function correctiveNote(config: Config, violations: Violation[]): string {
   const reasons = violations.map((v) => `- ${CATEGORY_LABEL[v.category]} (${v.claim})`).join("\n");
-  return loadPrompt("guard/corrective", config.prompts.guard_corrective).replace("{{violations}}", reasons);
+  return loadPrompt("guard/corrective", config.prompts.guard_corrective).replace(
+    "{{violations}}",
+    reasons,
+  );
 }

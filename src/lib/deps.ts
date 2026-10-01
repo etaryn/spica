@@ -13,7 +13,11 @@ export function getRuntime() {
     // Warm the producer queue now, not inline on the first chat request.
     const { queue, log } = runtime.deps;
     if (queue instanceof PgBossQueue) {
-      queue.start().catch((e) => log.error("pg-boss warm-up failed", { error: String((e as Error)?.name ?? "Error") }));
+      queue
+        .start()
+        .catch((e) =>
+          log.error("pg-boss warm-up failed", { error: String((e as Error)?.name ?? "Error") }),
+        );
     }
   }
   return g.__spicaRuntime;

@@ -8,7 +8,12 @@
   --accent: #b4532a;
   --danger: #a3261b;
   --radius: 18px;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -20,7 +25,22 @@
     --bubble-companion: #2a2825;
   }
 }
-* { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
-a { color: var(--accent); }
-button, input, textarea, select { font: inherit; }
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+a {
+  color: var(--accent);
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

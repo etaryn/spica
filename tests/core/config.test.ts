@@ -40,22 +40,41 @@ test("phase 1 config groups load with defaults", () => {
   const c = loadConfig();
   expect(c.models.extract).toBe("claude-haiku-4-5");
   expect(c.models.judge).toBe("claude-haiku-4-5");
-  expect(c.retrieval).toMatchObject({ candidate_pool: 200, top_n: 12, recency_half_life_days: 30, max_due_threads: 5 });
+  expect(c.retrieval).toMatchObject({
+    candidate_pool: 200,
+    top_n: 12,
+    recency_half_life_days: 30,
+    max_due_threads: 5,
+  });
   expect(c.reconcile.near_match_similarity).toBe(0.82);
-  expect(c.decay).toMatchObject({ grace_days: 3, rate: 0.08, stale_floor: 0.05, dormant_after_days: 14 });
+  expect(c.decay).toMatchObject({
+    grace_days: 3,
+    rate: 0.08,
+    stale_floor: 0.05,
+    dormant_after_days: 14,
+  });
   expect(c.cold_path.max_sweep_attempts).toBe(3);
   expect(c.prompts.persona).toBe("v2");
 });
 
 test("turn, hot_path and events config load with conservative defaults", () => {
   const c = loadConfig();
-  expect(c.turn).toMatchObject({ settle_ms: 4000, wait_ms: 12000, max_wait_ms: 40000, backchannel_style: "judge", sweep_batch: 500, worker_polling_interval_seconds: 0.5 });
+  expect(c.turn).toMatchObject({
+    settle_ms: 4000,
+    wait_ms: 12000,
+    max_wait_ms: 40000,
+    backchannel_style: "judge",
+    sweep_batch: 500,
+    worker_polling_interval_seconds: 0.5,
+  });
   expect(c.turn.read_delay_min_ms).toBeLessThanOrEqual(c.turn.read_delay_max_ms);
   expect(c.hot_path.db_timeout_ms).toBe(2000);
   expect(c.events).toEqual({ channel: "spica_events", heartbeat_ms: 25000 });
   expect(c.guard.timeout_ms).toBe(6000);
   expect(() => loadConfig({ turn: { backchannel_style: "loud" } })).toThrow();
-  expect(() => loadConfig({ turn: { read_delay_min_ms: 5000, read_delay_max_ms: 1000 } })).toThrow();
+  expect(() =>
+    loadConfig({ turn: { read_delay_min_ms: 5000, read_delay_max_ms: 1000 } }),
+  ).toThrow();
   expect(() => loadConfig({ turn: { worker_polling_interval_seconds: 0.1 } })).toThrow();
 });
 
@@ -82,7 +101,19 @@ test("life.timezone must be a real IANA zone", () => {
 
 test("outreach, push and reach_out prompt defaults", () => {
   const c = loadConfig();
-  expect(c.outreach).toMatchObject({ cap_per_day: 1, cap_per_week: 3, max_unanswered: 2, threshold: 0.2, tick_cron: "20 * * * *" });
-  expect(c.push).toEqual({ enabled: true, timeout_ms: 5000, ttl_seconds: 86400, body_max_chars: 1000, generic_body: "Spica sent you a message" });
+  expect(c.outreach).toMatchObject({
+    cap_per_day: 1,
+    cap_per_week: 3,
+    max_unanswered: 2,
+    threshold: 0.2,
+    tick_cron: "20 * * * *",
+  });
+  expect(c.push).toEqual({
+    enabled: true,
+    timeout_ms: 5000,
+    ttl_seconds: 86400,
+    body_max_chars: 1000,
+    generic_body: "Spica sent you a message",
+  });
   expect(c.prompts.reach_out).toBe("v1");
 });

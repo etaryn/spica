@@ -7,7 +7,12 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-const post = (body: unknown) => new Request("http://x/api/chat", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+const post = (body: unknown) =>
+  new Request("http://x/api/chat", {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
 
 test("401 without a session", async () => {
   const h = createChatHandler({ getUserId: async () => null, getDeps: () => makeTestDeps() });
@@ -39,7 +44,11 @@ test("200 returns a crisis reply immediately, with the card", async () => {
   const h = createChatHandler({ getUserId: async () => u, getDeps: () => deps });
   const res = await h(post({ clientMessageId: randomUUID(), text: "i want to end my life" }));
   expect(res.status).toBe(200);
-  expect(await res.json()).toMatchObject({ status: "replied", parts: ["I'm here with you."], crisisCard: { title: expect.any(String) } });
+  expect(await res.json()).toMatchObject({
+    status: "replied",
+    parts: ["I'm here with you."],
+    crisisCard: { title: expect.any(String) },
+  });
 });
 
 test("503 carries crisisCard when the reply fails on a flagged message", async () => {
@@ -60,14 +69,23 @@ test("409 on another user's message id", async () => {
   const b = await createTestUser("b");
   const deps = makeTestDeps();
   const id = randomUUID();
-  await createChatHandler({ getUserId: async () => a, getDeps: () => deps })(post({ clientMessageId: id, text: "a" }));
-  const res = await createChatHandler({ getUserId: async () => b, getDeps: () => deps })(post({ clientMessageId: id, text: "b" }));
+  await createChatHandler({ getUserId: async () => a, getDeps: () => deps })(
+    post({ clientMessageId: id, text: "a" }),
+  );
+  const res = await createChatHandler({ getUserId: async () => b, getDeps: () => deps })(
+    post({ clientMessageId: id, text: "b" }),
+  );
   expect(res.status).toBe(409);
 });
 
 test("timezone is accepted in the body", async () => {
   const u = await createTestUser();
   const h = createChatHandler({ getUserId: async () => u, getDeps: () => makeTestDeps() });
-  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: "Europe/London" }))).status).toBe(202);
-  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: 42 }))).status).toBe(400);
+  expect(
+    (await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: "Europe/London" })))
+      .status,
+  ).toBe(202);
+  expect((await h(post({ clientMessageId: randomUUID(), text: "hi", timezone: 42 }))).status).toBe(
+    400,
+  );
 });

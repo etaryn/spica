@@ -21,7 +21,11 @@ export class EventHub {
   private backoffMs = 1000;
   private stopped = false;
 
-  constructor(private readonly url: string, private readonly channel: string, private readonly log: Logger) {
+  constructor(
+    private readonly url: string,
+    private readonly channel: string,
+    private readonly log: Logger,
+  ) {
     if (!/^[a-z_][a-z0-9_]*$/.test(channel)) throw new Error("invalid channel name");
   }
 
@@ -89,7 +93,11 @@ export class EventHub {
     this.connecting = null;
     for (const set of this.subs.values()) {
       for (const sub of set) {
-        try { sub.onReset?.(); } catch { /* one bad subscriber never affects the others */ }
+        try {
+          sub.onReset?.();
+        } catch {
+          /* one bad subscriber never affects the others */
+        }
       }
     }
     this.retryLater();
@@ -115,12 +123,20 @@ export class EventHub {
   private dispatch(payload: string | undefined): void {
     if (!payload) return;
     let parsed: unknown;
-    try { parsed = JSON.parse(payload); } catch { return; }
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return;
+    }
     if (!parsed || typeof parsed !== "object") return;
     const { userId, ...event } = parsed as { userId?: unknown };
     if (typeof userId !== "string" || !isChatEvent(event)) return;
     for (const sub of this.subs.get(userId) ?? []) {
-      try { sub.fn(event); } catch { /* one bad subscriber never affects the others */ }
+      try {
+        sub.fn(event);
+      } catch {
+        /* one bad subscriber never affects the others */
+      }
     }
   }
 }

@@ -16,10 +16,17 @@ export function NotificationsSwitch({ publicKey }: { publicKey: string }) {
   if (on === null) return null;
   return (
     <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <input type="checkbox" checked={on} onChange={async (e) => {
-        if (e.target.checked) setOn(await subscribePush(publicKey));
-        else { await unsubscribePush(); setOn(false); }
-      }} />
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={async (e) => {
+          if (e.target.checked) setOn(await subscribePush(publicKey));
+          else {
+            await unsubscribePush();
+            setOn(false);
+          }
+        }}
+      />
       Notify me when Spica messages
     </label>
   );

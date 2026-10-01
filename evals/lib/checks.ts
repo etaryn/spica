@@ -9,7 +9,13 @@ import { turnText, type Script } from "./script";
  * One user turn: `reply` is the reply whose `reply_to` is this turn (null when a later reply covers it), and
  * `crisisCard` / `coveredBy` come from the reply that covers it (the first reply at or after it).
  */
-export type TurnResult = { session: number; text: string; reply: string | null; crisisCard: CrisisCard | null; coveredBy: string | null };
+export type TurnResult = {
+  session: number;
+  text: string;
+  reply: string | null;
+  crisisCard: CrisisCard | null;
+  coveredBy: string | null;
+};
 
 export interface CheckContext {
   db: Db;
@@ -22,15 +28,20 @@ export interface CheckContext {
 
 export type StateCheck = (ctx: CheckContext, params: Record<string, unknown>) => Promise<unknown>;
 
-const scriptedTurns = (script: Script, key: string) => script.sessions.filter((s) => s.user === key).flatMap((s) => s.turns.map(turnText));
+const scriptedTurns = (script: Script, key: string) =>
+  script.sessions.filter((s) => s.user === key).flatMap((s) => s.turns.map(turnText));
 
 export const stateChecks: Record<string, StateCheck> = {
   /** Backchannels are left out unless `include_backchannels` is true. */
   turn_count: async (ctx, p) =>
-    (await listTurns(ctx.db, ctx.userId))
-      .filter((t) => (!p.role || t.role === p.role) && (p.include_backchannels === true || t.trigger !== "backchannel")).length,
+    (await listTurns(ctx.db, ctx.userId)).filter(
+      (t) =>
+        (!p.role || t.role === p.role) &&
+        (p.include_backchannels === true || t.trigger !== "backchannel"),
+    ).length,
 
-  session_count: async (ctx) => new Set((await listTurns(ctx.db, ctx.userId)).map((t) => t.session_id)).size,
+  session_count: async (ctx) =>
+    new Set((await listTurns(ctx.db, ctx.userId)).map((t) => t.session_id)).size,
 
   all_unextracted: async (ctx) => (await listTurns(ctx.db, ctx.userId)).every((t) => !t.extracted),
 
@@ -40,12 +51,16 @@ export const stateChecks: Record<string, StateCheck> = {
     const replies = turns.filter((t) => t.role === "companion" && t.trigger === null);
     const answered = new Set(replies.flatMap((r) => (r.reply_to ? [r.reply_to] : [])));
     const anchors = turns.filter((t) => answered.has(t.id));
-    const covered = turns.filter((t) => t.role === "user").every((u) => anchors.some((a) => a.created_at >= u.created_at));
+    const covered = turns
+      .filter((t) => t.role === "user")
+      .every((u) => anchors.some((a) => a.created_at >= u.created_at));
     return covered && replies.every((t) => t.text.trim().length > 0);
   },
 
   user_turns_match_script: async (ctx) => {
-    const stored = (await listTurns(ctx.db, ctx.userId)).filter((t) => t.role === "user").map((t) => t.text);
+    const stored = (await listTurns(ctx.db, ctx.userId))
+      .filter((t) => t.role === "user")
+      .map((t) => t.text);
     const expected = scriptedTurns(ctx.script, ctx.userKey);
     return JSON.stringify(stored) === JSON.stringify(expected);
   },
@@ -54,7 +69,8 @@ export const stateChecks: Record<string, StateCheck> = {
     (await listTurns(ctx.db, ctx.userId)).filter((t) => t.safety_flag?.flagged).length,
 
   /** Distinct replies that carried the card (a reply covering several turns counts once). */
-  crisis_card_count: async (ctx) => new Set(ctx.results.filter((r) => r.crisisCard !== null).map((r) => r.coveredBy)).size,
+  crisis_card_count: async (ctx) =>
+    new Set(ctx.results.filter((r) => r.crisisCard !== null).map((r) => r.coveredBy)).size,
 
   /** Was the reply to this specific user turn flagged? Extra cautious flags elsewhere don't matter. */
   turn_flagged: async (ctx, p) => {
@@ -79,14 +95,25 @@ export const stateChecks: Record<string, StateCheck> = {
   all_extracted: async (ctx) => (await listTurns(ctx.db, ctx.userId)).every((t) => t.extracted),
 
   fact_status: async (ctx, p) => {
-    const rows = await ctx.db.select({ status: fact.status }).from(fact)
-      .where(and(eq(fact.user_id, ctx.userId), sql`${fact.content} ILIKE ${`%${String(p.contains)}%`}`));
+    const rows = await ctx.db
+      .select({ status: fact.status })
+      .from(fact)
+      .where(
+        and(eq(fact.user_id, ctx.userId), sql`${fact.content} ILIKE ${`%${String(p.contains)}%`}`),
+      );
     return rows.some((r) => r.status === p.status);
   },
 
   thread_status: async (ctx, p) => {
-    const rows = await ctx.db.select({ status: thread.status }).from(thread)
-      .where(and(eq(thread.user_id, ctx.userId), sql`${thread.title} ILIKE ${`%${String(p.contains)}%`}`));
+    const rows = await ctx.db
+      .select({ status: thread.status })
+      .from(thread)
+      .where(
+        and(
+          eq(thread.user_id, ctx.userId),
+          sql`${thread.title} ILIKE ${`%${String(p.contains)}%`}`,
+        ),
+      );
     return rows.some((r) => r.status === p.status);
   },
 
@@ -95,13 +122,25 @@ export const stateChecks: Record<string, StateCheck> = {
     if (p.contains) conds.push(sql`${fact.content} ILIKE ${`%${String(p.contains)}%`}`);
     if (p.status) conds.push(sql`${fact.status} = ${String(p.status)}`);
     if (p.subject) conds.push(sql`${fact.subject} = ${String(p.subject)}`);
-    return (await ctx.db.select({ id: fact.id }).from(fact).where(and(...conds))).length;
+    return (
+      await ctx.db
+        .select({ id: fact.id })
+        .from(fact)
+        .where(and(...conds))
+    ).length;
   },
 
   entity_exists: async (ctx, p) => {
     const n = String(p.name).toLowerCase();
-    const rows = await ctx.db.select({ id: entity.id }).from(entity).where(and(eq(entity.user_id, ctx.userId),
-      sql`(lower(${entity.name}) = ${n} OR ${n} = ANY(SELECT lower(a) FROM unnest(${entity.aliases}) a))`));
+    const rows = await ctx.db
+      .select({ id: entity.id })
+      .from(entity)
+      .where(
+        and(
+          eq(entity.user_id, ctx.userId),
+          sql`(lower(${entity.name}) = ${n} OR ${n} = ANY(SELECT lower(a) FROM unnest(${entity.aliases}) a))`,
+        ),
+      );
     return rows.length > 0;
   },
 
@@ -109,13 +148,27 @@ export const stateChecks: Record<string, StateCheck> = {
     const conds = [eq(entity.user_id, ctx.userId)];
     if (p.type) conds.push(sql`${entity.type} = ${String(p.type)}`);
     if (p.subject) conds.push(sql`${entity.subject} = ${String(p.subject)}`);
-    return (await ctx.db.select({ id: entity.id }).from(entity).where(and(...conds))).length;
+    return (
+      await ctx.db
+        .select({ id: entity.id })
+        .from(entity)
+        .where(and(...conds))
+    ).length;
   },
 
   fact_flag: async (ctx, p) => {
-    const rows = await ctx.db.select({ payload: fact.payload }).from(fact)
-      .where(and(eq(fact.user_id, ctx.userId), sql`${fact.content} ILIKE ${`%${String(p.contains ?? "")}%`}`));
-    return rows.some((r) => (r.payload as Record<string, unknown> | null)?.[String(p.flag)] === true);
+    const rows = await ctx.db
+      .select({ payload: fact.payload })
+      .from(fact)
+      .where(
+        and(
+          eq(fact.user_id, ctx.userId),
+          sql`${fact.content} ILIKE ${`%${String(p.contains ?? "")}%`}`,
+        ),
+      );
+    return rows.some(
+      (r) => (r.payload as Record<string, unknown> | null)?.[String(p.flag)] === true,
+    );
   },
 
   prompt_mentions: async (ctx, p) => {

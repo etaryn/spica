@@ -12,11 +12,12 @@
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
     "db:reset-self": "tsx --env-file-if-exists=.env src/db/reset-self-cli.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check .",
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=.env evals/run.ts",
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
-    "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts"
+    "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.127.0",
@@ -40,6 +41,7 @@
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.1",

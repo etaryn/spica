@@ -8,7 +8,12 @@ import { errorName } from "../errors";
 import { deliverPart } from "../delivery";
 import { emit } from "../events";
 import { guardOutgoing } from "../guard/outgoing";
-import { COLD_PATH_QUEUE, TURN_TIMER_QUEUE, type BackchannelJob, type TurnTimerJob } from "../queue";
+import {
+  COLD_PATH_QUEUE,
+  TURN_TIMER_QUEUE,
+  type BackchannelJob,
+  type TurnTimerJob,
+} from "../queue";
 import { runAvailabilityNote } from "./availability-note";
 import { withTimeout } from "../timeout";
 import { readDelayMs, seededUnit, sleepUntil, typingMs } from "./pacing";
@@ -32,18 +37,33 @@ async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>
  * insert via `finish`'s epoch/turn check, or between bubbles via an explicit re-read, so every later bubble
  * stops, not just the first (rule 7: crisis suspends all friction).
  */
-export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stale" | "busy" | "sent" | "abandoned" | "retry" | "failed"> {
+export async function runTurnTimer(
+  deps: Deps,
+  job: TurnTimerJob,
+): Promise<"stale" | "busy" | "sent" | "abandoned" | "retry" | "failed"> {
   const { db, clock, config, log } = deps;
   const { userId } = job;
   const commitAt = clock.now();
-  const c = await mutateState(db, userId, commitAt, (s) => T.commit(s, { version: job.version, now: commitAt }));
+  const c = await mutateState(db, userId, commitAt, (s) =>
+    T.commit(s, { version: job.version, now: commitAt }),
+  );
   if (c.kind === "stale") return "stale";
   if (c.kind === "busy") {
-    await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, job, { startAfter: plus(commitAt, config.turn.inflight_recheck_ms) }), "turn_timer");
+    await enqueueSafely(
+      deps,
+      userId,
+      () =>
+        deps.queue.enqueue(TURN_TIMER_QUEUE, job, {
+          startAfter: plus(commitAt, config.turn.inflight_recheck_ms),
+        }),
+      "turn_timer",
+    );
     return "busy";
   }
 
-  const getTurns = (deps as { getTurnsByIds?: typeof sessionLog.getTurnsByIds }).getTurnsByIds ?? sessionLog.getTurnsByIds;
+  const getTurns =
+    (deps as { getTurnsByIds?: typeof sessionLog.getTurnsByIds }).getTurnsByIds ??
+    sessionLog.getTurnsByIds;
 
   /**
    * A post-commit infrastructure error (before the reply row exists) must not strand the committed turns in
@@ -55,9 +75,26 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     const attempt = job.attempt ?? 0;
     const now = clock.now();
     if (attempt < config.turn.retry_limit) {
-      const r = await mutateState(db, userId, now, (s) => T.restore(s, { epoch: c.epoch, turnIds: c.turnIds, now, retryAt: plus(now, config.turn.retry_delay_ms) }));
+      const r = await mutateState(db, userId, now, (s) =>
+        T.restore(s, {
+          epoch: c.epoch,
+          turnIds: c.turnIds,
+          now,
+          retryAt: plus(now, config.turn.retry_delay_ms),
+        }),
+      );
       if (r.kind === "abandoned") return "abandoned";
-      await enqueueSafely(deps, userId, () => deps.queue.enqueue(TURN_TIMER_QUEUE, { userId, version: r.version, attempt: attempt + 1 }, { startAfter: plus(now, config.turn.retry_delay_ms) }), "turn_timer");
+      await enqueueSafely(
+        deps,
+        userId,
+        () =>
+          deps.queue.enqueue(
+            TURN_TIMER_QUEUE,
+            { userId, version: r.version, attempt: attempt + 1 },
+            { startAfter: plus(now, config.turn.retry_delay_ms) },
+          ),
+        "turn_timer",
+      );
       return "retry";
     }
     const cleared = await mutateState(db, userId, now, (s) => T.giveUp(s, { epoch: c.epoch, now }));
@@ -74,7 +111,9 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
   }
   const last = turns.at(-1);
   if (!last) {
-    await mutateState(db, userId, clock.now(), (s) => T.giveUp(s, { epoch: c.epoch, now: clock.now() }));
+    await mutateState(db, userId, clock.now(), (s) =>
+      T.giveUp(s, { epoch: c.epoch, now: clock.now() }),
+    );
     return "abandoned";
   }
 
@@ -83,8 +122,15 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
   // Generate during the read delay; settle so a rejection never goes unhandled while we sleep.
   const composing: Promise<{ ok: true; value: Composed } | { ok: false; error: unknown }> =
-    composeReply(deps, userId, { turns, openQuestions: c.openQuestions, flag: null, deferredFact: c.deferredFact })
-      .then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
+    composeReply(deps, userId, {
+      turns,
+      openQuestions: c.openQuestions,
+      flag: null,
+      deferredFact: c.deferredFact,
+    }).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
 
   await sleepUntil(clock, typingAt);
   await emit(deps, userId, { type: "typing", on: true });
@@ -124,7 +170,12 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
         const step = T.finish(s, { epoch: c.epoch, turnIds: c.turnIds, now: insertAt });
         if (!step.result) return { patch: null, result: null };
         const row = await sessionLog.insertReplyIfAbsent(tx, userId, {
-          id: randomUUID(), session_id: last.session_id, role: "companion", text: composed.value.text, created_at: insertAt, reply_to: last.id,
+          id: randomUUID(),
+          session_id: last.session_id,
+          role: "companion",
+          text: composed.value.text,
+          created_at: insertAt,
+          reply_to: last.id,
         });
         return { patch: step.patch, result: row };
       });
@@ -142,7 +193,10 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
     await deliverPart(deps, userId, { turnId: companion.id, part: 0, parts });
     for (let i = 1; i < parts.length; i++) {
-      sendAt = plus(new Date(Math.max(sendAt.getTime(), clock.now().getTime())), config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length));
+      sendAt = plus(
+        new Date(Math.max(sendAt.getTime(), clock.now().getTime())),
+        config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length),
+      );
       await sleepUntil(clock, sendAt);
       // Re-read right after the pacing sleep, immediately before this bubble's emit: the part-gap + typing
       // wait (seconds) is the likeliest window for a crisis to land, so checking before the sleep (as the
@@ -157,9 +211,18 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     }
     await stopTyping(); // emit typing:off right after the last bubble, before the cold-path enqueue and guard log
 
-    await enqueueSafely(deps, userId, () => deps.queue.enqueue(COLD_PATH_QUEUE, {
-      userId, turnIds: [...c.turnIds, companion.id], replyTurnId: companion.id, recalled: composed.value.recalled,
-    }), "cold_path");
+    await enqueueSafely(
+      deps,
+      userId,
+      () =>
+        deps.queue.enqueue(COLD_PATH_QUEUE, {
+          userId,
+          turnIds: [...c.turnIds, companion.id],
+          replyTurnId: companion.id,
+          recalled: composed.value.recalled,
+        }),
+      "cold_path",
+    );
     await composed.value.writeGuardLog(); // judge_log after the send
     return "sent";
   } finally {
@@ -181,11 +244,20 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 }
 
 /** turn_backchannel: once per buffer, rate-limited, keyword-guarded, never a memory. */
-export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"sent" | "skipped" | "dropped"> {
+export async function runBackchannel(
+  deps: Deps,
+  job: BackchannelJob,
+): Promise<"sent" | "skipped" | "dropped"> {
   if (job.trigger === "availability") return runAvailabilityNote(deps, job);
   const { db, clock, config } = deps;
   const now = clock.now();
-  const ok = await mutateState(db, job.userId, now, (s) => T.backchannel(s, { version: job.version, now, minIntervalMs: config.turn.backchannel_min_interval_ms }));
+  const ok = await mutateState(db, job.userId, now, (s) =>
+    T.backchannel(s, {
+      version: job.version,
+      now,
+      minIntervalMs: config.turn.backchannel_min_interval_ms,
+    }),
+  );
   if (!ok) return "skipped";
 
   const anchor = await sessionLog.getTurn(db, job.userId, job.turnId);
@@ -193,8 +265,15 @@ export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"
 
   const recent = await sessionLog.turnsUpTo(db, job.userId, anchor, config.chat.recent_turns);
   const guarded = await guardOutgoing(deps, {
-    userId: job.userId, turnId: anchor.id, first: job.text,
-    input: { kind: "backchannel", recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })), recalledFacts: [], onboardingFacts: [] },
+    userId: job.userId,
+    turnId: anchor.id,
+    first: job.text,
+    input: {
+      kind: "backchannel",
+      recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      recalledFacts: [],
+      onboardingFacts: [],
+    },
   });
   if (!guarded.text) {
     await guarded.writeLog();
@@ -207,8 +286,13 @@ export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"
   const bc = await mutateState<Turn | null>(db, job.userId, insertAt, async (s, tx) => {
     if (s.buffer_version !== job.version) return { patch: null, result: null };
     const row = await sessionLog.insertTurn(tx, job.userId, {
-      id: randomUUID(), session_id: anchor.session_id, role: "companion", text: guarded.text,
-      created_at: insertAt, trigger: "backchannel", extracted: true,
+      id: randomUUID(),
+      session_id: anchor.session_id,
+      role: "companion",
+      text: guarded.text,
+      created_at: insertAt,
+      trigger: "backchannel",
+      extracted: true,
     });
     return { patch: null, result: row };
   });

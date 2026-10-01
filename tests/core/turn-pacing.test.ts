@@ -27,10 +27,11 @@ test("read delay grows with buffer length and stays within [min, max]", () => {
   expect(mid).toBeGreaterThan(1500);
   expect(mid).toBeLessThan(4000);
   expect(readDelayMs(t, 200, 0)).toBeLessThan(readDelayMs(t, 200, 0.99));
-  for (const u of [0, 0.99]) for (const c of [0, 50, 10_000]) {
-    expect(readDelayMs(t, c, u)).toBeGreaterThanOrEqual(1500);
-    expect(readDelayMs(t, c, u)).toBeLessThanOrEqual(4000);
-  }
+  for (const u of [0, 0.99])
+    for (const c of [0, 50, 10_000]) {
+      expect(readDelayMs(t, c, u)).toBeGreaterThanOrEqual(1500);
+      expect(readDelayMs(t, c, u)).toBeLessThanOrEqual(4000);
+    }
 });
 
 test("typing time scales with length and is capped", () => {

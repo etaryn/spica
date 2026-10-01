@@ -7,7 +7,9 @@ import { user } from "./schema";
 export function assertDisposableDatabase(url: string): void {
   const name = new URL(url).pathname.replace(/^\//, "");
   if (!/_(test|eval)$/.test(name)) {
-    throw new Error(`refusing to wipe database "${name}": only *_test or *_eval databases may be truncated`);
+    throw new Error(
+      `refusing to wipe database "${name}": only *_test or *_eval databases may be truncated`,
+    );
   }
 }
 

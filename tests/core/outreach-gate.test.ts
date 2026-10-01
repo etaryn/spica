@@ -7,13 +7,30 @@ const cfg = loadConfig().outreach;
 const now = new Date("2026-01-10T12:00:00Z");
 const H = 3_600_000;
 const ago = (h: number) => new Date(now.getTime() - h * H);
-const ok = (): GateInputs => ({ status: "active", sentAt: [], herBlock: null, unanswered: 0, inProgress: false, crisisQuietUntil: null });
-const failed = (g: GateInputs) => evaluateGate(g, cfg, now).results.filter((r) => !r.pass).map((r) => r.rule);
+const ok = (): GateInputs => ({
+  status: "active",
+  sentAt: [],
+  herBlock: null,
+  unanswered: 0,
+  inProgress: false,
+  crisisQuietUntil: null,
+});
+const failed = (g: GateInputs) =>
+  evaluateGate(g, cfg, now)
+    .results.filter((r) => !r.pass)
+    .map((r) => r.rule);
 
 test("all clear passes and reports every rule", () => {
   const out = evaluateGate(ok(), cfg, now);
   expect(out.pass).toBe(true);
-  expect(out.results.map((r) => r.rule)).toEqual(["status", "caps", "her_day", "unanswered", "in_progress", "crisis"]);
+  expect(out.results.map((r) => r.rule)).toEqual([
+    "status",
+    "caps",
+    "her_day",
+    "unanswered",
+    "in_progress",
+    "crisis",
+  ]);
 });
 
 test("status: ended blocks, repairing passes", () => {
@@ -23,7 +40,7 @@ test("status: ended blocks, repairing passes", () => {
 
 test("caps are rolling windows: 1 per 24 h, 3 per 7 d", () => {
   expect(failed({ ...ok(), sentAt: [ago(23.9)] })).toEqual(["caps"]);
-  expect(failed({ ...ok(), sentAt: [ago(24)] })).toEqual([]);           // exactly 24 h ago is outside the window
+  expect(failed({ ...ok(), sentAt: [ago(24)] })).toEqual([]); // exactly 24 h ago is outside the window
   expect(failed({ ...ok(), sentAt: [ago(30), ago(80), ago(150)] })).toEqual(["caps"]);
   expect(failed({ ...ok(), sentAt: [ago(30), ago(80), ago(168)] })).toEqual([]);
 });
@@ -45,5 +62,9 @@ test("in progress and crisis quiet block; crisis ends exactly at crisis_quiet_un
 });
 
 test("every failing rule is reported, not just the first", () => {
-  expect(failed({ ...ok(), status: "ended_by_user", unanswered: 5, inProgress: true })).toEqual(["status", "unanswered", "in_progress"]);
+  expect(failed({ ...ok(), status: "ended_by_user", unanswered: 5, inProgress: true })).toEqual([
+    "status",
+    "unanswered",
+    "in_progress",
+  ]);
 });

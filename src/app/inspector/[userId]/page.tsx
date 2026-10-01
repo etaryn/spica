@@ -5,12 +5,37 @@ import { getDeps } from "@/lib/deps";
 import { parseUserIdParam } from "@/lib/inspector-access";
 import { assertInspectorAccess } from "@/lib/inspector-guard";
 import styles from "../inspector.module.css";
-import { EntitiesThreadsTab, FactsTab, IdentityTab, JudgeLogTab, LifeTab, ReachOutsTab, RelationshipTab, RetrievalTab, TranscriptTab, TurnStateTab } from "./tabs";
+import {
+  EntitiesThreadsTab,
+  FactsTab,
+  IdentityTab,
+  JudgeLogTab,
+  LifeTab,
+  ReachOutsTab,
+  RelationshipTab,
+  RetrievalTab,
+  TranscriptTab,
+  TurnStateTab,
+} from "./tabs";
 
-const TABS = { transcript: "Transcript", facts: "Facts", graph: "Entities & Threads", identity: "Identity", relationship: "Relationship", life: "Life", retrieval: "Retrieval", turn: "Turn-taking", judge: "Judge log", reachouts: "Reach-outs" } as const;
+const TABS = {
+  transcript: "Transcript",
+  facts: "Facts",
+  graph: "Entities & Threads",
+  identity: "Identity",
+  relationship: "Relationship",
+  life: "Life",
+  retrieval: "Retrieval",
+  turn: "Turn-taking",
+  judge: "Judge log",
+  reachouts: "Reach-outs",
+} as const;
 type Tab = keyof typeof TABS;
 
-export default async function InspectUser({ params, searchParams }: {
+export default async function InspectUser({
+  params,
+  searchParams,
+}: {
   params: Promise<{ userId: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
@@ -27,22 +52,30 @@ export default async function InspectUser({ params, searchParams }: {
   return (
     <>
       <Link href="/inspector">← users</Link>
-      <h1>{target.name} <small>{target.email}</small></h1>
+      <h1>
+        {target.name} <small>{target.email}</small>
+      </h1>
       <nav className={styles.nav}>
         {(Object.keys(TABS) as Tab[]).map((t) => (
-          <Link key={t} href={`${base}?tab=${t}`} className={t === tab ? styles.active : undefined}>{TABS[t]}</Link>
+          <Link key={t} href={`${base}?tab=${t}`} className={t === tab ? styles.active : undefined}>
+            {TABS[t]}
+          </Link>
         ))}
       </nav>
       {tab === "transcript" && <TranscriptTab db={db} userId={userId} />}
       {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}
       {tab === "graph" && <EntitiesThreadsTab db={db} userId={userId} base={base} />}
       {tab === "identity" && <IdentityTab db={db} userId={userId} />}
-      {tab === "relationship" && <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />}
+      {tab === "relationship" && (
+        <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />
+      )}
       {tab === "life" && <LifeTab db={db} userId={userId} now={clock.now()} cfg={config.life} />}
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
       {tab === "turn" && <TurnStateTab db={db} userId={userId} />}
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}
-      {tab === "reachouts" && <ReachOutsTab db={db} userId={userId} limit={config.outreach.log_list_limit} />}
+      {tab === "reachouts" && (
+        <ReachOutsTab db={db} userId={userId} limit={config.outreach.log_list_limit} />
+      )}
     </>
   );
 }

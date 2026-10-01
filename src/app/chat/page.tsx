@@ -12,13 +12,20 @@ export default async function ChatPage() {
   const { db, config } = getDeps();
   const turns = await recentTurns(db, user.id, config.chat.history_page_size);
   // mergeHistory([], ...) gives the same shape (status, of, trigger) history catch-up produces on the client.
-  const initial: UiMessage[] = mergeHistory([], turns.map((t) => toHistoryMessage(t, config)));
+  const initial: UiMessage[] = mergeHistory(
+    [],
+    turns.map((t) => toHistoryMessage(t, config)),
+  );
   return (
     <div className={styles.shell}>
       <header className={styles.header}>
         <span className={styles.title}>Spica</span>
-        <Link href="/memory" className={styles.settings}>Memory</Link>
-        <Link href="/settings" className={styles.settings}>Settings</Link>
+        <Link href="/memory" className={styles.settings}>
+          Memory
+        </Link>
+        <Link href="/settings" className={styles.settings}>
+          Settings
+        </Link>
       </header>
       <ChatClient initial={initial} vapidPublicKey={getVapidPublicKey()} />
     </div>

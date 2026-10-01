@@ -9,7 +9,10 @@ export const ReconcileSchema = z.object({
   target_fact_id: z.string().nullable(),
 });
 
-export type Decision = { relation: "duplicate" | "resolves" | "contradicts" | "new"; targetId: string | null };
+export type Decision = {
+  relation: "duplicate" | "resolves" | "contradicts" | "new";
+  targetId: string | null;
+};
 const NEW: Decision = { relation: "new", targetId: null };
 
 export function buildReconcileInput(c: ExtractedFact, neighbors: Neighbor[]): string {
@@ -21,7 +24,11 @@ export function buildReconcileInput(c: ExtractedFact, neighbors: Neighbor[]): st
 }
 
 /** Approach A: only near-matches reach the classifier; any target outside `neighbors` is ignored. */
-export async function decide(deps: Pick<Deps, "llm" | "config">, c: ExtractedFact, neighbors: Neighbor[]): Promise<Decision> {
+export async function decide(
+  deps: Pick<Deps, "llm" | "config">,
+  c: ExtractedFact,
+  neighbors: Neighbor[],
+): Promise<Decision> {
   if (neighbors.length === 0) return NEW;
   const raw = await deps.llm.classifyJson({
     purpose: "reconcile",

@@ -33,7 +33,11 @@ export class ScriptedEmbedder implements Embedder {
       this.failNext = false;
       throw new Error("scripted embedder failure");
     }
-    return texts.map((t) => this.vectors.get(t) ?? ScriptedEmbedder.axis(this.dimensions, 100 + (hash(t) % (this.dimensions - 100))));
+    return texts.map(
+      (t) =>
+        this.vectors.get(t) ??
+        ScriptedEmbedder.axis(this.dimensions, 100 + (hash(t) % (this.dimensions - 100))),
+    );
   }
 }
 

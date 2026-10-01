@@ -1,7 +1,8 @@
 import { createDb, type Db } from "@/db/client";
 import { insertUserRow, truncateAll } from "@/db/admin";
 
-export const testDbUrl = process.env.TEST_DATABASE_URL ?? "postgres://spica:spica@localhost:5432/spica_test";
+export const testDbUrl =
+  process.env.TEST_DATABASE_URL ?? "postgres://spica:spica@localhost:5432/spica_test";
 
 let cached: ReturnType<typeof createDb> | null = null;
 

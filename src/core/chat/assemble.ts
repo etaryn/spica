@@ -65,8 +65,10 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     input.valuesDoc,
     input.egoLine ? `## How you're feeling\n${input.egoLine}` : null,
     input.relationshipSummary ? `## You and them\n${input.relationshipSummary}` : null,
-    input.lifeState ? `## Your day
-${input.lifeState}` : null,
+    input.lifeState
+      ? `## Your day
+${input.lifeState}`
+      : null,
     memory.length ? `## What you remember\n${memory.join("\n\n")}` : null,
     retrieval.dueThreads.length
       ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}${t.detail ? ` (latest: ${t.detail})` : ""}`).join("\n")}`
@@ -82,14 +84,27 @@ ${input.lifeState}` : null,
   // The window can span days; without a marker the model carries on from the old moment.
   const messages: ChatMessage[] = turns.map((t, i) => {
     const prev = turns[i - 1];
-    const gapHours = prev?.created_at && t.created_at ? (t.created_at.getTime() - prev.created_at.getTime()) / HOUR : 0;
-    const marked = t.role === "user" && input.gapMarkerMinHours !== undefined && gapHours >= input.gapMarkerMinHours;
-    return { role: t.role === "user" ? "user" : "assistant", content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text };
+    const gapHours =
+      prev?.created_at && t.created_at
+        ? (t.created_at.getTime() - prev.created_at.getTime()) / HOUR
+        : 0;
+    const marked =
+      t.role === "user" &&
+      input.gapMarkerMinHours !== undefined &&
+      gapHours >= input.gapMarkerMinHours;
+    return {
+      role: t.role === "user" ? "user" : "assistant",
+      content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text,
+    };
   });
 
   if (input.reachOut) {
     const last = messages.at(-1);
-    if (last?.role === "user") messages[messages.length - 1] = { role: "user", content: `${last.content}\n\n${input.reachOut.cue}` };
+    if (last?.role === "user")
+      messages[messages.length - 1] = {
+        role: "user",
+        content: `${last.content}\n\n${input.reachOut.cue}`,
+      };
     else messages.push({ role: "user", content: input.reachOut.cue });
   }
 
@@ -104,7 +119,10 @@ function elapsed(hours: number): string {
 }
 
 /** Factual relationship line: how well she knows them, so she doesn't guess. */
-export function relationshipLine(s: { sessions: number; days: number; first: Date | null }, now: Date): string {
+export function relationshipLine(
+  s: { sessions: number; days: number; first: Date | null },
+  now: Date,
+): string {
   if (!s.first || s.sessions <= 1) return "This is your first conversation with them.";
   if (s.days <= 1) return "You've already talked earlier today.";
   return `You first talked ${relativeDate(s.first, now)}, and have talked on ${s.days} different days.`;

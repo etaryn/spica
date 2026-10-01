@@ -18,7 +18,8 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 const msg = (text: string, id = randomUUID()) => ({ clientMessageId: id, text });
-const timers = (deps: ReturnType<typeof makeTestDeps>) => deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE);
+const timers = (deps: ReturnType<typeof makeTestDeps>) =>
+  deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE);
 
 describe("receiveMessage", () => {
   test("a complete message is buffered, judged once, and a timer is set for the settle window", async () => {
@@ -28,8 +29,16 @@ describe("receiveMessage", () => {
     expect(await receiveMessage(deps, u, input)).toEqual({ status: "accepted" });
     const s = (await getState(getTestDb(), u))!;
     expect(s.buffer_turn_ids).toEqual([input.clientMessageId]);
-    expect(s.open_questions).toEqual([{ turn_id: input.clientMessageId, text: "what should I cook tonight?" }]);
-    expect(timers(deps)).toEqual([{ name: TURN_TIMER_QUEUE, data: { userId: u, version: 1 }, startAfter: new Date(deps.clock.now().getTime() + 4000) }]);
+    expect(s.open_questions).toEqual([
+      { turn_id: input.clientMessageId, text: "what should I cook tonight?" },
+    ]);
+    expect(timers(deps)).toEqual([
+      {
+        name: TURN_TIMER_QUEUE,
+        data: { userId: u, version: 1 },
+        startAfter: new Date(deps.clock.now().getTime() + 4000),
+      },
+    ]);
     expect(deps.llm.calls).toHaveLength(0); // no reply generated in the POST
     const logs = await listJudgeLogs(getTestDb(), u);
     expect(logs.map((l) => [l.kind, l.turn_id])).toEqual([["turn", input.clientMessageId]]);
@@ -40,21 +49,34 @@ describe("receiveMessage", () => {
     const u = await createTestUser();
     await receiveMessage(deps, u, msg("ok so today was insane and"));
     expect(timers(deps).at(-1)!.startAfter).toEqual(new Date(deps.clock.now().getTime() + 12000));
-    for (let i = 0; i < 5; i++) { deps.clock.advance(10_000); await receiveMessage(deps, u, msg("and then")); }
+    for (let i = 0; i < 5; i++) {
+      deps.clock.advance(10_000);
+      await receiveMessage(deps, u, msg("and then"));
+    }
     const s = (await getState(getTestDb(), u))!;
     expect(s.buffer_turn_ids).toHaveLength(6);
-    expect(timers(deps).at(-1)!.startAfter).toEqual(new Date(s.buffer_started_at!.getTime() + 40000));
+    expect(timers(deps).at(-1)!.startAfter).toEqual(
+      new Date(s.buffer_started_at!.getTime() + 40000),
+    );
   });
 
   test("backchannel: the judge's reaction is scheduled once per buffer, never on a complete verdict, never when silent", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
-    deps.llm.handlers.turn_judge = () => ({ reasoning: "mid-story", complete: false, open_questions: [], backchannel: "huh" });
+    deps.llm.handlers.turn_judge = () => ({
+      reasoning: "mid-story",
+      complete: false,
+      open_questions: [],
+      backchannel: "huh",
+    });
     await receiveMessage(deps, u, msg("my boss called me in"));
     await receiveMessage(deps, u, msg("and I thought I was getting fired"));
     const bcs = deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE);
     expect(bcs).toHaveLength(2); // both scheduled; the transition lets only the first send (Task 8)
-    expect(bcs[0]).toMatchObject({ data: { userId: u, text: "huh" }, startAfter: new Date(deps.clock.now().getTime() + 1500) });
+    expect(bcs[0]).toMatchObject({
+      data: { userId: u, text: "huh" },
+      startAfter: new Date(deps.clock.now().getTime() + 1500),
+    });
 
     const silent = makeTestDeps({ turn: { backchannel_style: "silent" } });
     silent.llm.handlers.turn_judge = deps.llm.handlers.turn_judge;
@@ -71,7 +93,10 @@ describe("receiveMessage", () => {
     deps.llm.replies.push("I'm really glad you told me.\n\nPlease reach out to 988.");
     const crisisMsg = msg("i want to end my life");
     const r = await receiveMessage(deps, u, crisisMsg);
-    expect(r).toMatchObject({ status: "replied", parts: ["I'm really glad you told me.", "Please reach out to 988."] });
+    expect(r).toMatchObject({
+      status: "replied",
+      parts: ["I'm really glad you told me.", "Please reach out to 988."],
+    });
     expect((r as { crisisCard: unknown }).crisisCard).not.toBeNull();
     const turns = await listTurns(getTestDb(), u);
     const reply = turns.find((t) => t.role === "companion")!;
@@ -79,11 +104,19 @@ describe("receiveMessage", () => {
     expect(reply.safety_flag?.flagged).toBe(true);
     const s = (await getState(getTestDb(), u))!;
     expect(s).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [], reply_epoch: 1 });
-    expect(deps.events.events.map((e) => e.event)).toEqual([{ type: "message", turnId: reply.id, part: 0 }, { type: "message", turnId: reply.id, part: 1 }, { type: "typing", on: false }]);
+    expect(deps.events.events.map((e) => e.event)).toEqual([
+      { type: "message", turnId: reply.id, part: 0 },
+      { type: "message", turnId: reply.id, part: 1 },
+      { type: "typing", on: false },
+    ]);
     expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id)).toHaveLength(2);
     // O9 (Ethan 2026-10-01): a crisis reply never shows its text on a lock screen.
-    expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id).map((p) => p.msg.body)).toEqual([deps.config.push.generic_body, deps.config.push.generic_body]);
-    expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({ turnIds: [turns[0]!.id, crisisMsg.clientMessageId, reply.id] });
+    expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id).map((p) => p.msg.body)).toEqual(
+      [deps.config.push.generic_body, deps.config.push.generic_body],
+    );
+    expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({
+      turnIds: [turns[0]!.id, crisisMsg.clientMessageId, reply.id],
+    });
     expect(deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
   });
 
@@ -126,7 +159,10 @@ describe("receiveMessage", () => {
     deps.llm.classify = () => ({ flag: true, category: "self_harm" });
     deps.llm.replyDelayMs = 20;
     const crisisMsg = msg("i want to end my life");
-    const [x, y] = await Promise.all([receiveMessage(deps, u, crisisMsg), receiveMessage(deps, u, crisisMsg)]);
+    const [x, y] = await Promise.all([
+      receiveMessage(deps, u, crisisMsg),
+      receiveMessage(deps, u, crisisMsg),
+    ]);
     expect(x).toMatchObject({ status: "replied" });
     expect(x).toEqual(y); // same turnId/text/parts/crisisCard
     const turns = await listTurns(getTestDb(), u);
@@ -156,7 +192,9 @@ describe("receiveMessage", () => {
 
     // Simulate a failed reply: the turn is neither buffered, in flight nor answered.
     const db = getTestDb();
-    await db.execute(sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`));
+    await db.execute(
+      sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`),
+    );
     const before = timers(deps).length;
     expect(await receiveMessage(deps, u, input)).toEqual({ status: "accepted" });
     expect(judged()).toBe(1);
@@ -164,8 +202,17 @@ describe("receiveMessage", () => {
     expect(timers(deps).length).toBe(before + 1);
 
     // Answered: a companion reply to it exists.
-    await insertTurn(db, u, { id: randomUUID(), session_id: (await listTurns(db, u))[0]!.session_id, role: "companion", text: "hey", created_at: deps.clock.now(), reply_to: input.clientMessageId });
-    await db.execute(sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`));
+    await insertTurn(db, u, {
+      id: randomUUID(),
+      session_id: (await listTurns(db, u))[0]!.session_id,
+      role: "companion",
+      text: "hey",
+      created_at: deps.clock.now(),
+      reply_to: input.clientMessageId,
+    });
+    await db.execute(
+      sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`),
+    );
     const t = timers(deps).length;
     expect(await receiveMessage(deps, u, input)).toEqual({ status: "accepted" });
     expect(timers(deps).length).toBe(t);
@@ -179,15 +226,23 @@ describe("receiveMessage", () => {
     await receiveMessage(deps, u, input); // first attempt: buffers it, schedules one timer
     const db = getTestDb();
     // Simulate its reply attempt failing (dropped from the buffer, as in the "failed → re-buffered" case above).
-    await db.execute(sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`));
+    await db.execute(
+      sql.raw(`UPDATE conversation_state SET buffer_turn_ids = '{}' WHERE user_id = '${u}'`),
+    );
 
     let releaseGate!: () => void;
-    const gate = new Promise<void>((resolve) => { releaseGate = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
     deps.llm.classify = async () => {
       // The outside buffered/inflight/answered check has already run (and seen none of them) by the time this
       // fires. Move the turn into "inflight" here, as if the (not-yet-built) turn_timer job had picked it up
       // in the gap between that outside check and the append under the lock.
-      await db.execute(sql.raw(`UPDATE conversation_state SET inflight_turn_ids = ARRAY['${input.clientMessageId}']::uuid[], inflight_since = now() WHERE user_id = '${u}'`));
+      await db.execute(
+        sql.raw(
+          `UPDATE conversation_state SET inflight_turn_ids = ARRAY['${input.clientMessageId}']::uuid[], inflight_since = now() WHERE user_id = '${u}'`,
+        ),
+      );
       await gate;
       return { flag: false, category: "none" };
     };
@@ -208,7 +263,9 @@ describe("receiveMessage", () => {
     const deps = makeTestDeps();
     const [a, b] = [await createTestUser("a"), await createTestUser("b")];
     await expect(receiveMessage(deps, a, msg("   "))).rejects.toBeInstanceOf(InputError);
-    await expect(receiveMessage(deps, a, msg("x".repeat(deps.config.chat.max_message_chars + 1)))).rejects.toBeInstanceOf(InputError);
+    await expect(
+      receiveMessage(deps, a, msg("x".repeat(deps.config.chat.max_message_chars + 1))),
+    ).rejects.toBeInstanceOf(InputError);
     expect(await listTurns(getTestDb(), a)).toEqual([]); // invalid input stores no turn
     const shared = msg("mine");
     await receiveMessage(deps, a, shared);
@@ -227,7 +284,9 @@ describe("receiveMessage", () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     deps.queue.failNext = true;
-    expect(await receiveMessage(deps, u, msg("hello there friend"))).toEqual({ status: "accepted" });
+    expect(await receiveMessage(deps, u, msg("hello there friend"))).toEqual({
+      status: "accepted",
+    });
     expect((await getState(getTestDb(), u))!.buffer_turn_ids).toHaveLength(1);
   });
 
@@ -246,7 +305,9 @@ describe("receiveMessage", () => {
     await receiveMessage(deps, u, msg("everything is falling apart"));
     deps.clock.advance(5000);
     await receiveMessage(deps, u, msg("i can't do this anymore"));
-    const crisisInput = deps.llm.structuredCalls.filter((c) => c.purpose === "crisis").at(-1)!.input;
+    const crisisInput = deps.llm.structuredCalls
+      .filter((c) => c.purpose === "crisis")
+      .at(-1)!.input;
     expect(crisisInput).toContain("everything is falling apart");
   });
 });
@@ -257,7 +318,27 @@ test("a message in a busy block from a low-closeness user defers the timer and s
   const now = new Date("2026-01-05T10:30:00Z");
   deps.clock.set(now);
   await rel.ensureRelationship(deps.db, u, now, deps.config.relationship); // closeness 0.2
-  await insertFact(deps.db, u, { subject: "self", kind: "event", content: "Spica's morning: reading.", payload: { start: "2026-01-05T10:00:00.000Z", end: "2026-01-05T13:00:00.000Z", block: "busy", busy: 0.8, label: "reading", life_day: "2026-01-05", shared: true }, embedding: vec(), created_at: now, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
+  await insertFact(deps.db, u, {
+    subject: "self",
+    kind: "event",
+    content: "Spica's morning: reading.",
+    payload: {
+      start: "2026-01-05T10:00:00.000Z",
+      end: "2026-01-05T13:00:00.000Z",
+      block: "busy",
+      busy: 0.8,
+      label: "reading",
+      life_day: "2026-01-05",
+      shared: true,
+    },
+    embedding: vec(),
+    created_at: now,
+    status: "open",
+    salience: 0.2,
+    valence: 0,
+    confidence: 1,
+    source: "generated",
+  });
   await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "so i was thinking and" });
   const timer = deps.queue.jobs.find((j) => j.name === TURN_TIMER_QUEUE)!;
   expect(timer.startAfter!.getTime() - now.getTime()).toBeGreaterThan(15 * 60_000);
@@ -271,10 +352,45 @@ test("a mid-closeness user's first message in a busy block enqueues the availabi
   const now = new Date("2026-01-05T10:30:00Z");
   deps.clock.set(now);
   await rel.ensureRelationship(deps.db, u, now, deps.config.relationship);
-  await deps.db.update(relationship_param).set({ value: 0.5, baseline: 0.5 }).where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
-  await insertFact(deps.db, u, { subject: "self", kind: "event", content: "Spica's morning: reading.", payload: { start: "2026-01-05T10:00:00.000Z", end: "2026-01-05T13:00:00.000Z", block: "busy", busy: 0.8, label: "reading", life_day: "2026-01-05", shared: true }, embedding: vec(), created_at: now, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
+  await deps.db
+    .update(relationship_param)
+    .set({ value: 0.5, baseline: 0.5 })
+    .where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
+  await insertFact(deps.db, u, {
+    subject: "self",
+    kind: "event",
+    content: "Spica's morning: reading.",
+    payload: {
+      start: "2026-01-05T10:00:00.000Z",
+      end: "2026-01-05T13:00:00.000Z",
+      block: "busy",
+      busy: 0.8,
+      label: "reading",
+      life_day: "2026-01-05",
+      shared: true,
+    },
+    embedding: vec(),
+    created_at: now,
+    status: "open",
+    salience: 0.2,
+    valence: 0,
+    confidence: 1,
+    source: "generated",
+  });
   await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "hey are you around?" });
-  const notes = deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE && (j.data as { trigger?: string }).trigger === "availability");
+  const notes = deps.queue.jobs.filter(
+    (j) =>
+      j.name === TURN_BACKCHANNEL_QUEUE &&
+      (j.data as { trigger?: string }).trigger === "availability",
+  );
   expect(notes).toHaveLength(1);
-  expect(notes[0]).toMatchObject({ data: { userId: u, trigger: "availability", blockKind: "busy", blockStart: "2026-01-05T10:00:00.000Z" }, startAfter: new Date(now.getTime() + deps.config.availability.note_read_delay_ms) });
+  expect(notes[0]).toMatchObject({
+    data: {
+      userId: u,
+      trigger: "availability",
+      blockKind: "busy",
+      blockStart: "2026-01-05T10:00:00.000Z",
+    },
+    startAfter: new Date(now.getTime() + deps.config.availability.note_read_delay_ms),
+  });
 });

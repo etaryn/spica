@@ -12,9 +12,19 @@ export const systemClock: Clock = {
 
 export class SimClock implements Clock {
   private t: number;
-  constructor(start: Date) { this.t = start.getTime(); }
-  now(): Date { return new Date(this.t); }
-  set(d: Date): void { this.t = d.getTime(); }
-  advance(ms: number): void { this.t += ms; }
-  async sleep(ms: number): Promise<void> { if (ms > 0) this.t += ms; }
+  constructor(start: Date) {
+    this.t = start.getTime();
+  }
+  now(): Date {
+    return new Date(this.t);
+  }
+  set(d: Date): void {
+    this.t = d.getTime();
+  }
+  advance(ms: number): void {
+    this.t += ms;
+  }
+  async sleep(ms: number): Promise<void> {
+    if (ms > 0) this.t += ms;
+  }
 }

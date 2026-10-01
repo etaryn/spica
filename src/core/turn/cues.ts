@@ -4,7 +4,11 @@
  */
 export function cueVerdict(buffer: string[], openQuestions: string[], cues: string[]) {
   const last = (buffer.at(-1) ?? "").trim();
-  const words = last.toLowerCase().replace(/[^\p{L}\p{N}\s']/gu, " ").split(/\s+/).filter(Boolean);
+  const words = last
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
   const trailing = /(\.\.\.|…)$/.test(last);
   const cue = words.length > 0 && cues.includes(words.at(-1)!);
   const complete = !(trailing || cue || words.length < 2);

@@ -9,8 +9,21 @@ afterAll(closeTestDb);
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 5, 9, min));
 
-async function turn(userId: string, role: "user" | "companion", text: string, created_at: Date, extra: Partial<log.NewTurn> = {}) {
-  return log.insertTurn(getTestDb(), userId, { id: randomUUID(), session_id: extra.session_id ?? randomUUID(), role, text, created_at, ...extra });
+async function turn(
+  userId: string,
+  role: "user" | "companion",
+  text: string,
+  created_at: Date,
+  extra: Partial<log.NewTurn> = {},
+) {
+  return log.insertTurn(getTestDb(), userId, {
+    id: randomUUID(),
+    session_id: extra.session_id ?? randomUUID(),
+    role,
+    text,
+    created_at,
+    ...extra,
+  });
 }
 
 test("recentTurns returns the last N oldest-first, user before companion on ties", async () => {
@@ -61,9 +74,23 @@ test("reply_to is unique", async () => {
 test("insertReplyIfAbsent reports a reply_to collision as null instead of throwing", async () => {
   const u = await createTestUser();
   const t1 = await turn(u, "user", "one", at(0));
-  const r1 = await log.insertReplyIfAbsent(getTestDb(), u, { id: randomUUID(), session_id: t1.session_id, role: "companion", text: "r1", created_at: at(1), reply_to: t1.id });
+  const r1 = await log.insertReplyIfAbsent(getTestDb(), u, {
+    id: randomUUID(),
+    session_id: t1.session_id,
+    role: "companion",
+    text: "r1",
+    created_at: at(1),
+    reply_to: t1.id,
+  });
   expect(r1?.text).toBe("r1");
-  const r2 = await log.insertReplyIfAbsent(getTestDb(), u, { id: randomUUID(), session_id: t1.session_id, role: "companion", text: "r2", created_at: at(2), reply_to: t1.id });
+  const r2 = await log.insertReplyIfAbsent(getTestDb(), u, {
+    id: randomUUID(),
+    session_id: t1.session_id,
+    role: "companion",
+    text: "r2",
+    created_at: at(2),
+    reply_to: t1.id,
+  });
   expect(r2).toBeNull();
   expect((await log.getReplyTo(getTestDb(), u, t1.id))?.text).toBe("r1");
 });
@@ -90,15 +117,27 @@ test("userTurnStats counts sessions and local days of user turns up to a time", 
   const s1 = randomUUID();
   const s2 = randomUUID();
   const turn = (session_id: string, at: string, role: "user" | "companion" = "user") =>
-    log.insertTurn(getTestDb(), u, { id: randomUUID(), session_id, role, text: "x", created_at: new Date(at) });
-  await turn(s1, "2026-01-05T23:30:00Z");                 // 5 Jan UTC, 6 Jan in Auckland (+13)
+    log.insertTurn(getTestDb(), u, {
+      id: randomUUID(),
+      session_id,
+      role,
+      text: "x",
+      created_at: new Date(at),
+    });
+  await turn(s1, "2026-01-05T23:30:00Z"); // 5 Jan UTC, 6 Jan in Auckland (+13)
   await turn(s1, "2026-01-05T23:31:00Z", "companion");
-  await turn(s2, "2026-01-06T20:00:00Z");                 // 6 Jan UTC, 7 Jan in Auckland
-  await turn(s2, "2026-01-09T10:00:00Z");                 // after the cut-off
+  await turn(s2, "2026-01-06T20:00:00Z"); // 6 Jan UTC, 7 Jan in Auckland
+  await turn(s2, "2026-01-09T10:00:00Z"); // after the cut-off
   const upTo = new Date("2026-01-07T00:00:00Z");
-  expect(await log.userTurnStats(getTestDb(), u, upTo, "UTC")).toEqual({ sessions: 2, days: 2, first: new Date("2026-01-05T23:30:00Z") });
+  expect(await log.userTurnStats(getTestDb(), u, upTo, "UTC")).toEqual({
+    sessions: 2,
+    days: 2,
+    first: new Date("2026-01-05T23:30:00Z"),
+  });
   expect((await log.userTurnStats(getTestDb(), u, upTo, "Pacific/Auckland")).days).toBe(2);
-  expect((await log.userTurnStats(getTestDb(), u, new Date("2026-01-06T00:00:00Z"), "UTC")).sessions).toBe(1);
+  expect(
+    (await log.userTurnStats(getTestDb(), u, new Date("2026-01-06T00:00:00Z"), "UTC")).sessions,
+  ).toBe(1);
 });
 
 test("answeringReply returns the earliest reply covering the turn, not whichever row the scan finds first", async () => {
@@ -108,6 +147,10 @@ test("answeringReply returns the earliest reply covering the turn, not whichever
   const t2 = await turn(u, "user", "anyway, pizza?", at(5), { session_id: sid });
   // Insert the later reply first so an unordered LIMIT 1 would find it before the crisis reply.
   await turn(u, "companion", "pizza!", at(6), { session_id: sid, reply_to: t2.id });
-  const crisisReply = await turn(u, "companion", "i'm here", at(1), { session_id: sid, reply_to: t1.id, safety_flag: { flagged: true, category: "self_harm", source: "model" } as never });
+  const crisisReply = await turn(u, "companion", "i'm here", at(1), {
+    session_id: sid,
+    reply_to: t1.id,
+    safety_flag: { flagged: true, category: "self_harm", source: "model" } as never,
+  });
   expect((await log.answeringReply(getTestDb(), u, t1))?.id).toBe(crisisReply.id);
 });

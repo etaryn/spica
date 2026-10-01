@@ -1,6 +1,10 @@
 "use client";
 /** Browser side of Web Push. Every call is safe to make where push isn't supported. */
-export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+export const pushSupported = () =>
+  typeof window !== "undefined" &&
+  "serviceWorker" in navigator &&
+  "PushManager" in window &&
+  "Notification" in window;
 
 function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
   const pad = "=".repeat((4 - (base64url.length % 4)) % 4);
@@ -15,14 +19,36 @@ export async function registerSw(): Promise<ServiceWorkerRegistration | null> {
 
 /** Explicit opt-out from the settings switch; survives because browser permission stays "granted" after unsubscribing. */
 const OFF = "spica.notifications.off";
-export const pushOptedOut = () => { try { return localStorage.getItem(OFF) === "1"; } catch { return false; } };
-const setOptOut = (off: boolean) => { try { if (off) localStorage.setItem(OFF, "1"); else localStorage.removeItem(OFF); } catch { /* private window */ } };
+export const pushOptedOut = () => {
+  try {
+    return localStorage.getItem(OFF) === "1";
+  } catch {
+    return false;
+  }
+};
+const setOptOut = (off: boolean) => {
+  try {
+    if (off) localStorage.setItem(OFF, "1");
+    else localStorage.removeItem(OFF);
+  } catch {
+    /* private window */
+  }
+};
 
 export async function subscribePush(publicKey: string): Promise<boolean> {
   const reg = await registerSw();
   if (!reg || (await Notification.requestPermission()) !== "granted") return false;
-  const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) }));
-  const res = await fetch("/api/push/subscribe", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(sub.toJSON()) });
+  const sub =
+    (await reg.pushManager.getSubscription()) ??
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: keyBytes(publicKey),
+    }));
+  const res = await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(sub.toJSON()),
+  });
   if (res.ok) setOptOut(false);
   return res.ok;
 }
@@ -32,7 +58,11 @@ export async function unsubscribePush(): Promise<void> {
   const reg = pushSupported() ? await navigator.serviceWorker.getRegistration() : null;
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return;
-  await fetch("/api/push/subscribe", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+  await fetch("/api/push/subscribe", {
+    method: "DELETE",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint }),
+  });
   await sub.unsubscribe();
 }
 
@@ -50,15 +80,23 @@ export async function releasePush(timeoutMs: number): Promise<void> {
     // The DELETE is sent first (the endpoint is already captured); the local unsubscribe runs alongside it, so a slow
     // or failing DELETE never leaves this browser subscribed.
     const del = fetch("/api/push/subscribe", {
-      method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }),
-      keepalive: true, signal: AbortSignal.timeout(timeoutMs),
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+      keepalive: true,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     await Promise.allSettled([del, sub.unsubscribe()]);
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     // `.catch` on release too: a rejection after the timeout won the race must not go unhandled.
-    await Promise.race([release().catch(() => undefined), new Promise<void>((r) => { timer = setTimeout(r, timeoutMs); })]);
+    await Promise.race([
+      release().catch(() => undefined),
+      new Promise<void>((r) => {
+        timer = setTimeout(r, timeoutMs);
+      }),
+    ]);
   } finally {
     clearTimeout(timer);
   }

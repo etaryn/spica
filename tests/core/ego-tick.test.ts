@@ -26,9 +26,30 @@ test("one step per hour, writing an ego_tick row", async () => {
 test("a busy day pulls energy lower than a free one", async () => {
   const deps = makeTestDeps({ ego: { noise: 0 } });
   const [busy, free] = [await createTestUser(), await createTestUser()];
-  const payload = { start: "2026-01-05T01:00:00.000Z", end: "2026-01-05T09:00:00.000Z", block: "busy", busy: 1, label: "reading", life_day: "2026-01-05", shared: true };
-  await insertFact(deps.db, busy, { subject: "self", kind: "event", content: "Spica's morning: reading.", payload, embedding: vec(), created_at: at, status: "open", salience: 0.2, valence: 0, confidence: 1, source: "generated" });
-  for (let k = 0; k < 5; k++) for (const u of [busy, free]) await egoTickUser(deps, u, new Date(at.getTime() + k * H));
+  const payload = {
+    start: "2026-01-05T01:00:00.000Z",
+    end: "2026-01-05T09:00:00.000Z",
+    block: "busy",
+    busy: 1,
+    label: "reading",
+    life_day: "2026-01-05",
+    shared: true,
+  };
+  await insertFact(deps.db, busy, {
+    subject: "self",
+    kind: "event",
+    content: "Spica's morning: reading.",
+    payload,
+    embedding: vec(),
+    created_at: at,
+    status: "open",
+    salience: 0.2,
+    valence: 0,
+    confidence: 1,
+    source: "generated",
+  });
+  for (let k = 0; k < 5; k++)
+    for (const u of [busy, free]) await egoTickUser(deps, u, new Date(at.getTime() + k * H));
   const [b, f] = [await getIdentityRow(deps.db, busy), await getIdentityRow(deps.db, free)];
   expect(b!.energy).toBeLessThan(f!.energy - 0.1);
 });
@@ -36,9 +57,23 @@ test("a busy day pulls energy lower than a free one", async () => {
 test("clears an expired preoccupation", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
-  const f = await insertFact(deps.db, u, { subject: "self", kind: "event", content: "x", embedding: vec(), created_at: at, status: "open", salience: 0.4, valence: 0.8, confidence: 1, source: "generated" });
+  const f = await insertFact(deps.db, u, {
+    subject: "self",
+    kind: "event",
+    content: "x",
+    embedding: vec(),
+    created_at: at,
+    status: "open",
+    salience: 0.4,
+    valence: 0.8,
+    confidence: 1,
+    source: "generated",
+  });
   await ensureIdentity(deps.db, u, deps.config.ego.baseline);
-  await updateIdentity(deps.db, u, { preoccupation: f.id, preoccupation_since: new Date(at.getTime() - deps.config.ego.preoccupation_hours * H) });
+  await updateIdentity(deps.db, u, {
+    preoccupation: f.id,
+    preoccupation_since: new Date(at.getTime() - deps.config.ego.preoccupation_hours * H),
+  });
   await egoTickUser(deps, u, at);
   expect((await getIdentityRow(deps.db, u))?.preoccupation).toBeNull();
 });

@@ -2,7 +2,10 @@ import { z } from "zod";
 import defaults from "../../config/default.json";
 import { isValidTimeZone } from "./timezone";
 
-const CrisisCardSchema = z.object({ title: z.string().min(1), lines: z.array(z.string().min(1)).min(1) });
+const CrisisCardSchema = z.object({
+  title: z.string().min(1),
+  lines: z.array(z.string().min(1)).min(1),
+});
 const unit = z.number().min(0).max(1);
 
 export const ConfigSchema = z.object({
@@ -47,10 +50,15 @@ export const ConfigSchema = z.object({
     classifier_max_tokens: z.number().int().positive(),
     classifier_context_turns: z.number().int().min(0),
     keywords: z.array(z.string().min(1)).min(1),
-    resources: z.record(z.string(), CrisisCardSchema).refine((r) => "default" in r, "resources.default is required"),
+    resources: z
+      .record(z.string(), CrisisCardSchema)
+      .refine((r) => "default" in r, "resources.default is required"),
   }),
   queue: z.object({ enqueue_timeout_ms: z.number().int().positive() }),
-  auth: z.object({ min_age: z.number().int().positive(), min_password_length: z.number().int().min(8) }),
+  auth: z.object({
+    min_age: z.number().int().positive(),
+    min_password_length: z.number().int().min(8),
+  }),
   guard: z.object({
     enabled: z.boolean(),
     timeout_ms: z.number().int().positive(),
@@ -59,40 +67,48 @@ export const ConfigSchema = z.object({
     fallback_keywords: z.array(z.string().min(1)).min(1),
   }),
   hot_path: z.object({ db_timeout_ms: z.number().int().positive() }),
-  events: z.object({ channel: z.string().regex(/^[a-z_][a-z0-9_]*$/), heartbeat_ms: z.number().int().positive() }),
-  turn: z.object({
-    settle_ms: z.number().int().min(0),
-    wait_ms: z.number().int().min(0),
-    short_message_chars: z.number().int().min(0),
-    short_wait_bonus_ms: z.number().int().min(0),
-    max_wait_ms: z.number().int().positive(),
-    read_delay_min_ms: z.number().int().min(0),
-    read_delay_max_ms: z.number().int().min(0),
-    read_delay_chars_for_max: z.number().int().positive(),
-    typing_ms_per_char: z.number().min(0),
-    typing_max_ms: z.number().int().min(0),
-    part_gap_ms: z.number().int().min(0),
-    backchannel_style: z.enum(["judge", "signals", "silent"]),
-    backchannel_min_interval_ms: z.number().int().min(0),
-    backchannel_max_words: z.number().int().positive(),
-    backchannel_read_delay_ms: z.number().int().min(0),
-    signals_probability: unit,
-    max_open_questions: z.number().int().min(0),
-    incomplete_cues: z.array(z.string().min(1)),
-    judge_timeout_ms: z.number().int().positive(),
-    judge_context_turns: z.number().int().min(0),
-    retry_limit: z.number().int().min(0),
-    retry_delay_ms: z.number().int().min(0),
-    inflight_recheck_ms: z.number().int().positive(),
-    worker_concurrency: z.number().int().positive(),
-    worker_polling_interval_seconds: z.number().min(0.5),
-    job_expire_seconds: z.number().int().positive(),
-    timer_job_retry_limit: z.number().int().min(0),
-    timer_job_retry_delay_seconds: z.number().int().min(0),
-    sweep_cron: z.string().min(1),
-    sweep_grace_ms: z.number().int().min(0),
-    sweep_batch: z.number().int().positive(),
-  }).refine((t) => t.read_delay_min_ms <= t.read_delay_max_ms, "turn.read_delay_min_ms must be <= read_delay_max_ms"),
+  events: z.object({
+    channel: z.string().regex(/^[a-z_][a-z0-9_]*$/),
+    heartbeat_ms: z.number().int().positive(),
+  }),
+  turn: z
+    .object({
+      settle_ms: z.number().int().min(0),
+      wait_ms: z.number().int().min(0),
+      short_message_chars: z.number().int().min(0),
+      short_wait_bonus_ms: z.number().int().min(0),
+      max_wait_ms: z.number().int().positive(),
+      read_delay_min_ms: z.number().int().min(0),
+      read_delay_max_ms: z.number().int().min(0),
+      read_delay_chars_for_max: z.number().int().positive(),
+      typing_ms_per_char: z.number().min(0),
+      typing_max_ms: z.number().int().min(0),
+      part_gap_ms: z.number().int().min(0),
+      backchannel_style: z.enum(["judge", "signals", "silent"]),
+      backchannel_min_interval_ms: z.number().int().min(0),
+      backchannel_max_words: z.number().int().positive(),
+      backchannel_read_delay_ms: z.number().int().min(0),
+      signals_probability: unit,
+      max_open_questions: z.number().int().min(0),
+      incomplete_cues: z.array(z.string().min(1)),
+      judge_timeout_ms: z.number().int().positive(),
+      judge_context_turns: z.number().int().min(0),
+      retry_limit: z.number().int().min(0),
+      retry_delay_ms: z.number().int().min(0),
+      inflight_recheck_ms: z.number().int().positive(),
+      worker_concurrency: z.number().int().positive(),
+      worker_polling_interval_seconds: z.number().min(0.5),
+      job_expire_seconds: z.number().int().positive(),
+      timer_job_retry_limit: z.number().int().min(0),
+      timer_job_retry_delay_seconds: z.number().int().min(0),
+      sweep_cron: z.string().min(1),
+      sweep_grace_ms: z.number().int().min(0),
+      sweep_batch: z.number().int().positive(),
+    })
+    .refine(
+      (t) => t.read_delay_min_ms <= t.read_delay_max_ms,
+      "turn.read_delay_min_ms must be <= read_delay_max_ms",
+    ),
   retrieval: z.object({
     candidate_pool: z.number().int().positive(),
     top_n: z.number().int().positive(),
@@ -135,49 +151,60 @@ export const ConfigSchema = z.object({
   relationship: (() => {
     const paramRecord = <T extends z.ZodTypeAny>(t: T) =>
       z.object({ closeness: t, trust: t, warmth: t, hurt: t, tension: t, msgs_per_day: t });
-    return z.object({
-      tick_cron: z.string().min(1),
-      tick_local_hour: z.number().int().min(0).max(23),
-      history_days: z.number().int().min(1),
-      baseline_alpha: unit,
-      variance_epsilon: z.number().positive(),
-      initial: paramRecord(z.number().min(0)),
-      initial_variance: paramRecord(z.number().min(0)),
-      gains: z.object({ warmth: unit, trust: unit, tension: unit, hurt: unit, closeness_per_warm_exchange: unit }),
-      hurt_half_life_hours: z.number().positive(),
-      tension_half_life_hours: z.number().positive(),
-      sensitise_window_days: z.number().min(0),
-      sensitise_factor: z.number().min(1),
-      scar_threshold: unit,
-      scar_trust_dent: unit,
-      absence_grace_factor: z.number().positive(),
-      closeness_absence_drift: unit,
-      absence_hurt_effect: z.number().min(-1).max(0),
-      absence_hurt_gain: unit,
-      make_up_threshold: unit,
-      make_up_clear_threshold: unit,
-      make_up_delay_replies: z.number().int().min(0),
-      make_up_relief: unit,
-      apology_relief: unit,
-      relief_tension_factor: unit,
-      end_confirm_hours: z.number().positive(),
-      end_closeness_factor: unit,
-      end_reconfirm_min_minutes: z.number().int().min(0),
-      repair_gain_factor: unit,
-      repair_complete_closeness: unit,
-      repair_min_days: z.number().min(0),
-      crisis_quiet_hours: z.number().min(0),
-      summary_min_effect: unit,
-      summary_strong_effect: unit,
-      summary_max_lines: z.number().int().min(0),
-      signal_deadzone: unit,
-      cadence_sessions: z.number().int().positive(),
-      hurt_fact_salience: unit,
-      hurt_fact_confidence: unit,
-      default_median_gap_hours: z.number().positive(),
-      min_sessions_for_gap: z.number().int().min(2),
-      event_list_limit: z.number().int().positive(),
-    }).refine((r) => r.make_up_clear_threshold < r.make_up_threshold, "relationship.make_up_clear_threshold must be < make_up_threshold");
+    return z
+      .object({
+        tick_cron: z.string().min(1),
+        tick_local_hour: z.number().int().min(0).max(23),
+        history_days: z.number().int().min(1),
+        baseline_alpha: unit,
+        variance_epsilon: z.number().positive(),
+        initial: paramRecord(z.number().min(0)),
+        initial_variance: paramRecord(z.number().min(0)),
+        gains: z.object({
+          warmth: unit,
+          trust: unit,
+          tension: unit,
+          hurt: unit,
+          closeness_per_warm_exchange: unit,
+        }),
+        hurt_half_life_hours: z.number().positive(),
+        tension_half_life_hours: z.number().positive(),
+        sensitise_window_days: z.number().min(0),
+        sensitise_factor: z.number().min(1),
+        scar_threshold: unit,
+        scar_trust_dent: unit,
+        absence_grace_factor: z.number().positive(),
+        closeness_absence_drift: unit,
+        absence_hurt_effect: z.number().min(-1).max(0),
+        absence_hurt_gain: unit,
+        make_up_threshold: unit,
+        make_up_clear_threshold: unit,
+        make_up_delay_replies: z.number().int().min(0),
+        make_up_relief: unit,
+        apology_relief: unit,
+        relief_tension_factor: unit,
+        end_confirm_hours: z.number().positive(),
+        end_closeness_factor: unit,
+        end_reconfirm_min_minutes: z.number().int().min(0),
+        repair_gain_factor: unit,
+        repair_complete_closeness: unit,
+        repair_min_days: z.number().min(0),
+        crisis_quiet_hours: z.number().min(0),
+        summary_min_effect: unit,
+        summary_strong_effect: unit,
+        summary_max_lines: z.number().int().min(0),
+        signal_deadzone: unit,
+        cadence_sessions: z.number().int().positive(),
+        hurt_fact_salience: unit,
+        hurt_fact_confidence: unit,
+        default_median_gap_hours: z.number().positive(),
+        min_sessions_for_gap: z.number().int().min(2),
+        event_list_limit: z.number().int().positive(),
+      })
+      .refine(
+        (r) => r.make_up_clear_threshold < r.make_up_threshold,
+        "relationship.make_up_clear_threshold must be < make_up_threshold",
+      );
   })(),
   life: (() => {
     const hhmm = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/);
@@ -191,7 +218,16 @@ export const ConfigSchema = z.object({
       quiet_busy: unit,
       min_busy: unit,
       fallback_busy: unit,
-      fallback_plan: z.array(z.object({ start: hhmm, end: hhmm, kind: z.enum(["busy", "downtime", "quiet"]), label: z.string().min(1) })).min(1),
+      fallback_plan: z
+        .array(
+          z.object({
+            start: hhmm,
+            end: hhmm,
+            kind: z.enum(["busy", "downtime", "quiet"]),
+            label: z.string().min(1),
+          }),
+        )
+        .min(1),
       tick_cron: z.string().min(1),
       tick_local_hour: z.number().int().min(0).max(23),
       lock_timeout_ms: z.number().int().positive(),
@@ -213,9 +249,15 @@ export const ConfigSchema = z.object({
     });
   })(),
   ego: (() => {
-    const band = z.tuple([z.number(), z.number()]).refine(([lo, hi]) => lo <= hi, "band low must be <= high");
+    const band = z
+      .tuple([z.number(), z.number()])
+      .refine(([lo, hi]) => lo <= hi, "band low must be <= high");
     return z.object({
-      baseline: z.object({ mood_valence: z.number().min(-1).max(1), mood_arousal: unit, energy: unit }),
+      baseline: z.object({
+        mood_valence: z.number().min(-1).max(1),
+        mood_arousal: unit,
+        energy: unit,
+      }),
       tick_cron: z.string().min(1),
       drift_rate: unit,
       noise: unit,
@@ -246,7 +288,13 @@ export const ConfigSchema = z.object({
     cap_per_week: z.number().int().min(0),
     max_unanswered: z.number().int().min(1),
     threshold: z.number().min(0),
-    weights: z.object({ thread: unit, make_up: unit, user_event: unit, her_day: unit, check_in: unit }),
+    weights: z.object({
+      thread: unit,
+      make_up: unit,
+      user_event: unit,
+      her_day: unit,
+      check_in: unit,
+    }),
     stakes_strength: z.object({ high: unit, med: unit }),
     user_event_lookback_hours: z.number().positive(),
     her_day_lookback_hours: z.number().positive(),

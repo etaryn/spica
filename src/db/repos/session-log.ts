@@ -7,7 +7,12 @@ export type Turn = typeof session_log.$inferSelect;
 export type NewTurn = Omit<typeof session_log.$inferInsert, "user_id">;
 
 export async function insertTurn(db: Db, userId: string, row: NewTurn): Promise<Turn> {
-  return one(await db.insert(session_log).values({ ...row, user_id: userId }).returning());
+  return one(
+    await db
+      .insert(session_log)
+      .values({ ...row, user_id: userId })
+      .returning(),
+  );
 }
 
 /**
@@ -16,35 +21,52 @@ export async function insertTurn(db: Db, userId: string, row: NewTurn): Promise<
  * statement, e.g. the `conversation_state` patch, into "current transaction is aborted"), so a concurrent
  * duplicate reply must be handled with `ON CONFLICT ... DO NOTHING` rather than try/catch.
  */
-export async function insertReplyIfAbsent(db: Db, userId: string, row: NewTurn): Promise<Turn | null> {
-  const rows = await db.insert(session_log).values({ ...row, user_id: userId })
+export async function insertReplyIfAbsent(
+  db: Db,
+  userId: string,
+  row: NewTurn,
+): Promise<Turn | null> {
+  const rows = await db
+    .insert(session_log)
+    .values({ ...row, user_id: userId })
     .onConflictDoNothing({ target: session_log.reply_to })
     .returning();
   return rows[0] ?? null;
 }
 
 export async function getTurn(db: Db, userId: string, id: string): Promise<Turn | null> {
-  const rows = await db.select().from(session_log)
-    .where(and(eq(session_log.user_id, userId), eq(session_log.id, id))).limit(1);
+  const rows = await db
+    .select()
+    .from(session_log)
+    .where(and(eq(session_log.user_id, userId), eq(session_log.id, id)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
 export async function getReplyTo(db: Db, userId: string, userTurnId: string): Promise<Turn | null> {
-  const rows = await db.select().from(session_log)
-    .where(and(eq(session_log.user_id, userId), eq(session_log.reply_to, userTurnId))).limit(1);
+  const rows = await db
+    .select()
+    .from(session_log)
+    .where(and(eq(session_log.user_id, userId), eq(session_log.reply_to, userTurnId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
 export async function lastUserTurn(db: Db, userId: string): Promise<Turn | null> {
-  const rows = await db.select().from(session_log)
+  const rows = await db
+    .select()
+    .from(session_log)
     .where(and(eq(session_log.user_id, userId), eq(session_log.role, "user")))
-    .orderBy(desc(session_log.created_at)).limit(1);
+    .orderBy(desc(session_log.created_at))
+    .limit(1);
   return rows[0] ?? null;
 }
 
 /** Last `limit` turns, oldest first. Ties on created_at: user before companion (enum order). */
 export async function recentTurns(db: Db, userId: string, limit: number): Promise<Turn[]> {
-  const rows = await db.select().from(session_log)
+  const rows = await db
+    .select()
+    .from(session_log)
     .where(eq(session_log.user_id, userId))
     .orderBy(desc(session_log.created_at), desc(session_log.role))
     .limit(limit);
@@ -55,8 +77,15 @@ export async function recentTurns(db: Db, userId: string, limit: number): Promis
  * Up to `limit` turns ending at `anchor`, oldest first. The prompt window for a
  * reply to `anchor`, so a retried older message never sees later turns.
  */
-export async function turnsUpTo(db: Db, userId: string, anchor: Turn, limit: number): Promise<Turn[]> {
-  const rows = await db.select().from(session_log)
+export async function turnsUpTo(
+  db: Db,
+  userId: string,
+  anchor: Turn,
+  limit: number,
+): Promise<Turn[]> {
+  const rows = await db
+    .select()
+    .from(session_log)
     .where(and(eq(session_log.user_id, userId), lte(session_log.created_at, anchor.created_at)))
     .orderBy(desc(session_log.created_at), desc(session_log.role))
     .limit(limit * 2);
@@ -71,38 +100,58 @@ export async function turnsUpTo(db: Db, userId: string, anchor: Turn, limit: num
  * when two turns share a `created_at`, so the exact "after the anchor" cut is a direct WHERE
  * (no headroom fetch-and-slice needed).
  */
-export async function turnsAfter(db: Db, userId: string, afterId: string, limit: number): Promise<Turn[]> {
+export async function turnsAfter(
+  db: Db,
+  userId: string,
+  afterId: string,
+  limit: number,
+): Promise<Turn[]> {
   const anchor = await getTurn(db, userId, afterId);
   if (!anchor) return recentTurns(db, userId, limit);
-  return db.select().from(session_log)
-    .where(and(
-      eq(session_log.user_id, userId),
-      or(
-        gt(session_log.created_at, anchor.created_at),
-        and(eq(session_log.created_at, anchor.created_at), gt(session_log.role, anchor.role)),
-        and(eq(session_log.created_at, anchor.created_at), eq(session_log.role, anchor.role), gt(session_log.id, anchor.id)),
+  return db
+    .select()
+    .from(session_log)
+    .where(
+      and(
+        eq(session_log.user_id, userId),
+        or(
+          gt(session_log.created_at, anchor.created_at),
+          and(eq(session_log.created_at, anchor.created_at), gt(session_log.role, anchor.role)),
+          and(
+            eq(session_log.created_at, anchor.created_at),
+            eq(session_log.role, anchor.role),
+            gt(session_log.id, anchor.id),
+          ),
+        ),
       ),
-    ))
+    )
     .orderBy(asc(session_log.created_at), asc(session_log.role), asc(session_log.id))
     .limit(limit);
 }
 
 export async function listTurns(db: Db, userId: string): Promise<Turn[]> {
-  return db.select().from(session_log)
+  return db
+    .select()
+    .from(session_log)
     .where(eq(session_log.user_id, userId))
     .orderBy(asc(session_log.created_at), asc(session_log.role));
 }
 
 export async function getTurnsByIds(db: Db, userId: string, ids: string[]): Promise<Turn[]> {
   if (ids.length === 0) return [];
-  return db.select().from(session_log)
+  return db
+    .select()
+    .from(session_log)
     .where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)))
     .orderBy(asc(session_log.created_at), asc(session_log.role));
 }
 
 export async function markExtracted(db: Db, userId: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  await db.update(session_log).set({ extracted: true }).where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
+  await db
+    .update(session_log)
+    .set({ extracted: true })
+    .where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }
 
 /** The reply that answers `turn`, if any: a companion turn whose `reply_to` turn is at or after `turn` (a buffered reply answers every earlier turn). */
@@ -121,7 +170,12 @@ export async function isAnswered(db: Db, userId: string, turn: Turn): Promise<bo
 }
 
 /** How long and how often they've talked, for the relationship line. `tz` must be a valid IANA zone. */
-export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: string): Promise<{ sessions: number; days: number; first: Date | null }> {
+export async function userTurnStats(
+  db: Db,
+  userId: string,
+  upTo: Date,
+  tz: string,
+): Promise<{ sessions: number; days: number; first: Date | null }> {
   const res = await db.execute(sql`
     SELECT count(DISTINCT session_id)::int AS sessions,
            count(DISTINCT (created_at AT TIME ZONE ${tz})::date)::int AS days,
@@ -133,10 +187,23 @@ export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: stri
 }
 
 /** Has she sent a message with this trigger since `since`? (The availability note is once per block.) */
-export async function hasTriggerSince(db: Db, userId: string, trigger: "availability" | "backchannel", since: Date): Promise<boolean> {
-  const rows = await db.select({ id: session_log.id }).from(session_log).where(and(
-    eq(session_log.user_id, userId), eq(session_log.trigger, trigger), gte(session_log.created_at, since),
-  )).limit(1);
+export async function hasTriggerSince(
+  db: Db,
+  userId: string,
+  trigger: "availability" | "backchannel",
+  since: Date,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: session_log.id })
+    .from(session_log)
+    .where(
+      and(
+        eq(session_log.user_id, userId),
+        eq(session_log.trigger, trigger),
+        gte(session_log.created_at, since),
+      ),
+    )
+    .limit(1);
   return rows.length > 0;
 }
 
@@ -144,10 +211,22 @@ export async function hasTriggerSince(db: Db, userId: string, trigger: "availabi
  * Creation time of the latest safety-flagged turn at or after `since` (the crisis reply carries the flag), or null.
  * One range scan on `session_log_user_created_idx`.
  */
-export async function latestFlaggedTurnAt(db: Db, userId: string, since: Date): Promise<Date | null> {
-  const rows = await db.select({ at: session_log.created_at }).from(session_log).where(and(
-    eq(session_log.user_id, userId), gte(session_log.created_at, since),
-    sql`COALESCE((${session_log.safety_flag}->>'flagged')::boolean, false) = true`,
-  )).orderBy(desc(session_log.created_at)).limit(1);
+export async function latestFlaggedTurnAt(
+  db: Db,
+  userId: string,
+  since: Date,
+): Promise<Date | null> {
+  const rows = await db
+    .select({ at: session_log.created_at })
+    .from(session_log)
+    .where(
+      and(
+        eq(session_log.user_id, userId),
+        gte(session_log.created_at, since),
+        sql`COALESCE((${session_log.safety_flag}->>'flagged')::boolean, false) = true`,
+      ),
+    )
+    .orderBy(desc(session_log.created_at))
+    .limit(1);
   return rows[0]?.at ?? null;
 }

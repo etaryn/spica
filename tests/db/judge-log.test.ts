@@ -1,14 +1,28 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { guardOutcomes, insertJudgeLogs, listJudgeLogs, type NewJudgeLog } from "@/db/repos/judge-log";
+import {
+  guardOutcomes,
+  insertJudgeLogs,
+  listJudgeLogs,
+  type NewJudgeLog,
+} from "@/db/repos/judge-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
 const row = (over: Partial<NewJudgeLog> = {}): NewJudgeLog => ({
-  kind: "guard", turn_id: null, attempt: 1, input: { text: "hi" }, output: { violations: [] }, outcome: null,
-  source: "model", latency_ms: 5, model: "claude-haiku-4-5", prompt_version: "guard@v1",
-  created_at: new Date("2026-01-05T09:00:00Z"), ...over,
+  kind: "guard",
+  turn_id: null,
+  attempt: 1,
+  input: { text: "hi" },
+  output: { violations: [] },
+  outcome: null,
+  source: "model",
+  latency_ms: 5,
+  model: "claude-haiku-4-5",
+  prompt_version: "guard@v1",
+  created_at: new Date("2026-01-05T09:00:00Z"),
+  ...over,
 });
 
 test("inserts rows scoped to the user; outcomes come back oldest first, nulls skipped", async () => {

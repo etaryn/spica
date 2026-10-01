@@ -8,20 +8,27 @@ export class ConflictError extends Error {}
 
 /** Reply generation failed; the user turn is stored and can be retried. Maps to HTTP 503. */
 export class ReplyFailedError extends Error {
-  constructor(message: string, readonly crisisCard: CrisisCard | null, options?: { cause?: unknown }) {
+  constructor(
+    message: string,
+    readonly crisisCard: CrisisCard | null,
+    options?: { cause?: unknown },
+  ) {
     super(message, options);
   }
 }
 
 export class TimeoutError extends Error {
-  constructor(ms: number) { super(`timed out after ${ms}ms`); }
+  constructor(ms: number) {
+    super(`timed out after ${ms}ms`);
+  }
 }
 
 /** Postgres unique_violation (23505), whether raw or wrapped by Drizzle. */
 export function isUniqueViolation(e: unknown): boolean {
   let cur: unknown = e;
   for (let i = 0; i < 3 && cur; i++) {
-    if (typeof cur === "object" && cur !== null && (cur as { code?: unknown }).code === "23505") return true;
+    if (typeof cur === "object" && cur !== null && (cur as { code?: unknown }).code === "23505")
+      return true;
     cur = (cur as { cause?: unknown }).cause;
   }
   return false;

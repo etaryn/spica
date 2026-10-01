@@ -1,11 +1,23 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
-import { dim, effect, faded, fadeParams, nudge, sampleBaseline } from "@/core/relationship/homeostasis";
+import {
+  dim,
+  effect,
+  faded,
+  fadeParams,
+  nudge,
+  sampleBaseline,
+} from "@/core/relationship/homeostasis";
 import type { Param } from "@/core/relationship/types";
 
 const cfg = loadConfig().relationship;
 const t0 = new Date("2026-01-05T10:00:00Z");
-const p = (value: number, baseline: number, variance: number): Param => ({ value, baseline, variance, updated_at: t0 });
+const p = (value: number, baseline: number, variance: number): Param => ({
+  value,
+  baseline,
+  variance,
+  updated_at: t0,
+});
 
 test("effect is bounded and signed by the deviation from baseline", () => {
   expect(effect(p(40, 5, 25), cfg.variance_epsilon)).toBeGreaterThan(0.99);
@@ -35,7 +47,14 @@ test("nudge saturates toward 1 and 0 and never leaves [0,1]", () => {
 test("faded halves per half-life; fadeParams touches only hurt and tension", () => {
   const later = new Date(t0.getTime() + 48 * 3_600_000);
   expect(faded(0.8, t0, later, 48)).toBeCloseTo(0.4);
-  const params = { closeness: p(0.3, 0.3, 0.01), trust: p(0.4, 0.4, 0.01), warmth: p(0.5, 0.5, 0.02), hurt: p(0.8, 0, 0.01), tension: p(0.8, 0, 0.01), msgs_per_day: p(5, 5, 25) };
+  const params = {
+    closeness: p(0.3, 0.3, 0.01),
+    trust: p(0.4, 0.4, 0.01),
+    warmth: p(0.5, 0.5, 0.02),
+    hurt: p(0.8, 0, 0.01),
+    tension: p(0.8, 0, 0.01),
+    msgs_per_day: p(5, 5, 25),
+  };
   const f = fadeParams(params, later, cfg);
   expect(f.hurt.value).toBeCloseTo(0.4);
   expect(f.tension.value).toBeCloseTo(0.2); // 24 h half-life, 48 h elapsed

@@ -9,7 +9,12 @@ export class VoyageEmbedder implements Embedder {
   private readonly model: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(opts: { apiKey: string | undefined; model: string; dimensions: number; fetchImpl?: typeof fetch }) {
+  constructor(opts: {
+    apiKey: string | undefined;
+    model: string;
+    dimensions: number;
+    fetchImpl?: typeof fetch;
+  }) {
     this.apiKey = opts.apiKey;
     this.model = opts.model;
     this.dimensions = opts.dimensions;
@@ -21,7 +26,12 @@ export class VoyageEmbedder implements Embedder {
     const res = await this.fetchImpl("https://api.voyageai.com/v1/embeddings", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({ input: texts, model: this.model, input_type: inputType, output_dimension: this.dimensions }),
+      body: JSON.stringify({
+        input: texts,
+        model: this.model,
+        input_type: inputType,
+        output_dimension: this.dimensions,
+      }),
     });
     if (!res.ok) throw new Error(`Voyage embeddings failed with HTTP ${res.status}`);
     const body = (await res.json()) as VoyageResponse;

@@ -14,7 +14,12 @@ export function band(x: number, [lo, hi]: [number, number]): "low" | "neutral" |
 }
 
 /** Slot 2: one phrase per non-neutral dimension, never raw numbers; all neutral → null. */
-export function egoLine(s: EgoState, cfg: EgoConfig, phrases: Phrases, seed: string): string | null {
+export function egoLine(
+  s: EgoState,
+  cfg: EgoConfig,
+  phrases: Phrases,
+  seed: string,
+): string | null {
   const parts: string[] = [];
   for (const dim of DIMS) {
     const b = band(s[dim], cfg.bands[dim]);
@@ -26,7 +31,11 @@ export function egoLine(s: EgoState, cfg: EgoConfig, phrases: Phrases, seed: str
 }
 
 /** Hot path, read-only: the caller wraps this in `withTimeout` and treats a failure as no line. */
-export async function loadEgoLine(deps: Pick<Deps, "db" | "config">, userId: string, now: Date): Promise<string | null> {
+export async function loadEgoLine(
+  deps: Pick<Deps, "db" | "config">,
+  userId: string,
+  now: Date,
+): Promise<string | null> {
   const row = await getIdentityRow(deps.db, userId);
   if (!row) return null;
   const phrases = parseSummaryPhrases(loadPrompt("ego/line", deps.config.prompts.ego_line));

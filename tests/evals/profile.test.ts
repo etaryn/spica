@@ -29,9 +29,13 @@ test("a real reply unlocks mode: real scripts; --llm=real means every purpose", 
 });
 
 test("rejects unknown purposes, an unknown --llm, and --real combined with --llm=real", () => {
-  expect(() => resolveProfile({ llm: "fake", real: "turn_judge,nope" })).toThrow(/unknown purpose nope.*reply, crisis/);
+  expect(() => resolveProfile({ llm: "fake", real: "turn_judge,nope" })).toThrow(
+    /unknown purpose nope.*reply, crisis/,
+  );
   expect(() => resolveProfile({ llm: "maybe" })).toThrow(/--llm must be fake or real/);
-  expect(() => resolveProfile({ llm: "real", real: "turn_judge" })).toThrow(/--real cannot be combined with --llm=real/);
+  expect(() => resolveProfile({ llm: "real", real: "turn_judge" })).toThrow(
+    /--real cannot be combined with --llm=real/,
+  );
 });
 
 test("phase 5 purposes can be made real", () => {

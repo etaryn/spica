@@ -8,7 +8,11 @@ const config = loadConfig({ safety: { classifier_timeout_ms: 50 } });
 describe("checkCrisis", () => {
   test("uses the classifier result when available", async () => {
     const llm = new FakeLLMProvider({ classify: () => ({ flag: true, category: "self_harm" }) });
-    expect(await checkCrisis({ llm, config }, "anything")).toEqual({ flagged: true, category: "self_harm", source: "classifier" });
+    expect(await checkCrisis({ llm, config }, "anything")).toEqual({
+      flagged: true,
+      category: "self_harm",
+      source: "classifier",
+    });
   });
 
   test("classifier 'no flag' wins over keywords when the classifier works", async () => {
@@ -17,9 +21,21 @@ describe("checkCrisis", () => {
   });
 
   test("falls back to keywords when the classifier throws", async () => {
-    const llm = new FakeLLMProvider({ classify: () => { throw new Error("down"); } });
-    expect(await checkCrisis({ llm, config }, "I want to end my life")).toEqual({ flagged: true, category: "self_harm", source: "keyword_fallback" });
-    expect(await checkCrisis({ llm, config }, "nice weather")).toEqual({ flagged: false, category: "none", source: "keyword_fallback" });
+    const llm = new FakeLLMProvider({
+      classify: () => {
+        throw new Error("down");
+      },
+    });
+    expect(await checkCrisis({ llm, config }, "I want to end my life")).toEqual({
+      flagged: true,
+      category: "self_harm",
+      source: "keyword_fallback",
+    });
+    expect(await checkCrisis({ llm, config }, "nice weather")).toEqual({
+      flagged: false,
+      category: "none",
+      source: "keyword_fallback",
+    });
   });
 
   test("falls back to keywords when the classifier hangs past the timeout", async () => {
@@ -38,6 +54,11 @@ describe("checkCrisis", () => {
 
 test("crisisCardFor returns the default card only when flagged", () => {
   expect(crisisCardFor(null, config)).toBeNull();
-  expect(crisisCardFor({ flagged: false, category: "none", source: "classifier" }, config)).toBeNull();
-  expect(crisisCardFor({ flagged: true, category: "self_harm", source: "classifier" }, config)?.lines.length).toBeGreaterThan(0);
+  expect(
+    crisisCardFor({ flagged: false, category: "none", source: "classifier" }, config),
+  ).toBeNull();
+  expect(
+    crisisCardFor({ flagged: true, category: "self_harm", source: "classifier" }, config)?.lines
+      .length,
+  ).toBeGreaterThan(0);
 });

@@ -19,10 +19,24 @@ import { WebPushPusher } from "./web-push";
 export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
   const config = loadConfig(env.configOverrides);
   const { db } = createDb(env.DATABASE_URL);
-  const pusher = config.push.enabled && vapidPublicKey(env)
-    ? new WebPushPusher(db, { publicKey: env.VAPID_PUBLIC_KEY!, privateKey: env.VAPID_PRIVATE_KEY!, subject: env.VAPID_SUBJECT!, ttlSeconds: config.push.ttl_seconds, timeoutMs: config.push.timeout_ms }, consoleLogger)
-    : noopPusher;
-  if (pusher === noopPusher) consoleLogger.info("web push disabled", { reason: config.push.enabled ? "no VAPID keys" : "push.enabled false" });
+  const pusher =
+    config.push.enabled && vapidPublicKey(env)
+      ? new WebPushPusher(
+          db,
+          {
+            publicKey: env.VAPID_PUBLIC_KEY!,
+            privateKey: env.VAPID_PRIVATE_KEY!,
+            subject: env.VAPID_SUBJECT!,
+            ttlSeconds: config.push.ttl_seconds,
+            timeoutMs: config.push.timeout_ms,
+          },
+          consoleLogger,
+        )
+      : noopPusher;
+  if (pusher === noopPusher)
+    consoleLogger.info("web push disabled", {
+      reason: config.push.enabled ? "no VAPID keys" : "push.enabled false",
+    });
   const embedder = new VoyageEmbedder({
     apiKey: env.VOYAGE_API_KEY,
     model: config.embedding.model,

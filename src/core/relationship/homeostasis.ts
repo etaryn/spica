@@ -11,7 +11,11 @@ export function effect(p: Param, eps: number): number {
 /** One daily sample: exponential moving average and exponentially weighted variance. */
 export function sampleBaseline(p: Param, x: number, alpha: number): Param {
   const d = x - p.baseline;
-  return { ...p, baseline: p.baseline + alpha * d, variance: (1 - alpha) * (p.variance + alpha * d * d) };
+  return {
+    ...p,
+    baseline: p.baseline + alpha * d,
+    variance: (1 - alpha) * (p.variance + alpha * d * d),
+  };
 }
 
 /** Saturating move: a step closes that fraction of the gap to 1 (or to 0). */
@@ -30,7 +34,11 @@ export function fadeParams(params: Params, now: Date, cfg: RelConfig): Params {
     const q = params[name];
     return { ...q, value: faded(q.value, q.updated_at, now, hl), updated_at: now };
   };
-  return { ...params, hurt: fade("hurt", cfg.hurt_half_life_hours), tension: fade("tension", cfg.tension_half_life_hours) };
+  return {
+    ...params,
+    hurt: fade("hurt", cfg.hurt_half_life_hours),
+    tension: fade("tension", cfg.tension_half_life_hours),
+  };
 }
 
 /** Diminishing returns: warmth from someone always warm counts for less. */

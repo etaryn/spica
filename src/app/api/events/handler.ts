@@ -14,10 +14,23 @@ export async function forward(deps: Deps, userId: string, e: ChatEvent, send: Se
   if (!t || t.role !== "companion") return;
   const parts = splitParts(t.text, deps.config.chat.max_parts);
   if (e.part < 0 || e.part >= parts.length) {
-    deps.log.error("sse message event part out of range", { userId, turnId: e.turnId, part: e.part, of: parts.length });
+    deps.log.error("sse message event part out of range", {
+      userId,
+      turnId: e.turnId,
+      part: e.part,
+      of: parts.length,
+    });
     return;
   }
-  send("message", { turnId: t.id, part: e.part, of: parts.length, text: parts[e.part]!, role: "companion", crisisCard: crisisCardFor(t.safety_flag, deps.config), trigger: t.trigger ?? null });
+  send("message", {
+    turnId: t.id,
+    part: e.part,
+    of: parts.length,
+    text: parts[e.part]!,
+    role: "companion",
+    crisisCard: crisisCardFor(t.safety_flag, deps.config),
+    trigger: t.trigger ?? null,
+  });
 }
 
 export function createEventsHandler(opts: {
@@ -43,16 +56,30 @@ export function createEventsHandler(opts: {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         let open = true;
-        const write = (s: string) => { if (open) controller.enqueue(enc.encode(s)); };
-        const send: Send = (event, data) => write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        const write = (s: string) => {
+          if (open) controller.enqueue(enc.encode(s));
+        };
+        const send: Send = (event, data) =>
+          write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
         // Serialise: a message event awaits a DB read, and bubbles must arrive in order.
         let chain = Promise.resolve();
         // A lost LISTEN connection closes the stream (rather than silently keep heart-beating) so
         // EventSource reconnects and the client runs history catch-up on the new connection.
-        const unsubscribe = opts.subscribe(userId, (e) => {
-          chain = chain.then(() => forward(deps, userId, e, send)).catch((err) =>
-            deps.log.error("sse forward failed", { userId, type: e.type, error: errorName(err) }));
-        }, () => cleanup());
+        const unsubscribe = opts.subscribe(
+          userId,
+          (e) => {
+            chain = chain
+              .then(() => forward(deps, userId, e, send))
+              .catch((err) =>
+                deps.log.error("sse forward failed", {
+                  userId,
+                  type: e.type,
+                  error: errorName(err),
+                }),
+              );
+          },
+          () => cleanup(),
+        );
         const heartbeat = setInterval(() => write(": hb\n\n"), deps.config.events.heartbeat_ms);
         write(": connected\n\n");
         cleanup = () => {
@@ -60,7 +87,11 @@ export function createEventsHandler(opts: {
           open = false;
           clearInterval(heartbeat);
           unsubscribe();
-          try { controller.close(); } catch { /* already closed */ }
+          try {
+            controller.close();
+          } catch {
+            /* already closed */
+          }
         };
         if (req.signal.aborted) {
           cleanup();
@@ -68,8 +99,16 @@ export function createEventsHandler(opts: {
         }
         req.signal.addEventListener("abort", () => cleanup());
       },
-      cancel() { cleanup(); },
+      cancel() {
+        cleanup();
+      },
     });
-    return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive" } });
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache, no-transform",
+        connection: "keep-alive",
+      },
+    });
   };
 }

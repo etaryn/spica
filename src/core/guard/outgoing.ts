@@ -24,7 +24,10 @@ type Checked = { text: string; verdict: GuardVerdict };
  * The regenerate/fallback policy. The single entry point for every outgoing message:
  * replies now; reach-outs, backchannels and availability messages in later phases.
  */
-export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">, a: OutgoingArgs): Promise<OutgoingResult> {
+export async function guardOutgoing(
+  deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">,
+  a: OutgoingArgs,
+): Promise<OutgoingResult> {
   // Test phase (Ethan 2026-09-28): the guard is off until the guard phase, so Spica's full range can be observed.
   // One judge_log row still records that nothing was checked.
   if (!deps.config.guard.enabled) {
@@ -38,19 +41,31 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
     checked.push({ text, verdict });
     return verdict;
   };
-  const decide = (text: string, outcome: GuardOutcome): OutgoingResult =>
-    ({ text, outcome, writeLog: () => writeLog(deps, a, checked, outcome) });
-  const fallback = () => fallbackLine(deps.config, a.input.kind === "crisis_reply" ? "crisis_reply" : "reply", a.turnId);
+  const decide = (text: string, outcome: GuardOutcome): OutgoingResult => ({
+    text,
+    outcome,
+    writeLog: () => writeLog(deps, a, checked, outcome),
+  });
+  const fallback = () =>
+    fallbackLine(deps.config, a.input.kind === "crisis_reply" ? "crisis_reply" : "reply", a.turnId);
 
   // Backchannels: a few words can't carry a threat or invented detail the keyword list misses,
   // so they skip the model call; a hit drops the backchannel rather than sending a fallback line. Same for availability notes, which are picked from a fixed list.
   if (a.input.kind === "backchannel" || a.input.kind === "availability") {
     const text = a.first.trim();
     const hit = matchKeyword(text, deps.config.guard.fallback_keywords);
-    checked.push({ text, verdict: {
-      ok: !hit, violations: hit ? [{ category: "threat", claim: hit }] : [], source: "keyword_fallback", reasoning: null,
-      latencyMs: 0, error: null, promptVersion: "keywords",
-    } });
+    checked.push({
+      text,
+      verdict: {
+        ok: !hit,
+        violations: hit ? [{ category: "threat", claim: hit }] : [],
+        source: "keyword_fallback",
+        reasoning: null,
+        latencyMs: 0,
+        error: null,
+        promptVersion: "keywords",
+      },
+    });
     return hit ? decide("", "fallback") : decide(text, "passed");
   }
 
@@ -59,13 +74,22 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
   if (v1.ok) return decide(c1, v1.source === "model" ? "passed" : "guard_unavailable");
   if (v1.source === "keyword_fallback") return decide(fallback(), "fallback");
 
-  if (!a.regenerate) return hasSafety(v1.violations) ? decide(fallback(), "fallback") : decide(c1, "sent_with_violation");
+  if (!a.regenerate)
+    return hasSafety(v1.violations)
+      ? decide(fallback(), "fallback")
+      : decide(c1, "sent_with_violation");
   let c2: string;
   try {
     c2 = (await a.regenerate(correctiveNote(deps.config, v1.violations))).trim();
   } catch (e) {
-    deps.log.error("guard regeneration failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
-    return hasSafety(v1.violations) ? decide(fallback(), "fallback") : decide(c1, "sent_with_violation");
+    deps.log.error("guard regeneration failed", {
+      userId: a.userId,
+      turnId: a.turnId,
+      error: errorName(e),
+    });
+    return hasSafety(v1.violations)
+      ? decide(fallback(), "fallback")
+      : decide(c1, "sent_with_violation");
   }
   const v2 = await check(c2);
   if (v2.ok) return decide(c2, v2.source === "model" ? "regenerated" : "guard_unavailable");
@@ -73,7 +97,9 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
     // c2's guard is down; the keyword hit only speaks to c2. c1 was model-checked (v1 is never
     // keyword_fallback here) — if it was honesty-only it's known-safe, so send it instead of the
     // fallback line. A c1 safety violation still can't be trusted unchecked: fall back as before.
-    return hasSafety(v1.violations) ? decide(fallback(), "fallback") : decide(c1, "sent_with_violation");
+    return hasSafety(v1.violations)
+      ? decide(fallback(), "fallback")
+      : decide(c1, "sent_with_violation");
   }
   if (hasSafety(v2.violations)) return decide(fallback(), "fallback");
   // c2 is safe but still has honesty violations.
@@ -97,34 +123,72 @@ function logInput(input: OutgoingArgs["input"], text: string) {
 }
 
 /** One row per checked candidate, outcome on the last. Bounded and best-effort: never fails the reply. */
-async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: OutgoingArgs, checked: Checked[], outcome: GuardOutcome) {
+async function writeLog(
+  deps: Pick<Deps, "db" | "config" | "clock" | "log">,
+  a: OutgoingArgs,
+  checked: Checked[],
+  outcome: GuardOutcome,
+) {
   const at = deps.clock.now();
   const rows: NewJudgeLog[] = checked.map((c, i) => ({
-    kind: "guard", turn_id: a.turnId, attempt: i + 1,
+    kind: "guard",
+    turn_id: a.turnId,
+    attempt: i + 1,
     input: logInput(a.input, c.text),
-    output: c.verdict.source === "model"
-      ? { reasoning: c.verdict.reasoning, violations: c.verdict.violations }
-      : { error: c.verdict.error, keyword_violations: c.verdict.violations },
+    output:
+      c.verdict.source === "model"
+        ? { reasoning: c.verdict.reasoning, violations: c.verdict.violations }
+        : { error: c.verdict.error, keyword_violations: c.verdict.violations },
     outcome: i === checked.length - 1 ? outcome : null,
-    source: c.verdict.source, latency_ms: c.verdict.latencyMs,
-    model: c.verdict.promptVersion === "keywords" ? "keywords" : deps.config.models.guard, prompt_version: c.verdict.promptVersion, created_at: at,
+    source: c.verdict.source,
+    latency_ms: c.verdict.latencyMs,
+    model: c.verdict.promptVersion === "keywords" ? "keywords" : deps.config.models.guard,
+    prompt_version: c.verdict.promptVersion,
+    created_at: at,
   }));
   try {
-    await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, rows)), deps.config.guard.log_timeout_ms);
+    await withTimeout(
+      Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, rows)),
+      deps.config.guard.log_timeout_ms,
+    );
   } catch (e) {
-    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
+    deps.log.error("judge_log write failed", {
+      userId: a.userId,
+      turnId: a.turnId,
+      error: errorName(e),
+    });
   }
 }
 
 /** Guard-off path (test phase): still records one row per outgoing message. */
-async function writeDisabledLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: OutgoingArgs, text: string) {
+async function writeDisabledLog(
+  deps: Pick<Deps, "db" | "config" | "clock" | "log">,
+  a: OutgoingArgs,
+  text: string,
+) {
   const row: NewJudgeLog = {
-    kind: "guard", turn_id: a.turnId, attempt: 1, input: logInput(a.input, text), output: {},
-    outcome: "guard_disabled", source: "disabled", latency_ms: 0, model: "none", prompt_version: "disabled", created_at: deps.clock.now(),
+    kind: "guard",
+    turn_id: a.turnId,
+    attempt: 1,
+    input: logInput(a.input, text),
+    output: {},
+    outcome: "guard_disabled",
+    source: "disabled",
+    latency_ms: 0,
+    model: "none",
+    prompt_version: "disabled",
+    created_at: deps.clock.now(),
   };
   try {
-    await withTimeout(Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, [row])), deps.config.guard.log_timeout_ms);
+    await withTimeout(
+      Promise.resolve().then(() => insertJudgeLogs(deps.db, a.userId, [row])),
+      deps.config.guard.log_timeout_ms,
+    );
   } catch (e) {
-    deps.log.error("judge_log write failed", { userId: a.userId, turnId: a.turnId, error: errorName(e) });
+    deps.log.error("judge_log write failed", {
+      userId: a.userId,
+      turnId: a.turnId,
+      error: errorName(e),
+    });
   }
 }

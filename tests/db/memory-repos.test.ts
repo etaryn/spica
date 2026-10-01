@@ -15,10 +15,24 @@ const T0 = new Date("2026-01-05T09:00:00Z");
 const ax = (i: number) => ScriptedEmbedder.axis(D, i);
 const db = () => getTestDb();
 
-async function fact(userId: string, content: string, vec: number[], extra: Partial<facts.NewFact> = {}) {
+async function fact(
+  userId: string,
+  content: string,
+  vec: number[],
+  extra: Partial<facts.NewFact> = {},
+) {
   return facts.insertFact(db(), userId, {
-    subject: "user", kind: "event", content, embedding: vec, created_at: T0, status: "open",
-    salience: 0.5, valence: 0, confidence: 0.9, source: "turn", ...extra,
+    subject: "user",
+    kind: "event",
+    content,
+    embedding: vec,
+    created_at: T0,
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+    ...extra,
   });
 }
 
@@ -26,7 +40,13 @@ describe("facts", () => {
   test("candidateFacts: nearest first, excludes other users, superseded, stale and group scope; entity salience joined", async () => {
     const a = await createTestUser("a");
     const b = await createTestUser("b");
-    const mia = await upsertEntityMention(db(), a, { name: "Mia", aliases: [], type: "person", subject: "user", relation: "sister" }, T0, { newSalience: 0.9, bump: 0, cap: 0.95 });
+    const mia = await upsertEntityMention(
+      db(),
+      a,
+      { name: "Mia", aliases: [], type: "person", subject: "user", relation: "sister" },
+      T0,
+      { newSalience: 0.9, bump: 0, cap: 0.95 },
+    );
     await fact(a, "exact", ax(1), { entity_refs: [mia.id] });
     await fact(a, "near", ScriptedEmbedder.near(D, 1, 2, 0.8));
     await fact(a, "old news", ax(1), { status: "superseded" });
@@ -57,11 +77,33 @@ describe("facts", () => {
     const f2 = await fact(u, "forgotten", ax(2));
     const f3 = await fact(other, "not yours", ax(3));
     const turnId = randomUUID();
-    await db().insert(s.session_log).values({ id: turnId, user_id: u, session_id: randomUUID(), role: "companion", text: "x", created_at: T0 });
+    await db().insert(s.session_log).values({
+      id: turnId,
+      user_id: u,
+      session_id: randomUUID(),
+      role: "companion",
+      text: "x",
+      created_at: T0,
+    });
     await facts.forgetFact(db(), u, f2.id);
-    const rec = (id: string) => ({ factId: id, sim: 0.9, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.45, forced: false });
+    const rec = (id: string) => ({
+      factId: id,
+      sim: 0.9,
+      fact_salience: 0.5,
+      entity_salience: 1,
+      recency: 1,
+      score: 0.45,
+      forced: false,
+    });
     const now = new Date("2026-01-06T09:00:00Z");
-    const updated = await facts.applyRecall(db(), u, [rec(f1.id), rec(f2.id), rec(f3.id)], now, { bump: 0.03, cap: 0.95, minSim: 0.5 }, turnId);
+    const updated = await facts.applyRecall(
+      db(),
+      u,
+      [rec(f1.id), rec(f2.id), rec(f3.id)],
+      now,
+      { bump: 0.03, cap: 0.95, minSim: 0.5 },
+      turnId,
+    );
     expect(updated).toEqual([f1.id]);
     const after = await facts.getFact(db(), u, f1.id);
     expect(after!.salience).toBeCloseTo(0.95, 5);
@@ -78,10 +120,32 @@ describe("facts", () => {
     const low = await fact(u, "low sim", ax(2));
     const forced = await fact(u, "forced", ax(3));
     const turnId = randomUUID();
-    await db().insert(s.session_log).values({ id: turnId, user_id: u, session_id: randomUUID(), role: "companion", text: "x", created_at: T0 });
-    const rec = (id: string, sim: number, isForced = false) => ({ factId: id, sim, fact_salience: 0.5, entity_salience: 1, recency: 1, score: 0.4, forced: isForced });
+    await db().insert(s.session_log).values({
+      id: turnId,
+      user_id: u,
+      session_id: randomUUID(),
+      role: "companion",
+      text: "x",
+      created_at: T0,
+    });
+    const rec = (id: string, sim: number, isForced = false) => ({
+      factId: id,
+      sim,
+      fact_salience: 0.5,
+      entity_salience: 1,
+      recency: 1,
+      score: 0.4,
+      forced: isForced,
+    });
     const now = new Date("2026-01-06T09:00:00Z");
-    const reinforced = await facts.applyRecall(db(), u, [rec(high.id, 0.8), rec(low.id, 0.3), rec(forced.id, 0.9, true)], now, { bump: 0.03, cap: 0.95, minSim: 0.5 }, turnId);
+    const reinforced = await facts.applyRecall(
+      db(),
+      u,
+      [rec(high.id, 0.8), rec(low.id, 0.3), rec(forced.id, 0.9, true)],
+      now,
+      { bump: 0.03, cap: 0.95, minSim: 0.5 },
+      turnId,
+    );
     expect(reinforced).toEqual([high.id]);
     const h = (await facts.getFact(db(), u, high.id))!;
     expect(h.salience).toBeCloseTo(0.53, 5);
@@ -101,13 +165,25 @@ describe("facts", () => {
     const u = await createTestUser();
     const other = await createTestUser("o");
     const cp = new Date("2026-01-08T09:00:00Z");
-    const lone = await threads.insertThread(db(), u, { title: "lone", subject: "user", stakes: "med", next_checkpoint: cp }, T0);
-    const shared = await threads.insertThread(db(), u, { title: "shared", subject: "user", stakes: "med", next_checkpoint: cp }, T0);
+    const lone = await threads.insertThread(
+      db(),
+      u,
+      { title: "lone", subject: "user", stakes: "med", next_checkpoint: cp },
+      T0,
+    );
+    const shared = await threads.insertThread(
+      db(),
+      u,
+      { title: "shared", subject: "user", stakes: "med", next_checkpoint: cp },
+      T0,
+    );
     const onlyFact = await fact(u, "only", ax(1), { thread_id: lone.id });
     const f1 = await fact(u, "one", ax(2), { thread_id: shared.id });
     await fact(u, "two (superseded)", ax(3), { thread_id: shared.id, status: "superseded" });
     const later = new Date("2026-01-10T09:00:00Z");
-    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id).sort()).toEqual([lone.id, shared.id].sort());
+    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id).sort()).toEqual(
+      [lone.id, shared.id].sort(),
+    );
     expect(await facts.forgetFact(db(), other, onlyFact.id)).toBe(false);
     expect(await threads.getOwnedThread(db(), u, lone.id)).not.toBeNull();
     expect(await facts.forgetFact(db(), u, onlyFact.id)).toBe(true);
@@ -134,18 +210,51 @@ describe("facts", () => {
     await fact(u, "newer", ax(2), { created_at: new Date("2026-01-03T00:00:00Z") });
     await fact(u, "hers", ax(3), { subject: "self" });
     await fact(u, "gone", ax(4), { status: "stale" });
-    expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual(["newer", "older"]);
+    expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual([
+      "newer",
+      "older",
+    ]);
   });
 
   test("listOnboardingFacts: only this user's live onboarding facts", async () => {
     const u = await createTestUser();
     const other = await createTestUser();
-    const base = { subject: "user" as const, kind: "preference" as const, embedding: vec(), created_at: new Date("2026-01-01T00:00:00Z"), salience: 0.5, valence: 0, confidence: 0.6 };
-    await facts.insertFact(getTestDb(), u, { ...base, content: "Drinks a lot of coffee.", status: "open", source: "onboarding" });
-    await facts.insertFact(getTestDb(), u, { ...base, content: "Old stale survey fact.", status: "stale", source: "onboarding" });
-    await facts.insertFact(getTestDb(), u, { ...base, content: "Said in chat.", status: "open", source: "turn" });
-    await facts.insertFact(getTestDb(), other, { ...base, content: "Someone else's survey fact.", status: "open", source: "onboarding" });
-    expect((await facts.listOnboardingFacts(getTestDb(), u)).map((f) => f.content)).toEqual(["Drinks a lot of coffee."]);
+    const base = {
+      subject: "user" as const,
+      kind: "preference" as const,
+      embedding: vec(),
+      created_at: new Date("2026-01-01T00:00:00Z"),
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+    };
+    await facts.insertFact(getTestDb(), u, {
+      ...base,
+      content: "Drinks a lot of coffee.",
+      status: "open",
+      source: "onboarding",
+    });
+    await facts.insertFact(getTestDb(), u, {
+      ...base,
+      content: "Old stale survey fact.",
+      status: "stale",
+      source: "onboarding",
+    });
+    await facts.insertFact(getTestDb(), u, {
+      ...base,
+      content: "Said in chat.",
+      status: "open",
+      source: "turn",
+    });
+    await facts.insertFact(getTestDb(), other, {
+      ...base,
+      content: "Someone else's survey fact.",
+      status: "open",
+      source: "onboarding",
+    });
+    expect((await facts.listOnboardingFacts(getTestDb(), u)).map((f) => f.content)).toEqual([
+      "Drinks a lot of coffee.",
+    ]);
   });
 });
 
@@ -153,10 +262,28 @@ describe("entities", () => {
   test("case/whitespace variants and aliases resolve to one entity; salience bumps and caps", async () => {
     const u = await createTestUser();
     const opts = { newSalience: 0.5, bump: 0.3, cap: 0.95 };
-    const first = await upsertEntityMention(db(), u, { name: "Mia", aliases: ["my sis"], type: "person", subject: "user", relation: "sister" }, T0, opts);
+    const first = await upsertEntityMention(
+      db(),
+      u,
+      { name: "Mia", aliases: ["my sis"], type: "person", subject: "user", relation: "sister" },
+      T0,
+      opts,
+    );
     expect(first.created).toBe(true);
-    const again = await upsertEntityMention(db(), u, { name: "  MIA ", aliases: [], type: "person", subject: "user", relation: null }, T0, opts);
-    const byAlias = await upsertEntityMention(db(), u, { name: "My Sis", aliases: [], type: "person", subject: "user", relation: null }, T0, opts);
+    const again = await upsertEntityMention(
+      db(),
+      u,
+      { name: "  MIA ", aliases: [], type: "person", subject: "user", relation: null },
+      T0,
+      opts,
+    );
+    const byAlias = await upsertEntityMention(
+      db(),
+      u,
+      { name: "My Sis", aliases: [], type: "person", subject: "user", relation: null },
+      T0,
+      opts,
+    );
     expect(again).toEqual({ id: first.id, created: false });
     expect(byAlias.id).toBe(first.id);
     const row = await findEntityByName(db(), u, "user", "mia");
@@ -168,14 +295,37 @@ describe("entities", () => {
 describe("threads", () => {
   test("title match is case/space-insensitive; due threads carry their latest active fact", async () => {
     const u = await createTestUser();
-    const t = await threads.insertThread(db(), u, { title: "Job interview at Acme", subject: "user", stakes: "high", next_checkpoint: new Date("2026-01-10T09:00:00Z") }, T0);
-    expect((await threads.findOpenThreadByTitle(db(), u, "  job INTERVIEW at acme"))!.id).toBe(t.id);
-    await fact(u, "older detail", ax(1), { thread_id: t.id, created_at: new Date("2026-01-05T09:00:00Z") });
-    await fact(u, "Interview is on Friday at 10am", ax(2), { thread_id: t.id, created_at: new Date("2026-01-06T09:00:00Z"), salience: 0.8 });
+    const t = await threads.insertThread(
+      db(),
+      u,
+      {
+        title: "Job interview at Acme",
+        subject: "user",
+        stakes: "high",
+        next_checkpoint: new Date("2026-01-10T09:00:00Z"),
+      },
+      T0,
+    );
+    expect((await threads.findOpenThreadByTitle(db(), u, "  job INTERVIEW at acme"))!.id).toBe(
+      t.id,
+    );
+    await fact(u, "older detail", ax(1), {
+      thread_id: t.id,
+      created_at: new Date("2026-01-05T09:00:00Z"),
+    });
+    await fact(u, "Interview is on Friday at 10am", ax(2), {
+      thread_id: t.id,
+      created_at: new Date("2026-01-06T09:00:00Z"),
+      salience: 0.8,
+    });
     expect(await threads.dueThreads(db(), u, new Date("2026-01-09T09:00:00Z"), 5)).toEqual([]);
     const due = await threads.dueThreads(db(), u, new Date("2026-01-12T09:00:00Z"), 5);
     expect(due).toHaveLength(1);
-    expect(due[0]).toMatchObject({ id: t.id, title: "Job interview at Acme", content: "Interview is on Friday at 10am" });
+    expect(due[0]).toMatchObject({
+      id: t.id,
+      title: "Job interview at Acme",
+      content: "Interview is on Friday at 10am",
+    });
     expect(due[0]!.salience).toBeCloseTo(0.8, 5);
     await threads.resolveThread(db(), u, t.id, new Date("2026-01-12T10:00:00Z"));
     expect(await threads.dueThreads(db(), u, new Date("2026-01-12T11:00:00Z"), 5)).toEqual([]);
@@ -184,13 +334,27 @@ describe("threads", () => {
 
   test("a thread touched after its checkpoint stops being due until a new checkpoint passes", async () => {
     const u = await createTestUser();
-    const t = await threads.insertThread(db(), u, { title: "driving test", subject: "user", stakes: "med", next_checkpoint: new Date("2026-01-08T09:00:00Z") }, T0);
-    expect((await threads.dueThreads(db(), u, new Date("2026-01-09T09:00:00Z"), 5)).map((d) => d.id)).toEqual([t.id]);
+    const t = await threads.insertThread(
+      db(),
+      u,
+      {
+        title: "driving test",
+        subject: "user",
+        stakes: "med",
+        next_checkpoint: new Date("2026-01-08T09:00:00Z"),
+      },
+      T0,
+    );
+    expect(
+      (await threads.dueThreads(db(), u, new Date("2026-01-09T09:00:00Z"), 5)).map((d) => d.id),
+    ).toEqual([t.id]);
     await threads.touchThread(db(), u, t.id, new Date("2026-01-09T10:00:00Z"), null);
     expect(await threads.dueThreads(db(), u, new Date("2026-01-09T11:00:00Z"), 5)).toEqual([]);
     const next = new Date("2026-01-20T09:00:00Z");
     await threads.touchThread(db(), u, t.id, new Date("2026-01-10T09:00:00Z"), next);
     expect(await threads.dueThreads(db(), u, new Date("2026-01-19T09:00:00Z"), 5)).toEqual([]);
-    expect((await threads.dueThreads(db(), u, new Date("2026-01-21T09:00:00Z"), 5)).map((d) => d.id)).toEqual([t.id]);
+    expect(
+      (await threads.dueThreads(db(), u, new Date("2026-01-21T09:00:00Z"), 5)).map((d) => d.id),
+    ).toEqual([t.id]);
   });
 });

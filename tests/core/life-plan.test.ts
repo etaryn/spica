@@ -8,11 +8,13 @@ beforeEach(resetDb);
 afterAll(closeTestDb);
 
 const cfg = makeTestDeps().config.life;
-const good = { blocks: [
-  { start: "10:00", end: "13:00", kind: "busy" as const, busy: 1.4, label: " reading  " },
-  { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.1, label: "offline" },
-  { start: "23:00", end: "24:00", kind: "quiet" as const, busy: 0, label: "offline" },
-] };
+const good = {
+  blocks: [
+    { start: "10:00", end: "13:00", kind: "busy" as const, busy: 1.4, label: " reading  " },
+    { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.1, label: "offline" },
+    { start: "23:00", end: "24:00", kind: "quiet" as const, busy: 0, label: "offline" },
+  ],
+};
 
 test("validatePlan sorts, normalises busy levels and labels", () => {
   const r = validatePlan(good, cfg);
@@ -24,11 +26,16 @@ test("validatePlan sorts, normalises busy levels and labels", () => {
 });
 
 test("validatePlan rejects overlap, bad times, no busy block and too little quiet", () => {
-  const bad = validatePlan({ blocks: [
-    { start: "00:00", end: "05:00", kind: "quiet", busy: 0, label: "offline" },
-    { start: "04:00", end: "06:00", kind: "downtime", busy: 0, label: "x" },
-    { start: "25:00", end: "26:00", kind: "busy", busy: 0.5, label: "y" },
-  ] }, cfg);
+  const bad = validatePlan(
+    {
+      blocks: [
+        { start: "00:00", end: "05:00", kind: "quiet", busy: 0, label: "offline" },
+        { start: "04:00", end: "06:00", kind: "downtime", busy: 0, label: "x" },
+        { start: "25:00", end: "26:00", kind: "busy", busy: 0.5, label: "y" },
+      ],
+    },
+    cfg,
+  );
   expect(bad.ok).toBe(false);
   if (bad.ok) return;
   expect(bad.violations.join(" | ")).toMatch(/bad time/);
@@ -60,7 +67,9 @@ test("an invalid plan is retried with its violations, then replaced by the fallb
 
 test("an LLM error on both attempts also falls back", async () => {
   const deps = makeTestDeps();
-  deps.llm.handlers.life_plan = () => { throw new Error("down"); };
+  deps.llm.handlers.life_plan = () => {
+    throw new Error("down");
+  };
   await ensurePlans(deps, new Date("2026-01-05T02:00:00Z"));
   expect((await getLifeDay(getTestDb(), "2026-01-05"))?.source).toBe("fallback");
 });

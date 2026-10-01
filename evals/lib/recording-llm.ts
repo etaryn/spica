@@ -9,7 +9,11 @@ export class RecordingLLM implements LLMProvider {
   prompts: string[] = [];
   constructor(private readonly inner: LLMProvider) {}
   generateReply(req: ReplyRequest): Promise<string> {
-    this.prompts.push([req.system, ...req.messages.filter((m) => m.role === "user").map((m) => m.content)].join("\n"));
+    this.prompts.push(
+      [req.system, ...req.messages.filter((m) => m.role === "user").map((m) => m.content)].join(
+        "\n",
+      ),
+    );
     return this.inner.generateReply(req);
   }
   classifyJson<T>(req: ClassifyRequest<T>): Promise<T> {

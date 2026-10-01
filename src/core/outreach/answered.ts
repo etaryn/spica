@@ -7,7 +7,11 @@ import { errorName } from "../errors";
  * any user message answers. Best-effort: a failure leaves the counter up, so she stays quieter,
  * which is the safe side; it never fails the POST.
  */
-export async function markReachOutAnswered(deps: Pick<Deps, "db" | "log">, userId: string, at: Date): Promise<void> {
+export async function markReachOutAnswered(
+  deps: Pick<Deps, "db" | "log">,
+  userId: string,
+  at: Date,
+): Promise<void> {
   try {
     await deps.db.transaction(async (tx) => {
       await resetUnanswered(tx, userId);

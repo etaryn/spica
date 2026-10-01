@@ -31,17 +31,30 @@ type Recheck = { gate: GateResult[]; topicUsed: boolean; epochChanged: boolean; 
  * recheck stays the authority. A drop applies only while the row is still `scheduled` (a duplicate delivery of a
  * sent job is `stale`).
  */
-export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise<"stale" | "dropped" | "sent" | "abandoned"> {
+export async function runReachOutSend(
+  deps: Deps,
+  job: ReachOutSendJob,
+): Promise<"stale" | "dropped" | "sent" | "abandoned"> {
   const { db, clock, config, log } = deps;
   const { userId, logId } = job;
   const row = await getReachOutLog(db, userId, logId);
   if (!row || row.status !== "scheduled") return "stale";
   const winner = row.winner as Candidate;
   const drop = async (reason: string, recheck?: Recheck): Promise<"dropped" | "stale"> =>
-    (await dropScheduled(db, userId, logId, { tick: row.gate_results, dropped: reason, ...(recheck ? { recheck } : {}) })) ? "dropped" : "stale";
+    (await dropScheduled(db, userId, logId, {
+      tick: row.gate_results,
+      dropped: reason,
+      ...(recheck ? { recheck } : {}),
+    }))
+      ? "dropped"
+      : "stale";
 
   // A job that runs long after its slot (worker down) is dropped rather than sent out of context.
-  if (row.send_at && clock.now().getTime() > row.send_at.getTime() + config.outreach.pending_max_age_minutes * 60_000) return drop("late");
+  if (
+    row.send_at &&
+    clock.now().getTime() > row.send_at.getTime() + config.outreach.pending_max_age_minutes * 60_000
+  )
+    return drop("late");
 
   const recent = await sessionLog.recentTurns(db, userId, config.chat.recent_turns);
   if (recent.length === 0) return drop("no_history");
@@ -49,9 +62,17 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
   // Precheck (unlocked, nothing emitted yet): mid-conversation, capped, in her block, crisis or topic used → drop now.
   const preAt = clock.now();
   const preIn = await loadGateInputs(deps, userId, preAt);
-  const pre = preIn ? evaluateGate(preIn, config.outreach, preAt) : { pass: false, results: [] as GateResult[] };
+  const pre = preIn
+    ? evaluateGate(preIn, config.outreach, preAt)
+    : { pass: false, results: [] as GateResult[] };
   const preTopicUsed = (await usedTopics(db, userId)).includes(winner.topic);
-  if (!pre.pass || preTopicUsed) return drop("precheck", { gate: pre.results, topicUsed: preTopicUsed, epochChanged: false, newTurn: false });
+  if (!pre.pass || preTopicUsed)
+    return drop("precheck", {
+      gate: pre.results,
+      topicUsed: preTopicUsed,
+      epochChanged: false,
+      newTurn: false,
+    });
 
   // A crisis (epoch bump) or a new turn landing during compose/typing must win over this reach-out.
   const startEpoch = (await getState(db, userId))?.reply_epoch ?? 0;
@@ -78,21 +99,48 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
     await sleepUntil(clock, sendAt);
 
     const insertAt = clock.now();
-    const outcome = await mutateState<{ turn: Turn; epoch: number } | { recheck: Recheck }>(db, userId, insertAt, async (s, tx) => {
-      const gateIn = await loadGateInputs(deps, userId, insertAt, tx, s);
-      const gate = gateIn ? evaluateGate(gateIn, config.outreach, insertAt) : { pass: false, results: [] as GateResult[] };
-      const topicUsed = (await usedTopics(tx, userId)).includes(winner.topic);
-      const epochChanged = s.reply_epoch !== startEpoch;
-      const newTurn = (await sessionLog.recentTurns(tx, userId, 1)).at(-1)?.id !== lastTurnId;
-      if (!gate.pass || topicUsed || epochChanged || newTurn) return { patch: null, result: { recheck: { gate: gate.results, topicUsed, epochChanged, newTurn } } };
-      const turn = await sessionLog.insertTurn(tx, userId, {
-        id: randomUUID(), session_id: resolveSessionId(recent.at(-1)!, insertAt, config.session.idle_gap_minutes, randomUUID),
-        role: "companion", text: composed.text, created_at: insertAt, trigger: "reach_out",
-      });
-      await updateReachOutLog(tx, userId, logId, { status: "sent", turn_id: turn.id, send_at: insertAt });
-      await incrementUnanswered(tx, userId);
-      return { patch: { sending_since: insertAt, updated_at: insertAt }, result: { turn, epoch: s.reply_epoch } };
-    });
+    const outcome = await mutateState<{ turn: Turn; epoch: number } | { recheck: Recheck }>(
+      db,
+      userId,
+      insertAt,
+      async (s, tx) => {
+        const gateIn = await loadGateInputs(deps, userId, insertAt, tx, s);
+        const gate = gateIn
+          ? evaluateGate(gateIn, config.outreach, insertAt)
+          : { pass: false, results: [] as GateResult[] };
+        const topicUsed = (await usedTopics(tx, userId)).includes(winner.topic);
+        const epochChanged = s.reply_epoch !== startEpoch;
+        const newTurn = (await sessionLog.recentTurns(tx, userId, 1)).at(-1)?.id !== lastTurnId;
+        if (!gate.pass || topicUsed || epochChanged || newTurn)
+          return {
+            patch: null,
+            result: { recheck: { gate: gate.results, topicUsed, epochChanged, newTurn } },
+          };
+        const turn = await sessionLog.insertTurn(tx, userId, {
+          id: randomUUID(),
+          session_id: resolveSessionId(
+            recent.at(-1)!,
+            insertAt,
+            config.session.idle_gap_minutes,
+            randomUUID,
+          ),
+          role: "companion",
+          text: composed.text,
+          created_at: insertAt,
+          trigger: "reach_out",
+        });
+        await updateReachOutLog(tx, userId, logId, {
+          status: "sent",
+          turn_id: turn.id,
+          send_at: insertAt,
+        });
+        await incrementUnanswered(tx, userId);
+        return {
+          patch: { sending_since: insertAt, updated_at: insertAt },
+          result: { turn, epoch: s.reply_epoch },
+        };
+      },
+    );
     if ("recheck" in outcome) {
       await composed.writeGuardLog();
       return await drop("recheck", outcome.recheck);
@@ -102,18 +150,29 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
 
     await deliverPart(deps, userId, { turnId, part: 0, parts });
     for (let i = 1; i < parts.length; i++) {
-      sendAt = plus(new Date(Math.max(sendAt.getTime(), clock.now().getTime())), config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length));
+      sendAt = plus(
+        new Date(Math.max(sendAt.getTime(), clock.now().getTime())),
+        config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length),
+      );
       await sleepUntil(clock, sendAt);
       const cur = await getState(db, userId);
-      if (!cur || cur.reply_epoch !== epoch) { // a crisis reply took over (rule 7)
+      if (!cur || cur.reply_epoch !== epoch) {
+        // a crisis reply took over (rule 7)
         await composed.writeGuardLog();
         return "abandoned";
       }
       await deliverPart(deps, userId, { turnId, part: i, parts });
     }
     await stopTyping();
-    await withTimeout(deps.queue.enqueue(COLD_PATH_QUEUE, { userId, turnIds: [turnId], replyTurnId: turnId, recalled: composed.recalled }), config.queue.enqueue_timeout_ms)
-      .catch((e) => log.error("cold_path enqueue failed", { userId, error: errorName(e) }));
+    await withTimeout(
+      deps.queue.enqueue(COLD_PATH_QUEUE, {
+        userId,
+        turnIds: [turnId],
+        replyTurnId: turnId,
+        recalled: composed.recalled,
+      }),
+      config.queue.enqueue_timeout_ms,
+    ).catch((e) => log.error("cold_path enqueue failed", { userId, error: errorName(e) }));
     await composed.writeGuardLog();
     return "sent";
   } finally {

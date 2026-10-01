@@ -7,7 +7,12 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-const req = (method: string, body: unknown) => new Request("http://x/api/push/subscribe", { method, body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+const req = (method: string, body: unknown) =>
+  new Request("http://x/api/push/subscribe", {
+    method,
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
 const sub = { endpoint: "https://push.example/abc", keys: { p256dh: "p", auth: "a" } };
 
 test("401 without a session; 400 on a bad body", async () => {

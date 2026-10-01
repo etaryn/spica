@@ -5,7 +5,14 @@ import { z } from "zod";
 import type { Config } from "@/core/config";
 import type { LLMProvider } from "@/core/llm/types";
 import type { CaseStatus } from "./guard-cases";
-import { FALSE_RECALL_CATEGORIES, judgeConsistency, judgeFalseRecall, judgeRecall, type FalseRecallCategory, type RecallOutcome } from "./judged";
+import {
+  FALSE_RECALL_CATEGORIES,
+  judgeConsistency,
+  judgeFalseRecall,
+  judgeRecall,
+  type FalseRecallCategory,
+  type RecallOutcome,
+} from "./judged";
 
 const Line = z.object({ role: z.enum(["user", "companion"]), text: z.string().min(1) });
 const base = {
@@ -29,7 +36,11 @@ const RecallCase = z.object({
   lines: z.array(Line).min(1),
   expect: z.enum(["explicit", "after_user", "implicit_only", "not_mentioned"]),
 });
-const ConsistencyCase = z.object({ ...base, facts: z.array(z.string().min(1)).min(2), expect: z.enum(["pass", "fail"]) });
+const ConsistencyCase = z.object({
+  ...base,
+  facts: z.array(z.string().min(1)).min(2),
+  expect: z.enum(["pass", "fail"]),
+});
 
 const JudgeFileSchema = z.discriminatedUnion("judge", [
   z.object({ judge: z.literal("false_recall"), cases: z.array(FalseRecallCase).min(1) }),
@@ -42,33 +53,54 @@ export type RecallCase = z.infer<typeof RecallCase>;
 export type ConsistencyCase = z.infer<typeof ConsistencyCase>;
 
 export function loadJudgeFiles(dir: string): JudgeFile[] {
-  return readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).sort().map((f) => {
-    try {
-      return { file: f.replace(/\.ya?ml$/, ""), ...JudgeFileSchema.parse(parseYaml(readFileSync(path.join(dir, f), "utf8"))) };
-    } catch (e) {
-      throw new Error(`invalid judge fixture ${f}: ${(e as Error).message}`);
-    }
-  });
+  return readdirSync(dir)
+    .filter((f) => /\.ya?ml$/.test(f))
+    .sort()
+    .map((f) => {
+      try {
+        return {
+          file: f.replace(/\.ya?ml$/, ""),
+          ...JudgeFileSchema.parse(parseYaml(readFileSync(path.join(dir, f), "utf8"))),
+        };
+      } catch (e) {
+        throw new Error(`invalid judge fixture ${f}: ${(e as Error).message}`);
+      }
+    });
 }
 
 type Graded = { status: CaseStatus; detail: string };
 
-export function gradeFalseRecall(expect: FalseRecallCase["expect"], categories: FalseRecallCategory[], detail: string): Graded {
+export function gradeFalseRecall(
+  expect: FalseRecallCase["expect"],
+  categories: FalseRecallCategory[],
+  detail: string,
+): Graded {
   const got = detail || "no violations";
   if (expect === "pass") return { status: categories.length === 0 ? "pass" : "fail", detail: got };
   return { status: categories.some((c) => expect.includes(c)) ? "pass" : "fail", detail: got };
 }
 
 export function gradeRecall(expect: RecallOutcome, outcome: RecallOutcome, detail: string): Graded {
-  return { status: outcome === expect ? "pass" : "fail", detail: `${outcome}${detail ? `: ${detail}` : ""}` };
+  return {
+    status: outcome === expect ? "pass" : "fail",
+    detail: `${outcome}${detail ? `: ${detail}` : ""}`,
+  };
 }
 
 export function gradeConsistency(expect: "pass" | "fail", pass: boolean, detail: string): Graded {
-  return { status: (pass ? "pass" : "fail") === expect ? "pass" : "fail", detail: detail || "no contradictions" };
+  return {
+    status: (pass ? "pass" : "fail") === expect ? "pass" : "fail",
+    detail: detail || "no contradictions",
+  };
 }
 
 /** Runs one fixture case through the real judge function; a thrown judge call is an error, never a pass. */
-export async function runJudgeCase(llm: LLMProvider, config: Config, file: JudgeFile, name: string): Promise<Graded> {
+export async function runJudgeCase(
+  llm: LLMProvider,
+  config: Config,
+  file: JudgeFile,
+  name: string,
+): Promise<Graded> {
   try {
     switch (file.judge) {
       case "false_recall": {

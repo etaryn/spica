@@ -24,13 +24,17 @@ export type ColdPathOutcome = { status: "done" | "skipped"; applied?: ApplyOutco
 export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
   const { db, config, clock, embedder, log } = deps;
   return db.transaction(async (tx) => {
-    const lock = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(hashtext(${`cold_path:${job.userId}`})) AS ok`);
+    const lock = await tx.execute(
+      sql`SELECT pg_try_advisory_xact_lock(hashtext(${`cold_path:${job.userId}`})) AS ok`,
+    );
     if (!lock.rows[0]?.ok) throw new LockBusyError(`cold_path busy for user`);
 
     const turns = await getTurnsByIds(tx, job.userId, job.turnIds);
     if (turns.length === 0 || turns.every((t) => t.extracted)) return { status: "skipped" };
 
-    const context = (await turnsUpTo(tx, job.userId, turns[0]!, config.extraction.context_turns + 1)).slice(0, -1);
+    const context = (
+      await turnsUpTo(tx, job.userId, turns[0]!, config.extraction.context_turns + 1)
+    ).slice(0, -1);
     const extraction = await extract(deps, {
       newTurns: turns,
       contextTurns: context,
@@ -43,25 +47,50 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
     // The hurt cause lives in the fact store: one self `feeling` fact, reconciled like any other.
-    const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
+    const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map(
+      (fact) => ({ fact, source: "turn" }),
+    );
     // Same deadzone comparison applyExchange uses (`>=`): a hurt too small to move the param writes no fact.
-    const hurt = signals?.hurt && signals.hurt.amount >= config.relationship.signal_deadzone ? signals.hurt : null;
+    const hurt =
+      signals?.hurt && signals.hurt.amount >= config.relationship.signal_deadzone
+        ? signals.hurt
+        : null;
     if (hurt) {
-      facts.push({ source: "inferred", fact: {
-        subject: "self", kind: "feeling", content: hurtFactContent(hurt.cause), occurred_at: null,
-        salience: config.relationship.hurt_fact_salience, valence: -hurt.amount, confidence: config.relationship.hurt_fact_confidence,
-        entity_names: [], thread_title: null,
-      } });
+      facts.push({
+        source: "inferred",
+        fact: {
+          subject: "self",
+          kind: "feeling",
+          content: hurtFactContent(hurt.cause),
+          occurred_at: null,
+          salience: config.relationship.hurt_fact_salience,
+          valence: -hurt.amount,
+          confidence: config.relationship.hurt_fact_confidence,
+          entity_names: [],
+          thread_title: null,
+        },
+      });
     }
 
-    const embeddings = facts.length > 0
-      ? await embedder.embed(facts.map((f) => f.fact.content), "document")
-      : [];
+    const embeddings =
+      facts.length > 0
+        ? await embedder.embed(
+            facts.map((f) => f.fact.content),
+            "document",
+          )
+        : [];
     const planned: PlannedFact[] = [];
     for (const [i, { fact, source }] of facts.entries()) {
       const embedding = embeddings[i];
       if (!embedding) throw new Error("embedder returned fewer vectors than facts");
-      const neighbors = await nearFacts(tx, job.userId, fact.subject, embedding, config.reconcile.neighbor_k, config.reconcile.near_match_similarity);
+      const neighbors = await nearFacts(
+        tx,
+        job.userId,
+        fact.subject,
+        embedding,
+        config.reconcile.neighbor_k,
+        config.reconcile.near_match_similarity,
+      );
       planned.push({ fact, embedding, decision: await decide(deps, fact, neighbors), source });
     }
 
@@ -80,11 +109,15 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
 
-    const hurtFactId = hurt ? applied.factIds.at(-1) ?? null : null;
-    const applyRel = (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ?? applyRelationship;
+    const hurtFactId = hurt ? (applied.factIds.at(-1) ?? null) : null;
+    const applyRel =
+      (deps as { applyRelationship?: typeof applyRelationship }).applyRelationship ??
+      applyRelationship;
     if (hasUserTurn) {
       try {
-        await tx.transaction(async (sp) => { await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId }); });
+        await tx.transaction(async (sp) => {
+          await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId });
+        });
       } catch (e) {
         log.error("relationship update failed", { userId: job.userId, error: errorName(e) });
       }
@@ -94,7 +127,12 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     if (hasUserTurn) {
       try {
         await tx.transaction(async (sp) => {
-          await nudgeEgoForExchange(sp, config, { userId: job.userId, facts: facts.map((f) => f.fact), crisis, now: clock.now() });
+          await nudgeEgoForExchange(sp, config, {
+            userId: job.userId,
+            facts: facts.map((f) => f.fact),
+            crisis,
+            now: clock.now(),
+          });
         });
       } catch (e) {
         log.error("ego nudge failed", { userId: job.userId, error: errorName(e) });

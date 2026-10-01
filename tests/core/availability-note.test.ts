@@ -15,9 +15,31 @@ async function setup(deferredUntil: Date | null) {
   const deps = makeTestDeps();
   deps.clock.set(now);
   const u = await createTestUser();
-  const t = await insertTurn(deps.db, u, { id: randomUUID(), session_id: randomUUID(), role: "user", text: "you around?", created_at: new Date("2026-01-05T10:30:00Z") });
-  await mutateState(deps.db, u, now, (_s) => ({ patch: { buffer_turn_ids: [t.id], buffer_version: 1, deferred_until: deferredUntil, updated_at: now }, result: null }));
-  const job = { userId: u, version: 1, text: "", turnId: t.id, trigger: "availability" as const, blockKind: "busy" as const, blockStart };
+  const t = await insertTurn(deps.db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "user",
+    text: "you around?",
+    created_at: new Date("2026-01-05T10:30:00Z"),
+  });
+  await mutateState(deps.db, u, now, (_s) => ({
+    patch: {
+      buffer_turn_ids: [t.id],
+      buffer_version: 1,
+      deferred_until: deferredUntil,
+      updated_at: now,
+    },
+    result: null,
+  }));
+  const job = {
+    userId: u,
+    version: 1,
+    text: "",
+    turnId: t.id,
+    trigger: "availability" as const,
+    blockKind: "busy" as const,
+    blockStart,
+  };
   return { deps, u, job };
 }
 

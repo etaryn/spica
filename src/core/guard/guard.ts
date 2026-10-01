@@ -17,10 +17,14 @@ export type GuardInput = {
 };
 export type Violation = { category: Category; claim: string };
 export type GuardVerdict = {
-  ok: boolean; violations: Violation[]; source: "model" | "keyword_fallback";
+  ok: boolean;
+  violations: Violation[];
+  source: "model" | "keyword_fallback";
   /** The guard's brief note on its verdict (judge_log only); null when the model gave none (keyword fallback). */
   reasoning: string | null;
-  latencyMs: number; error: string | null; promptVersion: string;
+  latencyMs: number;
+  error: string | null;
+  promptVersion: string;
 };
 
 /** `reasoning` comes first so structured output makes the model think before it labels. */
@@ -40,7 +44,9 @@ export function messageToCheck(input: string): string {
 const list = (xs: string[]) => (xs.length ? xs.map((x) => `- ${x}`).join("\n") : "- (nothing)");
 
 export function renderGuardInput(input: GuardInput): string {
-  const turns = input.recentTurns.map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`).join("\n");
+  const turns = input.recentTurns
+    .map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`)
+    .join("\n");
   return [
     `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${list(input.onboardingFacts.map((f) => f.content))}`,
     `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${list(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`))}`,
@@ -53,7 +59,10 @@ export function renderGuardInput(input: GuardInput): string {
  * The guard check. Never rejects: after `guard.retry_limit` retries it degrades to the
  * outage keyword list, reported as `source: "keyword_fallback"`.
  */
-export async function checkMessage(deps: Pick<Deps, "llm" | "config" | "clock">, input: GuardInput): Promise<GuardVerdict> {
+export async function checkMessage(
+  deps: Pick<Deps, "llm" | "config" | "clock">,
+  input: GuardInput,
+): Promise<GuardVerdict> {
   const { llm, config, clock } = deps;
   const crisis = input.kind === "crisis_reply";
   const name = crisis ? "guard/crisis" : "guard";
@@ -65,19 +74,39 @@ export async function checkMessage(deps: Pick<Deps, "llm" | "config" | "clock">,
   let error: string | null = null;
   for (let attempt = 0; attempt <= config.guard.retry_limit; attempt++) {
     try {
-      const r = await withTimeout(llm.classifyJson({
-        purpose: crisis ? "guard_crisis" : "guard", model: "guard",
-        system: loadPrompt(name, version), input: renderGuardInput(input), schema: GuardResultSchema,
-        timeoutMs: config.guard.timeout_ms, maxTokens: config.models.guard_max_tokens,
-      }), config.guard.timeout_ms);
-      return { ok: r.violations.length === 0, violations: r.violations, reasoning: r.reasoning, source: "model", latencyMs: elapsed(), error: null, promptVersion };
+      const r = await withTimeout(
+        llm.classifyJson({
+          purpose: crisis ? "guard_crisis" : "guard",
+          model: "guard",
+          system: loadPrompt(name, version),
+          input: renderGuardInput(input),
+          schema: GuardResultSchema,
+          timeoutMs: config.guard.timeout_ms,
+          maxTokens: config.models.guard_max_tokens,
+        }),
+        config.guard.timeout_ms,
+      );
+      return {
+        ok: r.violations.length === 0,
+        violations: r.violations,
+        reasoning: r.reasoning,
+        source: "model",
+        latencyMs: elapsed(),
+        error: null,
+        promptVersion,
+      };
     } catch (e) {
       error = errorName(e);
     }
   }
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);
   return {
-    ok: hit === null, violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [], reasoning: null,
-    source: "keyword_fallback", latencyMs: elapsed(), error, promptVersion,
+    ok: hit === null,
+    violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [],
+    reasoning: null,
+    source: "keyword_fallback",
+    latencyMs: elapsed(),
+    error,
+    promptVersion,
   };
 }

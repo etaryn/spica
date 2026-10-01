@@ -1,7 +1,12 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import * as ro from "@/db/repos/reach-out";
 import * as push from "@/db/repos/push";
-import { ensureRelationship, getRelationshipRow, incrementUnanswered, resetUnanswered } from "@/db/repos/relationship";
+import {
+  ensureRelationship,
+  getRelationshipRow,
+  incrementUnanswered,
+  resetUnanswered,
+} from "@/db/repos/relationship";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -16,10 +21,33 @@ test("sent times, used topics and pending scheduled are per user and per status"
   const db = getTestDb();
   const a = await createTestUser("a");
   const b = await createTestUser("b");
-  await ro.insertReachOutLog(db, a, { ...base, status: "sent", topic: "thread:1@x", send_at: h(1), created_at: h(1) });
-  await ro.insertReachOutLog(db, a, { ...base, status: "blocked", topic: "fact:2", created_at: h(2) });
-  const sched = await ro.insertReachOutLog(db, a, { ...base, status: "scheduled", topic: "fact:3", send_at: h(3), created_at: h(3) });
-  await ro.insertReachOutLog(db, b, { ...base, status: "sent", topic: "fact:9", send_at: h(1), created_at: h(1) });
+  await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "sent",
+    topic: "thread:1@x",
+    send_at: h(1),
+    created_at: h(1),
+  });
+  await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "blocked",
+    topic: "fact:2",
+    created_at: h(2),
+  });
+  const sched = await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "scheduled",
+    topic: "fact:3",
+    send_at: h(3),
+    created_at: h(3),
+  });
+  await ro.insertReachOutLog(db, b, {
+    ...base,
+    status: "sent",
+    topic: "fact:9",
+    send_at: h(1),
+    created_at: h(1),
+  });
 
   expect(await ro.sentReachOutTimes(db, a, h(0))).toEqual([h(1)]);
   expect(await ro.sentReachOutTimes(db, a, h(2))).toEqual([]);
@@ -27,14 +55,26 @@ test("sent times, used topics and pending scheduled are per user and per status"
   expect(await ro.hasPendingScheduled(db, a, h(2))).toBe(true);
   expect(await ro.hasPendingScheduled(db, a, h(4))).toBe(false); // older than `since`: stale, ignored
   expect(await ro.hasPendingScheduled(db, b, h(0))).toBe(false);
-  expect((await ro.getReachOutLog(db, b, sched))).toBeNull(); // user-scoped
+  expect(await ro.getReachOutLog(db, b, sched)).toBeNull(); // user-scoped
 });
 
 test("markLatestAnswered marks only the most recent unanswered sent row", async () => {
   const db = getTestDb();
   const a = await createTestUser();
-  const first = await ro.insertReachOutLog(db, a, { ...base, status: "sent", topic: "a", send_at: h(1), created_at: h(1) });
-  const second = await ro.insertReachOutLog(db, a, { ...base, status: "sent", topic: "b", send_at: h(30), created_at: h(30) });
+  const first = await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "sent",
+    topic: "a",
+    send_at: h(1),
+    created_at: h(1),
+  });
+  const second = await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "sent",
+    topic: "b",
+    send_at: h(30),
+    created_at: h(30),
+  });
   expect(await ro.markLatestAnswered(db, a, h(40))).toBe(second);
   expect((await ro.getReachOutLog(db, a, first))?.answered_at).toBeNull();
   expect((await ro.getReachOutLog(db, a, second))?.answered_at).toEqual(h(40));
@@ -44,12 +84,32 @@ test("markLatestAnswered marks only the most recent unanswered sent row", async 
 test("M1: dropScheduled drops only a row that is still scheduled", async () => {
   const db = getTestDb();
   const a = await createTestUser("a");
-  const sched = await ro.insertReachOutLog(db, a, { ...base, status: "scheduled", topic: "t:1", send_at: h(1), created_at: h(0) });
-  const sent = await ro.insertReachOutLog(db, a, { ...base, status: "sent", topic: "t:2", send_at: h(1), created_at: h(0) });
+  const sched = await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "scheduled",
+    topic: "t:1",
+    send_at: h(1),
+    created_at: h(0),
+  });
+  const sent = await ro.insertReachOutLog(db, a, {
+    ...base,
+    status: "sent",
+    topic: "t:2",
+    send_at: h(1),
+    created_at: h(0),
+  });
   expect(await ro.dropScheduled(db, a, sched, { dropped: "x" })).toBe(true);
-  expect(await ro.getReachOutLog(db, a, sched)).toMatchObject({ status: "dropped", sent: false, gate_results: { dropped: "x" } });
+  expect(await ro.getReachOutLog(db, a, sched)).toMatchObject({
+    status: "dropped",
+    sent: false,
+    gate_results: { dropped: "x" },
+  });
   expect(await ro.dropScheduled(db, a, sent, { dropped: "x" })).toBe(false);
-  expect(await ro.getReachOutLog(db, a, sent)).toMatchObject({ status: "sent", sent: true, gate_results: [] });
+  expect(await ro.getReachOutLog(db, a, sent)).toMatchObject({
+    status: "sent",
+    sent: true,
+    gate_results: [],
+  });
 });
 
 test("unanswered counter increments and resets", async () => {

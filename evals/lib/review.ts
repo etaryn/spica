@@ -1,7 +1,13 @@
 import type { RelSnapshot } from "./relationship-check";
 import type { ScriptResult, TraceDecision, TraceTurn } from "./runner";
 
-export type ReviewRun = { script: string; attempt: number; result: ScriptResult; description?: string; profile?: string };
+export type ReviewRun = {
+  script: string;
+  attempt: number;
+  result: ScriptResult;
+  description?: string;
+  profile?: string;
+};
 export type ReviewMeta = { stamp: string; real: string[]; annotate: boolean };
 
 const time = (d: Date | string) => new Date(d).getTime();
@@ -12,9 +18,12 @@ function decisionLine(d: TraceDecision): string {
   const o = (d.output ?? {}) as Record<string, unknown>;
   if (d.kind === "turn") {
     const parts = [
-      `complete: ${fmt(o.complete)}`, `wait ${fmt(o.wait_ms)}ms`,
+      `complete: ${fmt(o.complete)}`,
+      `wait ${fmt(o.wait_ms)}ms`,
       `backchannel: ${o.backchannel ? fmt(o.backchannel) : "none"}`,
-      ...(Array.isArray(o.open_questions) && o.open_questions.length ? [`open questions: ${fmt(o.open_questions)}`] : []),
+      ...(Array.isArray(o.open_questions) && o.open_questions.length
+        ? [`open questions: ${fmt(o.open_questions)}`]
+        : []),
       ...(o.reasoning !== undefined ? [`reasoning: ${fmt(o.reasoning)}`] : []),
       ...(o.error ? [`error: ${fmt(o.error)}`] : []),
     ];
@@ -37,23 +46,35 @@ function decisionLine(d: TraceDecision): string {
 function renderRelationship(snap: RelSnapshot): string[] {
   const counts = new Map<string, number>();
   for (const e of snap.events) counts.set(e.cause, (counts.get(e.cause) ?? 0) + 1);
-  const eventsLine = [...counts.entries()].map(([cause, n]) => `${cause} ${n}`).join(", ") || "none";
+  const eventsLine =
+    [...counts.entries()].map(([cause, n]) => `${cause} ${n}`).join(", ") || "none";
   return [
     `Relationship: status ${snap.state.status} · make_up ${snap.state.make_up_state} · end_pending ${snap.state.end_pending_since ? "yes" : "no"}`,
     "",
-    "| param | value | baseline | effect |", "|---|---|---|---|",
-    ...Object.entries(snap.params).map(([name, p]) => `| ${name} | ${p.value.toFixed(3)} | ${p.baseline.toFixed(3)} | ${snap.effects[name as keyof typeof snap.effects].toFixed(3)} |`),
-    "", `Events by cause: ${eventsLine}`,
+    "| param | value | baseline | effect |",
+    "|---|---|---|---|",
+    ...Object.entries(snap.params).map(
+      ([name, p]) =>
+        `| ${name} | ${p.value.toFixed(3)} | ${p.baseline.toFixed(3)} | ${snap.effects[name as keyof typeof snap.effects].toFixed(3)} |`,
+    ),
+    "",
+    `Events by cause: ${eventsLine}`,
   ];
 }
 
 /** One user's session, chronologically: turns with their offset, what each reply covered, and the decisions on each turn. */
-function renderSession(out: string[], turns: TraceTurn[], decisions: TraceDecision[], all: TraceTurn[]) {
+function renderSession(
+  out: string[],
+  turns: TraceTurn[],
+  decisions: TraceDecision[],
+  all: TraceTurn[],
+) {
   const t0 = time(turns[0]!.created_at);
   const byId = new Map(all.map((t) => [t.id, t]));
   const userIndex = new Map(turns.filter((t) => t.role === "user").map((t, i) => [t.id, i + 1]));
   const byTurn = new Map<string, TraceDecision[]>();
-  for (const d of decisions) if (d.turn_id) (byTurn.get(d.turn_id) ?? byTurn.set(d.turn_id, []).get(d.turn_id)!).push(d);
+  for (const d of decisions)
+    if (d.turn_id) (byTurn.get(d.turn_id) ?? byTurn.set(d.turn_id, []).get(d.turn_id)!).push(d);
   let prevEnd = -Infinity;
   for (const t of turns) {
     const at = `\`+${Math.round((time(t.created_at) - t0) / 1000)}s\``;
@@ -64,9 +85,15 @@ function renderSession(out: string[], turns: TraceTurn[], decisions: TraceDecisi
     } else if (t.reply_to) {
       const anchor = byId.get(t.reply_to);
       const end = anchor ? time(anchor.created_at) : -Infinity;
-      const covers = turns.filter((u) => u.role === "user" && time(u.created_at) > prevEnd && time(u.created_at) <= end).map((u) => `#${userIndex.get(u.id)}`);
+      const covers = turns
+        .filter(
+          (u) => u.role === "user" && time(u.created_at) > prevEnd && time(u.created_at) <= end,
+        )
+        .map((u) => `#${userIndex.get(u.id)}`);
       prevEnd = Math.max(prevEnd, end);
-      out.push(`- ${at} **Spica** (covers ${covers.join(", ") || "none in this session"}): ${oneLine(t.text)}`);
+      out.push(
+        `- ${at} **Spica** (covers ${covers.join(", ") || "none in this session"}): ${oneLine(t.text)}`,
+      );
     } else {
       out.push(`- ${at} **Spica**${t.trigger ? ` (${t.trigger})` : ""}: ${oneLine(t.text)}`);
     }
@@ -80,10 +107,12 @@ function renderSession(out: string[], turns: TraceTurn[], decisions: TraceDecisi
  */
 export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
   const out: string[] = [
-    `# Eval review ${meta.stamp}`, "",
+    `# Eval review ${meta.stamp}`,
+    "",
     `- real: ${meta.real.length ? meta.real.join(", ") : "(none)"}; everything else fake`,
     `- annotations: ${meta.annotate ? "on" : "off"}`,
-    "- For manual analysis. Nothing here is a pass/fail verdict on reply quality.", "",
+    "- For manual analysis. Nothing here is a pass/fail verdict on reply quality.",
+    "",
   ];
   for (const { script, attempt, result, description, profile } of runs) {
     out.push(`## ${script} (attempt ${attempt})`, "");
@@ -106,19 +135,39 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
         if (snap) out.push(...renderRelationship(snap), "");
       }
       const loose = decisions.filter((d) => !d.turn_id || !known.has(d.turn_id));
-      if (loose.length) out.push("Decisions without a turn:", "", ...loose.map((d) => `- ${decisionLine(d)}`), "");
+      if (loose.length)
+        out.push("Decisions without a turn:", "", ...loose.map((d) => `- ${decisionLine(d)}`), "");
       const facts = (trace?.memory?.[user]?.facts ?? []) as Record<string, unknown>[];
       out.push("Final facts:", "");
-      out.push(...(facts.length ? facts.map((f) => `- [${fmt(f.status)}] ${fmt(f.subject)}/${fmt(f.kind)}: ${fmt(f.content)}`) : ["- (none)"]), "");
+      out.push(
+        ...(facts.length
+          ? facts.map(
+              (f) => `- [${fmt(f.status)}] ${fmt(f.subject)}/${fmt(f.kind)}: ${fmt(f.content)}`,
+            )
+          : ["- (none)"]),
+        "",
+      );
     }
     out.push("### Annotations", "");
-    out.push(...(result.annotations.length
-      ? result.annotations.map((a) => `- ${a.type} (${a.user}): ${a.verdict}${a.detail ? ` — ${oneLine(a.detail)}` : ""}`)
-      : [meta.annotate ? "- (none)" : "- (not run; use --annotate)"]), "");
+    out.push(
+      ...(result.annotations.length
+        ? result.annotations.map(
+            (a) =>
+              `- ${a.type} (${a.user}): ${a.verdict}${a.detail ? ` — ${oneLine(a.detail)}` : ""}`,
+          )
+        : [meta.annotate ? "- (none)" : "- (not run; use --annotate)"]),
+      "",
+    );
     out.push("### Checks", "");
-    out.push(...(result.assertions.length
-      ? result.assertions.map((a) => `- ${a.status === "pass" ? "✓" : a.status === "skipped" ? "–" : "✗"} ${a.type}${a.check ? `/${a.check}` : ""}${a.user ? ` (${a.user})` : ""}${a.detail ? ` — ${oneLine(a.detail)}` : ""}`)
-      : ["- (none)"]), "");
+    out.push(
+      ...(result.assertions.length
+        ? result.assertions.map(
+            (a) =>
+              `- ${a.status === "pass" ? "✓" : a.status === "skipped" ? "–" : "✗"} ${a.type}${a.check ? `/${a.check}` : ""}${a.user ? ` (${a.user})` : ""}${a.detail ? ` — ${oneLine(a.detail)}` : ""}`,
+          )
+        : ["- (none)"]),
+      "",
+    );
   }
   return out.join("\n");
 }

@@ -54,8 +54,19 @@
     "new_entity_salience": 0.5,
     "entity_bump": 0.05
   },
-  "reconcile": { "neighbor_k": 5, "near_match_similarity": 0.82, "duplicate_bump": 0.05, "max_tokens": 256 },
-  "decay": { "cron": "0 4 * * *", "grace_days": 3, "rate": 0.08, "stale_floor": 0.05, "dormant_after_days": 14 },
+  "reconcile": {
+    "neighbor_k": 5,
+    "near_match_similarity": 0.82,
+    "duplicate_bump": 0.05,
+    "max_tokens": 256
+  },
+  "decay": {
+    "cron": "0 4 * * *",
+    "grace_days": 3,
+    "rate": 0.08,
+    "stale_floor": 0.05,
+    "dormant_after_days": 14
+  },
   "cold_path": {
     "retry_limit": 3,
     "retry_delay_seconds": 30,
@@ -180,9 +191,29 @@
     "history_days": 90,
     "baseline_alpha": 0.15,
     "variance_epsilon": 0.01,
-    "initial": { "closeness": 0.2, "trust": 0.4, "warmth": 0.5, "hurt": 0, "tension": 0, "msgs_per_day": 5 },
-    "initial_variance": { "closeness": 0.01, "trust": 0.01, "warmth": 0.02, "hurt": 0.01, "tension": 0.01, "msgs_per_day": 25 },
-    "gains": { "warmth": 0.15, "trust": 0.1, "tension": 0.3, "hurt": 0.5, "closeness_per_warm_exchange": 0.02 },
+    "initial": {
+      "closeness": 0.2,
+      "trust": 0.4,
+      "warmth": 0.5,
+      "hurt": 0,
+      "tension": 0,
+      "msgs_per_day": 5
+    },
+    "initial_variance": {
+      "closeness": 0.01,
+      "trust": 0.01,
+      "warmth": 0.02,
+      "hurt": 0.01,
+      "tension": 0.01,
+      "msgs_per_day": 25
+    },
+    "gains": {
+      "warmth": 0.15,
+      "trust": 0.1,
+      "tension": 0.3,
+      "hurt": 0.5,
+      "closeness_per_warm_exchange": 0.02
+    },
     "hurt_half_life_hours": 48,
     "tension_half_life_hours": 24,
     "sensitise_window_days": 14,
@@ -281,7 +312,13 @@
     "cap_per_week": 3,
     "max_unanswered": 2,
     "threshold": 0.2,
-    "weights": { "thread": 1.0, "make_up": 0.9, "user_event": 0.8, "her_day": 0.6, "check_in": 0.5 },
+    "weights": {
+      "thread": 1.0,
+      "make_up": 0.9,
+      "user_event": 0.8,
+      "her_day": 0.6,
+      "check_in": 0.5
+    },
     "stakes_strength": { "high": 1.0, "med": 0.6 },
     "user_event_lookback_hours": 72,
     "her_day_lookback_hours": 24,
@@ -291,5 +328,11 @@
     "pending_max_age_minutes": 120,
     "log_list_limit": 200
   },
-  "push": { "enabled": true, "timeout_ms": 5000, "ttl_seconds": 86400, "body_max_chars": 1000, "generic_body": "Spica sent you a message" }
+  "push": {
+    "enabled": true,
+    "timeout_ms": 5000,
+    "ttl_seconds": 86400,
+    "body_max_chars": 1000,
+    "generic_body": "Spica sent you a message"
+  }
 }

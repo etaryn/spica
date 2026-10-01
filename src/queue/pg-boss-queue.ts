@@ -17,8 +17,11 @@ export class PgBossQueue implements JobQueue {
   constructor(
     private readonly boss: PgBoss,
     private readonly opts: {
-      retryLimit: number; retryDelaySeconds: number; turnExpireSeconds: number;
-      timerRetryLimit: number; timerRetryDelaySeconds: number;
+      retryLimit: number;
+      retryDelaySeconds: number;
+      turnExpireSeconds: number;
+      timerRetryLimit: number;
+      timerRetryDelaySeconds: number;
     },
   ) {}
 
@@ -29,13 +32,21 @@ export class PgBossQueue implements JobQueue {
       // createQueue is create-only (ON CONFLICT DO NOTHING), so a queue created by an earlier
       // deploy keeps its old policy unless we also updateQueue it here; updateQueue is a safe
       // no-op WHERE-matched UPDATE when the queue doesn't exist yet.
-      const policy = { retryLimit: this.opts.retryLimit, retryDelay: this.opts.retryDelaySeconds, retryBackoff: true };
+      const policy = {
+        retryLimit: this.opts.retryLimit,
+        retryDelay: this.opts.retryDelaySeconds,
+        retryBackoff: true,
+      };
       await this.boss.createQueue(COLD_PATH_QUEUE, policy);
       await this.boss.updateQueue(COLD_PATH_QUEUE, policy);
 
       // Turn jobs: a timer may be retried (a stale or duplicate one is a no-op thanks to the version check);
       // a backchannel never is (a late "huh" is worse than none).
-      const turn = { retryLimit: this.opts.timerRetryLimit, retryDelay: this.opts.timerRetryDelaySeconds, expireInSeconds: this.opts.turnExpireSeconds };
+      const turn = {
+        retryLimit: this.opts.timerRetryLimit,
+        retryDelay: this.opts.timerRetryDelaySeconds,
+        expireInSeconds: this.opts.turnExpireSeconds,
+      };
       await this.boss.createQueue(TURN_TIMER_QUEUE, turn);
       await this.boss.updateQueue(TURN_TIMER_QUEUE, turn);
       const bc = { retryLimit: 0, expireInSeconds: this.opts.turnExpireSeconds };
@@ -51,7 +62,11 @@ export class PgBossQueue implements JobQueue {
     return this.ready;
   }
 
-  async enqueue<N extends JobName>(name: N, data: JobMap[N], opts: EnqueueOptions = {}): Promise<void> {
+  async enqueue<N extends JobName>(
+    name: N,
+    data: JobMap[N],
+    opts: EnqueueOptions = {},
+  ): Promise<void> {
     await this.start();
     await this.boss.send(name, data, opts.startAfter ? { startAfter: opts.startAfter } : {});
   }

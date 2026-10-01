@@ -1,7 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Config } from "../config";
-import type { ClassifyRequest, LLMProvider, ReplyRequest, StructuredModel, UsageSink } from "./types";
+import type {
+  ClassifyRequest,
+  LLMProvider,
+  ReplyRequest,
+  StructuredModel,
+  UsageSink,
+} from "./types";
 
 export class AnthropicProvider implements LLMProvider {
   constructor(
@@ -17,7 +23,9 @@ export class AnthropicProvider implements LLMProvider {
         max_tokens: this.models.reply_max_tokens,
         system,
         messages,
-        ...(this.models.reply_effort ? { output_config: { effort: this.models.reply_effort } } : {}),
+        ...(this.models.reply_effort
+          ? { output_config: { effort: this.models.reply_effort } }
+          : {}),
         // Adaptive thinking at low effort sometimes ends the turn after an empty thinking block with no text.
         thinking: { type: this.models.reply_thinking },
       },
@@ -30,10 +38,22 @@ export class AnthropicProvider implements LLMProvider {
     return text;
   }
 
-  async classifyJson<T>({ purpose, system, input, schema, timeoutMs, maxTokens, model = "cheap" }: ClassifyRequest<T>): Promise<T> {
+  async classifyJson<T>({
+    purpose,
+    system,
+    input,
+    schema,
+    timeoutMs,
+    maxTokens,
+    model = "cheap",
+  }: ClassifyRequest<T>): Promise<T> {
     const ids: Record<StructuredModel, string> = {
-      cheap: this.models.cheap, extract: this.models.extract, judge: this.models.judge, guard: this.models.guard,
-      turn_judge: this.models.turn_judge, life: this.models.life,
+      cheap: this.models.cheap,
+      extract: this.models.extract,
+      judge: this.models.judge,
+      guard: this.models.guard,
+      turn_judge: this.models.turn_judge,
+      life: this.models.life,
     };
     const modelId = ids[model];
     // Only the judge takes effort/thinking settings; a null effort sends none (Haiku rejects it).

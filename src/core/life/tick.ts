@@ -1,6 +1,13 @@
 import { sql } from "drizzle-orm";
 import * as factsRepo from "@/db/repos/facts";
-import { adminListLifeUsers, ensureIdentity, getIdentityRow, lockIdentity, updateIdentity, type IdentityRow } from "@/db/repos/identity";
+import {
+  adminListLifeUsers,
+  ensureIdentity,
+  getIdentityRow,
+  lockIdentity,
+  updateIdentity,
+  type IdentityRow,
+} from "@/db/repos/identity";
 import { getLifeDay } from "@/db/repos/life-day";
 import { insertLifeEventLogs } from "@/db/repos/life-event-log";
 import type { Deps } from "../deps";
@@ -16,7 +23,8 @@ export type { InjectedEvent } from "./events";
 export type LifeTickOptions = { inject?: (userId: string, day: string) => InjectedEvent | null };
 
 const DAY = 86_400_000;
-const due = (row: IdentityRow | null, day: string) => !row?.life_last_date || row.life_last_date < day;
+const due = (row: IdentityRow | null, day: string) =>
+  !row?.life_last_date || row.life_last_date < day;
 
 /**
  * `life_tick` for one user: once per her local date, at or after `life.tick_local_hour` in her
@@ -24,7 +32,12 @@ const due = (row: IdentityRow | null, day: string) => !row?.life_last_date || ro
  * path's per-user advisory lock and the identity row lock, re-checks, and writes `life_last_date` last, so a
  * failure rolls back everything and the next hourly run retries from scratch.
  */
-export async function lifeTickUser(deps: Deps, userId: string, now: Date, opts: LifeTickOptions = {}): Promise<"not_due" | "done"> {
+export async function lifeTickUser(
+  deps: Deps,
+  userId: string,
+  now: Date,
+  opts: LifeTickOptions = {},
+): Promise<"not_due" | "done"> {
   const { config } = deps;
   const cfg = config.life;
   if (lifeHour(cfg, now) < cfg.tick_local_hour) return "not_due";
@@ -48,29 +61,69 @@ export async function lifeTickUser(deps: Deps, userId: string, now: Date, opts: 
     for (const e of events.accepted) {
       const occurred = e.fact.occurred_at!;
       const out = await applyExtraction(tx, config, {
-        userId, now, exchangeAt: now, entities: [],
-        facts: [{ fact: e.fact, embedding: e.embedding, decision: e.decision, source: "generated" }],
-        threads: e.candidate.stakes === "high"
-          ? [{ action: "open", title: e.fact.content, subject: "self", stakes: "high", next_checkpoint: new Date(occurred.getTime() + cfg.high_stakes_checkpoint_days * DAY), thread_id: null }]
-          : [],
-        sensitive: false, sourceRef: `life_day:${day}`, recalled: [], replyTurnId: null, turnIds: [],
+        userId,
+        now,
+        exchangeAt: now,
+        entities: [],
+        facts: [
+          { fact: e.fact, embedding: e.embedding, decision: e.decision, source: "generated" },
+        ],
+        threads:
+          e.candidate.stakes === "high"
+            ? [
+                {
+                  action: "open",
+                  title: e.fact.content,
+                  subject: "self",
+                  stakes: "high",
+                  next_checkpoint: new Date(
+                    occurred.getTime() + cfg.high_stakes_checkpoint_days * DAY,
+                  ),
+                  thread_id: null,
+                },
+              ]
+            : [],
+        sensitive: false,
+        sourceRef: `life_day:${day}`,
+        recalled: [],
+        replyTurnId: null,
+        turnIds: [],
       });
       const id = out.factIds[0] ?? null;
       if (id) factIds.set(e.key, id);
-      row = await nudgeEgoForEvent(tx, config, { userId, row, factId: id, valence: e.fact.valence, now });
+      row = await nudgeEgoForEvent(tx, config, {
+        userId,
+        row,
+        factId: id,
+        valence: e.fact.valence,
+        now,
+      });
     }
-    await insertLifeEventLogs(tx, userId, events.attempts.map((a) => ({
-      life_day: day, attempt: a.attempt, candidate: { ...(a.candidate as object), source: a.source }, decision: a.decision,
-      target_fact_id: a.targetFactId, fact_id: factIds.get(a.key) ?? null,
-      model: a.source === "model" ? config.models.life : "injected", prompt_version: a.source === "model" ? config.prompts.life_event : "injected",
-      created_at: now,
-    })));
+    await insertLifeEventLogs(
+      tx,
+      userId,
+      events.attempts.map((a) => ({
+        life_day: day,
+        attempt: a.attempt,
+        candidate: { ...(a.candidate as object), source: a.source },
+        decision: a.decision,
+        target_fact_id: a.targetFactId,
+        fact_id: factIds.get(a.key) ?? null,
+        model: a.source === "model" ? config.models.life : "injected",
+        prompt_version: a.source === "model" ? config.prompts.life_event : "injected",
+        created_at: now,
+      })),
+    );
     await updateIdentity(tx, userId, { life_last_date: day });
   });
   return "done";
 }
 
-export async function lifeTick(deps: Deps, now: Date, opts: LifeTickOptions = {}): Promise<{ users: number; failed: number }> {
+export async function lifeTick(
+  deps: Deps,
+  now: Date,
+  opts: LifeTickOptions = {},
+): Promise<{ users: number; failed: number }> {
   const users = await adminListLifeUsers(deps.db);
   let failed = 0;
   for (const userId of users) {

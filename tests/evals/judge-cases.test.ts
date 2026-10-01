@@ -2,7 +2,13 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import { loadConfig } from "@/core/config";
 import { FakeLLMProvider } from "@/core/llm/fake";
-import { gradeConsistency, gradeFalseRecall, gradeRecall, loadJudgeFiles, runJudgeCase } from "../../evals/lib/judge-cases";
+import {
+  gradeConsistency,
+  gradeFalseRecall,
+  gradeRecall,
+  loadJudgeFiles,
+  runJudgeCase,
+} from "../../evals/lib/judge-cases";
 
 const config = loadConfig();
 
@@ -17,12 +23,19 @@ describe("judge fixtures", () => {
 
   test("each file covers both verdicts, and false recall covers every category", () => {
     for (const f of files) {
-      const expects = new Set(f.cases.map((c) => (Array.isArray(c.expect) ? "violation" : c.expect)));
+      const expects = new Set(
+        f.cases.map((c) => (Array.isArray(c.expect) ? "violation" : c.expect)),
+      );
       expect(expects.size, f.file).toBeGreaterThan(1);
     }
     const fr = files.find((f) => f.judge === "false_recall")!;
     const covered = new Set(fr.cases.flatMap((c) => (Array.isArray(c.expect) ? c.expect : [])));
-    expect([...covered].sort()).toEqual(["implied_familiarity", "invented_detail", "misremembering", "onboarding_as_chat"]);
+    expect([...covered].sort()).toEqual([
+      "implied_familiarity",
+      "invented_detail",
+      "misremembering",
+      "onboarding_as_chat",
+    ]);
   });
 });
 
@@ -30,7 +43,9 @@ describe("grading", () => {
   test("false recall: pass needs no violations; a violation case needs one listed category", () => {
     expect(gradeFalseRecall("pass", [], "").status).toBe("pass");
     expect(gradeFalseRecall("pass", ["invented_detail"], "invented_detail: x").status).toBe("fail");
-    expect(gradeFalseRecall(["invented_detail", "misremembering"], ["misremembering"], "").status).toBe("pass");
+    expect(
+      gradeFalseRecall(["invented_detail", "misremembering"], ["misremembering"], "").status,
+    ).toBe("pass");
     expect(gradeFalseRecall(["onboarding_as_chat"], ["invented_detail"], "").status).toBe("fail");
     expect(gradeFalseRecall(["invented_detail"], [], "").status).toBe("fail");
   });
@@ -46,14 +61,27 @@ describe("grading", () => {
 
 describe("runJudgeCase", () => {
   const file = {
-    file: "fr", judge: "false_recall" as const,
-    cases: [{ name: "c", known: [], sessions: [{ label: "Session 1", lines: [{ role: "user" as const, text: "hi" }] }], expect: ["invented_detail" as const] }],
+    file: "fr",
+    judge: "false_recall" as const,
+    cases: [
+      {
+        name: "c",
+        known: [],
+        sessions: [{ label: "Session 1", lines: [{ role: "user" as const, text: "hi" }] }],
+        expect: ["invented_detail" as const],
+      },
+    ],
   };
 
   test("routes through the real judge function and grades its verdict", async () => {
     const llm = new FakeLLMProvider();
-    llm.handlers.judge_false_recall = () => ({ violations: [{ message: "m", claim: "a month", category: "invented_detail" }] });
-    expect(await runJudgeCase(llm, config, file, "c")).toEqual({ status: "pass", detail: "invented_detail: a month" });
+    llm.handlers.judge_false_recall = () => ({
+      violations: [{ message: "m", claim: "a month", category: "invented_detail" }],
+    });
+    expect(await runJudgeCase(llm, config, file, "c")).toEqual({
+      status: "pass",
+      detail: "invented_detail: a month",
+    });
     expect(llm.structuredCalls[0]!.input).toContain("Session 1");
   });
 

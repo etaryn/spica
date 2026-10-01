@@ -1,6 +1,15 @@
 import type { PgBoss } from "pg-boss";
 import type { Logger } from "@/core/log";
-import { DECAY_QUEUE, EGO_TICK_QUEUE, LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, OUTREACH_TICK_QUEUE, RELATIONSHIP_TICK_QUEUE, SWEEP_QUEUE, TURN_SWEEP_QUEUE } from "@/core/queue";
+import {
+  DECAY_QUEUE,
+  EGO_TICK_QUEUE,
+  LIFE_PLAN_QUEUE,
+  LIFE_TICK_QUEUE,
+  OUTREACH_TICK_QUEUE,
+  RELATIONSHIP_TICK_QUEUE,
+  SWEEP_QUEUE,
+  TURN_SWEEP_QUEUE,
+} from "@/core/queue";
 
 import { errorName } from "@/core/errors";
 
@@ -9,7 +18,11 @@ import { errorName } from "@/core/errors";
  * rethrown as a bare `Error(name)`: pg-boss persists the thrown error in the job's output.
  * Still a throw, so retryable failures (e.g. LockBusyError) are retried.
  */
-export function scrubErrors<J extends { id: string }>(queue: string, log: Logger, fn: (jobs: J[]) => Promise<void>) {
+export function scrubErrors<J extends { id: string }>(
+  queue: string,
+  log: Logger,
+  fn: (jobs: J[]) => Promise<void>,
+) {
   return async (jobs: J[]): Promise<void> => {
     try {
       await fn(jobs);

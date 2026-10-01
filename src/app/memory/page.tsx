@@ -6,8 +6,13 @@ import { ForgetButton } from "./forget-button";
 import styles from "./memory.module.css";
 
 const LABELS: Record<string, string> = {
-  event: "Things that happened", trait: "About you", preference: "What you like", state: "How things are",
-  opinion: "What you think", feeling: "How you felt", promise: "Plans and promises",
+  event: "Things that happened",
+  trait: "About you",
+  preference: "What you like",
+  state: "How things are",
+  opinion: "What you think",
+  feeling: "How you felt",
+  promise: "Plans and promises",
 };
 
 export default async function MemoryPage() {
@@ -20,10 +25,13 @@ export default async function MemoryPage() {
       <Link href="/chat">← Back to chat</Link>
       <h1>What Spica remembers about you</h1>
       <p className={styles.note}>
-        Forgetting something removes it from what Spica recalls. Your chat history itself stays until you delete your
-        account, and her last ~20 messages with you are still in her short-term view of the conversation.
+        Forgetting something removes it from what Spica recalls. Your chat history itself stays
+        until you delete your account, and her last ~20 messages with you are still in her
+        short-term view of the conversation.
       </p>
-      {facts.length === 0 && <p className={styles.note}>Nothing yet. Memories appear here as you talk.</p>}
+      {facts.length === 0 && (
+        <p className={styles.note}>Nothing yet. Memories appear here as you talk.</p>
+      )}
       {[...groups].map(([kind, rows]) => (
         <section key={kind}>
           <h2>{LABELS[kind] ?? kind}</h2>

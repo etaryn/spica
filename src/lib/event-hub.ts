@@ -8,6 +8,10 @@ const g = globalThis as unknown as { __spicaEventHub?: EventHub };
 
 /** One LISTEN connection per server process (survives dev hot reloads). */
 export function getEventHub(): EventHub {
-  g.__spicaEventHub ??= new EventHub(readEnv().DATABASE_URL, getDeps().config.events.channel, consoleLogger);
+  g.__spicaEventHub ??= new EventHub(
+    readEnv().DATABASE_URL,
+    getDeps().config.events.channel,
+    consoleLogger,
+  );
   return g.__spicaEventHub;
 }

@@ -32,16 +32,33 @@ async function readFrames(res: Response, count: number): Promise<string[]> {
 }
 
 test("401 without a session", async () => {
-  const h = createEventsHandler({ getUserId: async () => null, getDeps: () => makeTestDeps(), subscribe: () => () => {} });
+  const h = createEventsHandler({
+    getUserId: async () => null,
+    getDeps: () => makeTestDeps(),
+    subscribe: () => () => {},
+  });
   expect((await h(new Request("http://x/api/events"))).status).toBe(401);
 });
 
 test("streams typing and message events; message text is read from session_log for this user only", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
-  await insertTurn(getTestDb(), u, { id: id(1), session_id: SESSION, role: "companion", text: "WAIT.\n\npromotion??", created_at: deps.clock.now() });
+  await insertTurn(getTestDb(), u, {
+    id: id(1),
+    session_id: SESSION,
+    role: "companion",
+    text: "WAIT.\n\npromotion??",
+    created_at: deps.clock.now(),
+  });
   let push: (e: ChatEvent) => void = () => {};
-  const h = createEventsHandler({ getUserId: async () => u, getDeps: () => deps, subscribe: (_u, fn) => { push = fn; return () => {}; } });
+  const h = createEventsHandler({
+    getUserId: async () => u,
+    getDeps: () => deps,
+    subscribe: (_u, fn) => {
+      push = fn;
+      return () => {};
+    },
+  });
   const res = await h(new Request("http://x/api/events"));
   expect(res.headers.get("content-type")).toBe("text/event-stream");
   const frames = readFrames(res, 3);
@@ -63,7 +80,10 @@ test("onReset closes the stream so EventSource reconnects and the client re-catc
   const h = createEventsHandler({
     getUserId: async () => u,
     getDeps: () => deps,
-    subscribe: (_u, _fn, onReset) => { reset = onReset; return () => {}; },
+    subscribe: (_u, _fn, onReset) => {
+      reset = onReset;
+      return () => {};
+    },
   });
   const res = await h(new Request("http://x/api/events"));
   const reader = res.body!.getReader();
@@ -81,7 +101,9 @@ test("a rejecting ready() returns 503 before the stream opens", async () => {
     getUserId: async () => u,
     getDeps: () => deps,
     subscribe: () => () => {},
-    ready: async () => { throw new Error("event hub unavailable"); },
+    ready: async () => {
+      throw new Error("event hub unavailable");
+    },
   });
   const res = await h(new Request("http://x/api/events"));
   expect(res.status).toBe(503);
@@ -90,11 +112,27 @@ test("a rejecting ready() returns 503 before the stream opens", async () => {
 test("history returns turns after the given id, user-scoped", async () => {
   const deps = makeTestDeps();
   const [u, other] = [await createTestUser("u"), await createTestUser("o")];
-  for (const [n, role, text] of [[1, "user", "hi"], [2, "companion", "hey!"], [3, "user", "so"]] as const) {
-    await insertTurn(getTestDb(), u, { id: id(n), session_id: SESSION, role, text, created_at: deps.clock.now() });
+  for (const [n, role, text] of [
+    [1, "user", "hi"],
+    [2, "companion", "hey!"],
+    [3, "user", "so"],
+  ] as const) {
+    await insertTurn(getTestDb(), u, {
+      id: id(n),
+      session_id: SESSION,
+      role,
+      text,
+      created_at: deps.clock.now(),
+    });
     deps.clock.advance(1000);
   }
-  await insertTurn(getTestDb(), other, { id: id(50), session_id: SESSION, role: "user", text: "secret", created_at: deps.clock.now() });
+  await insertTurn(getTestDb(), other, {
+    id: id(50),
+    session_id: SESSION,
+    role: "user",
+    text: "secret",
+    created_at: deps.clock.now(),
+  });
   const h = createHistoryHandler({ getUserId: async () => u, getDeps: () => deps });
   const body = await (await h(new Request(`http://x/api/chat/history?after=${id(1)}`))).json();
   expect(body.messages.map((m: { id: string }) => m.id)).toEqual([id(2), id(3)]);

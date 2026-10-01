@@ -8,15 +8,25 @@ import { applyPart, catchUpAnchor, markFailed, mergeHistory, type UiMessage } fr
 
 export type { UiMessage };
 
-export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; vapidPublicKey: string | null }) {
+export function ChatClient({
+  initial,
+  vapidPublicKey,
+}: {
+  initial: UiMessage[];
+  vapidPublicKey: string | null;
+}) {
   const [messages, setMessages] = useState<UiMessage[]>(initial);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<UiMessage[]>(initial);
 
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, typing]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, typing]);
 
   // One stream per tab: replies, backchannels and typing arrive here. On every (re)connect, catch up from history.
   useEffect(() => {
@@ -34,13 +44,17 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
         // message is marked sent on its first part, so anchoring there would strand its later parts
         // after a mid-reply reconnect (round 1 fix).
         const after = catchUpAnchor(messagesRef.current);
-        const res = await fetch(`/api/chat/history${after ? `?after=${after}` : ""}`).catch(() => null);
+        const res = await fetch(`/api/chat/history${after ? `?after=${after}` : ""}`).catch(
+          () => null,
+        );
         if (res?.ok) {
           const body = (await res.json()) as { messages: HistoryMessage[] };
           setMessages((m) => mergeHistory(m, body.messages));
         }
       });
-      es.addEventListener("typing", (e) => setTyping(JSON.parse((e as MessageEvent).data).on === true));
+      es.addEventListener("typing", (e) =>
+        setTyping(JSON.parse((e as MessageEvent).data).on === true),
+      );
       es.addEventListener("message", (e) => {
         const d = JSON.parse((e as MessageEvent).data);
         setMessages((m) => applyPart(m, d));
@@ -76,15 +90,35 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ clientMessageId: id, text, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+        body: JSON.stringify({
+          clientMessageId: id,
+          text,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       });
-      if (res.status === 401) { window.location.href = "/login"; return; }
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { patch(id, { status: "failed", crisisCard: body.crisisCard ?? null }); return; }
+      if (!res.ok) {
+        patch(id, { status: "failed", crisisCard: body.crisisCard ?? null });
+        return;
+      }
       patch(id, { status: "sent", crisisCard: null });
       if (res.status === 200 && body.status === "replied") {
         // Crisis: the reply comes back in the response too, so the card shows even if SSE is down.
-        setMessages((m) => mergeHistory(m, [{ id: body.turnId, role: "companion", parts: body.parts, crisisCard: body.crisisCard, trigger: null }]));
+        setMessages((m) =>
+          mergeHistory(m, [
+            {
+              id: body.turnId,
+              role: "companion",
+              parts: body.parts,
+              crisisCard: body.crisisCard,
+              trigger: null,
+            },
+          ]),
+        );
       }
     } catch {
       patch(id, { status: "failed" });
@@ -95,7 +129,10 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
     const text = draft.trim();
     if (!text) return;
     const id = crypto.randomUUID();
-    setMessages((m) => [...m, { id, role: "user", parts: [text], crisisCard: null, status: "pending", local: true }]);
+    setMessages((m) => [
+      ...m,
+      { id, role: "user", parts: [text], crisisCard: null, status: "pending", local: true },
+    ]);
     setDraft("");
     void deliver(id, text);
   }
@@ -104,13 +141,22 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
     <>
       <NotificationsBanner publicKey={vapidPublicKey} />
       <main className={styles.log} aria-live="polite">
-        {messages.length === 0 && <p className={styles.empty}>Say hi. This is the start of your conversation.</p>}
+        {messages.length === 0 && (
+          <p className={styles.empty}>Say hi. This is the start of your conversation.</p>
+        )}
         {messages.map((m) => {
-          const bubbleClass = m.role === "user" ? styles.bubbleUser : m.trigger === "backchannel" ? styles.bubbleBackchannel : styles.bubbleCompanion;
+          const bubbleClass =
+            m.role === "user"
+              ? styles.bubbleUser
+              : m.trigger === "backchannel"
+                ? styles.bubbleBackchannel
+                : styles.bubbleCompanion;
           return (
             <div key={m.id} className={m.role === "user" ? styles.rowUser : styles.rowCompanion}>
               {m.parts.map((p, i) => (
-                <p key={i} className={bubbleClass}>{p}</p>
+                <p key={i} className={bubbleClass}>
+                  {p}
+                </p>
               ))}
               {m.status === "failed" && (
                 <button className={styles.retry} onClick={() => deliver(m.id, m.parts[0] ?? "")}>
@@ -120,26 +166,47 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
               {m.crisisCard && (
                 <aside className={styles.crisis} role="note">
                   <strong>{m.crisisCard.title}</strong>
-                  <ul>{m.crisisCard.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+                  <ul>
+                    {m.crisisCard.lines.map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                  </ul>
                 </aside>
               )}
             </div>
           );
         })}
-        {typing && <p className={styles.typing} aria-label="typing">•••</p>}
+        {typing && (
+          <p className={styles.typing} aria-label="typing">
+            •••
+          </p>
+        )}
         <div ref={endRef} />
       </main>
-      <form className={styles.composer} onSubmit={(e) => { e.preventDefault(); send(); }}>
+      <form
+        className={styles.composer}
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
           placeholder="Message"
           rows={1}
           maxLength={4000}
           aria-label="Message"
         />
-        <button type="submit" disabled={!draft.trim()}>Send</button>
+        <button type="submit" disabled={!draft.trim()}>
+          Send
+        </button>
       </form>
     </>
   );

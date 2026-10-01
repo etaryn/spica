@@ -45,15 +45,21 @@ class HookedClock extends SimClock {
     await super.sleep(ms);
   }
 }
-const lastTimer = (deps: D) => deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
+const lastTimer = (deps: D) =>
+  deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
 
 describe("runTurnTimer", () => {
   test("one reply answers the whole buffer: paced timeline, typing events, reply_to = last turn, cold path gets every turn", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     const ids = [];
-    for (const t of ["ok so today was insane", "my boss called me in", "turns out it was a promotion lol"]) {
-      const m = msg(t); ids.push(m.clientMessageId);
+    for (const t of [
+      "ok so today was insane",
+      "my boss called me in",
+      "turns out it was a promotion lol",
+    ]) {
+      const m = msg(t);
+      ids.push(m.clientMessageId);
       await receiveMessage(deps, u, m);
       deps.clock.advance(2000);
     }
@@ -74,8 +80,14 @@ describe("runTurnTimer", () => {
       { type: "typing", on: false },
     ]);
     expect(deps.pusher.pushes.filter((p) => p.msg.tag === reply.id)).toHaveLength(2);
-    expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({ turnIds: [...ids, reply.id], replyTurnId: reply.id });
-    expect((await getState(getTestDb(), u))!).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [] });
+    expect(deps.queue.jobs.find((j) => j.name === "cold_path")!.data).toMatchObject({
+      turnIds: [...ids, reply.id],
+      replyTurnId: reply.id,
+    });
+    expect((await getState(getTestDb(), u))!).toMatchObject({
+      buffer_turn_ids: [],
+      inflight_turn_ids: [],
+    });
   });
 
   test("a stale timer (a newer message arrived) does nothing", async () => {
@@ -98,7 +110,9 @@ describe("runTurnTimer", () => {
     const timer = lastTimer(deps);
     // While the first reply is generating, the user sends another message.
     const late = msg("nvm I'll just order pizza");
-    deps.llm.replyHook = async () => { await receiveMessage(deps, u, late); };
+    deps.llm.replyHook = async () => {
+      await receiveMessage(deps, u, late);
+    };
     expect(await runTurnTimer(deps, timer)).toBe("sent");
     deps.llm.replyHook = undefined;
     // Its timer runs; the first reply is done, so it commits and follows up.
@@ -135,7 +149,9 @@ describe("runTurnTimer", () => {
     expect(await runTurnTimer(deps, lastTimer(deps))).toBe("sent");
     const [r1, r2] = (await listTurns(getTestDb(), u)).filter((t) => t.role === "companion");
     const events = deps.events.events.map((x) => x.event);
-    const lastOfFirst = events.findIndex((e) => e.type === "message" && e.turnId === r1!.id && e.part === 1);
+    const lastOfFirst = events.findIndex(
+      (e) => e.type === "message" && e.turnId === r1!.id && e.part === 1,
+    );
     const firstOfSecond = events.findIndex((e) => e.type === "message" && e.turnId === r2!.id);
     expect(r2!.reply_to).toBe(late.clientMessageId);
     expect(lastOfFirst).toBeGreaterThan(-1);
@@ -146,7 +162,11 @@ describe("runTurnTimer", () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     await receiveMessage(deps, u, msg("first thing here"));
-    await getTestDb().execute(sql.raw(`UPDATE conversation_state SET sending_since = '2026-01-05T09:00:00Z' WHERE user_id = '${u}'`));
+    await getTestDb().execute(
+      sql.raw(
+        `UPDATE conversation_state SET sending_since = '2026-01-05T09:00:00Z' WHERE user_id = '${u}'`,
+      ),
+    );
     expect(await runTurnTimer(deps, lastTimer(deps))).toBe("busy");
     deps.llm.classify = () => ({ flag: true, category: "self_harm" });
     await receiveMessage(deps, u, msg("actually i want to end my life"));
@@ -159,7 +179,11 @@ describe("runTurnTimer", () => {
     const u = await createTestUser();
     await receiveMessage(deps, u, msg("first thing here"));
     const db = getTestDb();
-    await db.execute(sql.raw(`UPDATE conversation_state SET inflight_turn_ids = ARRAY['${randomUUID()}']::uuid[], inflight_since = '2026-01-05T09:00:00Z' WHERE user_id = '${u}'`));
+    await db.execute(
+      sql.raw(
+        `UPDATE conversation_state SET inflight_turn_ids = ARRAY['${randomUUID()}']::uuid[], inflight_since = '2026-01-05T09:00:00Z' WHERE user_id = '${u}'`,
+      ),
+    );
     const job = lastTimer(deps);
     expect(await runTurnTimer(deps, job)).toBe("busy");
     const again = deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!;
@@ -194,8 +218,14 @@ describe("runTurnTimer", () => {
     const retry = lastTimer(deps);
     expect(retry.attempt).toBe(1);
     expect(await runTurnTimer(deps, retry)).toBe("failed");
-    expect((await getState(getTestDb(), u))!).toMatchObject({ buffer_turn_ids: [], inflight_turn_ids: [] });
-    expect(deps.events.events.map((e) => e.event)).toContainEqual({ type: "reply_failed", turnIds: [m.clientMessageId] });
+    expect((await getState(getTestDb(), u))!).toMatchObject({
+      buffer_turn_ids: [],
+      inflight_turn_ids: [],
+    });
+    expect(deps.events.events.map((e) => e.event)).toContainEqual({
+      type: "reply_failed",
+      turnIds: [m.clientMessageId],
+    });
     // A client retry re-buffers it and it can then be answered.
     deps.llm.failReplies = 0;
     await receiveMessage(deps, u, m);
@@ -269,7 +299,9 @@ describe("runTurnTimer", () => {
     expect(pacedReply).toBeDefined();
 
     const events = deps.events.events.map((x) => x.event);
-    expect(events.filter((e) => e.type === "message" && e.turnId === pacedReply.id && e.part >= 1)).toEqual([]);
+    expect(
+      events.filter((e) => e.type === "message" && e.turnId === pacedReply.id && e.part >= 1),
+    ).toEqual([]);
     expect(events.at(-1)).toEqual({ type: "typing", on: false });
   });
 
@@ -286,7 +318,9 @@ describe("runTurnTimer", () => {
       await receiveMessage(deps, u, msg("actually i want to end my life"));
     };
     expect(await runTurnTimer(deps, timer)).toBe("abandoned");
-    expect(deps.events.events.map((e) => e.event)).not.toContainEqual(expect.objectContaining({ type: "reply_failed" }));
+    expect(deps.events.events.map((e) => e.event)).not.toContainEqual(
+      expect.objectContaining({ type: "reply_failed" }),
+    );
     expect(deps.events.events.at(-1)!.event).toEqual({ type: "typing", on: false });
   });
 
@@ -298,8 +332,12 @@ describe("runTurnTimer", () => {
     const timer = lastTimer(deps);
     const userTurn = (await listTurns(getTestDb(), u))[0]!;
     await insertTurn(getTestDb(), u, {
-      id: randomUUID(), session_id: userTurn.session_id, role: "companion", text: "already answered",
-      created_at: deps.clock.now(), reply_to: userTurn.id,
+      id: randomUUID(),
+      session_id: userTurn.session_id,
+      role: "companion",
+      text: "already answered",
+      created_at: deps.clock.now(),
+      reply_to: userTurn.id,
     });
     expect(await runTurnTimer(deps, timer)).toBe("abandoned");
     expect((await getState(getTestDb(), u))!).toMatchObject({ inflight_turn_ids: [] });
@@ -316,7 +354,10 @@ describe("runTurnTimer", () => {
     let failed = false;
     Object.assign(deps, {
       getTurnsByIds: async (...args: Parameters<typeof getTurnsByIds>) => {
-        if (!failed) { failed = true; throw new Error("db down"); }
+        if (!failed) {
+          failed = true;
+          throw new Error("db down");
+        }
         return getTurnsByIds(...args);
       },
     });
@@ -332,12 +373,21 @@ describe("runBackchannel", () => {
   test("sends once per buffer, stored as a backchannel turn that is never extracted", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
-    deps.llm.handlers.turn_judge = () => ({ reasoning: "r", complete: false, open_questions: [], backchannel: "huh" });
+    deps.llm.handlers.turn_judge = () => ({
+      reasoning: "r",
+      complete: false,
+      open_questions: [],
+      backchannel: "huh",
+    });
     const m = msg("my boss called me in");
     await receiveMessage(deps, u, m);
     const version = (await getState(getTestDb(), u))!.buffer_version;
-    expect(await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId })).toBe("sent");
-    expect(await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId })).toBe("skipped");
+    expect(
+      await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId }),
+    ).toBe("sent");
+    expect(
+      await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId }),
+    ).toBe("skipped");
     const bc = (await listTurns(getTestDb(), u)).find((t) => t.trigger === "backchannel")!;
     expect(bc).toMatchObject({ role: "companion", text: "huh", reply_to: null, extracted: true });
     expect(deps.events.events.at(-1)!.event).toEqual({ type: "message", turnId: bc.id, part: 0 });
@@ -351,10 +401,21 @@ describe("runBackchannel", () => {
     await receiveMessage(deps, u, m);
     const version = (await getState(getTestDb(), u))!.buffer_version;
     await receiveMessage(deps, u, msg("and I thought I was getting fired"));
-    expect(await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId })).toBe("skipped");
+    expect(
+      await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId }),
+    ).toBe("skipped");
     const v2 = (await getState(getTestDb(), u))!.buffer_version;
-    expect(await runBackchannel(deps, { userId: u, version: v2, text: "you owe me", turnId: m.clientMessageId })).toBe("dropped");
-    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual([]);
+    expect(
+      await runBackchannel(deps, {
+        userId: u,
+        version: v2,
+        text: "you owe me",
+        turnId: m.clientMessageId,
+      }),
+    ).toBe("dropped");
+    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual(
+      [],
+    );
   });
 
   test("round 1 fix: a missing anchor turn returns skipped instead of inventing a session id", async () => {
@@ -363,8 +424,12 @@ describe("runBackchannel", () => {
     const m = msg("my boss called me in");
     await receiveMessage(deps, u, m);
     const version = (await getState(getTestDb(), u))!.buffer_version;
-    expect(await runBackchannel(deps, { userId: u, version, text: "huh", turnId: randomUUID() })).toBe("skipped");
-    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual([]);
+    expect(
+      await runBackchannel(deps, { userId: u, version, text: "huh", turnId: randomUUID() }),
+    ).toBe("skipped");
+    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual(
+      [],
+    );
   });
 
   test("round 1 fix: a version bump during the (unlocked) guard check makes the insert-time recheck skip it", async () => {
@@ -380,10 +445,14 @@ describe("runBackchannel", () => {
       return real(d, a);
     });
     try {
-      expect(await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId })).toBe("skipped");
+      expect(
+        await runBackchannel(deps, { userId: u, version, text: "huh", turnId: m.clientMessageId }),
+      ).toBe("skipped");
     } finally {
       spy.mockRestore();
     }
-    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual([]);
+    expect((await listTurns(getTestDb(), u)).filter((t) => t.trigger === "backchannel")).toEqual(
+      [],
+    );
   });
 });

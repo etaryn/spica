@@ -2,20 +2,59 @@ import { expect, test } from "vitest";
 import { checkRelationship, type RelSnapshot } from "../../evals/lib/relationship-check";
 
 const snap = (): RelSnapshot => ({
-  state: { status: "active", end_pending_since: null, ended_at: null, repair_started_at: null, make_up_state: "due", make_up_replies: 0,
-    hurt_cause_fact: null, crisis_quiet_until: null, last_tick: null, last_hurt_at: null },
-  params: { closeness: p(0.2), trust: p(0.4), warmth: p(0.5), hurt: p(0.3), tension: p(0), msgs_per_day: p(40, 5) },
+  state: {
+    status: "active",
+    end_pending_since: null,
+    ended_at: null,
+    repair_started_at: null,
+    make_up_state: "due",
+    make_up_replies: 0,
+    hurt_cause_fact: null,
+    crisis_quiet_until: null,
+    last_tick: null,
+    last_hurt_at: null,
+  },
+  params: {
+    closeness: p(0.2),
+    trust: p(0.4),
+    warmth: p(0.5),
+    hurt: p(0.3),
+    tension: p(0),
+    msgs_per_day: p(40, 5),
+  },
   effects: { closeness: 0, trust: 0, warmth: 0, hurt: 0.9, tension: 0, msgs_per_day: 1 },
   events: [{ cause: "signal", param: "hurt", detail: { sensitised: true } }],
 });
-function p(value: number, baseline = value) { return { value, baseline, variance: 0.01, updated_at: new Date(0) }; }
+function p(value: number, baseline = value) {
+  return { value, baseline, variance: 0.01, updated_at: new Date(0) };
+}
 
 test("each field is checked; details name the failure", () => {
   const base = { type: "relationship" as const, user: "main" };
-  expect(checkRelationship(snap(), { ...base, param: "msgs_per_day", effect: { sign: "pos", min_abs: 0.9 } }).ok).toBe(true);
-  expect(checkRelationship(snap(), { ...base, param: "hurt", value: { gt: 0.25, lt: 0.5 } }).ok).toBe(true);
-  expect(checkRelationship(snap(), { ...base, make_up_state: "due", status: "active", end_pending: false }).ok).toBe(true);
-  expect(checkRelationship(snap(), { ...base, events: { cause: "signal", param: "hurt", detail: { sensitised: true }, min: 1 } }).ok).toBe(true);
+  expect(
+    checkRelationship(snap(), {
+      ...base,
+      param: "msgs_per_day",
+      effect: { sign: "pos", min_abs: 0.9 },
+    }).ok,
+  ).toBe(true);
+  expect(
+    checkRelationship(snap(), { ...base, param: "hurt", value: { gt: 0.25, lt: 0.5 } }).ok,
+  ).toBe(true);
+  expect(
+    checkRelationship(snap(), {
+      ...base,
+      make_up_state: "due",
+      status: "active",
+      end_pending: false,
+    }).ok,
+  ).toBe(true);
+  expect(
+    checkRelationship(snap(), {
+      ...base,
+      events: { cause: "signal", param: "hurt", detail: { sensitised: true }, min: 1 },
+    }).ok,
+  ).toBe(true);
   const bad = checkRelationship(snap(), { ...base, param: "hurt", value: { lt: 0.1 } });
   expect(bad).toMatchObject({ ok: false });
   expect(bad.detail).toContain("hurt");

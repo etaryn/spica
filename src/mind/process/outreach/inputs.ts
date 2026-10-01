@@ -108,6 +108,8 @@ async function loadHerDay(
     pre &&
     pre.status !== "superseded" &&
     pre.status !== "stale" &&
+    // The world tick records the day's events at midnight; one that hasn't happened yet isn't news.
+    (pre.occurred_at ?? pre.created_at) <= now &&
     !herDay.some((m) => m.id === pre.id)
   )
     herDay.push({ id: pre.id, content: pre.content, salience: pre.salience, sensitive: false });

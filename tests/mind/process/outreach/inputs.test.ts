@@ -135,6 +135,29 @@ test("her day: her core episodes within the lookback, plus her preoccupation; ne
   expect(herDay.every((f) => !f.sensitive)).toBe(true);
 });
 
+test("her day: a preoccupation that hasn't happened yet stays out until its time", async () => {
+  const { deps, u } = await setup();
+  // The world tick records the day's events at midnight; a strong one takes her mind at once.
+  const pre = await deps.core.memory.insert({
+    kind: "episode",
+    content: "Spica gets the telescope images at 15:00.",
+    embedding: vec(),
+    occurred_at: new Date(now.getTime() + 3 * H),
+    created_at: ago(10),
+    status: "open",
+    salience: 0.4,
+    valence: 0.8,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.update({ preoccupation: pre, preoccupation_since: ago(10) });
+  expect((await loadCandidateInputs(deps, u, now)).herDay).toEqual([]);
+  const later = new Date(now.getTime() + 4 * H);
+  expect((await loadCandidateInputs(deps, u, later)).herDay.map((f) => f.id)).toEqual([pre]);
+});
+
 test("due threads carry stakes and the latest fact's sensitivity; make-up carries faded hurt and cause", async () => {
   const { deps, u } = await setup();
   const t = await insertThread(

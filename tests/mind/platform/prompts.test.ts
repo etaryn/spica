@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
+import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 
 test("loads persona, reply rules, extraction, reconcile and crisis prompts", () => {
@@ -45,16 +46,23 @@ test("loads the turn judge prompt", () => {
   expect(p).toMatch(/backchannel/);
 });
 
-test("persona v3 is the configured persona", () => {
+test("persona v4 is the configured persona", () => {
   const c = loadConfig();
-  expect(c.prompts.persona).toBe("v3");
+  expect(c.prompts.persona).toBe("v4");
   const p = loadPrompt("persona", c.prompts.persona);
   expect(p).toMatch(/Alcor/);
   expect(p).not.toMatch(/Pesto/);
 });
 
-test("reply v8 tells her the feeling and day lines are her own state", () => {
+test("the configured reply prompt tells her the feeling and day lines are her own state", () => {
   const c = loadConfig();
-  expect(c.prompts.reply).toBe("v9");
+  expect(c.prompts.reply).toBe("v10");
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/"Your day" are your own state/);
+});
+
+test("her core values and the reply prompt never repeat a section heading", () => {
+  const c = loadConfig();
+  const system = `${loadPersona(c).coreValues}\n\n${loadPrompt("reply", c.prompts.reply)}`;
+  const headings = system.split("\n").filter((l) => l.startsWith("## "));
+  expect(new Set(headings).size).toBe(headings.length);
 });

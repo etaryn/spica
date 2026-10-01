@@ -160,9 +160,9 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v9",
+    "reply": "v10",
     "crisis_classifier": "v2",
-    "persona": "v3",
+    "persona": "v4",
     "extract": "v4",
     "reconcile": "v1",
     "judge_recall": "v3",
@@ -178,7 +178,7 @@
     "life_plan": "v1",
     "life_event": "v2",
     "life_availability": "v1",
-    "core_state_line": "v1",
+    "core_state_line": "v2",
     "reach_out": "v1"
   },
   "queue": {

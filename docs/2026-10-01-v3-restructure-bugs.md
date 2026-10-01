@@ -9,3 +9,5 @@
 ## Suspected bugs
 
 Found while rewriting; not fixed (the restructure changes no behaviour).
+
+- `src/mind/world/day-plan.ts`: the plan label limit (80 characters) and the number of generation attempts (2) are literals in code, not config keys. The rewrite names them as constants but doesn't move them, because a new config key is out of scope here.

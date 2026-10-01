@@ -1,12 +1,13 @@
+/**
+ * Any message from the user answers her latest reach-out and resets the unanswered count. Best
+ * effort: a failure leaves the count up, so she stays quieter (the safe side), and it never fails
+ * the user's message.
+ */
 import { markLatestAnswered } from "@/db/repos/reach-out";
 import { resetUnanswered } from "@/db/repos/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 
-/**
- * any user message answers. Best-effort: a failure leaves the counter up, so she stays quieter,
- * which is the safe side; it never fails the POST.
- */
 export async function markReachOutAnswered(
   deps: Pick<Deps, "db" | "log">,
   userId: string,

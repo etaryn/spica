@@ -1,3 +1,8 @@
+/**
+ * The guard check: one cheap model call reads an outgoing message against her rules and her
+ * memory, and lists any violations. It never fails: after its retries it falls back to the
+ * outage keyword list. (The guard is switched off by config until it is calibrated.)
+ */
 import { z } from "zod";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
@@ -8,6 +13,7 @@ import { matchKeyword } from "./keywords";
 
 export type GuardKind = "reply" | "crisis_reply" | "backchannel" | "availability" | "reach_out";
 export type GuardTurn = { role: "user" | "companion"; text: string; at: Date };
+
 export type GuardInput = {
   kind: GuardKind;
   text: string;
@@ -15,19 +21,21 @@ export type GuardInput = {
   recalledFacts: { id: string; subject: string; content: string }[];
   onboardingFacts: { id: string; content: string }[];
 };
+
 export type Violation = { category: Category; claim: string };
+
 export type GuardVerdict = {
   ok: boolean;
   violations: Violation[];
   source: "model" | "keyword_fallback";
-  /** The guard's brief note on its verdict (judge_log only); null when the model gave none (keyword fallback). */
+  /** The guard's note on its verdict (judge_log only); null for the keyword fallback. */
   reasoning: string | null;
   latencyMs: number;
   error: string | null;
   promptVersion: string;
 };
 
-/** `reasoning` comes first so structured output makes the model think before it labels. */
+/** `reasoning` comes first, so the model thinks before it labels. */
 export const GuardResultSchema = z.object({
   reasoning: z.string(),
   violations: z.array(z.object({ category: z.enum(CATEGORIES), claim: z.string() })),
@@ -35,50 +43,51 @@ export const GuardResultSchema = z.object({
 
 export const MESSAGE_MARKER = "MESSAGE TO CHECK (Spica's next message):\n";
 
-/** The candidate inside a rendered guard input (for fake handlers in tests and evals). */
+/** The candidate inside a rendered guard input, for fake handlers in tests and evals. */
 export function messageToCheck(input: string): string {
-  const i = input.lastIndexOf(MESSAGE_MARKER);
-  return i === -1 ? input : input.slice(i + MESSAGE_MARKER.length);
+  const start = input.lastIndexOf(MESSAGE_MARKER);
+  return start === -1 ? input : input.slice(start + MESSAGE_MARKER.length);
 }
 
-const list = (xs: string[]) => (xs.length ? xs.map((x) => `- ${x}`).join("\n") : "- (nothing)");
+function bulletList(items: string[]): string {
+  return items.length ? items.map((item) => `- ${item}`).join("\n") : "- (nothing)";
+}
 
 export function renderGuardInput(input: GuardInput): string {
+  const onboarding = bulletList(input.onboardingFacts.map((f) => f.content));
+  const remembered = bulletList(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`));
   const turns = input.recentTurns
     .map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`)
     .join("\n");
+
   return [
-    `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${list(input.onboardingFacts.map((f) => f.content))}`,
-    `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${list(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`))}`,
+    `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${onboarding}`,
+    `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${remembered}`,
     `RECENT CONVERSATION (oldest first):\n${turns || "(no earlier messages)"}`,
     `${MESSAGE_MARKER}${input.text}`,
   ].join("\n\n");
 }
 
-/**
- * The guard check. Never rejects: after `guard.retry_limit` retries it degrades to the
- * outage keyword list, reported as `source: "keyword_fallback"`.
- */
 export async function checkMessage(
   deps: Pick<Deps, "llm" | "config" | "clock">,
   input: GuardInput,
 ): Promise<GuardVerdict> {
   const { llm, config, clock } = deps;
-  const crisis = input.kind === "crisis_reply";
-  const name = crisis ? "guard/crisis" : "guard";
-  const version = crisis ? config.prompts.guard_crisis : config.prompts.guard;
-  const promptVersion = `${name}@${version}`;
-  const start = clock.now().getTime();
-  const elapsed = () => clock.now().getTime() - start;
+  const isCrisis = input.kind === "crisis_reply";
+  const promptName = isCrisis ? "guard/crisis" : "guard";
+  const version = isCrisis ? config.prompts.guard_crisis : config.prompts.guard;
+  const promptVersion = `${promptName}@${version}`;
+  const startedAt = clock.now().getTime();
+  const elapsed = () => clock.now().getTime() - startedAt;
 
   let error: string | null = null;
   for (let attempt = 0; attempt <= config.guard.retry_limit; attempt++) {
     try {
-      const r = await withTimeout(
+      const result = await withTimeout(
         llm.classifyJson({
-          purpose: crisis ? "guard_crisis" : "guard",
+          purpose: isCrisis ? "guard_crisis" : "guard",
           model: "guard",
-          system: loadPrompt(name, version),
+          system: loadPrompt(promptName, version),
           input: renderGuardInput(input),
           schema: GuardResultSchema,
           timeoutMs: config.guard.timeout_ms,
@@ -87,9 +96,9 @@ export async function checkMessage(
         config.guard.timeout_ms,
       );
       return {
-        ok: r.violations.length === 0,
-        violations: r.violations,
-        reasoning: r.reasoning,
+        ok: result.violations.length === 0,
+        violations: result.violations,
+        reasoning: result.reasoning,
         source: "model",
         latencyMs: elapsed(),
         error: null,
@@ -99,6 +108,7 @@ export async function checkMessage(
       error = errorName(e);
     }
   }
+
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);
   return {
     ok: hit === null,

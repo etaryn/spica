@@ -1,5 +1,5 @@
 import type { SimClock } from "@/mind/platform/clock";
-import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import type { Deps } from "@/mind/platform/deps";
 import { runReachOutSend } from "@/mind/process/outreach/send";
 import {
@@ -25,7 +25,7 @@ async function drainColdPath(deps: Deps, queue: RecordingQueue): Promise<void> {
     // pg-boss retries a failed cold_path job up to cold_path.retry_limit times; do the same here.
     for (let attempt = 0; ; attempt++) {
       try {
-        await handleColdPath(deps, job.data);
+        await runColdPath(deps, job.data);
         break;
       } catch (e) {
         if (attempt >= deps.config.cold_path.retry_limit) throw e;

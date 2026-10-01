@@ -1,108 +1,63 @@
+/**
+ * The cold path: after she has replied, it turns the exchange into memory and relationship state.
+ * The steps are extract, embed, reconcile against near memories, encode, then update the
+ * relationship and her mood. It all runs in one transaction holding a per-user advisory lock, so a
+ * crash writes nothing and two exchanges from one user never reconcile at once. It throws on
+ * failure so pg-boss retries, and it never delays a reply.
+ */
 import { sql } from "drizzle-orm";
+import type { Db } from "@/db/client";
 import { nearFacts } from "@/db/repos/facts";
-import { getTurnsByIds, turnsUpTo } from "@/db/repos/session-log";
+import { getTurnsByIds, turnsUpTo, type Turn } from "@/db/repos/session-log";
 import { listOpenThreads } from "@/db/repos/threads";
 import { getTimezone } from "@/db/repos/users";
-import type { Deps } from "@/mind/platform/deps";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
-import { extract, type ExtractedFact } from "@/mind/memory/user/extract";
+import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
 import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
+import type { Deps } from "@/mind/platform/deps";
+import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { nudgeEgoForExchange } from "@/mind/state/legacy-ego/nudge";
-import { errorName } from "@/mind/platform/errors";
+import { hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
 import { updateRelationship } from "@/mind/state/user/relationship/update";
-import { hurtFactContent } from "@/mind/state/user/relationship/signals";
 
 export class LockBusyError extends Error {}
+
 export type ColdPathOutcome = { status: "done" | "skipped"; applied?: EncodeOutcome };
 
-/**
- * Cold path: extract → embed → reconcile → apply, all inside one transaction
- * holding a per-user advisory lock, so a crash writes nothing and two exchanges from
- * one user never reconcile concurrently. Throws on failure so pg-boss retries.
- */
-export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
-  const { db, config, clock, embedder, log } = deps;
+type CandidateFact = { fact: ExtractedFact; source: "turn" | "inferred" };
+
+export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
+  const { db, config, clock, log } = deps;
+
   return db.transaction(async (tx) => {
+    const lockKey = `cold_path:${job.userId}`;
     const lock = await tx.execute(
-      sql`SELECT pg_try_advisory_xact_lock(hashtext(${`cold_path:${job.userId}`})) AS ok`,
+      sql`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS ok`,
     );
     if (!lock.rows[0]?.ok) throw new LockBusyError(`cold_path busy for user`);
 
     const turns = await getTurnsByIds(tx, job.userId, job.turnIds);
     if (turns.length === 0 || turns.every((t) => t.extracted)) return { status: "skipped" };
 
-    const context = (
-      await turnsUpTo(tx, job.userId, turns[0]!, config.extraction.context_turns + 1)
-    ).slice(0, -1);
-    const extraction = await extract(deps, {
-      newTurns: turns,
-      contextTurns: context,
-      openThreads: await listOpenThreads(tx, job.userId, config.extraction.open_threads_in_prompt),
-      timezone: await getTimezone(tx, job.userId),
-    });
+    const extraction = await extractExchange(deps, tx, job.userId, turns);
 
     const crisis = turns.some((t) => t.safety_flag?.flagged);
-    // A reach-out alone is her words only; no user behaviour to score, no exchange tone.
+    // A reach-out on its own is only her words: no user behaviour to score, no exchange tone.
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
-    // The hurt cause lives in the fact store: one self `feeling` fact, reconciled like any other.
-    const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map(
-      (fact) => ({ fact, source: "turn" }),
-    );
-    // Same deadzone comparison applyExchange uses (`>=`): a hurt too small to move the param writes no fact.
-    const hurt =
-      signals?.hurt && signals.hurt.amount >= config.relationship.signal_deadzone
-        ? signals.hurt
-        : null;
-    if (hurt) {
-      facts.push({
-        source: "inferred",
-        fact: {
-          subject: "self",
-          kind: "feeling",
-          content: hurtFactContent(hurt.cause),
-          occurred_at: null,
-          salience: config.relationship.hurt_fact_salience,
-          valence: -hurt.amount,
-          confidence: config.relationship.hurt_fact_confidence,
-          entity_names: [],
-          thread_title: null,
-        },
-      });
-    }
 
-    const embeddings =
-      facts.length > 0
-        ? await embedder.embed(
-            facts.map((f) => f.fact.content),
-            "document",
-          )
-        : [];
-    const planned: PlannedFact[] = [];
-    for (const [i, { fact, source }] of facts.entries()) {
-      const embedding = embeddings[i];
-      if (!embedding) throw new Error("embedder returned fewer vectors than facts");
-      const neighbors = await nearFacts(
-        tx,
-        job.userId,
-        fact.subject,
-        embedding,
-        config.reconcile.neighbor_k,
-        config.reconcile.near_match_similarity,
-      );
-      planned.push({
-        fact,
-        embedding,
-        decision: await reconcileAgainstNeighbours(deps, fact, neighbors),
-        source,
-      });
-    }
+    const hurt = significantHurt(signals, config.relationship.signal_deadzone);
+    const candidates: CandidateFact[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
+    if (hurt) candidates.push(hurtFeeling(hurt, config));
+
+    const planned = await reconcileCandidates(deps, tx, job.userId, candidates);
 
     const applied = await encodeExtraction(tx, config, {
       userId: job.userId,
       now: clock.now(),
-      exchangeAt: turns[0]!.created_at, // getTurnsByIds sorts oldest first: the exchange's first turn (hers, for a reach-out)
+      // Turns come back oldest first: the exchange's first turn (hers, for a reach-out).
+      exchangeAt: turns[0]!.created_at,
       entities: extraction.entities,
       facts: planned,
       threads: extraction.threads,
@@ -114,36 +69,136 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
 
-    const hurtFactId = hurt ? (applied.factIds.at(-1) ?? null) : null;
-    const applyRel =
-      (deps as { updateRelationship?: typeof updateRelationship }).updateRelationship ??
-      updateRelationship;
     if (hasUserTurn) {
-      try {
-        await tx.transaction(async (sp) => {
-          await applyRel(sp, deps, { userId: job.userId, turns, signals, crisis, hurtFactId });
-        });
-      } catch (e) {
-        log.error("relationship update failed", { userId: job.userId, error: errorName(e) });
-      }
-    }
-
-    // Its own savepoint, so an ego failure never loses the memory or relationship writes.
-    if (hasUserTurn) {
-      try {
-        await tx.transaction(async (sp) => {
-          await nudgeEgoForExchange(sp, config, {
-            userId: job.userId,
-            facts: facts.map((f) => f.fact),
-            crisis,
-            now: clock.now(),
-          });
-        });
-      } catch (e) {
-        log.error("ego nudge failed", { userId: job.userId, error: errorName(e) });
-      }
+      const hurtFactId = hurt ? (applied.factIds.at(-1) ?? null) : null;
+      await updateRelationshipSafely(deps, tx, {
+        userId: job.userId,
+        turns,
+        signals,
+        crisis,
+        hurtFactId,
+      });
+      await nudgeMoodSafely(deps, tx, job.userId, candidates, crisis);
     }
 
     return { status: "done", applied };
   });
+}
+
+async function extractExchange(
+  deps: Deps,
+  tx: Db,
+  userId: string,
+  turns: Turn[],
+): Promise<Extraction> {
+  const { config } = deps;
+  const context = (
+    await turnsUpTo(tx, userId, turns[0]!, config.extraction.context_turns + 1)
+  ).slice(0, -1);
+
+  return extract(deps, {
+    newTurns: turns,
+    contextTurns: context,
+    openThreads: await listOpenThreads(tx, userId, config.extraction.open_threads_in_prompt),
+    timezone: await getTimezone(tx, userId),
+  });
+}
+
+/** The same deadzone comparison the relationship uses (`>=`): a hurt too small to move it writes nothing. */
+function significantHurt(signals: Signals | null, deadzone: number): Signals["hurt"] {
+  const hurt = signals?.hurt;
+  return hurt && hurt.amount >= deadzone ? hurt : null;
+}
+
+/** Why she's hurt lives in memory: one self `feeling` fact, reconciled like any other. */
+function hurtFeeling(hurt: NonNullable<Signals["hurt"]>, config: Deps["config"]): CandidateFact {
+  return {
+    source: "inferred",
+    fact: {
+      subject: "self",
+      kind: "feeling",
+      content: hurtFactContent(hurt.cause),
+      occurred_at: null,
+      salience: config.relationship.hurt_fact_salience,
+      valence: -hurt.amount,
+      confidence: config.relationship.hurt_fact_confidence,
+      entity_names: [],
+      thread_title: null,
+    },
+  };
+}
+
+async function reconcileCandidates(
+  deps: Deps,
+  tx: Db,
+  userId: string,
+  candidates: CandidateFact[],
+): Promise<PlannedFact[]> {
+  const { config, embedder } = deps;
+  const embeddings = candidates.length
+    ? await embedder.embed(
+        candidates.map((c) => c.fact.content),
+        "document",
+      )
+    : [];
+
+  const planned: PlannedFact[] = [];
+  for (const [i, { fact, source }] of candidates.entries()) {
+    const embedding = embeddings[i];
+    if (!embedding) throw new Error("embedder returned fewer vectors than facts");
+
+    const neighbors = await nearFacts(
+      tx,
+      userId,
+      fact.subject,
+      embedding,
+      config.reconcile.neighbor_k,
+      config.reconcile.near_match_similarity,
+    );
+    const decision = await reconcileAgainstNeighbours(deps, fact, neighbors);
+    planned.push({ fact, embedding, decision, source });
+  }
+  return planned;
+}
+
+/** In its own savepoint, so a relationship failure never loses the memory writes. */
+async function updateRelationshipSafely(
+  deps: Deps,
+  tx: Db,
+  update: Parameters<typeof updateRelationship>[2],
+): Promise<void> {
+  // Test seam: lets a test replace the relationship update.
+  const runUpdate =
+    (deps as { updateRelationship?: typeof updateRelationship }).updateRelationship ??
+    updateRelationship;
+
+  try {
+    await tx.transaction(async (savepoint) => {
+      await runUpdate(savepoint, deps, update);
+    });
+  } catch (e) {
+    deps.log.error("relationship update failed", { userId: update.userId, error: errorName(e) });
+  }
+}
+
+/** In its own savepoint, so a mood failure never loses the memory or relationship writes. */
+async function nudgeMoodSafely(
+  deps: Deps,
+  tx: Db,
+  userId: string,
+  candidates: CandidateFact[],
+  crisis: boolean,
+): Promise<void> {
+  try {
+    await tx.transaction(async (savepoint) => {
+      await nudgeEgoForExchange(savepoint, deps.config, {
+        userId,
+        facts: candidates.map((c) => c.fact),
+        crisis,
+        now: deps.clock.now(),
+      });
+    });
+  } catch (e) {
+    deps.log.error("ego nudge failed", { userId, error: errorName(e) });
+  }
 }

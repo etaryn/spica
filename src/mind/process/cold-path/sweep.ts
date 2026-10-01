@@ -1,3 +1,7 @@
+/**
+ * The `cold_path_sweep` job: re-queues exchanges whose cold path never finished, up to a cap on
+ * attempts per exchange, so no exchange is silently left out of memory.
+ */
 import {
   adminBumpExtractAttempts,
   adminFindUnextractedExchanges,
@@ -5,31 +9,36 @@ import {
 import type { Deps } from "@/mind/platform/deps";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
 
-/** Re-enqueue exchanges whose cold path never completed, with a per-exchange attempt cap. */
-export async function sweepUnextracted(
+const MINUTE = 60_000;
+
+export async function sweepUnfinishedColdPaths(
   deps: Pick<Deps, "db" | "queue" | "config" | "log">,
   now: Date,
 ): Promise<number> {
   const { db, queue, config, log } = deps;
-  const olderThan = new Date(now.getTime() - config.cold_path.sweep_min_age_minutes * 60_000);
-  const rows = await adminFindUnextractedExchanges(
+  const settings = config.cold_path;
+
+  const olderThan = new Date(now.getTime() - settings.sweep_min_age_minutes * MINUTE);
+  const exchanges = await adminFindUnextractedExchanges(
     db,
     olderThan,
-    config.cold_path.max_sweep_attempts,
-    config.cold_path.sweep_batch,
+    settings.max_sweep_attempts,
+    settings.sweep_batch,
   );
   await adminBumpExtractAttempts(
     db,
-    rows.map((r) => r.replyTurnId),
+    exchanges.map((e) => e.replyTurnId),
   );
-  for (const r of rows) {
+
+  for (const exchange of exchanges) {
     await queue.enqueue(COLD_PATH_QUEUE, {
-      userId: r.userId,
-      turnIds: [...r.userTurnIds, r.replyTurnId],
-      replyTurnId: r.replyTurnId,
+      userId: exchange.userId,
+      turnIds: [...exchange.userTurnIds, exchange.replyTurnId],
+      replyTurnId: exchange.replyTurnId,
       recalled: [],
     });
   }
-  if (rows.length > 0) log.info("cold_path sweep enqueued", { count: rows.length });
-  return rows.length;
+
+  if (exchanges.length > 0) log.info("cold_path sweep enqueued", { count: exchanges.length });
+  return exchanges.length;
 }

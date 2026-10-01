@@ -1,87 +1,121 @@
-import { relativeDate } from "@/mind/platform/relative-date";
-import type { ChatMessage } from "@/mind/platform/llm/types";
+/**
+ * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
+ * empty: core values, how she's feeling, you and them, her day, what she remembers, things to
+ * ask about, unanswered questions, and why she's writing (for a reach-out). The live
+ * conversation follows as the messages.
+ */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
+import type { ChatMessage } from "@/mind/platform/llm/types";
+import { relativeDate } from "@/mind/platform/relative-date";
 import { HOUR } from "@/mind/platform/time";
 
 export interface AssembleInput {
   valuesDoc: string;
-  egoLine: string | null;
+  feelingLine: string | null;
   relationshipSummary: string | null;
-  /** Her day: what she is doing now and next. */
-  lifeState?: string | null;
+  /** Her day: what she's doing now and next. */
+  yourDay?: string | null;
   retrieval: RetrievalResult;
   recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
   now: Date;
-  /** Mark the first user message after a gap of at least this many hours ("[7 days later] …"). */
+  /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
   /** The user's unanswered questions. */
   openQuestions?: string[];
-  /** Slot 7b: why she's writing first, and the trailing user-role cue the model answers. */
+  /** Why she's writing first, and the trailing user-role cue the model answers. */
   reachOut?: { slot: string; cue: string } | null;
 }
 
-function factList(title: string, facts: RetrievedFact[], now: Date): string | null {
-  if (facts.length === 0) return null;
-  return `### ${title}\n${facts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})${f.onMind ? " (on your mind lately)" : ""}`).join("\n")}`;
+export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
+  const sections = [
+    input.valuesDoc,
+    section("How you're feeling", input.feelingLine),
+    section("You and them", input.relationshipSummary),
+    section("Your day", input.yourDay ?? null),
+    section("What you remember", memorySection(input.retrieval, input.now)),
+    section("Things you might naturally ask about", dueThreadList(input.retrieval)),
+    section("They asked and you haven't answered yet", questionList(input.openQuestions)),
+    // A reach-out always gets its heading, even when the slot text is empty.
+    input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
+  ].filter((s): s is string => s !== null);
+
+  const messages = conversationMessages(input);
+  if (input.reachOut) appendReachOutCue(messages, input.reachOut.cue);
+
+  return { system: sections.join("\n\n"), messages };
 }
 
-/** Fixed slot order of the reply prompt. Empty slots are skipped. */
-export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
-  const { retrieval, now } = input;
-  const memory = [
+function section(heading: string, body: string | null): string | null {
+  return body ? `## ${heading}\n${body}` : null;
+}
+
+function memorySection(retrieval: RetrievalResult, now: Date): string | null {
+  const lists = [
     factList("About them", retrieval.facts.user, now),
     factList("About you", retrieval.facts.self, now),
     factList("Between you", retrieval.facts.shared, now),
   ].filter((s): s is string => s !== null);
 
-  const slots = [
-    input.valuesDoc,
-    input.egoLine ? `## How you're feeling\n${input.egoLine}` : null,
-    input.relationshipSummary ? `## You and them\n${input.relationshipSummary}` : null,
-    input.lifeState
-      ? `## Your day
-${input.lifeState}`
-      : null,
-    memory.length ? `## What you remember\n${memory.join("\n\n")}` : null,
-    retrieval.dueThreads.length
-      ? `## Things you might naturally ask about\n${retrieval.dueThreads.map((t) => `- ${t.title}${t.detail ? ` (latest: ${t.detail})` : ""}`).join("\n")}`
-      : null,
-    input.openQuestions?.length
-      ? `## They asked and you haven't answered yet\n${input.openQuestions.map((q) => `- ${q}`).join("\n")}`
-      : null,
-    input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
-  ].filter((s): s is string => s !== null);
+  return lists.length ? lists.join("\n\n") : null;
+}
 
+function factList(title: string, facts: RetrievedFact[], now: Date): string | null {
+  if (facts.length === 0) return null;
+
+  const lines = facts.map((fact) => {
+    const onMind = fact.onMind ? " (on your mind lately)" : "";
+    return `- ${fact.content} (${relativeDate(fact.when, now)})${onMind}`;
+  });
+  return `### ${title}\n${lines.join("\n")}`;
+}
+
+function dueThreadList(retrieval: RetrievalResult): string | null {
+  if (!retrieval.dueThreads.length) return null;
+
+  return retrieval.dueThreads
+    .map((thread) => `- ${thread.title}${thread.detail ? ` (latest: ${thread.detail})` : ""}`)
+    .join("\n");
+}
+
+function questionList(questions: string[] | undefined): string | null {
+  if (!questions?.length) return null;
+  return questions.map((q) => `- ${q}`).join("\n");
+}
+
+/**
+ * The recent turns, starting at the first user turn. The window can span days, so a user turn
+ * after a long gap is marked; without the marker the model carries on from the old moment.
+ */
+function conversationMessages(input: AssembleInput): ChatMessage[] {
   const firstUser = input.recentTurns.findIndex((t) => t.role === "user");
   const turns = firstUser === -1 ? [] : input.recentTurns.slice(firstUser);
-  // The window can span days; without a marker the model carries on from the old moment.
-  const messages: ChatMessage[] = turns.map((t, i) => {
-    const prev = turns[i - 1];
+
+  return turns.map((turn, i) => {
+    const previous = turns[i - 1];
     const gapHours =
-      prev?.created_at && t.created_at
-        ? (t.created_at.getTime() - prev.created_at.getTime()) / HOUR
+      previous?.created_at && turn.created_at
+        ? (turn.created_at.getTime() - previous.created_at.getTime()) / HOUR
         : 0;
     const marked =
-      t.role === "user" &&
+      turn.role === "user" &&
       input.gapMarkerMinHours !== undefined &&
       gapHours >= input.gapMarkerMinHours;
+
     return {
-      role: t.role === "user" ? "user" : "assistant",
-      content: marked ? `[${elapsed(gapHours)} later] ${t.text}` : t.text,
+      role: turn.role === "user" ? "user" : "assistant",
+      content: marked ? `[${elapsed(gapHours)} later] ${turn.text}` : turn.text,
     };
   });
+}
 
-  if (input.reachOut) {
-    const last = messages.at(-1);
-    if (last?.role === "user")
-      messages[messages.length - 1] = {
-        role: "user",
-        content: `${last.content}\n\n${input.reachOut.cue}`,
-      };
-    else messages.push({ role: "user", content: input.reachOut.cue });
+/** A reach-out ends on a user-role cue for the model to answer. */
+function appendReachOutCue(messages: ChatMessage[], cue: string): void {
+  const last = messages.at(-1);
+  if (last?.role === "user") {
+    messages[messages.length - 1] = { role: "user", content: `${last.content}\n\n${cue}` };
+  } else {
+    messages.push({ role: "user", content: cue });
   }
-
-  return { system: slots.join("\n\n"), messages };
 }
 
 function elapsed(hours: number): string {
@@ -91,21 +125,23 @@ function elapsed(hours: number): string {
   return `about ${Math.round(days / 7)} weeks`;
 }
 
-/** Factual relationship line: how well she knows them, so she doesn't guess. */
+/** A factual line about how well she knows them, so she doesn't guess. */
 export function relationshipLine(
-  s: { sessions: number; days: number; first: Date | null },
+  stats: { sessions: number; days: number; first: Date | null },
   now: Date,
 ): string {
-  if (!s.first || s.sessions <= 1) return "This is your first conversation with them.";
-  if (s.days <= 1) return "You've already talked earlier today.";
-  return `You first talked ${relativeDate(s.first, now)}, and have talked on ${s.days} different days.`;
+  if (!stats.first || stats.sessions <= 1) return "This is your first conversation with them.";
+  if (stats.days <= 1) return "You've already talked earlier today.";
+  return `You first talked ${relativeDate(stats.first, now)}, and have talked on ${stats.days} different days.`;
 }
 
-/** The gap line: time since the previous turn, omitted under `minHours`. */
-export function gapLine(prevAt: Date | null, now: Date, minHours: number): string | null {
-  if (!prevAt) return null;
-  const hours = (now.getTime() - prevAt.getTime()) / HOUR;
+/** Time since the previous turn; null under `minHours`. */
+export function gapLine(previousAt: Date | null, now: Date, minHours: number): string | null {
+  if (!previousAt) return null;
+
+  const hours = (now.getTime() - previousAt.getTime()) / HOUR;
   if (hours < minHours) return null;
+
   const days = Math.floor(hours / 24);
   if (days <= 1) return "You last talked yesterday.";
   if (days < 14) return `You last talked ${days} days ago.`;

@@ -1,3 +1,8 @@
+/**
+ * Reads everything outreach decides from: the candidate inputs (due threads, a pending make-up,
+ * the user's recent events, her own day and preoccupation, check-in timing, topics already used)
+ * and the send gate's inputs. Read-only.
+ */
 import type { Db } from "@/db/client";
 import { getState, type ConvState } from "@/db/repos/conversation-state";
 import {
@@ -6,30 +11,33 @@ import {
   listOutreachHerDay,
   listOutreachUserEvents,
 } from "@/db/repos/facts";
-import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/relationship";
 import { sentReachOutTimes, usedTopics } from "@/db/repos/reach-out";
+import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/session-log";
 import { dueThreads } from "@/db/repos/threads";
 import type { Deps } from "@/mind/platform/deps";
-import { blockAt, listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
-import { lifeDate } from "@/mind/world/her-clock";
-import { faded } from "@/mind/state/user/relationship/params";
 import { HOUR } from "@/mind/platform/time";
+import { faded } from "@/mind/state/user/relationship/params";
+import { lifeDate } from "@/mind/world/her-clock";
+import { blockAt, listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
 import type { CandidateInputs, GateInputs } from "./types";
 
 const DAY = 24 * HOUR;
+const WEEK = 7 * DAY;
 
-/** everything the pure candidate builder needs. Read-only. */
+type InputDeps = Pick<Deps, "db" | "config">;
+
 export async function loadCandidateInputs(
-  deps: Pick<Deps, "db" | "config">,
+  deps: InputDeps,
   userId: string,
   now: Date,
   db: Db = deps.db,
 ): Promise<CandidateInputs> {
   const { config } = deps;
-  const cfg = config.outreach;
-  const row = await getRelationshipRow(db, userId);
-  const params = row ? await getParams(db, userId) : null;
+  const settings = config.outreach;
+
+  const relationship = await getRelationshipRow(db, userId);
+  const params = relationship ? await getParams(db, userId) : null;
   const hurt = params
     ? faded(
         params.hurt.value,
@@ -38,99 +46,123 @@ export async function loadCandidateInputs(
         config.relationship.hurt_half_life_hours,
       )
     : 0;
-  const cause = row?.hurt_cause_fact ? await getFact(db, userId, row.hurt_cause_fact) : null;
+  const cause = relationship?.hurt_cause_fact
+    ? await getFact(db, userId, relationship.hurt_cause_fact)
+    : null;
 
-  const herDay = await listOutreachHerDay(
+  const herDay = await loadHerDay(db, userId, now, settings.her_day_lookback_hours);
+  const cadence = (relationship?.cadence ?? {}) as Partial<Cadence>;
+
+  const due = await dueThreads(db, userId, now, settings.due_threads_limit);
+  const userEvents = await listOutreachUserEvents(
     db,
     userId,
-    new Date(now.getTime() - cfg.her_day_lookback_hours * HOUR),
+    new Date(now.getTime() - settings.user_event_lookback_hours * HOUR),
     now,
   );
-  const pre = await getPreoccupationFact(db, userId, now);
-  if (pre && !herDay.some((f) => f.id === pre.id)) {
-    herDay.push({
-      id: pre.id,
-      content: pre.content,
-      salience: pre.salience,
-      sensitive: (pre.payload as { sensitive?: boolean } | null)?.sensitive === true,
-    });
-  }
-  const cadence = (row?.cadence ?? {}) as Partial<Cadence>;
+
   return {
-    dueThreads: (await dueThreads(db, userId, now, cfg.due_threads_limit)).map((t) => ({
-      id: t.id,
-      title: t.title,
-      detail: t.content,
-      stakes: t.stakes,
-      next_checkpoint: t.next_checkpoint,
-      fact_id: t.fact_id,
-      sensitive: t.sensitive,
+    dueThreads: due.map((thread) => ({
+      id: thread.id,
+      title: thread.title,
+      detail: thread.content,
+      stakes: thread.stakes,
+      next_checkpoint: thread.next_checkpoint,
+      fact_id: thread.fact_id,
+      sensitive: thread.sensitive,
     })),
     makeUp: {
-      due: row?.status !== "ended_by_user" && row?.make_up_state === "due",
+      due: relationship?.status !== "ended_by_user" && relationship?.make_up_state === "due",
       hurt,
-      causeFactId: row?.hurt_cause_fact ?? null,
+      causeFactId: relationship?.hurt_cause_fact ?? null,
       causeText: cause?.content ?? null,
-      lastHurtAt: row?.last_hurt_at ?? null,
+      lastHurtAt: relationship?.last_hurt_at ?? null,
     },
-    userEvents: await listOutreachUserEvents(
-      db,
-      userId,
-      new Date(now.getTime() - cfg.user_event_lookback_hours * HOUR),
-      now,
-    ),
+    userEvents,
     herDay,
     checkIn: {
-      lastContact: row?.last_contact ?? null,
+      lastContact: relationship?.last_contact ?? null,
       medianGapHours: cadence.median_gap_hours ?? config.relationship.default_median_gap_hours,
     },
     usedTopics: await usedTopics(db, userId),
   };
 }
 
+/** Her recent day, plus her preoccupation if it isn't already among them. */
+async function loadHerDay(
+  db: Db,
+  userId: string,
+  now: Date,
+  lookbackHours: number,
+): Promise<CandidateInputs["herDay"]> {
+  const herDay = await listOutreachHerDay(
+    db,
+    userId,
+    new Date(now.getTime() - lookbackHours * HOUR),
+    now,
+  );
+
+  const preoccupation = await getPreoccupationFact(db, userId, now);
+  if (preoccupation && !herDay.some((f) => f.id === preoccupation.id)) {
+    herDay.push({
+      id: preoccupation.id,
+      content: preoccupation.content,
+      salience: preoccupation.salience,
+      sensitive: (preoccupation.payload as { sensitive?: boolean } | null)?.sensitive === true,
+    });
+  }
+  return herDay;
+}
+
 /**
- * Rule 7 (G6): the crisis window is the later of the stored `crisis_quiet_until` (set by the crisis exchange's cold
- * path) and the latest safety-flagged turn + `crisis_quiet_hours`, so it holds before that cold path commits, or if it
- * never does.
+ * The crisis window is the later of the stored `crisis_quiet_until` (set by the crisis
+ * exchange's cold path) and the latest flagged turn plus `crisis_quiet_hours`. That way it holds
+ * before that cold path commits, or even if it never does.
  */
 export async function effectiveCrisisQuietUntil(
-  deps: Pick<Deps, "db" | "config">,
+  deps: InputDeps,
   userId: string,
   stored: Date | null,
   now: Date,
   db: Db = deps.db,
 ): Promise<Date | null> {
   const window = deps.config.relationship.crisis_quiet_hours * HOUR;
-  const flagged = await latestFlaggedTurnAt(db, userId, new Date(now.getTime() - window));
-  const fromTurn = flagged ? new Date(flagged.getTime() + window) : null;
-  if (!fromTurn) return stored;
+  const flaggedAt = await latestFlaggedTurnAt(db, userId, new Date(now.getTime() - window));
+  if (!flaggedAt) return stored;
+
+  const fromTurn = new Date(flaggedAt.getTime() + window);
   return !stored || fromTurn > stored ? fromTurn : stored;
 }
 
-/** gate inputs, or null when the user has no relationship row yet. */
+/** Null when the user has no relationship row yet. */
 export async function loadGateInputs(
-  deps: Pick<Deps, "db" | "config">,
+  deps: InputDeps,
   userId: string,
   now: Date,
   db: Db = deps.db,
-  conv?: ConvState | null,
+  conversation?: ConvState | null,
 ): Promise<GateInputs | null> {
-  const row = await getRelationshipRow(db, userId);
-  if (!row) return null;
-  const s = conv === undefined ? await getState(db, userId) : conv;
+  const relationship = await getRelationshipRow(db, userId);
+  if (!relationship) return null;
+
+  const state = conversation === undefined ? await getState(db, userId) : conversation;
   const block = blockAt(await listLifeBlocks(db, userId, lifeDate(deps.config.life, now)), now);
+  const inProgress =
+    !!state &&
+    (state.buffer_turn_ids.length > 0 ||
+      state.inflight_turn_ids.length > 0 ||
+      state.sending_since !== null);
+
   return {
-    status: row.status,
-    sentAt: await sentReachOutTimes(db, userId, new Date(now.getTime() - 7 * DAY)),
+    status: relationship.status,
+    sentAt: await sentReachOutTimes(db, userId, new Date(now.getTime() - WEEK)),
     herBlock: block ? { block: block.block, label: block.label } : null,
-    unanswered: row.unanswered_reach_outs,
-    inProgress:
-      !!s &&
-      (s.buffer_turn_ids.length > 0 || s.inflight_turn_ids.length > 0 || s.sending_since !== null),
+    unanswered: relationship.unanswered_reach_outs,
+    inProgress,
     crisisQuietUntil: await effectiveCrisisQuietUntil(
       deps,
       userId,
-      row.crisis_quiet_until,
+      relationship.crisis_quiet_until,
       now,
       db,
     ),

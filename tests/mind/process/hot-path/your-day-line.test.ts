@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { lifeStateLines, loadLifeState } from "@/mind/process/hot-path/your-day-line";
+import { yourDayLines, loadYourDayLine } from "@/mind/process/hot-path/your-day-line";
 import { insertFact } from "@/db/repos/facts";
 import { fact } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -29,13 +29,13 @@ const blocks = [
 ];
 
 test("now, later and the deferred line", () => {
-  expect(lifeStateLines(blocks, d("2026-01-05T03:00:00Z"), null)).toBe(
+  expect(yourDayLines(blocks, d("2026-01-05T03:00:00Z"), null)).toBe(
     "Right now you're rewatching an old film (busy).\nLater: offline, winding down.",
   );
-  expect(lifeStateLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film")).toBe(
+  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film")).toBe(
     "Right now you're free.\nLater: offline, winding down.\nThey wrote while you were rewatching an old film; you're only getting to it now.",
   );
-  expect(lifeStateLines([], d("2026-01-05T06:00:00Z"), null)).toBeNull();
+  expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null)).toBeNull();
 });
 
 test("a deleted deferred fact degrades to no deferred line (review focus 5)", async () => {
@@ -63,7 +63,7 @@ test("a deleted deferred fact degrades to no deferred line (review focus 5)", as
     source: "generated",
   });
   const at = d("2026-01-05T10:00:00Z");
-  expect(await loadLifeState(deps, u, at, f.id)).toMatch(/They wrote while you were reading/);
+  expect(await loadYourDayLine(deps, u, at, f.id)).toMatch(/They wrote while you were reading/);
   await deps.db.delete(fact).where(eq(fact.id, f.id));
-  expect(await loadLifeState(deps, u, at, f.id)).toBeNull();
+  expect(await loadYourDayLine(deps, u, at, f.id)).toBeNull();
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { nudgeEgoForExchange } from "@/mind/state/legacy-ego/nudge";
 import { getIdentityRow } from "@/db/repos/identity";
 import { insertTurn } from "@/db/repos/session-log";
@@ -86,7 +86,7 @@ test("the cold path applies the nudge from extracted facts", async () => {
     created_at: new Date(now.getTime() + 1000),
     reply_to: t1.id,
   });
-  await handleColdPath(deps, { userId: u, turnIds: [t1.id, t2.id], replyTurnId: t2.id });
+  await runColdPath(deps, { userId: u, turnIds: [t1.id, t2.id], replyTurnId: t2.id });
   expect((await getIdentityRow(deps.db, u))!.mood_valence).toBeLessThan(
     deps.config.ego.baseline.mood_valence,
   );

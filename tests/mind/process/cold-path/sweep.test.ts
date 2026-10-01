@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { sweepUnextracted } from "@/mind/process/cold-path/sweep";
+import { sweepUnfinishedColdPaths } from "@/mind/process/cold-path/sweep";
 import { insertTurn } from "@/db/repos/session-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
@@ -47,7 +47,7 @@ test("re-enqueues old unextracted exchanges, bumps attempts, skips fresh/extract
   await exchange(u, new Date("2026-01-05T11:55:00Z")); // too fresh (min age 10 min)
   await exchange(u, old, { extracted: true }); // done
   await exchange(u, old, { attempts: 3 }); // exhausted (max 3)
-  const n = await sweepUnextracted(deps, now);
+  const n = await sweepUnfinishedColdPaths(deps, now);
   expect(n).toBe(1);
   expect(deps.queue.jobs).toEqual([
     {
@@ -90,7 +90,7 @@ test("an exchange that answered several buffered turns is swept with all of them
     created_at: new Date(t0.getTime() + 9000),
     reply_to: b.id,
   });
-  await sweepUnextracted(deps, new Date(t0.getTime() + 3_600_000));
+  await sweepUnfinishedColdPaths(deps, new Date(t0.getTime() + 3_600_000));
   expect(deps.queue.jobs).toEqual([
     {
       name: "cold_path",

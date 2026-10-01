@@ -8,7 +8,7 @@ import { resolveSessionId } from "@/mind/process/receive/session";
 const now = new Date("2026-01-12T12:00:00Z");
 const base = {
   valuesDoc: "VALUES",
-  egoLine: null,
+  feelingLine: null,
   relationshipSummary: null,
   retrieval: emptyRetrieval(),
   now,
@@ -64,7 +64,7 @@ describe("assemblePrompt", () => {
   test("renders slots in fixed slot order and skips empty ones", () => {
     const p = assemblePrompt({
       ...base,
-      egoLine: "You're a bit tired today.",
+      feelingLine: "You're a bit tired today.",
       relationshipSummary: "You've been friends for a month.",
       retrieval: {
         facts: {
@@ -180,7 +180,7 @@ describe("time-gap markers in the message window", () => {
 test("open questions fill their own slot after due threads, only when present", () => {
   const base = {
     valuesDoc: "V",
-    egoLine: null,
+    feelingLine: null,
     relationshipSummary: null,
     retrieval: emptyRetrieval(),
     recentTurns: [{ role: "user" as const, text: "hi" }],
@@ -217,9 +217,9 @@ test("slot 4 'Your day' sits after 'You and them'; the preoccupation is labelled
   });
   const { system } = assemblePrompt({
     valuesDoc: "V",
-    egoLine: "You're in a good mood.",
+    feelingLine: "You're in a good mood.",
     relationshipSummary: "R",
-    lifeState: "Right now you're free.",
+    yourDay: "Right now you're free.",
     retrieval: r,
     recentTurns: [],
     now: new Date("2026-01-05T10:00:00Z"),

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import type { Db } from "@/db/client";
 import {
   ensureRelationship,
@@ -68,7 +68,7 @@ test("a hurt signal stores the cause as a self feeling fact, raises hurt, makes 
     hurt: { amount: 0.8, cause: "the user called her news stupid" },
   });
   const u = await createTestUser();
-  await handleColdPath(deps, await exchange(deps, u, "your news is stupid"));
+  await runColdPath(deps, await exchange(deps, u, "your news is stupid"));
   const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(facts).toHaveLength(1);
   expect(facts[0]).toMatchObject({
@@ -95,7 +95,7 @@ test("a sub-deadzone hurt writes no feeling fact and moves no hurt (matches appl
     hurt: { amount: deps0.config.relationship.signal_deadzone / 2, cause: "a tiny slight" },
   });
   const u = await createTestUser();
-  await handleColdPath(deps, await exchange(deps, u, "meh"));
+  await runColdPath(deps, await exchange(deps, u, "meh"));
   expect(await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).toEqual([]);
   expect((await getParams(getTestDb(), u)).hurt.value).toBe(0);
   expect((await getRelationshipRow(getTestDb(), u))?.hurt_cause_fact).toBeNull();
@@ -107,7 +107,7 @@ test("a hurt exactly at the deadzone still writes the feeling fact (same >= as a
     hurt: { amount: deps0.config.relationship.signal_deadzone, cause: "a small slight" },
   });
   const u = await createTestUser();
-  await handleColdPath(deps, await exchange(deps, u, "meh"));
+  await runColdPath(deps, await exchange(deps, u, "meh"));
   const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(facts.map((f) => f.kind)).toEqual(["feeling"]);
   expect((await getParams(getTestDb(), u)).hurt.value).toBeGreaterThan(0);
@@ -116,7 +116,7 @@ test("a hurt exactly at the deadzone still writes the feeling fact (same >= as a
 test("null block: memory commits, relationship row created, no signal events", async () => {
   const deps = withSignals(null);
   const u = await createTestUser();
-  expect((await handleColdPath(deps, await exchange(deps, u, "hi"))).status).toBe("done");
+  expect((await runColdPath(deps, await exchange(deps, u, "hi"))).status).toBe("done");
   expect(await getRelationshipRow(getTestDb(), u)).not.toBeNull();
   expect(
     (await listRelationshipEvents(getTestDb(), u, 50)).filter((e) => e.cause === "signal"),
@@ -126,7 +126,7 @@ test("null block: memory commits, relationship row created, no signal events", a
 test("crisis exchange: no feeling fact, no hurt, crisis event", async () => {
   const deps = withSignals({ ...none, hurt: { amount: 1, cause: "x" }, ends_relationship: true });
   const u = await createTestUser();
-  await handleColdPath(deps, await exchange(deps, u, "i want to die", true));
+  await runColdPath(deps, await exchange(deps, u, "i want to die", true));
   expect(await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).toEqual([]);
   expect((await getParams(getTestDb(), u)).hurt.value).toBe(0);
   expect((await getParams(getTestDb(), u)).tension.value).toBe(0);
@@ -144,7 +144,7 @@ test("exchangeAt wiring: end_pending_since is stamped with the user turn's creat
   const turnAt = deps.clock.now();
   const job = await exchange(deps, u, "i'm done, we're through");
   deps.clock.advance(3 * 3_600_000); // the cold path runs 3 hours after the turn was written
-  await handleColdPath(deps, job);
+  await runColdPath(deps, job);
   const row = await getRelationshipRow(getTestDb(), u);
   expect(row?.end_pending_since).toEqual(turnAt);
   expect(row?.end_pending_since).not.toEqual(deps.clock.now());
@@ -181,7 +181,7 @@ test("savepoint: a relationship failure rolls back only the relationship part", 
   });
   const u = await createTestUser();
   const job = await exchange(deps, u, "i like tea");
-  expect((await handleColdPath(deps, job)).status).toBe("done");
+  expect((await runColdPath(deps, job)).status).toBe("done");
   expect(await getRelationshipRow(getTestDb(), u)).toBeNull();
   expect(
     (await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).map((f) => f.content),

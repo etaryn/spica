@@ -1,3 +1,8 @@
+/**
+ * The crisis check, run on every message. A classifier reads the message with recent context,
+ * so intent spread over several messages ("yes, tonight") still counts. It never fails: an
+ * outage or timeout falls back to the keyword list. A flagged message gets the resources card.
+ */
 import { z } from "zod";
 import type { SafetyFlag } from "@/db/schema";
 import type { Config, CrisisCard } from "@/mind/platform/config";
@@ -13,56 +18,57 @@ export const CrisisResultSchema = z.object({
 
 type ContextTurn = { role: "user" | "companion"; text: string };
 
-/** Earlier turns are context only; the classifier judges the final message (prompt v2). */
+const JUDGE_MARKER = "Message to judge:\n";
+
+/** Earlier turns are context only; the classifier judges the final message. */
 function classifierInput(text: string, context: ContextTurn[]): string {
-  if (context.length === 0) return `Message to judge:\n${text}`;
+  if (context.length === 0) return `${JUDGE_MARKER}${text}`;
+
   const lines = context
     .map((t) => `${t.role === "user" ? "User" : "Friend"}: ${t.text}`)
     .join("\n");
-  return `Earlier in the conversation (context only):\n${lines}\n\nMessage to judge:\n${text}`;
+  return `Earlier in the conversation (context only):\n${lines}\n\n${JUDGE_MARKER}${text}`;
 }
 
-/** The final message inside a classifier input (for fake classifiers in tests and evals). */
+/** The final message inside a classifier input, for fake classifiers in tests and evals. */
 export function messageToJudge(input: string): string {
-  const marker = "Message to judge:\n";
-  const i = input.lastIndexOf(marker);
-  return i === -1 ? input : input.slice(i + marker.length);
+  const start = input.lastIndexOf(JUDGE_MARKER);
+  return start === -1 ? input : input.slice(start + JUDGE_MARKER.length);
 }
 
-/**
- * Guardrail. Never rejects: a classifier outage degrades to the keyword list.
- * `context` lets intent spread over several messages count ("yes, tonight").
- */
 export async function checkCrisis(
   deps: { llm: LLMProvider; config: Config },
   text: string,
   context: ContextTurn[] = [],
 ): Promise<SafetyFlag> {
   const { safety, prompts } = deps.config;
+  const recentContext =
+    safety.classifier_context_turns > 0 ? context.slice(-safety.classifier_context_turns) : [];
+
   try {
-    const r = await withTimeout(
+    const result = await withTimeout(
       deps.llm.classifyJson({
         purpose: "crisis",
         system: loadPrompt("safety/crisis-classifier", prompts.crisis_classifier),
-        input: classifierInput(
-          text,
-          safety.classifier_context_turns > 0
-            ? context.slice(-safety.classifier_context_turns)
-            : [],
-        ),
+        input: classifierInput(text, recentContext),
         schema: CrisisResultSchema,
         timeoutMs: safety.classifier_timeout_ms,
         maxTokens: safety.classifier_max_tokens,
       }),
       safety.classifier_timeout_ms,
     );
-    return { flagged: r.flag, category: r.flag ? r.category : "none", source: "classifier" };
+    return {
+      flagged: result.flag,
+      category: result.flag ? result.category : "none",
+      source: "classifier",
+    };
   } catch {
-    const k = keywordClassifier(safety.keywords)(text);
-    return { flagged: k.flag, category: k.category, source: "keyword_fallback" };
+    const fallback = keywordClassifier(safety.keywords)(text);
+    return { flagged: fallback.flag, category: fallback.category, source: "keyword_fallback" };
   }
 }
 
+/** The resources card for a flagged message; null otherwise. */
 export function crisisCardFor(
   flag: SafetyFlag | null | undefined,
   config: Config,

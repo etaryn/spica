@@ -1,7 +1,13 @@
-const norm = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ");
+/**
+ * The guard's outage keyword check: the first configured phrase found in a message, used only
+ * when the guard model can't be reached.
+ */
 
-/** Outage-only pre-check: the first configured phrase contained in `text`, or null. */
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ");
+}
+
 export function matchKeyword(text: string, keywords: string[]): string | null {
-  const t = norm(text);
-  return keywords.find((k) => t.includes(norm(k))) ?? null;
+  const normalized = normalize(text);
+  return keywords.find((keyword) => normalized.includes(normalize(keyword))) ?? null;
 }

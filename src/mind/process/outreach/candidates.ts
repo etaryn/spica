@@ -1,92 +1,74 @@
+/**
+ * Reach-out candidates: every reason she might write first, each scored in code as weight ×
+ * strength. A candidate is filtered out when its topic was already used, when it's sensitive, or
+ * when it scores under the threshold. Pure. Sorted best first (score, then kind order, then
+ * topic), with filtered candidates kept so the log shows them too.
+ */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
-import { KIND_ORDER, type Candidate, type CandidateInputs, type CandidateKind } from "./types";
+import {
+  KIND_ORDER,
+  type Candidate,
+  type CandidateInputs,
+  type CandidateKind,
+  type FilterReason,
+} from "./types";
 
-type Raw = Omit<Candidate, "score" | "filtered"> & { sensitive: boolean };
+type RawCandidate = Omit<Candidate, "score" | "filtered"> & { sensitive: boolean };
+type MemoryInput = CandidateInputs["userEvents"][number];
 
-/**
- * every candidate with its score and, if it can't win, why. Pure. Sorted best first
- * (score desc, then kind order, then topic), filtered ones included so the log shows them.
- */
-export function buildCandidates(i: CandidateInputs, cfg: OutreachConfig, now: Date): Candidate[] {
-  const raw: Raw[] = [];
-  const seenFacts = new Set<string>();
+export function buildCandidates(
+  inputs: CandidateInputs,
+  settings: OutreachConfig,
+  now: Date,
+): Candidate[] {
+  const raw: RawCandidate[] = [];
+  // A memory already behind a due thread doesn't also become a user_event or her_day candidate.
+  const claimedFacts = new Set<string>();
 
-  for (const t of i.dueThreads) {
-    if (t.stakes !== "high" && t.stakes !== "med") continue;
+  for (const thread of inputs.dueThreads) {
+    if (thread.stakes !== "high" && thread.stakes !== "med") continue;
+
     raw.push({
       kind: "thread",
-      topic: `thread:${t.id}@${t.next_checkpoint.toISOString()}`,
-      text: t.detail ? `${t.title} (latest: ${t.detail})` : t.title,
-      strength: cfg.stakes_strength[t.stakes],
-      factId: t.fact_id,
-      threadId: t.id,
-      sensitive: t.sensitive,
+      topic: `thread:${thread.id}@${thread.next_checkpoint.toISOString()}`,
+      text: thread.detail ? `${thread.title} (latest: ${thread.detail})` : thread.title,
+      strength: settings.stakes_strength[thread.stakes],
+      factId: thread.fact_id,
+      threadId: thread.id,
+      sensitive: thread.sensitive,
     });
-    // Reserve fact_id from due threads so they don't become user_event/her_day candidates
-    if (t.fact_id) seenFacts.add(t.fact_id);
+    if (thread.fact_id) claimedFacts.add(thread.fact_id);
   }
 
-  if (i.makeUp.due) {
-    const key = i.makeUp.causeFactId ?? i.makeUp.lastHurtAt?.toISOString() ?? "unknown";
-    raw.push({
-      kind: "make_up",
-      topic: `make_up:${key}`,
-      text: i.makeUp.causeText ?? "Something hurt between you recently.",
-      strength: i.makeUp.hurt,
-      factId: i.makeUp.causeFactId,
-      threadId: null,
-      sensitive: false,
-    });
-  }
+  const makeUp = makeUpCandidate(inputs.makeUp);
+  if (makeUp) raw.push(makeUp);
 
-  const factCand = (
-    kind: CandidateKind,
-    f: { id: string; content: string; salience: number; sensitive: boolean },
-  ) => {
-    if (seenFacts.has(f.id)) return;
-    seenFacts.add(f.id);
+  const addMemory = (kind: CandidateKind, memory: MemoryInput) => {
+    if (claimedFacts.has(memory.id)) return;
+    claimedFacts.add(memory.id);
     raw.push({
       kind,
-      topic: `fact:${f.id}`,
-      text: f.content,
-      strength: f.salience,
-      factId: f.id,
+      topic: `fact:${memory.id}`,
+      text: memory.content,
+      strength: memory.salience,
+      factId: memory.id,
       threadId: null,
-      sensitive: f.sensitive,
+      sensitive: memory.sensitive,
     });
   };
-  for (const f of i.userEvents) factCand("user_event", f);
-  for (const f of i.herDay) factCand("her_day", f);
+  for (const memory of inputs.userEvents) addMemory("user_event", memory);
+  for (const memory of inputs.herDay) addMemory("her_day", memory);
 
-  const { lastContact, medianGapHours } = i.checkIn;
-  if (lastContact) {
-    const ratio = (now.getTime() - lastContact.getTime()) / HOUR / medianGapHours;
-    if (ratio >= cfg.check_in_gap_factor) {
-      raw.push({
-        kind: "check_in",
-        topic: `check_in:${lastContact.toISOString()}`,
-        text: "",
-        strength: Math.min(1, ratio / (2 * cfg.check_in_gap_factor)),
-        factId: null,
-        threadId: null,
-        sensitive: false,
-      });
-    }
-  }
+  const checkIn = checkInCandidate(inputs.checkIn, settings, now);
+  if (checkIn) raw.push(checkIn);
 
-  const used = new Set(i.usedTopics);
+  const usedTopics = new Set(inputs.usedTopics);
   return raw
-    .map(({ sensitive, ...c }): Candidate => {
-      const score = cfg.weights[c.kind] * c.strength;
-      const filtered = sensitive
-        ? "sensitive"
-        : used.has(c.topic)
-          ? "topic_used"
-          : score < cfg.threshold
-            ? "below_threshold"
-            : null;
-      return { ...c, score, filtered };
+    .map(({ sensitive, ...candidate }): Candidate => {
+      const score = settings.weights[candidate.kind] * candidate.strength;
+      const filtered = filterReason(candidate.topic, sensitive, score, usedTopics, settings);
+      return { ...candidate, score, filtered };
     })
     .sort(
       (a, b) =>
@@ -96,7 +78,58 @@ export function buildCandidates(i: CandidateInputs, cfg: OutreachConfig, now: Da
     );
 }
 
-/** the best unfiltered candidate, or none. */
-export function pickWinner(cands: Candidate[]): Candidate | null {
-  return cands.find((c) => c.filtered === null) ?? null;
+function makeUpCandidate(makeUp: CandidateInputs["makeUp"]): RawCandidate | null {
+  if (!makeUp.due) return null;
+
+  const key = makeUp.causeFactId ?? makeUp.lastHurtAt?.toISOString() ?? "unknown";
+  return {
+    kind: "make_up",
+    topic: `make_up:${key}`,
+    text: makeUp.causeText ?? "Something hurt between you recently.",
+    strength: makeUp.hurt,
+    factId: makeUp.causeFactId,
+    threadId: null,
+    sensitive: false,
+  };
+}
+
+/** Strength grows with how far past their usual gap the silence has gone. */
+function checkInCandidate(
+  checkIn: CandidateInputs["checkIn"],
+  settings: OutreachConfig,
+  now: Date,
+): RawCandidate | null {
+  const { lastContact, medianGapHours } = checkIn;
+  if (!lastContact) return null;
+
+  const gapRatio = (now.getTime() - lastContact.getTime()) / HOUR / medianGapHours;
+  if (gapRatio < settings.check_in_gap_factor) return null;
+
+  return {
+    kind: "check_in",
+    topic: `check_in:${lastContact.toISOString()}`,
+    text: "",
+    strength: Math.min(1, gapRatio / (2 * settings.check_in_gap_factor)),
+    factId: null,
+    threadId: null,
+    sensitive: false,
+  };
+}
+
+function filterReason(
+  topic: string,
+  sensitive: boolean,
+  score: number,
+  usedTopics: Set<string>,
+  settings: OutreachConfig,
+): FilterReason | null {
+  if (sensitive) return "sensitive";
+  if (usedTopics.has(topic)) return "topic_used";
+  if (score < settings.threshold) return "below_threshold";
+  return null;
+}
+
+/** The best candidate that isn't filtered out, or none. */
+export function pickWinner(candidates: Candidate[]): Candidate | null {
+  return candidates.find((c) => c.filtered === null) ?? null;
 }

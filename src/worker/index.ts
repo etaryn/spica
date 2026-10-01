@@ -1,9 +1,9 @@
-import { handleColdPath } from "@/mind/process/cold-path/cold-path";
+import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { egoTick } from "@/mind/state/legacy-ego/tick";
 import { ensurePlans } from "@/mind/world/day-plan";
 import { lifeTick } from "@/mind/world/legacy-life-tick/tick";
 import { decayPass } from "@/mind/memory/user/decay";
-import { sweepUnextracted } from "@/mind/process/cold-path/sweep";
+import { sweepUnfinishedColdPaths } from "@/mind/process/cold-path/sweep";
 import { runReachOutSend } from "@/mind/process/outreach/send";
 import { outreachTick } from "@/mind/process/outreach/tick";
 import {
@@ -40,13 +40,13 @@ await ensureSystemQueues(boss);
 await boss.work<ColdPathJob>(
   COLD_PATH_QUEUE,
   scrubErrors(COLD_PATH_QUEUE, deps.log, async (jobs) => {
-    for (const job of jobs) await handleColdPath(deps, job.data);
+    for (const job of jobs) await runColdPath(deps, job.data);
   }),
 );
 await boss.work(
   SWEEP_QUEUE,
   scrubErrors(SWEEP_QUEUE, deps.log, async () => {
-    await sweepUnextracted(deps, deps.clock.now());
+    await sweepUnfinishedColdPaths(deps, deps.clock.now());
   }),
 );
 await boss.work(
@@ -127,7 +127,7 @@ await boss.work<ReachOutSendJob>(
   }),
 );
 
-await sweepUnextracted(deps, deps.clock.now()); // pick up anything left from before this start
+await sweepUnfinishedColdPaths(deps, deps.clock.now()); // pick up anything left from before this start
 deps.log.info("worker started", {
   queues: [
     COLD_PATH_QUEUE,

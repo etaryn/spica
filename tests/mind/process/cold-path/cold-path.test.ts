@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
-import { handleColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
+import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { getIdentityRow } from "@/db/repos/identity";
 import { getTurn, insertTurn } from "@/db/repos/session-log";
@@ -79,7 +79,7 @@ test("extracts, embeds, reconciles and applies in one go; turns marked extracted
   const deps = depsWith();
   const u = await createTestUser();
   const { job } = await exchange(u, "my dog Biscuit ate my headphones", "iconic", 0);
-  const out = await handleColdPath(deps, job);
+  const out = await runColdPath(deps, job);
   expect(out.status).toBe("done");
   expect(out.applied).toMatchObject({ inserted: 1, entitiesCreated: 1 });
   const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
@@ -92,9 +92,9 @@ test("idempotent: a second run is skipped and makes no LLM call", async () => {
   const deps = depsWith();
   const u = await createTestUser();
   const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
-  await handleColdPath(deps, job);
+  await runColdPath(deps, job);
   const calls = deps.llm.structuredCalls.length;
-  expect((await handleColdPath(deps, job)).status).toBe("skipped");
+  expect((await runColdPath(deps, job)).status).toBe("skipped");
   expect(deps.llm.structuredCalls.length).toBe(calls);
 });
 
@@ -103,7 +103,7 @@ test("atomic: an embedder failure writes nothing and leaves turns unextracted", 
   deps.embedder.failNext = true;
   const u = await createTestUser();
   const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
-  await expect(handleColdPath(deps, job)).rejects.toThrow();
+  await expect(runColdPath(deps, job)).rejects.toThrow();
   expect(await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).toEqual([]);
   expect(await getTestDb().select().from(s.entity).where(eq(s.entity.user_id, u))).toEqual([]);
   const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
@@ -150,7 +150,7 @@ test("atomic: a failure mid-write (after facts/entities/recall write-back) leave
       FOR EACH ROW EXECUTE FUNCTION cold_path_test_fail();
     `);
     await expect(
-      handleColdPath(deps, {
+      runColdPath(deps, {
         ...job,
         recalled: [
           {
@@ -196,7 +196,7 @@ test("a busy per-user lock rejects with LockBusyError", async () => {
   await holder.connect();
   await holder.query("SELECT pg_advisory_lock(hashtext($1))", [`cold_path:${u}`]);
   try {
-    await expect(handleColdPath(deps, job)).rejects.toBeInstanceOf(LockBusyError);
+    await expect(runColdPath(deps, job)).rejects.toBeInstanceOf(LockBusyError);
   } finally {
     await holder.query("SELECT pg_advisory_unlock_all()");
     await holder.end();
@@ -230,7 +230,7 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
     1,
     true,
   );
-  const out = await handleColdPath(deps, {
+  const out = await runColdPath(deps, {
     ...job,
     recalled: [
       {
@@ -282,7 +282,7 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
       wants_repair: false,
     },
   });
-  const out = await handleColdPath({ ...deps, updateRelationship } as never, {
+  const out = await runColdPath({ ...deps, updateRelationship } as never, {
     userId: u,
     turnIds: [c.id],
     replyTurnId: c.id,

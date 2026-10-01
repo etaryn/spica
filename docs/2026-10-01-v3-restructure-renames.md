@@ -26,3 +26,8 @@ design doc's layout section.
 | `toRelState` | `toRelationshipState` | `src/db/repos/relationship.ts` |
 | `availabilityFor` | `deferWhileBusy` | `src/mind/process/availability/deferral.ts` |
 | (closure `fail`) | `retryOrGiveUp` (internal) | `src/mind/process/turn-taking/commit-and-reply.ts` |
+| `handleColdPath` | `runColdPath` | `src/mind/process/cold-path/cold-path.ts` |
+| `sweepUnextracted` | `sweepUnfinishedColdPaths` | `src/mind/process/cold-path/sweep.ts` |
+| `lifeStateLines` | `yourDayLines` | `src/mind/process/hot-path/your-day-line.ts` |
+| `loadLifeState` | `loadYourDayLine` | `src/mind/process/hot-path/your-day-line.ts` |
+| `AssembleInput.egoLine`, `.lifeState` | `.feelingLine`, `.yourDay` | `src/mind/process/hot-path/assemble.ts` |

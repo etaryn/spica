@@ -1,32 +1,44 @@
+/**
+ * The send gate: whether she may write first right now. The relationship must not be ended,
+ * she must be within the daily and weekly caps, free (not busy or quiet), under the unanswered
+ * limit, not mid-conversation, and outside a crisis quiet window. Pure. Every rule is evaluated and
+ * reported, with no short-circuit, so the log shows the whole picture.
+ */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
 import type { GateInputs, GateOutcome, GateResult } from "./types";
 
-/** The reach-out send gate. Pure; every rule evaluated and reported (no short-circuit) so the log shows the whole picture. */
-export function evaluateGate(g: GateInputs, cfg: OutreachConfig, now: Date): GateOutcome {
-  const within = (hours: number) =>
-    g.sentAt.filter((t) => now.getTime() - t.getTime() < hours * HOUR).length;
-  const day = within(24);
-  const week = within(24 * 7);
+const DAY_HOURS = 24;
+const WEEK_HOURS = 7 * DAY_HOURS;
+
+export function evaluateGate(inputs: GateInputs, settings: OutreachConfig, now: Date): GateOutcome {
+  const sentWithin = (hours: number) =>
+    inputs.sentAt.filter((sent) => now.getTime() - sent.getTime() < hours * HOUR).length;
+  const today = sentWithin(DAY_HOURS);
+  const thisWeek = sentWithin(WEEK_HOURS);
+
+  const crisisOver = !inputs.crisisQuietUntil || inputs.crisisQuietUntil.getTime() <= now.getTime();
+
   const results: GateResult[] = [
-    { rule: "status", pass: g.status !== "ended_by_user", detail: g.status },
+    { rule: "status", pass: inputs.status !== "ended_by_user", detail: inputs.status },
     {
       rule: "caps",
-      pass: day < cfg.cap_per_day && week < cfg.cap_per_week,
-      detail: `24h ${day}/${cfg.cap_per_day}, 7d ${week}/${cfg.cap_per_week}`,
+      pass: today < settings.cap_per_day && thisWeek < settings.cap_per_week,
+      detail: `24h ${today}/${settings.cap_per_day}, 7d ${thisWeek}/${settings.cap_per_week}`,
     },
     {
       rule: "her_day",
-      pass: g.herBlock === null,
-      detail: g.herBlock ? `${g.herBlock.block}: ${g.herBlock.label}` : "free",
+      pass: inputs.herBlock === null,
+      detail: inputs.herBlock ? `${inputs.herBlock.block}: ${inputs.herBlock.label}` : "free",
     },
     {
       rule: "unanswered",
-      pass: g.unanswered < cfg.max_unanswered,
-      detail: `${g.unanswered}/${cfg.max_unanswered}`,
+      pass: inputs.unanswered < settings.max_unanswered,
+      detail: `${inputs.unanswered}/${settings.max_unanswered}`,
     },
-    { rule: "in_progress", pass: !g.inProgress },
-    { rule: "crisis", pass: !g.crisisQuietUntil || g.crisisQuietUntil.getTime() <= now.getTime() },
+    { rule: "in_progress", pass: !inputs.inProgress },
+    { rule: "crisis", pass: crisisOver },
   ];
+
   return { pass: results.every((r) => r.pass), results };
 }

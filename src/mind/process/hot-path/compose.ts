@@ -14,6 +14,7 @@ import type { RecalledFact, RetrievalResult } from "@/mind/memory/shared/types";
 import { retrieve } from "@/mind/memory/user/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName, ReplyFailedError } from "@/mind/platform/errors";
+import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
@@ -210,7 +211,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       .join("\n") || null;
 
   const prompt = assemblePrompt({
-    valuesDoc: `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("reply", config.prompts.reply)}`,
+    valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
     yourDay: await yourDay,

@@ -12,6 +12,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { relativeDate } from "@/mind/platform/relative-date";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
 import { reconcileAgainstNeighbours, type Decision } from "@/mind/memory/shared/reconcile";
+import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
@@ -173,7 +174,7 @@ export async function generateEvents(
   const known = new Set(ctx.selfEntities.map(normalizeName));
   let lastNewEntityAt = await latestSelfEntityFirstSeen(db, userId);
   let lastHighStakesAt = await lastAcceptedHighStakes(db, userId);
-  const system = `${loadPrompt("persona", config.prompts.persona)}\n\n${loadPrompt("life/event", config.prompts.life_event)}`;
+  const system = `${loadPersona(config).coreValues}\n\n${loadPrompt("life/event", config.prompts.life_event)}`;
 
   for (const [i, kept] of draws.entries()) {
     if (!kept) continue;

@@ -54,7 +54,7 @@ test("phase 1 config groups load with defaults", () => {
     dormant_after_days: 14,
   });
   expect(c.cold_path.max_sweep_attempts).toBe(3);
-  expect(c.prompts.persona).toBe("v2");
+  expect(c.prompts.persona).toBe("v3");
 });
 
 test("turn, hot_path and events config load with conservative defaults", () => {

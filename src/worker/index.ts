@@ -2,6 +2,8 @@
  * The background worker: starts pg-boss, registers every job by engine, picks up any exchange
  * left unfinished before this start, and shuts down cleanly on a signal.
  */
+import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { coreDepsOf } from "@/mind/platform/deps";
 import { sweepUnfinishedColdPaths } from "@/mind/process/cold-path/sweep";
 import { buildRuntime } from "@/runtime/deps";
 import { readEnv } from "@/runtime/env";
@@ -16,6 +18,7 @@ const { deps, boss } = buildRuntime(readEnv());
 const queue = deps.queue as PgBossQueue;
 await queue.start();
 await ensureSystemQueues(boss);
+await seedSnapshot(coreDepsOf(deps));
 
 await registerMemoryJobs(boss, deps);
 await registerProcessJobs(boss, deps);

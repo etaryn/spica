@@ -14,6 +14,7 @@ import type { LifeBlock, LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
+import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { nextLocalDate } from "@/mind/platform/timezone";
 import { lifeDate, minutesOf, weekday } from "./her-clock";
@@ -145,7 +146,7 @@ async function generatePlan(
 ): Promise<{ plan: LifePlan; source: "model" | "fallback" }> {
   const { config, llm, log } = deps;
   const previous = await listLifeDaysBefore(deps.db, date, config.life.plan_context_days);
-  const persona = loadPrompt("persona", config.prompts.persona);
+  const persona = loadPersona(config).coreValues;
   const instructions = loadPrompt("life/plan", config.prompts.life_plan);
   const system = `${persona}\n\n${instructions}`;
 

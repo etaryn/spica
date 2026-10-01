@@ -4,13 +4,14 @@ import { isDeepStrictEqual } from "node:util";
 import { and, eq, notInArray } from "drizzle-orm";
 import { SimClock } from "@/mind/platform/clock";
 import { deepMerge, loadConfig, type Config } from "@/mind/platform/config";
-import type { Deps } from "@/mind/platform/deps";
+import { coreDepsOf, type Deps } from "@/mind/platform/deps";
 import { RecordingPusher } from "@/mind/platform/push";
 import { FakeEmbedder } from "@/mind/platform/embedder/fake";
 import type { Embedder } from "@/mind/platform/embedder/types";
 import { RecordingEventBus } from "@/mind/platform/events";
 import type { LLMProvider } from "@/mind/platform/llm/types";
 import { silentLogger } from "@/mind/platform/log";
+import { seedSnapshot } from "@/mind/memory/core/snapshot";
 import { decayPass } from "@/mind/memory/user/decay";
 import { RecordingQueue } from "@/mind/platform/jobs";
 import type { Signals } from "@/mind/state/user/relationship/signals";
@@ -343,6 +344,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     events: new RecordingEventBus(),
     pusher,
   };
+  await seedSnapshot(coreDepsOf(deps));
   const lifeSnaps = async () =>
     script.life
       ? Object.fromEntries(

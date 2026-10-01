@@ -16,7 +16,7 @@ import { one, toDate, toDateOrNull, vecLiteral } from "../util";
 
 const ACTIVE = sql`${core_memory.status} NOT IN ('superseded', 'stale')`;
 
-function toItem(r: typeof core_memory.$inferSelect): CoreMemoryItem {
+export function toItem(r: typeof core_memory.$inferSelect): CoreMemoryItem {
   return {
     id: r.id,
     kind: r.kind,

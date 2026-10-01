@@ -59,6 +59,7 @@ export default async function InspectUser({
             {TABS[t]}
           </Link>
         ))}
+        <Link href="/inspector/core">Core mind</Link>
       </nav>
       {tab === "transcript" && <TranscriptTab db={db} userId={userId} />}
       {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}

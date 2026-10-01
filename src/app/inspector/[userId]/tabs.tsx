@@ -3,6 +3,7 @@ import type { LifeConfig } from "@/mind/platform/config";
 import { lifeDate } from "@/mind/world/her-clock";
 import type { RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
+import { createCoreLayer } from "@/db/repos/core";
 import * as r from "@/db/repos/admin/inspector";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { listTurns } from "@/db/repos/user/session-log";
@@ -511,6 +512,7 @@ export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
 export async function LifeTab({ db, now, cfg }: { db: Db; now: Date; cfg: LifeConfig }) {
   const day = lifeDate(cfg, now);
   const v = await r.getLifeView(db, day);
+  const events = await createCoreLayer(db).world.events(day);
   return (
     <>
       <h3>
@@ -535,6 +537,23 @@ export async function LifeTab({ db, now, cfg }: { db: Db; now: Date; cfg: LifeCo
         <Empty phase={5} />
       )}
       <p>source: {v.plan?.source ?? "—"}</p>
+      <h3>What happened today</h3>
+      {events.length > 0 ? (
+        <table className={styles.table}>
+          <tbody>
+            {events.map((e) => (
+              <tr key={e.id}>
+                <td>{iso(e.at)}</td>
+                <td>{e.kind}</td>
+                <td>{e.stakes}</td>
+                <td>{e.content}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className={styles.empty}>No events yet today.</p>
+      )}
     </>
   );
 }

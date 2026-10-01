@@ -1,4 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { coreDepsOf } from "@/mind/platform/deps";
+import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { coreStateTick } from "@/mind/state/core/tick";
+import { inspectCore } from "@/db/repos/admin/inspector-core";
 import { loadConfig } from "@/mind/platform/config";
 import { forgetFact, insertFact } from "@/db/repos/user/facts";
 import {
@@ -15,6 +19,7 @@ import { insertLifeDay } from "@/db/repos/world/life-day";
 import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/user/relationship";
 import * as s from "@/db/schema";
+import { makeTestDeps } from "../helpers/deps";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 beforeEach(resetDb);
@@ -200,4 +205,14 @@ test("listReachOuts returns status, topic, answered_at and turn, newest first, u
     ["none", null],
   ]);
   expect(await listReachOuts(db, a, 1)).toHaveLength(1);
+});
+
+test("the core page shows state, snapshot, recent memories, traces and event attempts", async () => {
+  const deps = makeTestDeps();
+  await seedSnapshot(coreDepsOf(deps));
+  await coreStateTick(coreDepsOf(deps), deps.clock.now());
+  const view = await inspectCore(deps.db, 20);
+  expect(view.state).not.toBeNull();
+  expect(view.snapshot?.version).toBe(0);
+  expect(view.traces.map((t) => t.loop)).toContain("core_state_tick");
 });

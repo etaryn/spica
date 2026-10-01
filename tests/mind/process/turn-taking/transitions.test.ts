@@ -17,7 +17,7 @@ const empty = (over: Partial<ConvState> = {}): ConvState => ({
   sending_since: null,
   reply_epoch: 0,
   deferred_until: null,
-  deferred_fact: null,
+  deferred_block: null,
   updated_at: at(0),
   ...over,
 });
@@ -135,7 +135,7 @@ describe("commit", () => {
       turnIds: ["a", "b"],
       epoch: 0,
       openQuestions: ["what should I cook?"],
-      deferredFact: null,
+      deferredBlock: null,
     });
     expect(r.patch).toMatchObject({
       buffer_turn_ids: [],
@@ -336,10 +336,10 @@ describe("availability deferral", () => {
       windowMs: 4000,
       maxWaitMs: 40_000,
       openQuestions: [],
-      defer: { until, factId: "f1" },
+      defer: { until, blockKey: "f1" },
     });
     expect(a.result).toMatchObject({ waitUntil: until, deferredUntil: until, deferredNow: true });
-    expect(a.patch).toMatchObject({ deferred_until: until, deferred_fact: "f1" });
+    expect(a.patch).toMatchObject({ deferred_until: until, deferred_block: "f1" });
     const s2 = { ...empty(), ...a.patch } as ConvState;
     const b = T.append(s2, {
       turnId: "t2",
@@ -358,11 +358,11 @@ describe("availability deferral", () => {
       buffer_turn_ids: ["t1"],
       buffer_version: 3,
       deferred_until: new Date(),
-      deferred_fact: "f1",
+      deferred_block: "f1",
     } as ConvState;
     const c = T.commit(s, { version: 3, now: new Date() });
-    expect(c.result).toMatchObject({ kind: "commit", deferredFact: "f1" });
-    expect(c.patch).toMatchObject({ deferred_until: null, deferred_fact: null });
+    expect(c.result).toMatchObject({ kind: "commit", deferredBlock: "f1" });
+    expect(c.patch).toMatchObject({ deferred_until: null, deferred_block: null });
   });
 
   test("crisis clears the deferral; the next buffer computes a fresh one (review focus 3)", () => {
@@ -371,10 +371,10 @@ describe("availability deferral", () => {
       ...empty(),
       buffer_turn_ids: ["t1"],
       deferred_until: until,
-      deferred_fact: "f1",
+      deferred_block: "f1",
     } as ConvState;
     const c = T.crisis(s, { turnId: "t2", now: new Date("2026-01-05T10:31:00Z") });
-    expect(c.patch).toMatchObject({ deferred_until: null, deferred_fact: null });
+    expect(c.patch).toMatchObject({ deferred_until: null, deferred_block: null });
     const after = { ...s, ...c.patch } as ConvState;
     const next = T.append(after, {
       turnId: "t3",

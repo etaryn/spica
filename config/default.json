@@ -268,7 +268,6 @@
     "tick_cron": "10 * * * *",
     "tick_local_hour": 0,
     "lock_timeout_ms": 5000,
-    "block_salience": 0.2,
     "events_per_day_max": 1,
     "event_probability": 0.5,
     "event_context_facts": 20,

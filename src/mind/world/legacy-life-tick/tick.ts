@@ -1,6 +1,5 @@
 import { adminListLifeUsers } from "@/db/repos/admin/life";
 import { sql } from "drizzle-orm";
-import * as factsRepo from "@/db/repos/user/facts";
 import {
   ensureIdentity,
   getIdentityRow,
@@ -14,7 +13,6 @@ import type { Deps } from "@/mind/platform/deps";
 import { nudgeEgoForEvent } from "@/mind/state/legacy-ego/nudge";
 import { errorName } from "@/mind/platform/errors";
 import { encodeExtraction } from "@/mind/memory/user/encode";
-import { prepareBlockFacts } from "./blocks";
 import { lifeDate, lifeHour } from "@/mind/world/her-clock";
 import { generateEvents, type InjectedEvent } from "./events";
 
@@ -45,7 +43,6 @@ export async function lifeTickUser(
   if (!due(await getIdentityRow(deps.db, userId), day)) return "not_due";
 
   const lifeDay = await getLifeDay(deps.db, day);
-  const blockFacts = lifeDay ? await prepareBlockFacts(deps, day, lifeDay.plan, now) : [];
   const events = await generateEvents(deps, userId, day, lifeDay?.plan ?? null, now, opts.inject);
 
   await deps.db.transaction(async (tx) => {
@@ -56,7 +53,6 @@ export async function lifeTickUser(
     await ensureIdentity(tx, userId, config.ego.baseline);
     let row = await lockIdentity(tx, userId);
     if (!due(row, day)) return; // a concurrent run already ticked this date
-    for (const f of blockFacts) await factsRepo.insertFact(tx, userId, f);
     const factIds = new Map<string, string>();
     for (const e of events.accepted) {
       const occurred = e.fact.occurred_at!;

@@ -400,7 +400,8 @@ export const conversation_state = pgTable(
     sending_since: ts("sending_since"),
     reply_epoch: integer("reply_epoch").notNull().default(0),
     deferred_until: ts("deferred_until"),
-    deferred_fact: uuid("deferred_fact").references(() => fact.id, { onDelete: "set null" }),
+    // The busy block a deferral waits out ("<her date>#<start>"), for the "while you were…" line.
+    deferred_block: text("deferred_block"),
     updated_at: ts("updated_at").notNull(),
   },
   (t) => [index("conversation_state_wait_idx").on(t.wait_until)],

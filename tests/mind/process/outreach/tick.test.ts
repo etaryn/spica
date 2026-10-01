@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { lifeTickUser } from "@/mind/world/legacy-life-tick/tick";
 import { outreachTick, outreachTickUser } from "@/mind/process/outreach/tick";
 import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
 import { insertFact } from "@/db/repos/user/facts";
@@ -91,7 +90,6 @@ test("a winner in her busy block → a 'blocked' row with the failing rule, no j
     generated_at: now,
     plan: { blocks: [{ start: "11:00", end: "16:00", kind: "busy", busy: 0.8, label: "film" }] },
   });
-  await lifeTickUser(deps, u, new Date("2026-01-05T05:00:00Z")); // copies the blocks into her facts (after tick_local_hour 4)
   expect(await outreachTickUser(deps, u, now)).toBe("blocked"); // 15:20 is inside 11:00–16:00
   const [r] = await rows(deps, u);
   expect(r!.status).toBe("blocked");

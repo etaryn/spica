@@ -20,8 +20,8 @@ test("rhythm peaks at energy_peak_hour", () => {
 
 test("dayLoad counts busy hours only, weighted by busy level, up to now", () => {
   const blocks = [
-    { start: t(9), end: t(13), busy: 1, block: "busy" as const },
-    { start: t(0), end: t(8), busy: 0.9, block: "quiet" as const },
+    { key: "k1", label: "x", start: t(9), end: t(13), busy: 1, block: "busy" as const },
+    { key: "k2", label: "y", start: t(0), end: t(8), busy: 0.9, block: "quiet" as const },
   ];
   expect(dayLoad(blocks, t(0), t(11), cfg)).toBeCloseTo(2 / cfg.full_load_hours);
   expect(dayLoad(blocks, t(0), t(20), cfg)).toBeCloseTo(4 / cfg.full_load_hours);

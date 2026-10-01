@@ -1,5 +1,6 @@
 import type { EgoConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
+import type { WorldBlock } from "@/mind/world/blocks";
 
 export type EgoState = { mood_valence: number; mood_arousal: number; energy: number };
 
@@ -22,12 +23,7 @@ export function rhythm(hour: number, cfg: EgoConfig): number {
 }
 
 /** Busy-weighted hours of today's busy blocks between `from` and `to`, as a fraction of a full day (quiet is rest). */
-export function dayLoad(
-  blocks: { start: Date; end: Date; busy: number; block: "busy" | "quiet" }[],
-  from: Date,
-  to: Date,
-  cfg: EgoConfig,
-): number {
+export function dayLoad(blocks: WorldBlock[], from: Date, to: Date, cfg: EgoConfig): number {
   let sum = 0;
   for (const b of blocks) {
     if (b.block !== "busy") continue;

@@ -281,7 +281,6 @@ const life = z.object({
   tick_cron: cron,
   tick_local_hour: hourOfDay,
   lock_timeout_ms: positiveInt,
-  block_salience: unit,
   events_per_day_max: countFromZero,
   event_probability: unit,
   event_context_facts: countFromZero,

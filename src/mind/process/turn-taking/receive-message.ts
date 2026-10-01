@@ -136,7 +136,7 @@ export async function receiveMessage(
   const now = clock.now();
   const defer =
     availability.delayMs > 0
-      ? { until: new Date(now.getTime() + availability.delayMs), factId: availability.blockFactId }
+      ? { until: new Date(now.getTime() + availability.delayMs), blockKey: availability.blockKey }
       : null;
 
   const appended = await mutateState(db, userId, now, async (locked, tx) => {

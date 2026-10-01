@@ -1,9 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { yourDayLines, loadYourDayLine } from "@/mind/process/hot-path/your-day-line";
-import { insertFact } from "@/db/repos/user/facts";
-import { fact } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
+import { insertLifeDay } from "@/db/repos/world/life-day";
+import { closeTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -11,7 +9,7 @@ afterAll(closeTestDb);
 const d = (iso: string) => new Date(iso);
 const blocks = [
   {
-    id: "a",
+    key: "a",
     start: d("2026-01-05T02:00:00Z"),
     end: d("2026-01-05T05:00:00Z"),
     block: "busy" as const,
@@ -19,7 +17,7 @@ const blocks = [
     label: "rewatching an old film",
   },
   {
-    id: "b",
+    key: "b",
     start: d("2026-01-05T15:00:00Z"),
     end: d("2026-01-05T16:00:00Z"),
     block: "quiet" as const,
@@ -38,32 +36,22 @@ test("now, later and the deferred line", () => {
   expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null)).toBeNull();
 });
 
-test("a deleted deferred fact degrades to no deferred line (review focus 5)", async () => {
+test("a deferred block that is in the plan gives the 'while you were' line", async () => {
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
-  const u = await createTestUser();
-  const f = await insertFact(deps.db, u, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: reading.",
-    payload: {
-      start: "2026-01-05T09:00:00.000Z",
-      end: "2026-01-05T12:00:00.000Z",
-      block: "busy",
-      busy: 0.8,
-      label: "reading",
-      life_day: "2026-01-05",
-      shared: true,
-    },
-    embedding: vec(),
-    created_at: d("2026-01-05T01:00:00Z"),
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: { blocks: [{ start: "09:00", end: "12:00", kind: "busy", busy: 0.8, label: "reading" }] },
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: d("2026-01-05T01:00:00Z"),
   });
-  const at = d("2026-01-05T10:00:00Z");
-  expect(await loadYourDayLine(deps, u, at, f.id)).toMatch(/They wrote while you were reading/);
-  await deps.db.delete(fact).where(eq(fact.id, f.id));
-  expect(await loadYourDayLine(deps, u, at, f.id)).toBeNull();
+  const line = await loadYourDayLine(deps, d("2026-01-05T13:00:00Z"), "2026-01-05#09:00");
+  expect(line).toMatch(/They wrote while you were reading/);
+});
+
+test("an unknown deferred block key just drops the 'while you were' line", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  const line = await loadYourDayLine(deps, d("2026-01-05T10:00:00Z"), "2026-01-05#03:33");
+  expect(line ?? "").not.toContain("They wrote while you were");
 });

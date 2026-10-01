@@ -18,14 +18,13 @@ import { dueThreads } from "@/db/repos/user/threads";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
 import { faded } from "@/mind/state/user/relationship/params";
-import { lifeDate } from "@/mind/world/her-clock";
-import { blockAt, listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
+import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import type { CandidateInputs, GateInputs } from "./types";
 
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
 
-type InputDeps = Pick<Deps, "db" | "config">;
+type InputDeps = Pick<Deps, "db" | "core" | "config">;
 
 export async function loadCandidateInputs(
   deps: InputDeps,
@@ -146,7 +145,7 @@ export async function loadGateInputs(
   if (!relationship) return null;
 
   const state = conversation === undefined ? await getState(db, userId) : conversation;
-  const block = blockAt(await listLifeBlocks(db, userId, lifeDate(deps.config.life, now)), now);
+  const block = blockAt(await todaysBlocks(deps, now), now);
   const inProgress =
     !!state &&
     (state.buffer_turn_ids.length > 0 ||

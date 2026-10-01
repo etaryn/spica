@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { availabilityDelay, deferWhileBusy, wantsNote } from "@/mind/process/availability/deferral";
-import { insertFact } from "@/db/repos/user/facts";
+import { insertLifeDay } from "@/db/repos/world/life-day";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { relationship, relationship_param } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
+import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -54,35 +54,26 @@ async function busyUser(closeness: number) {
     .update(relationship_param)
     .set({ value: closeness, baseline: closeness })
     .where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
-  const f = await insertFact(deps.db, u, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: rewatching an old film.",
-    payload: {
-      start: "2026-01-05T10:00:00.000Z",
-      end: "2026-01-05T13:00:00.000Z",
-      block: "busy",
-      busy: 0.8,
-      label: "rewatching an old film",
-      life_day: "2026-01-05",
-      shared: true,
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: {
+      blocks: [
+        { start: "10:00", end: "13:00", kind: "busy", busy: 0.8, label: "rewatching an old film" },
+      ],
     },
-    embedding: vec(),
-    created_at: now,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: now,
   });
-  return { deps, u, f };
+  return { deps, u };
 }
 
 test("deferWhileBusy: delay + note for a mid-closeness user in a busy block", async () => {
-  const { deps, u, f } = await busyUser(0.5);
+  const { deps, u } = await busyUser(0.5);
   const a = await deferWhileBusy(deps, u, now, "seed");
   expect(a.delayMs).toBeGreaterThan(cfg.note_min_delay_ms);
-  expect(a).toMatchObject({ blockFactId: f.id, blockKind: "busy", note: true });
+  expect(a).toMatchObject({ blockKey: "2026-01-05#10:00", blockKind: "busy", note: true });
   await insertTurn(deps.db, u, {
     id: randomUUID(),
     session_id: randomUUID(),

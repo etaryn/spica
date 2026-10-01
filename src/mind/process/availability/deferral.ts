@@ -12,12 +12,11 @@ import { errorName } from "@/mind/platform/errors";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { withTimeout } from "@/mind/platform/timeout";
 import { fadeParams } from "@/mind/state/user/relationship/params";
-import { lifeDate } from "@/mind/world/her-clock";
-import { blockAt, listLifeBlocks, type BlockFact } from "@/mind/world/legacy-life-tick/blocks";
+import { blockAt, todaysBlocks, type WorldBlock } from "@/mind/world/blocks";
 
 export type Availability = {
   delayMs: number;
-  blockFactId: string | null;
+  blockKey: string | null;
   blockKind: "busy" | "quiet" | null;
   blockStart: Date | null;
   note: boolean;
@@ -25,7 +24,7 @@ export type Availability = {
 
 export const NO_DELAY: Availability = {
   delayMs: 0,
-  blockFactId: null,
+  blockKey: null,
   blockKind: null,
   blockStart: null,
   note: false,
@@ -37,7 +36,7 @@ export const NO_DELAY: Availability = {
  * `override_closeness` there's no delay.
  */
 export function availabilityDelay(
-  block: Pick<BlockFact, "busy" | "block" | "end">,
+  block: Pick<WorldBlock, "busy" | "block" | "end">,
   closeness: number,
   now: Date,
   unit: number,
@@ -66,14 +65,14 @@ export function wantsNote(
 }
 
 async function decideAvailability(
-  deps: Pick<Deps, "db" | "config">,
+  deps: Pick<Deps, "db" | "core" | "config">,
   userId: string,
   now: Date,
   seed: string,
 ): Promise<Availability> {
   const { db, config } = deps;
 
-  const block = blockAt(await listLifeBlocks(db, userId, lifeDate(config.life, now)), now);
+  const block = blockAt(await todaysBlocks(deps, now), now);
   if (!block) return NO_DELAY;
 
   const relationship = await relationshipRepo.getRelationshipRow(db, userId);
@@ -90,7 +89,7 @@ async function decideAvailability(
   const alreadyNoted = await sessionLog.hasTriggerSince(db, userId, "availability", block.start);
   return {
     delayMs,
-    blockFactId: block.id,
+    blockKey: block.key,
     blockKind: block.block,
     blockStart: block.start,
     note: wantsNote(delayMs, closeness, alreadyNoted, config.availability),
@@ -99,7 +98,7 @@ async function decideAvailability(
 
 /** Called once, for the first message of a buffer. The crisis path never calls it. */
 export async function deferWhileBusy(
-  deps: Pick<Deps, "db" | "config" | "log">,
+  deps: Pick<Deps, "db" | "core" | "config" | "log">,
   userId: string,
   now: Date,
   seed: string,

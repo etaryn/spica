@@ -1,7 +1,6 @@
 import { adminListLifeUsers } from "@/db/repos/admin/life";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { truncateAll } from "@/db/admin";
-import { insertFact } from "@/db/repos/user/facts";
 import * as idn from "@/db/repos/user/identity";
 import { getLifeDay, insertLifeDay, listLifeDaysBefore } from "@/db/repos/world/life-day";
 import {
@@ -10,11 +9,8 @@ import {
   listLifeEventLogs,
 } from "@/db/repos/user/life-event-log";
 import { ensureRelationship } from "@/db/repos/user/relationship";
-import { getState, lockState, updateState } from "@/db/repos/user/conversation-state";
-import { fact } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { loadConfig } from "@/mind/platform/config";
-import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl, vec } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl } from "../helpers/db";
 
 const cfg = loadConfig();
 const t0 = new Date("2026-01-05T10:00:00Z");
@@ -100,27 +96,4 @@ test("life_event_log is user-scoped and finds the last accepted high-stakes even
   expect(await lastAcceptedHighStakes(db, b)).toBeNull();
   expect(await listLifeEventLogs(db, b, 10)).toEqual([]);
   expect((await listLifeEventLogs(db, a, 10))[0]?.decision).toBe("accepted");
-});
-
-test("deleting the deferred block fact nulls conversation_state.deferred_fact", async () => {
-  const db = getTestDb();
-  const u = await createTestUser();
-  const f = await insertFact(db, u, {
-    subject: "self",
-    kind: "event",
-    content: "x",
-    embedding: vec(),
-    created_at: t0,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
-  });
-  await db.transaction(async (tx) => {
-    await lockState(tx, u, t0);
-    await updateState(tx, u, { deferred_until: t0, deferred_fact: f.id });
-  });
-  await db.delete(fact).where(eq(fact.id, f.id));
-  expect((await getState(db, u))?.deferred_fact).toBeNull();
 });

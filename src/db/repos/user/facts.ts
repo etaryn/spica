@@ -301,27 +301,6 @@ export async function forgetFact(db: Db, userId: string, factId: string): Promis
   });
 }
 
-/** Her copied schedule blocks for one of her local dates. Stale blocks still count; superseded don't. */
-export async function listGeneratedBlockRows(
-  db: Db,
-  userId: string,
-  lifeDay: string,
-): Promise<{ id: string; payload: unknown }[]> {
-  return db
-    .select({ id: fact.id, payload: fact.payload })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        eq(fact.scope, "private"),
-        eq(fact.source, "generated"),
-        sql`${fact.status} <> 'superseded'`,
-        sql`${fact.payload}->>'life_day' = ${lifeDay}`,
-        sql`${fact.payload}->>'block' IS NOT NULL`,
-      ),
-    );
-}
-
 /** Her recent self facts for the event generator, excluding copied schedule blocks. */
 export async function listRecentSelfFacts(
   db: Db,

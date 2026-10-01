@@ -99,7 +99,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<Timer
     turns,
     openQuestions: committed.openQuestions,
     flag: null,
-    deferredFact: committed.deferredFact,
+    deferredBlock: committed.deferredBlock,
   }).then(
     (value) => ({ ok: true as const, value }),
     (error: unknown) => ({ ok: false as const, error }),

@@ -3,6 +3,7 @@ import { egoTick, egoTickUser } from "@/mind/state/legacy-ego/tick";
 import { insertFact } from "@/db/repos/user/facts";
 import { getIdentityRow, updateIdentity, ensureIdentity } from "@/db/repos/user/identity";
 import { ensureRelationship } from "@/db/repos/user/relationship";
+import { insertLifeDay } from "@/db/repos/world/life-day";
 import { ego_tick } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
@@ -26,30 +27,19 @@ test("one step per hour, writing an ego_tick row", async () => {
 test("a busy day pulls energy lower than a free one", async () => {
   const deps = makeTestDeps({ ego: { noise: 0 } });
   const [busy, free] = [await createTestUser(), await createTestUser()];
-  const payload = {
-    start: "2026-01-05T01:00:00.000Z",
-    end: "2026-01-05T09:00:00.000Z",
-    block: "busy",
-    busy: 1,
-    label: "reading",
-    life_day: "2026-01-05",
-    shared: true,
-  };
-  await insertFact(deps.db, busy, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: reading.",
-    payload,
-    embedding: vec(),
-    created_at: at,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: { blocks: [{ start: "09:00", end: "17:00", kind: "busy", busy: 1, label: "reading" }] },
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: at,
   });
-  for (let k = 0; k < 5; k++)
-    for (const u of [busy, free]) await egoTickUser(deps, u, new Date(at.getTime() + k * H));
+  // The plan is shared, so "free" is the same hours on a day with no plan.
+  for (let k = 0; k < 5; k++) {
+    await egoTickUser(deps, busy, new Date(at.getTime() + k * H));
+    await egoTickUser(deps, free, new Date(at.getTime() + 48 * H + k * H));
+  }
   const [b, f] = [await getIdentityRow(deps.db, busy), await getIdentityRow(deps.db, free)];
   expect(b!.energy).toBeLessThan(f!.energy - 0.1);
 });

@@ -49,7 +49,7 @@ type ComposeInput = {
   anchor: Turn;
   openQuestions: string[];
   flag: SafetyFlag | null;
-  deferredFact?: string | null;
+  deferredBlock?: string | null;
   reachOut: ReachOutTrigger | null;
 };
 
@@ -76,7 +76,7 @@ export async function composeReply(
     turns: Turn[];
     openQuestions: string[];
     flag: SafetyFlag | null;
-    deferredFact?: string | null;
+    deferredBlock?: string | null;
   },
 ): Promise<Composed> {
   const last = request.turns.at(-1);
@@ -97,7 +97,7 @@ export async function composeReply(
     anchor: last,
     openQuestions: request.openQuestions,
     flag: request.flag,
-    deferredFact: request.deferredFact,
+    deferredBlock: request.deferredBlock,
     reachOut: null,
   });
 }
@@ -194,7 +194,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         deps,
         "life state",
         userId,
-        () => loadYourDayLine(deps, userId, clock.now(), input.deferredFact ?? null),
+        () => loadYourDayLine(deps, clock.now(), input.deferredBlock ?? null),
         null,
       );
 

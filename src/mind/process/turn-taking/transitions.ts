@@ -51,7 +51,7 @@ export function append(
     maxWaitMs: number;
     openQuestions: OpenQuestion[];
     /** Availability: only applied to the first message of a buffer. */
-    defer?: { until: Date; factId: string | null } | null;
+    defer?: { until: Date; blockKey: string | null } | null;
   },
 ) {
   // Never re-buffer a message that's mid-reply, or it could be answered twice.
@@ -72,7 +72,7 @@ export function append(
     ? {
         backchannel_sent: false,
         deferred_until: input.defer?.until ?? null,
-        deferred_fact: input.defer?.factId ?? null,
+        deferred_block: input.defer?.blockKey ?? null,
       }
     : {};
 
@@ -106,7 +106,7 @@ export type CommitResult =
       turnIds: string[];
       epoch: number;
       openQuestions: string[];
-      deferredFact: string | null;
+      deferredBlock: string | null;
     };
 
 /** Moves the buffer in flight for one reply, if the timer's version is still current. */
@@ -131,7 +131,7 @@ export function commit(
       wait_until: null,
       backchannel_sent: false,
       deferred_until: null,
-      deferred_fact: null,
+      deferred_block: null,
       buffer_version: state.buffer_version + 1,
       updated_at: input.now,
     },
@@ -140,7 +140,7 @@ export function commit(
       turnIds: state.buffer_turn_ids,
       epoch: state.reply_epoch,
       openQuestions: state.open_questions.map((q) => q.text),
-      deferredFact: state.deferred_fact,
+      deferredBlock: state.deferred_block,
     },
   };
 }
@@ -236,7 +236,7 @@ export function crisis(
       backchannel_sent: false,
       open_questions: [],
       deferred_until: null,
-      deferred_fact: null,
+      deferred_block: null,
       buffer_version: state.buffer_version + 1,
       reply_epoch: state.reply_epoch + 1,
       updated_at: input.now,

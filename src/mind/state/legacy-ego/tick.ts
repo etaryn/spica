@@ -8,7 +8,7 @@ import {
 } from "@/db/repos/user/identity";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import { listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
+import { todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate, lifeHour, lifeTimezone } from "@/mind/world/her-clock";
 import { HOUR } from "@/mind/platform/time";
 import { localMidnight } from "@/mind/platform/timezone";
@@ -27,7 +27,7 @@ const sameHour = (a: Date | null, b: Date) =>
 
 /** `ego_tick` for one user: one drift step per UTC hour; missed hours aren't caught up. */
 export async function egoTickUser(
-  deps: Pick<Deps, "db" | "config">,
+  deps: Pick<Deps, "db" | "core" | "config">,
   userId: string,
   now: Date,
 ): Promise<"not_due" | "done"> {
@@ -35,7 +35,7 @@ export async function egoTickUser(
   const cfg = config.ego;
   if (sameHour((await getIdentityRow(db, userId))?.last_tick ?? null, now)) return "not_due";
   const day = lifeDate(config.life, now);
-  const blocks = await listLifeBlocks(db, userId, day);
+  const blocks = await todaysBlocks(deps, now);
   const load = dayLoad(blocks, localMidnight(day, lifeTimezone(config.life, now)), now, cfg);
   const hourIso = new Date(Math.floor(now.getTime() / HOUR) * HOUR).toISOString();
   const noise = (["v", "a", "e"] as const).map(
@@ -73,7 +73,7 @@ export async function egoTickUser(
 }
 
 export async function egoTick(
-  deps: Pick<Deps, "db" | "config" | "log">,
+  deps: Pick<Deps, "db" | "core" | "config" | "log">,
   now: Date,
 ): Promise<{ users: number; failed: number }> {
   const users = await adminListLifeUsers(deps.db);

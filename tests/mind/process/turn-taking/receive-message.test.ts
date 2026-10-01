@@ -5,14 +5,14 @@ import { ConflictError, InputError, ReplyFailedError } from "@/mind/platform/err
 import { TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/mind/platform/jobs";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { getState } from "@/db/repos/user/conversation-state";
-import { insertFact } from "@/db/repos/user/facts";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import * as sessionLog from "@/db/repos/user/session-log";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
+import { insertLifeDay } from "@/db/repos/world/life-day";
 import { relationship_param } from "@/db/schema";
-import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -312,26 +312,13 @@ test("a message in a busy block from a low-closeness user defers the timer and s
   const now = new Date("2026-01-05T10:30:00Z");
   deps.clock.set(now);
   await rel.ensureRelationship(deps.db, u, now, deps.config.relationship); // closeness 0.2
-  await insertFact(deps.db, u, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: reading.",
-    payload: {
-      start: "2026-01-05T10:00:00.000Z",
-      end: "2026-01-05T13:00:00.000Z",
-      block: "busy",
-      busy: 0.8,
-      label: "reading",
-      life_day: "2026-01-05",
-      shared: true,
-    },
-    embedding: vec(),
-    created_at: now,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: { blocks: [{ start: "10:00", end: "13:00", kind: "busy", busy: 0.8, label: "reading" }] },
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: now,
   });
   await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "so i was thinking and" });
   const timer = deps.queue.jobs.find((j) => j.name === TURN_TIMER_QUEUE)!;
@@ -350,26 +337,13 @@ test("a mid-closeness user's first message in a busy block enqueues the availabi
     .update(relationship_param)
     .set({ value: 0.5, baseline: 0.5 })
     .where(and(eq(relationship_param.user_id, u), eq(relationship_param.name, "closeness")));
-  await insertFact(deps.db, u, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: reading.",
-    payload: {
-      start: "2026-01-05T10:00:00.000Z",
-      end: "2026-01-05T13:00:00.000Z",
-      block: "busy",
-      busy: 0.8,
-      label: "reading",
-      life_day: "2026-01-05",
-      shared: true,
-    },
-    embedding: vec(),
-    created_at: now,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: { blocks: [{ start: "10:00", end: "13:00", kind: "busy", busy: 0.8, label: "reading" }] },
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: now,
   });
   await receiveMessage(deps, u, { clientMessageId: randomUUID(), text: "hey are you around?" });
   const notes = deps.queue.jobs.filter(

@@ -10,7 +10,6 @@ import { insertThread } from "@/db/repos/user/threads";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
 import { relationship, conversation_state } from "@/db/schema";
-import { lifeTickUser } from "@/mind/world/legacy-life-tick/tick";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -223,7 +222,6 @@ test("gate inputs: her block on her clock, sent times, in-progress, crisis, unan
     generated_at: ago(12),
     plan: { blocks: [{ start: "11:00", end: "13:00", kind: "busy", busy: 0.8, label: "film" }] },
   });
-  await lifeTickUser(deps, u, ago(7)); // copies the blocks into her facts (UTC life zone, 05:00, after tick_local_hour 4)
   await deps.db
     .update(relationship)
     .set({ unanswered_reach_outs: 1, crisis_quiet_until: ago(-1) })

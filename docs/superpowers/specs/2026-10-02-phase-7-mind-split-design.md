@@ -306,6 +306,16 @@ Two users, A and B, three simulated days, hourly jobs between sessions.
 Definition of done: `pnpm typecheck`, `pnpm lint`, `pnpm test`, the exit run and
 `pnpm eval --llm=fake --compare` pass (baseline updated for the retired assertions).
 
+### 10.4 Deviations as built
+
+- The exit run is a Vitest test (`tests/exit/mind-split.test.ts`) driving the eval runner, not
+  an eval script (`evals/scripts/mind-split-exit.yaml` was not written).
+- `core.world.event_confidence` was kept (the plan had dropped it); `event_context_days` and
+  `entity_salience` were added.
+- `World` doesn't derive blocks; the pure `src/mind/world/blocks.ts` does.
+- Core loops live in `src/mind/process/core/`, not a new top-level directory; the ESLint rule
+  bans `@/mind/process/*` from core code except `@/mind/process/core`.
+
 ## 11. Paperwork
 
 - **v3 updated:** the tables, columns, jobs, config keys and prompts above (§5, §6, §8, §10.3,

@@ -200,10 +200,9 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: none started under v3.** The pre-v3 cleanup is done
-(2026-10-01). The phase order is OPEN (v3 §21 #9), including whether
-onboarding comes before the mind split. Confirm the order with Ethan before
-starting any phase; each phase starts with its own design doc.
+**Current phase: Phase 7 built (mind split); next phase per v3 §20, confirm
+with Ethan.** The phase order is OPEN (v3 §21 #9). Each phase starts with its
+own design doc.
 
 **Exit tests:** only the phase's own functionality, deterministic
 assertions; exit runs call the real API only for the phase's own LLM
@@ -240,8 +239,7 @@ only); backchannel style global `judge`; shared day plan; reach-out caps
   `user/` (`userId`-first), `world/`, `admin/` (cross-user); `src/runtime`
   Node implementations; `src/server` Next server helpers; `src/app`
   Next.js; `src/worker` pg-boss, one file per engine; `prompts/`; `evals/`.
-  The per-user ego and life tick sit in `state/legacy-ego/` and
-  `world/legacy-life-tick/` until the mind split replaces them.
+  Core-only code takes `CoreDeps` (no `db`); core loops live in `process/core/`.
 - Style: Prettier at 100 columns; every file starts with a short plain-English
   header in v3 terms; names follow v3's vocabulary (renames log:
   `docs/2026-10-01-v3-restructure-renames.md`).

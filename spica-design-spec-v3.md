@@ -333,56 +333,70 @@ Every table here references `user(id) ON DELETE CASCADE`.
 - **`thread`**: ongoing storylines with `next_checkpoint` and `stakes`.
 - **`session_log`**: the raw transcript; `trigger`
   (`null | backchannel | availability | reach_out`), `reply_to` (the last
-  user turn a reply answers), `safety_flag`, `extracted`.
-- **`conversation_state`**: turn-taking state (§10.1).
+  user turn a reply answers), `safety_flag`, `extracted`, and
+  `snapshot_version` (the self snapshot a reply read; null for turns that
+  read none, or when no snapshot exists yet).
+- **`conversation_state`**: turn-taking state (§10.1). `deferred_block` holds
+  the key of the busy or quiet block that deferred the buffer
+  (`<date>#<start>`), so the "they wrote while you were…" line can be
+  rebuilt from the day plan; it replaces the stored `deferred_fact`.
 - **`relationship`** and **`relationship_param`** (§11). `relationship_param`
-  is extensible without migration; **new params (PROPOSED):**
-  `affect_valence`, `afterglow` (her feelings toward this user, V4),
-  `relatedness`, `reciprocity`.
-- **`identity`** (Changes in v3): its per-user ego columns (mood, energy,
-  preoccupation) are retired in favour of core state (§6.2) and the user
-  params above. `life_last_date` is retired with the per-user life tick
-  (§8.3).
+  is extensible without migration. **Built:** `affect_valence` and
+  `afterglow` (her feelings toward this user, V4; §10.4); a migration
+  backfilled both for existing users, since `getParams` throws on a missing
+  row. **New (PROPOSED):** `relatedness`, `reciprocity`.
+- **`identity`** (removed): its per-user ego columns (mood, energy,
+  preoccupation) and `life_last_date` went with the per-user ego and life
+  tick; the table is gone. Core state (§6.2) and the params above replace it.
 - **`push_subscription`**: one row per browser subscription.
 - **New (PROPOSED): `disclosure`**: `user_id`, `core_ref` (the core memory
   item or snapshot section revealed), `depth` (tier), `turn_id`,
   `created_at`. Which parts of her self she has revealed to this user
   (§11.3).
 - **Trace tables**: `retrieval_trace`, `reach_out_log`, `judge_log`,
-  `relationship_event`, `ego_tick` (retired with the per-user ego), and
-  **new (PROPOSED)** `user_loop_trace` (§9.5).
+  `relationship_event`, and **new (PROPOSED)** `user_loop_trace` (§9.5).
+  `ego_tick` is gone with the per-user ego.
 
-### 6.2 Core scope (New)
+### 6.2 Core scope (Built in part; the rest New)
 
-Holds no user data; no `user_id`.
+Holds no user data; no `user_id`. Core memory is **separate tables**
+(§21 #5, settled), reached only through the `CoreMemory`, `CoreState` and
+`World` repos in `CoreDeps`, which has no `db` handle (V6).
 
-- **Core memory** (PROPOSED shape; storage OPEN, §21): items with `kind`
-  (`episode | opinion | interest | goal | intention | thought | reflection |
-  idea | hypothetical | insight | narrative | agent_note`), `content`,
-  `payload`, `embedding`, `entity_refs` (core entities: Alcor and her other
-  agents), `occurred_at`, `salience`, `valence`, `confidence`, `status`,
-  `superseded_by`, `source` (`world | loop`), `source_ref` (the loop run or
-  world event), `created_at`. Two storage options must both stay possible
-  behind the `CoreMemory` interface: the `fact` table with `scope = 'core'`
-  and `user_id` null, or a separate `core_fact` table (plus `core_entity`).
-- **`core_state`** (one row): `emotion` (`{label, valence, arousal, about,
-  since}`), `mood_valence`, `mood_arousal`, `energy`, `needs`
+- **`core_memory`** (Built): items with `kind` (`episode | opinion |
+  interest | goal | intention | thought | reflection | idea | hypothetical |
+  insight | narrative | agent_note`; only `episode` is written so far),
+  `content`, `payload`, `embedding`, `entity_refs` (ids of `core_entity`),
+  `occurred_at`, `created_at`, `last_recalled_at`, `recall_count`, `salience`,
+  `valence`, `confidence`, `status` (the `fact` statuses), `superseded_by`,
+  `source` (`world | loop`), `source_ref` (the loop run or world event). It
+  has the same retrieval index and range checks as `fact`.
+- **`core_entity`** (Built): Alcor and her other agents: `name` (unique),
+  `aliases`, `salience`, `first_seen`.
+- **`core_state`** (Built; one row, `id = 1`): `emotion` (`{label, valence,
+  arousal, about, since}`), `mood_valence`, `mood_arousal`, `energy`, `needs`
   (`{autonomy, competence}`, 0–1), `preoccupation` (core memory id),
-  `preoccupation_since`, `baseline`, `last_tick`.
-- **`core_goal`** (or core memory `kind = goal`; same storage decision):
-  `title`, `why`, `status` (`active | done | dropped`), `progress` (0–1),
-  `started_at`, `target_at`.
-- **`core_snapshot`**: `version` (int pk), `content` (text), `sections`
-  (jsonb), `source_ids` (core memory ids), `rendered_at`, `model`,
-  `prompt_version`.
+  `preoccupation_since`, `baseline`, `last_tick`, and `last_event_day` (her
+  local date of the last finished event generation; makes the world tick
+  idempotent, §8.3).
+- **`core_goal`** (New): or core memory `kind = goal`; decided with the
+  goals phase: `title`, `why`, `status` (`active | done | dropped`),
+  `progress` (0–1), `started_at`, `target_at`.
+- **`core_snapshot`** (Built): `version` (int pk), `content` (text),
+  `sections` (jsonb), `source_ids` (core memory ids), `rendered_at`, `model`,
+  `prompt_version`. Version 0 is the persona file's seed self.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
-- **`world_event`** (PROPOSED): what actually happened: `at`, `kind`
-  (`planned | surprise | resolution`), `content`, `plan_ref`, `goal_ref`,
-  `agents`, `outcome`, `created_at`.
-- **Traces:** `core_loop_trace` (loop, inputs by id, outputs by id, model,
-  prompt version, tokens, cost, created_at), `drift_log` (§7.3),
-  `life_event_log` (Built; event-generator attempts; loses its `user_id`
-  when events move to core).
+- **`world_event`** (Built): what happened: `at`, `kind`
+  (`planned | surprise | resolution`; only `planned` is written so far),
+  `content`, `valence`, `stakes` (`low | high`), `agents` (core entity ids),
+  `life_day`, `plan_ref`, `goal_ref`, `outcome`, `created_at`.
+- **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
+  model, prompt version, tokens, cost, created_at; written by the world and
+  state ticks), `life_event_log` (Built; every event-generator attempt:
+  `life_day`, `attempt`, `candidate`, `decision`, `target_memory_id` (the core
+  memory a reconcile verdict pointed at), `world_event_id` (the event an
+  accepted attempt became), model, prompt version; no `user_id`), and
+  `drift_log` (New, §7.3).
 
 ---
 
@@ -486,7 +500,17 @@ decay to `stale`, supersede on contradiction, reconcile on insert.
 The built per-user ego mechanics carry over as the starting point, moved to
 core: hourly drift toward baseline with bounded noise, energy rhythm
 `1 + amplitude × cos(2π(h − peak)/24)` in her local hour, busy-load drain,
-preoccupation expiry, event nudges. Keys move from `ego.*` to `core.state.*`.
+preoccupation expiry, event nudges. Keys moved from `ego.*` to
+`core.state.*`.
+
+**Built** (`core_state_tick`, hourly at `core.state.tick_cron`): `baseline`
+(`mood_valence`, `mood_arousal`, `energy`), `drift_rate`, `noise`,
+`energy_peak_hour`, `energy_amplitude`, `busy_drain`, `full_load_hours`,
+`preoccupation_hours` (expiry) and `preoccupation_min_valence` (how strong
+an event's feeling must be to take over her mind), `event_gain` and
+`event_arousal_gain` (how far an event moves mood), and `bands` (the ranges
+that turn values into the phrases of the "How you're feeling" line, from
+`prompts/core-state/line`). Needs and goal progress are not built yet.
 
 ### 8.3 World
 
@@ -500,14 +524,34 @@ preoccupation expiry, event nudges. Keys move from `ego.*` to `core.state.*`.
   busy levels clamped to [`life.min_busy`, 1], quiet blocks at
   `life.quiet_busy`), retried once, with a fallback plan (its busy blocks at
   `life.fallback_busy`). The same for everyone.
-- **Change:** the per-user `life_tick` that copied blocks into each user's
+- **Built:** the per-user `life_tick` that copied blocks into each user's
   self facts is retired. Every reader (availability, the "Your day" line,
   retrieval, outreach, core loops) reads the day plan and core memory
-  directly.
-- **Change:** personal events become **core events**, generated once
-  globally (not per user), checked by rules (new-entity rate, high-stakes
-  spacing) and reconciled against **core memory** (`duplicate` and
-  `contradicts` rejected and regenerated; every attempt logged).
+  directly. Busy and quiet blocks are derived by the pure `blocks.ts`; the
+  `World` repo only stores and reads plans and events.
+- **Built:** personal events are **core events**, made by `core_world_tick`
+  (hourly at `core.world.tick_cron`). From `core.world.events_local_hour` of
+  her day, once per local date (guarded by `core_state.last_event_day` and a
+  lock, in one transaction, so a retry never doubles a day), it generates up
+  to `events_per_day_max` events with probability `event_probability` (the
+  prompt reads her last `event_context_items` episodes from the past
+  `event_context_days`), checked by rules (new-entity rate over
+  `new_entity_days`, high-stakes spacing `high_stakes_min_days`) and
+  reconciled against **core memory** (`duplicate` and `contradicts` rejected
+  and regenerated up to `regen_attempts`; every attempt logged in
+  `life_event_log`). An accepted event is recorded in `world_event`, then
+  appraised: `appraiseEvent` is the code-only stand-in for `core_appraise`
+  (the event's own valence is the appraisal). It writes an `episode` (salience
+  `event_salience`, confidence `event_confidence`, her entities at
+  `entity_salience`), nudges mood and, past `preoccupation_min_valence`,
+  sets her preoccupation. A high-stakes event opens an episode (status
+  `open`) that stays on her mind through the preoccupation; she has no
+  per-user threads for her own life. Other keys: `event_max_tokens`,
+  `event_max_chars`, `injected_event_at` (eval-injected events), and
+  `canon_entities` (Alcor). Her memories whose `occurred_at` is later than
+  now (events are recorded about 00:10 her time, dated to their hour) are
+  never surfaced by core retrieval or by outreach `her_day`. Without a plan
+  for today the tick still generates a generic event.
 
 **New (PROPOSED).**
 - **Goal-driven events**: an event advances or blocks an active goal where
@@ -528,20 +572,23 @@ times closeness (user).
 
 All scheduled, all within `core.daily_call_budget`; each reads only core
 memory, core state and the world (V3), and writes a `core_loop_trace` row.
-Prompts under `prompts/core/<loop>/v<N>.md`.
+Prompts under `prompts/core/<loop>/v<N>.md`. Core loops live in
+`src/mind/process/core/` and take `CoreDeps` (no `db`); the ESLint one-way
+rule bans `@/mind/process/*` imports from core code except
+`@/mind/process/core`.
 
 | Loop | Cadence | Reads | Writes |
 |---|---|---|---|
 | `life_plan` (Built) | Hourly check; makes today and tomorrow | Previous plans, goals, persona | World: day plan |
-| `core_world_tick` | Hourly | Plan, clock, goals, agents | World: events, resolutions |
-| `core_appraise` | Per world event | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion |
+| `core_world_tick` (Built: events only) | Hourly | Plan, clock, goals, agents | World: events, resolutions |
+| `core_appraise` (code-only stand-in built: `appraiseEvent`) | Per world event | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion |
 | `core_wander` | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
 | `core_anticipate` | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
 | `core_ruminate` | After strong events | The episode | State: lingering emotion. Memory: thought |
 | `core_reflect` | Nightly | Recent episodes and thoughts | Memory: insights, opinion updates, narrative |
 | `core_consolidate` | Nightly | Episodes | Memory: gist, decay |
 | `core_render_snapshot` | Nightly, after reflect | Core memory, core state, core values | Snapshot vN+1; triggers the drift watch |
-| `core_state_tick` | Hourly | State, day plan | State: drift, energy rhythm, need depletion, preoccupation expiry |
+| `core_state_tick` (Built: drift, energy, preoccupation expiry) | Hourly | State, day plan | State: drift, energy rhythm, need depletion, preoccupation expiry |
 
 ---
 
@@ -659,14 +706,19 @@ when the guard is on.
 2. **Assemble** in this fixed order (PROPOSED):
    1. core values
    2. self snapshot vN
-   3. core state line ("How you're feeling", "Your day": now, later, and a
-      note if the reply was deferred), never raw numbers
+   3. core state line ("How you're feeling", then "Your day": now, later, and
+      a note if the reply was deferred), never raw numbers
    4. user state line ("You and them": the relationship summary from
-      parameter deviations, make-up line, status lines)
+      parameter deviations, including her affect toward this user, make-up
+      line, status lines)
    5. latest big-event summary for this user
-   6. retrieved memory: user facts by subject with relative dates, episodes,
-      thoughts about this user, relevant core memory; retrieval biased by
-      core mood (mood-congruent recall) and active goals
+   6. retrieved memory under "What you remember": "About them", "Between
+      you", "What you've told them" (user-scope `subject = self`, V5), and
+      "From your own life" (her core memory, the top `retrieval.core_top_n`
+      by the same score; future-dated items hidden). Core retrieval is
+      read-only: replies write no recall reinforcement to core memory.
+      **PROPOSED, Phase 8:** retrieval biased by core mood (mood-congruent
+      recall) and active goals
    7. due threads ("things you might naturally ask about"), open questions,
       things she wants to bring up (`user_ideate`); for a reach-out, "Why
       you're writing"
@@ -676,8 +728,11 @@ when the guard is on.
 4. **Guard** (off in the test phase, §10.5).
 5. **Pace and send** (§10.1); enqueue the cold path.
 
-The reply logs the snapshot version it read (`session_log` payload or the
-retrieval trace) so behaviour can be traced to the core loop that caused it.
+The reply logs the snapshot version it read in `session_log.snapshot_version`
+so behaviour can be traced to the core loop that caused it. With no snapshot
+row the section is skipped and the version stays null. Core values and the
+seed self come from `prompts/persona/v3.md`; the reply prompt is
+`prompts/reply/v9.md`.
 
 Crisis replies skip slots 3–7 except plain context; the crisis rubric
 applies.
@@ -698,7 +753,12 @@ Asynchronous, after sending; never blocks a reply.
 3. **Update state** in one transaction under a per-user advisory lock:
    facts, entities, threads, recall write-back, the relationship params (in a
    savepoint), and **(Changes in v3)** the exchange's emotional tone nudges
-   the user's `affect_valence` and `afterglow`, not core mood (V4).
+   the user's `affect_valence` and `afterglow`, not core mood (V4). **Built:**
+the tone is the salience-weighted mean valence of the exchange's facts;
+`affect_valence` moves toward it by `relationship.affect.exchange_gain`, and a
+positive tone adds to `afterglow` by `afterglow_gain × tone` (afterglow
+fades with half-life `afterglow_half_life_hours`). A reach-out exchange
+applies none of this.
 4. **Her own words** extracted as `subject = self` stay user-scoped as "what
    she told this user" (V5).
 5. **Big-event check (New):** after the update, evaluate the triggers (§9.4)
@@ -728,8 +788,11 @@ by `busy × (1 − closeness / availability.override_closeness) × maxDelay`
 mid closeness she first sends a short "busy, later?" note (once per block,
 no LLM). Closeness at or above the override replies normally. Closeness is
 the param's value, not its deviation. Crisis bypasses; errors fail open.
-**Change:** the block is read from the day plan directly, not from per-user
-block facts.
+**Change (Built):** the block is read from the day plan directly, not from
+per-user block facts. A deferral stores the block's key
+(`conversation_state.deferred_block`, `<date>#<start>`); an unknown key
+(plan gone, or a deferral from before) yields no "they wrote while you
+were…" line rather than a failure.
 
 ---
 
@@ -927,21 +990,34 @@ Scripted multi-session conversations on a simulated clock (`evals/scripts/`,
 YAML), `--llm=fake | real`, `--real <purposes>` per-purpose routing,
 `--runs N`, `--compare` against `evals/baseline.json`, `--review` files,
 `--annotate`. Deterministic assertions (`state`, `turn`, `relationship`,
-`life`, `ego`, `reach_out`, `guard`) gate; judged ones annotate. The harness
-runs the production hourly jobs between sessions. **New:** a core loop
-runner (`core: {days, inject}`) and assertions `core` (state, memory kinds,
-snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
+`life`, `core`, `reach_out`, `guard`) gate; judged ones annotate. **Built:**
+`life` counts day plans and events and checks decisions of the event
+generator (`life_event_log`); `core` reads her core state and memory (energy
+at a time, one time's energy lower than another's, preoccupation set,
+episode and world-event counts). A script's `seed_core_memory` lists
+episodes that happened before day 0, embedded with the run's embedder. The harness
+runs the production hourly jobs between sessions, including the core world
+and state ticks. **New:** a core loop runner (`core: {days, inject}`),
+`core` extended (memory kinds, snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
 outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
 
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
-- **Canary** (every exit run, deterministic): plant a unique token in user
+- **Canary** (every exit run, deterministic; **Built** as
+  `tests/exit/mind-split.test.ts`, a Vitest test driving the eval runner):
+  plant a unique token in user
   A's facts, turns and state. Run every core loop and user B's whole
   pipeline (user loops, reply, reach-out). Assert the token appears nowhere
   in core memory, core state, any snapshot, any core prompt, or any of user
   B's prompts or outputs.
-- **Side channel:** a strong emotional exchange with user A leaves core state
-  unchanged (V4).
+  The test's `CapturingLLM` echoes any canary found in its input into the
+  `extract`, `life_event`, `life_plan` and `reply` outputs, so a leak through
+  any path would surface in what the next stage stores or prompts. It scans
+  the core tables (including `life_day`), the core prompts (`life_plan`,
+  `life_event`, core reconcile) and user B's tables and prompts.
+- **Side channel** (Built, same test): a strong emotional exchange with user
+  A leaves core state unchanged (V4); her events happen once for both users;
+  every reply reads snapshot v0.
 - **Structural:** a unit test asserts the core data access layer exposes no
   user-scoped query.
 
@@ -949,13 +1025,15 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
 
 Built (twelve): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
 `turn_backchannel`, `turn_sweep`, `relationship_tick`, `life_plan`,
-`life_tick`, `ego_tick`, `outreach_tick`, `reach_out_send`.
+`core_world_tick`, `core_state_tick`, `outreach_tick`, `reach_out_send`.
 
-v3 changes (PROPOSED):
-- **Retired:** `life_tick` (per-user block copy and events) and `ego_tick`
-  (per-user ego).
-- **New core jobs:** `core_world_tick`, `core_state_tick` (hourly);
-  `core_appraise` (per event); `core_wander`, `core_anticipate`,
+v3 changes:
+- **Retired (Built):** `life_tick` (per-user block copy and events) and
+  `ego_tick` (per-user ego). A dev database that ran them still has their
+  pg-boss schedules registered; unschedule them by hand.
+- **Core jobs built:** `core_world_tick` (`core.world.tick_cron`) and
+  `core_state_tick` (`core.state.tick_cron`), both hourly.
+- **Core jobs, PROPOSED:** `core_appraise` (per event); `core_wander`, `core_anticipate`,
   `core_ruminate` (scheduled by the world tick); `core_nightly` (reflect,
   consolidate, render snapshot, drift watch, in order).
 - **New user job:** `user_mind_run {userId, trigger}`, enqueued by the cold
@@ -1015,12 +1093,12 @@ two minds or at reply time.
 | 4. Relationship | Homeostatic params, hurt, tension, make-up, ending and repair |
 | 5. Life sim, availability, ego | Shared day plan, per-user events and ego, availability deferral |
 | 6. Proactive outreach | Candidates, send gate, compose, Web Push |
+| 7. Mind split | Core scope and the core-only data layer (`CoreDeps`, no `db`); `core_state` (ego moved to core, ticked hourly); world reads from the day plan (`life_tick` retired); core events made once by `core_world_tick`; user affect params; "what she told this user"; persona split into core values and seed self, `core_snapshot` v0; reply assembly order (§10.3); inspector Core tab; leak canary and side channel as `tests/exit/mind-split.test.ts` (`pnpm test` 99 files / 664 tests at close) |
 
-**Next phases (PROPOSED order; the order is OPEN, §21):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phase 7 is built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **7. Mind split** | Core scope and the core data access layer (V6); `core_state` (ego moved to core); world reads (`life_tick` retired; day plan read directly); core events (generation and reconcile against core memory); user affect params (V4); "what she told this user" (V5); persona file split into core values and seed self; `core_snapshot` v0; reply assembly order (§10.3); leak canary and side-channel test | Canary passes; an emotional exchange leaves core state unchanged; core events are generated once for all users; replies read the snapshot and log its version |
 | **8. Core loops** | Appraisal, goals and needs, world resolution, wander, anticipate, ruminate, reflect, consolidate, snapshot rendering, drift watch, `core.daily_call_budget`, inspector Core tab | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
 | **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
@@ -1042,8 +1120,7 @@ smallest budget; raise only with review-run evidence.
 4. **Core vs what she told a user:** when core later contradicts something
    she said to one user, does core win (she changed her mind), or does the
    user-scoped claim bind her in that relationship?
-5. **Core memory storage:** the `fact` table with `scope = 'core'`, or
-   separate core tables (§6.2).
+5. **Core memory storage:** settled, separate core tables (§6.2).
 6. **Drift response:** whether a values contradiction should eventually
    block or roll back a snapshot.
 7. **User-loop outputs to outreach:** whether `user_reflect` / `user_ideate`
@@ -1057,7 +1134,7 @@ smallest budget; raise only with review-run evidence.
 11. **Jab vs contempt:** where the line sits, and which suspended rules come
     back and how. Decided in the guard phase.
 
-Settled: fixed Spica, the test calibrates the user; interests `adjacent` (at
+Settled: core memory in separate tables; fixed Spica, the test calibrates the user; interests `adjacent` (at
 reply time only, §7.5); backchannel style global `judge`; shared day plan;
 reach-out caps 1/day, 3/week, silence after 2 unanswered; identity
 disclosure honest, in her own voice.
@@ -1163,7 +1240,7 @@ and life tick) were dropped; the replacement is designed fresh.
   *Later.*
 - **B9.** `open_questions` are never cleared when a reply answers them; only
   a model verdict or a crisis replaces them. *Later.*
-- **B10.** A retried reply loses `deferredFact`; `judge_log` `wait_ms`
+- **B10.** A retried reply loses `deferredBlock`; `judge_log` `wait_ms`
   records the window, not the deferred wait; the once-per-block note check
   and the first-message deferral read run outside the lock (fail open).
   *Later.*
@@ -1195,8 +1272,8 @@ and life tick) were dropped; the replacement is designed fresh.
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts
-  fail `life.event_max_chars`. State a length or raise the cap. *Phase 7*
-  (core events).
+  fail `core.world.event_max_chars`. State a length or raise the cap.
+  *Tuning* (core events are built).
 - **B19.** Generated events reuse seeded self content (watch repetition
   across weeks). *Tuning.*
 - **B20.** Her night is two quiet blocks, so a user writing across midnight
@@ -1206,6 +1283,25 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B22.** `lifeInstant` is an offset from the start of her local day, wrong
   by the DST shift on a DST-change day (none in Singapore). *Later, when she
   floats between zones.*
+
+- **B50.** `generatePlan` (`life_plan`, `src/mind/world/day-plan.ts`) still
+  takes a `Deps` with `db` rather than `CoreDeps`, so the day-plan loop isn't
+  fenced by the core-only layer. *Phase 8.*
+- **B51.** Core `resolves` reconcile verdicts don't yet act on the target
+  episode (an open episode is never closed by a later event). *Phase 8.*
+- **B52.** `recentEpisodes` returns the oldest N episodes in its window, not
+  the newest; harmless at one event a day. *Later.*
+- **B53.** Mood-congruent and goal-biased core retrieval (§10.3 slot 6).
+  *Phase 8.*
+- **B54.** When core contradicts something she told a user (§21 #4). *Phase 8,
+  with Ethan.*
+- **B55.** Core loops should run on a separate Postgres role with no grants on
+  user tables, so the scope rule holds in the database as well as in code.
+  *Before users.*
+- **B56.** Afterglow learns a baseline, so a negative deviation has no summary
+  phrase. *Tuning.*
+- **B57.** The `core-state/line` and `relationship/summary` phrase files
+  (including the affect phrases) need a pass. *Tuning.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
@@ -1307,3 +1403,4 @@ and life tick) were dropped; the replacement is designed fresh.
 | 2026-10-01 | v3 is the default design spec, standalone, in its test phase | Ethan |
 | 2026-10-01 | Pre-v3 cleanup: v2 and the phase 0–6 docs deleted (tag `v2-final`); fresh `DECISIONS.md`; small code debt fixed; open items moved to §25; spec citations removed from code comments | Ethan |
 | 2026-10-01 | v3 builds on the built code and replaces modules from the ground up, deleting the old ones in the same phase (§0.2) | Ethan |
+| 2026-10-02 | Core memory is separate tables (`core_memory`, `core_entity`) behind `CoreMemory` (§21 #5 settled) | Ethan |

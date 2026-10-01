@@ -13,7 +13,7 @@ import { listOpenThreads } from "@/db/repos/user/threads";
 import { getTimezone } from "@/db/repos/user/users";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
 import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
-import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
+import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
@@ -155,7 +155,11 @@ async function reconcileCandidates(
       config.reconcile.neighbor_k,
       config.reconcile.near_match_similarity,
     );
-    const decision = await reconcileAgainstNeighbours(deps, fact, neighbors);
+    const decision = await reconcileAgainstNeighbours(
+      deps,
+      { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
+      neighbors,
+    );
     planned.push({ fact, embedding, decision, source });
   }
   return planned;

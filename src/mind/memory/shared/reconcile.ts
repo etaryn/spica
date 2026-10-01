@@ -1,13 +1,12 @@
 /**
- * Reconcile: decides how a new memory relates to the closest ones already stored. It can be a
+ * Reconcile: decides how a new memory, from either mind, relates to the closest ones already stored. It can be a
  * duplicate, resolve an open one, contradict one (which supersedes it), or be new. The model is
  * only asked when a near match exists.
  */
 import { z } from "zod";
-import type { Neighbor } from "@/db/repos/user/facts";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
-import type { ExtractedFact } from "./extract";
+import type { Neighbor } from "./types";
 
 export const ReconcileSchema = z.object({
   relation: z.enum(["duplicate", "resolves", "contradicts", "new"]),
@@ -19,11 +18,14 @@ export type Decision = {
   targetId: string | null;
 };
 
+/** The new memory, described the same way for either mind: "user, event", "self, opinion", "episode". */
+export type ReconcileCandidate = { label: string; content: string };
+
 const IS_NEW: Decision = { relation: "new", targetId: null };
 
-export function buildReconcileInput(candidate: ExtractedFact, neighbors: Neighbor[]): string {
+export function buildReconcileInput(candidate: ReconcileCandidate, neighbors: Neighbor[]): string {
   return [
-    `New fact (${candidate.subject}, ${candidate.kind}): ${candidate.content}`,
+    `New fact (${candidate.label}): ${candidate.content}`,
     "Existing facts:",
     ...neighbors.map((n) => `- id=${n.id} [${n.status}] ${n.content}`),
   ].join("\n");
@@ -32,7 +34,7 @@ export function buildReconcileInput(candidate: ExtractedFact, neighbors: Neighbo
 /** A target the model names that isn't one of `neighbors` is ignored, so the memory counts as new. */
 export async function reconcileAgainstNeighbours(
   deps: Pick<Deps, "llm" | "config">,
-  candidate: ExtractedFact,
+  candidate: ReconcileCandidate,
   neighbors: Neighbor[],
 ): Promise<Decision> {
   if (neighbors.length === 0) return IS_NEW;

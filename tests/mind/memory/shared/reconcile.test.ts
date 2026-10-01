@@ -1,21 +1,10 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
-import type { ExtractedFact } from "@/mind/memory/user/extract";
-import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
+import { buildReconcileInput, reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 
 const config = loadConfig();
-const cand: ExtractedFact = {
-  subject: "user",
-  kind: "event",
-  content: "Mia starts university in November.",
-  occurred_at: null,
-  salience: 0.7,
-  valence: 0.3,
-  confidence: 0.95,
-  entity_names: ["Mia"],
-  thread_title: null,
-};
+const cand = { label: "user, event", content: "Mia starts university in November." };
 const n = (id: string) => ({
   id,
   content: "Mia starts university in October.",
@@ -66,4 +55,10 @@ test("foreign target id → new; non-new relation without target → new", async
     relation: "new",
     targetId: null,
   });
+});
+
+test("the label tells the model what kind of memory is new", () => {
+  expect(buildReconcileInput({ label: "episode", content: "She reread Dune." }, [])).toBe(
+    "New fact (episode): She reread Dune.\nExisting facts:",
+  );
 });

@@ -11,7 +11,7 @@ import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { relativeDate } from "@/mind/platform/relative-date";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
-import { reconcileAgainstNeighbours, type Decision } from "@/mind/memory/user/reconcile";
+import { reconcileAgainstNeighbours, type Decision } from "@/mind/memory/shared/reconcile";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
@@ -234,7 +234,11 @@ export async function generateEvents(
         config.reconcile.neighbor_k,
         config.reconcile.near_match_similarity,
       );
-      const decision = await reconcileAgainstNeighbours(deps, fact, neighbors);
+      const decision = await reconcileAgainstNeighbours(
+        deps,
+        { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
+        neighbors,
+      );
       if (decision.relation === "duplicate" || decision.relation === "contradicts") {
         reject(decision.relation, decision.targetId);
         continue;

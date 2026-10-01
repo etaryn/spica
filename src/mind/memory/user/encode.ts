@@ -24,7 +24,7 @@ import {
 import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Config } from "@/mind/platform/config";
 import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract";
-import type { Decision } from "./reconcile";
+import type { Decision } from "@/mind/memory/shared/reconcile";
 
 export type PlannedFact = {
   fact: ExtractedFact;

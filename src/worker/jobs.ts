@@ -6,7 +6,7 @@ import type { PgBoss } from "pg-boss";
 import type { Logger } from "@/mind/platform/log";
 import {
   DECAY_QUEUE,
-  EGO_TICK_QUEUE,
+  CORE_STATE_TICK_QUEUE,
   LIFE_PLAN_QUEUE,
   LIFE_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -50,7 +50,7 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
   await boss.createQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 });
   await boss.updateQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 }); // a retry would sample the baseline twice
   // Hourly, idempotent jobs; the next hour is the retry.
-  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE, OUTREACH_TICK_QUEUE]) {
+  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, CORE_STATE_TICK_QUEUE, OUTREACH_TICK_QUEUE]) {
     await boss.createQueue(q, { retryLimit: 0 });
     await boss.updateQueue(q, { retryLimit: 0 });
   }

@@ -15,17 +15,15 @@ import { retrieve } from "@/mind/memory/user/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName, ReplyFailedError } from "@/mind/platform/errors";
 import { loadPersona } from "@/mind/platform/persona";
+import { parseSummaryPhrases } from "@/mind/platform/phrases";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
-import { loadEgoLine } from "@/mind/state/legacy-ego/line";
-import {
-  loadRelationshipSummary,
-  parseSummaryPhrases,
-} from "@/mind/state/user/relationship/summary";
+import { loadCoreStateLine } from "@/mind/state/core/line";
+import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { assemblePrompt, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
 import { loadYourDayLine } from "./your-day-line";
@@ -187,7 +185,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       );
   const feeling = inCrisis
     ? Promise.resolve(null)
-    : bounded(deps, "ego line", userId, () => loadEgoLine(deps, userId, clock.now()), null);
+    : bounded(deps, "core state line", userId, () => loadCoreStateLine(deps, clock.now()), null);
   const yourDay = inCrisis
     ? Promise.resolve(null)
     : bounded(

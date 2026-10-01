@@ -14,8 +14,8 @@ describe("job names", () => {
     expect(names).toEqual([
       "cold_path",
       "cold_path_sweep",
+      "core_state_tick",
       "decay_pass",
-      "ego_tick",
       "life_plan",
       "life_tick",
       "outreach_tick",

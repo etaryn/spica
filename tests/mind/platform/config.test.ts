@@ -87,7 +87,7 @@ test("phase 5 config: life, ego and availability load with her fixed zone", () =
   const c = loadConfig();
   expect(c.life.timezone).toBe("Asia/Singapore");
   expect(c.life.events_per_day_max).toBe(1);
-  expect(c.ego.bands.energy).toEqual([0.35, 0.7]);
+  expect(c.core.state.bands.energy).toEqual([0.35, 0.7]);
   expect(c.availability.override_closeness).toBe(0.8);
   expect(c.models.life).toBe("claude-haiku-4-5");
   expect(c.prompts.life_plan).toBe("v1");

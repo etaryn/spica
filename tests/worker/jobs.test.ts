@@ -4,7 +4,7 @@ import { LockBusyError } from "@/mind/process/cold-path/cold-path";
 import type { Logger } from "@/mind/platform/log";
 import {
   DECAY_QUEUE,
-  EGO_TICK_QUEUE,
+  CORE_STATE_TICK_QUEUE,
   LIFE_PLAN_QUEUE,
   LIFE_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -104,7 +104,7 @@ test("ensureSystemQueues creates the phase 5 queues without retries", async () =
   await boss.start();
   started = true;
   await ensureSystemQueues(boss);
-  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE])
+  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, CORE_STATE_TICK_QUEUE])
     expect(await boss.getQueue(q)).toMatchObject({ retryLimit: 0 });
 });
 

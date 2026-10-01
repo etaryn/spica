@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { SimClock } from "@/mind/platform/clock";
-import type { Deps } from "@/mind/platform/deps";
-import { egoTick } from "@/mind/state/legacy-ego/tick";
+import { coreDepsOf, type Deps } from "@/mind/platform/deps";
+import { coreStateTick } from "@/mind/state/core/tick";
 import { lifeDate } from "@/mind/world/her-clock";
 import { ensurePlans } from "@/mind/world/day-plan";
 import { lifeTick } from "@/mind/world/legacy-life-tick/tick";
@@ -109,8 +109,7 @@ export function makeLifeLoop(
     else await ensurePlans(deps, now);
     const lt = await lifeTick(deps, now, { inject });
     if (lt.failed > 0) throw new Error(`life tick failed for ${lt.failed} of ${lt.users} user(s)`);
-    const et = await egoTick(deps, now);
-    if (et.failed > 0) throw new Error(`ego tick failed for ${et.failed} of ${et.users} user(s)`);
+    await coreStateTick(coreDepsOf(deps), now);
     if (outreach) {
       const ot = await outreachTick(deps, now);
       if (ot.failed > 0)

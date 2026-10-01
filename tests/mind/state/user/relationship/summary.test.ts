@@ -1,7 +1,8 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { parseSummaryPhrases, summaryLines } from "@/mind/state/user/relationship/summary";
+import { parseSummaryPhrases } from "@/mind/platform/phrases";
+import { summaryLines } from "@/mind/state/user/relationship/summary";
 import {
   PARAM_NAMES,
   type Params,

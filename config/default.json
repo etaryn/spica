@@ -177,7 +177,7 @@
     "life_plan": "v1",
     "life_event": "v1",
     "life_availability": "v1",
-    "ego_line": "v1",
+    "core_state_line": "v1",
     "reach_out": "v1"
   },
   "queue": {
@@ -283,19 +283,27 @@
     "preoccupation_min_valence": 0.5,
     "canon_entities": ["Alcor"]
   },
+  "core": {
+    "state": {
+      "baseline": { "mood_valence": 0.2, "mood_arousal": 0.4, "energy": 0.6 },
+      "tick_cron": "45 * * * *",
+      "drift_rate": 0.2,
+      "noise": 0.03,
+      "energy_peak_hour": 16,
+      "energy_amplitude": 0.25,
+      "busy_drain": 0.3,
+      "full_load_hours": 8,
+      "preoccupation_hours": 36,
+      "preoccupation_min_valence": 0.5,
+      "event_gain": 0.3,
+      "event_arousal_gain": 0.2,
+      "bands": { "energy": [0.35, 0.7], "mood_valence": [-0.2, 0.4], "mood_arousal": [0.25, 0.7] }
+    }
+  },
   "ego": {
     "baseline": { "mood_valence": 0.2, "mood_arousal": 0.4, "energy": 0.6 },
-    "tick_cron": "45 * * * *",
-    "drift_rate": 0.2,
-    "noise": 0.03,
-    "energy_peak_hour": 16,
-    "energy_amplitude": 0.25,
-    "busy_drain": 0.3,
-    "full_load_hours": 8,
-    "preoccupation_hours": 36,
     "event_gain": 0.3,
-    "event_arousal_gain": 0.2,
-    "bands": { "energy": [0.35, 0.7], "mood_valence": [-0.2, 0.4], "mood_arousal": [0.25, 0.7] }
+    "event_arousal_gain": 0.2
   },
   "availability": {
     "override_closeness": 0.8,

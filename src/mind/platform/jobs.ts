@@ -13,7 +13,7 @@ export const TURN_SWEEP_QUEUE = "turn_sweep";
 export const RELATIONSHIP_TICK_QUEUE = "relationship_tick";
 export const LIFE_PLAN_QUEUE = "life_plan";
 export const LIFE_TICK_QUEUE = "life_tick";
-export const EGO_TICK_QUEUE = "ego_tick";
+export const CORE_STATE_TICK_QUEUE = "core_state_tick";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 

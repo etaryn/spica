@@ -6,6 +6,7 @@
 import { getFact } from "@/db/repos/user/facts";
 import * as relationshipRepo from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
+import { parseSummaryPhrases, type Phrases } from "@/mind/platform/phrases";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { deviationOf, fadeParams } from "./params";
 import { makeUpLineDue } from "./transitions";
@@ -16,29 +17,6 @@ import {
   type RelationshipConfig,
   type RelationshipState,
 } from "./types";
-
-/** Phrase lists by heading, parsed from a prompt file of `## heading` and `- phrase` lines. */
-export type Phrases = Record<string, string[]>;
-
-export function parseSummaryPhrases(markdown: string): Phrases {
-  const phrases: Phrases = {};
-  let heading: string | null = null;
-
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim();
-
-    const headingMatch = /^##\s+(.+)$/.exec(line);
-    if (headingMatch) {
-      heading = headingMatch[1]!.trim();
-      phrases[heading] = [];
-      continue;
-    }
-
-    const itemMatch = /^-\s+(.+)$/.exec(line);
-    if (heading && itemMatch) phrases[heading]!.push(itemMatch[1]!.trim());
-  }
-  return phrases;
-}
 
 function firstPhrase(phrases: Phrases, key: string): string | null {
   return phrases[key]?.[0] ?? null;

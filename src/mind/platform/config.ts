@@ -302,7 +302,7 @@ const band = z
   .tuple([z.number(), z.number()])
   .refine(([low, high]) => low <= high, "band low must be <= high");
 
-const ego = z.object({
+const coreState = z.object({
   baseline: z.object({
     mood_valence: z.number().min(-1).max(1),
     mood_arousal: unit,
@@ -316,9 +316,23 @@ const ego = z.object({
   busy_drain: unit,
   full_load_hours: z.number().positive(),
   preoccupation_hours: z.number().positive(),
+  preoccupation_min_valence: unit,
   event_gain: unit,
   event_arousal_gain: unit,
   bands: z.object({ energy: band, mood_valence: band, mood_arousal: band }),
+});
+
+const core = z.object({ state: coreState });
+
+// The per-user mood the legacy life tick still nudges; goes with that tick.
+const ego = z.object({
+  baseline: z.object({
+    mood_valence: z.number().min(-1).max(1),
+    mood_arousal: unit,
+    energy: unit,
+  }),
+  event_gain: unit,
+  event_arousal_gain: unit,
 });
 
 const availability = z.object({
@@ -385,7 +399,7 @@ const prompts = z.object({
   life_plan: promptVersion,
   life_event: promptVersion,
   life_availability: promptVersion,
-  ego_line: promptVersion,
+  core_state_line: promptVersion,
 });
 
 // ---------- The whole config ----------
@@ -409,6 +423,7 @@ export const ConfigSchema = z.object({
   cold_path: coldPath,
   relationship,
   life,
+  core,
   ego,
   availability,
   outreach,
@@ -421,6 +436,7 @@ export type CrisisCard = z.infer<typeof CrisisCardSchema>;
 export type TurnConfig = Config["turn"];
 export type LifeConfig = Config["life"];
 export type EgoConfig = Config["ego"];
+export type CoreStateConfig = Config["core"]["state"];
 export type AvailabilityConfig = Config["availability"];
 export type OutreachConfig = Config["outreach"];
 

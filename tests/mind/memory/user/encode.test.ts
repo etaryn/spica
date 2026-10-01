@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { applyExtraction, type ApplyInput } from "@/mind/memory/user/encode";
+import { encodeExtraction, type EncodeInput } from "@/mind/memory/user/encode";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
 import * as facts from "@/db/repos/facts";
 import { findEntityByName } from "@/db/repos/entities";
@@ -47,7 +47,7 @@ async function setup() {
     created_at: now,
     reply_to: ut.id,
   });
-  const input = (over: Partial<ApplyInput>): ApplyInput => ({
+  const input = (over: Partial<EncodeInput>): EncodeInput => ({
     userId: u,
     now,
     exchangeAt: now,
@@ -80,10 +80,10 @@ async function seed(u: string, content: string, over: Partial<facts.NewFact> = {
   });
 }
 
-describe("applyExtraction", () => {
+describe("encodeExtraction", () => {
   test("new fact: inserted with entities, thread, source_ref; turns marked extracted", async () => {
     const { u, ct, input } = await setup();
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -133,7 +133,7 @@ describe("applyExtraction", () => {
     const dup = await seed(u, "The user is allergic to cats.", { salience: 0.93 });
     const old = await seed(u, "Mia starts in October.");
     const plan = await seed(u, "The user has a driving test on Thursday.");
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -173,7 +173,7 @@ describe("applyExtraction", () => {
     const newer = await seed(u, "Mia starts in December.", {
       created_at: new Date("2026-01-11T00:00:00Z"),
     });
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -219,7 +219,7 @@ describe("applyExtraction", () => {
       score: 0.4,
       forced,
     });
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -247,7 +247,7 @@ describe("applyExtraction", () => {
       { title: "their thing", subject: "user", stakes: "low", next_checkpoint: null },
       now,
     );
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -290,7 +290,7 @@ describe("applyExtraction", () => {
       score: 0.4,
       forced: false,
     });
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -322,7 +322,7 @@ describe("applyExtraction", () => {
       new Date("2026-01-01T00:00:00Z"),
     );
     const cp = new Date("2026-02-01T09:00:00Z");
-    await applyExtraction(
+    await encodeExtraction(
       db(),
       config,
       input({
@@ -341,7 +341,7 @@ describe("applyExtraction", () => {
     expect((await threads.getOwnedThread(db(), u, t.id))!.next_checkpoint!.toISOString()).toBe(
       cp.toISOString(),
     );
-    await applyExtraction(
+    await encodeExtraction(
       db(),
       config,
       input({
@@ -365,7 +365,7 @@ describe("applyExtraction", () => {
     const exchangeAt = new Date("2026-01-05T09:00:00Z");
     const checkpoint = new Date("2026-01-08T09:00:00Z");
     // `now` (job time, 2026-01-12) is after the checkpoint; the exchange was before it.
-    await applyExtraction(
+    await encodeExtraction(
       db(),
       config,
       input({
@@ -388,7 +388,7 @@ describe("applyExtraction", () => {
       "Driving test",
     ]);
 
-    await applyExtraction(
+    await encodeExtraction(
       db(),
       config,
       input({
@@ -410,7 +410,7 @@ describe("applyExtraction", () => {
     ]);
 
     // An older exchange never moves last_touched backwards.
-    await applyExtraction(
+    await encodeExtraction(
       db(),
       config,
       input({
@@ -437,7 +437,7 @@ describe("applyExtraction", () => {
     const target = await seed(u, "The user's driving test is on Friday.", {
       created_at: new Date("2026-01-10T00:00:00Z"),
     });
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({
@@ -457,7 +457,7 @@ describe("applyExtraction", () => {
 
   test("#10 mentions sharing a name merge their aliases; blank names are dropped", async () => {
     const { u, input } = await setup();
-    const out = await applyExtraction(
+    const out = await encodeExtraction(
       db(),
       config,
       input({

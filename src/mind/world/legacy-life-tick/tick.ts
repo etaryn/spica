@@ -13,7 +13,7 @@ import { insertLifeEventLogs } from "@/db/repos/life-event-log";
 import type { Deps } from "@/mind/platform/deps";
 import { nudgeEgoForEvent } from "@/mind/state/legacy-ego/nudge";
 import { errorName } from "@/mind/platform/errors";
-import { applyExtraction } from "@/mind/memory/user/encode";
+import { encodeExtraction } from "@/mind/memory/user/encode";
 import { prepareBlockFacts } from "./blocks";
 import { lifeDate, lifeHour } from "@/mind/world/her-clock";
 import { generateEvents, type InjectedEvent } from "./events";
@@ -60,7 +60,7 @@ export async function lifeTickUser(
     const factIds = new Map<string, string>();
     for (const e of events.accepted) {
       const occurred = e.fact.occurred_at!;
-      const out = await applyExtraction(tx, config, {
+      const out = await encodeExtraction(tx, config, {
         userId,
         now,
         exchangeAt: now,

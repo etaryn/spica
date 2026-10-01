@@ -1,26 +1,39 @@
+/**
+ * Memory ranking: scores each candidate memory by similarity × weight × entity weight × recency
+ * and keeps the best few. Pure maths with no data access, so both minds can share it.
+ */
 import type { CandidateFact } from "@/db/repos/facts";
 
 const DAY_MS = 86_400_000;
 
+export type Scored = CandidateFact & { recency: number; score: number };
+
+/** Halves every `halfLifeDays`; never above 1, even for a memory dated in the future. */
 export function recencyFactor(ageDays: number, halfLifeDays: number): number {
   return Math.pow(0.5, Math.max(0, ageDays) / halfLifeDays);
 }
 
-export type Scored = CandidateFact & { recency: number; score: number };
-
-/** score = sim × salience × max(entity salience) × recency(max(created_at, last_recalled_at)). */
-export function rankCandidates(
-  cands: CandidateFact[],
+/**
+ * score = similarity × salience × entity salience × recency. Recency counts from the later of
+ * when the memory was made and when it was last recalled, so recalling a memory keeps it fresh.
+ */
+export function rankMemories(
+  candidates: CandidateFact[],
   now: Date,
-  cfg: { top_n: number; recency_half_life_days: number },
+  settings: { top_n: number; recency_half_life_days: number },
 ): Scored[] {
-  return cands
-    .map((c) => {
-      const ref = Math.max(c.created_at.getTime(), c.last_recalled_at?.getTime() ?? 0);
-      const recency = recencyFactor((now.getTime() - ref) / DAY_MS, cfg.recency_half_life_days);
-      const score = Math.max(0, c.sim) * c.salience * c.entity_salience * recency;
-      return { ...c, recency, score };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, cfg.top_n);
+  const scored = candidates.map((candidate) => {
+    const lastTouched = Math.max(
+      candidate.created_at.getTime(),
+      candidate.last_recalled_at?.getTime() ?? 0,
+    );
+    const ageDays = (now.getTime() - lastTouched) / DAY_MS;
+    const recency = recencyFactor(ageDays, settings.recency_half_life_days);
+
+    const similarity = Math.max(0, candidate.sim);
+    const score = similarity * candidate.salience * candidate.entity_salience * recency;
+    return { ...candidate, recency, score };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, settings.top_n);
 }

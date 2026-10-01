@@ -7,7 +7,7 @@ import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { relativeDate } from "@/mind/platform/relative-date";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
-import { decide, type Decision } from "@/mind/memory/user/reconcile";
+import { reconcileAgainstNeighbours, type Decision } from "@/mind/memory/user/reconcile";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
@@ -140,7 +140,7 @@ const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = 
 };
 
 /**
- * Personal events for one user's day: generate → rules → reconcile (the cold path's `decide`),
+ * Personal events for one user's day: generate → rules → reconcile (the cold path's `reconcileAgainstNeighbours`),
  * rejecting duplicates and contradictions and regenerating up to `life.regen_attempts` times. Read-only: the
  * caller applies the accepted events. An LLM or embed error propagates (the user's tick is retried next hour).
  */
@@ -230,7 +230,7 @@ export async function generateEvents(
         config.reconcile.neighbor_k,
         config.reconcile.near_match_similarity,
       );
-      const decision = await decide(deps, fact, neighbors);
+      const decision = await reconcileAgainstNeighbours(deps, fact, neighbors);
       if (decision.relation === "duplicate" || decision.relation === "contradicts") {
         reject(decision.relation, decision.targetId);
         continue;

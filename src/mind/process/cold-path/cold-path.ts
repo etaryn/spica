@@ -4,9 +4,9 @@ import { getTurnsByIds, turnsUpTo } from "@/db/repos/session-log";
 import { listOpenThreads } from "@/db/repos/threads";
 import { getTimezone } from "@/db/repos/users";
 import type { Deps } from "@/mind/platform/deps";
-import { applyExtraction, type ApplyOutcome, type PlannedFact } from "@/mind/memory/user/encode";
+import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
 import { extract, type ExtractedFact } from "@/mind/memory/user/extract";
-import { decide } from "@/mind/memory/user/reconcile";
+import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { nudgeEgoForExchange } from "@/mind/state/legacy-ego/nudge";
 import { errorName } from "@/mind/platform/errors";
@@ -14,7 +14,7 @@ import { applyRelationship } from "@/mind/state/user/relationship/update";
 import { hurtFactContent } from "@/mind/state/user/relationship/signals";
 
 export class LockBusyError extends Error {}
-export type ColdPathOutcome = { status: "done" | "skipped"; applied?: ApplyOutcome };
+export type ColdPathOutcome = { status: "done" | "skipped"; applied?: EncodeOutcome };
 
 /**
  * Cold path: extract → embed → reconcile → apply, all inside one transaction
@@ -91,10 +91,15 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
         config.reconcile.neighbor_k,
         config.reconcile.near_match_similarity,
       );
-      planned.push({ fact, embedding, decision: await decide(deps, fact, neighbors), source });
+      planned.push({
+        fact,
+        embedding,
+        decision: await reconcileAgainstNeighbours(deps, fact, neighbors),
+        source,
+      });
     }
 
-    const applied = await applyExtraction(tx, config, {
+    const applied = await encodeExtraction(tx, config, {
       userId: job.userId,
       now: clock.now(),
       exchangeAt: turns[0]!.created_at, // getTurnsByIds sorts oldest first: the exchange's first turn (hers, for a reach-out)

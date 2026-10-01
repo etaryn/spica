@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
-import { decide } from "@/mind/memory/user/reconcile";
+import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";
 
 const config = loadConfig();
 const cand: ExtractedFact = {
@@ -25,7 +25,10 @@ const n = (id: string) => ({
 
 test("no neighbors → new, without an LLM call", async () => {
   const llm = new FakeLLMProvider();
-  expect(await decide({ llm, config }, cand, [])).toEqual({ relation: "new", targetId: null });
+  expect(await reconcileAgainstNeighbours({ llm, config }, cand, [])).toEqual({
+    relation: "new",
+    targetId: null,
+  });
   expect(llm.structuredCalls).toEqual([]);
 });
 
@@ -33,7 +36,7 @@ test("classifier decision is applied when the target is one of the neighbors", a
   const llm = new FakeLLMProvider();
   const id = "11111111-1111-4111-8111-111111111111";
   llm.handlers.reconcile = () => ({ relation: "contradicts", target_fact_id: id });
-  expect(await decide({ llm, config }, cand, [n(id)])).toEqual({
+  expect(await reconcileAgainstNeighbours({ llm, config }, cand, [n(id)])).toEqual({
     relation: "contradicts",
     targetId: id,
   });
@@ -46,12 +49,20 @@ test("foreign target id → new; non-new relation without target → new", async
     relation: "duplicate",
     target_fact_id: "22222222-2222-4222-8222-222222222222",
   });
-  expect(await decide({ llm, config }, cand, [n("11111111-1111-4111-8111-111111111111")])).toEqual({
+  expect(
+    await reconcileAgainstNeighbours({ llm, config }, cand, [
+      n("11111111-1111-4111-8111-111111111111"),
+    ]),
+  ).toEqual({
     relation: "new",
     targetId: null,
   });
   llm.handlers.reconcile = () => ({ relation: "resolves", target_fact_id: null });
-  expect(await decide({ llm, config }, cand, [n("11111111-1111-4111-8111-111111111111")])).toEqual({
+  expect(
+    await reconcileAgainstNeighbours({ llm, config }, cand, [
+      n("11111111-1111-4111-8111-111111111111"),
+    ]),
+  ).toEqual({
     relation: "new",
     targetId: null,
   });

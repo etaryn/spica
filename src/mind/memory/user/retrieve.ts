@@ -1,141 +1,201 @@
+/**
+ * Retrieval for the hot path. It ranks the user's memories against the conversation, then forces
+ * in what must be there: a reach-out's own topic, threads due a check-in, and her current
+ * preoccupation. Read-only, and it never throws: a failure degrades to whatever could still be
+ * found, so a memory problem never costs the user their reply.
+ */
 import { candidateFacts, getFact, getPreoccupationFact } from "@/db/repos/facts";
 import type { Turn } from "@/db/repos/session-log";
 import { dueThreads } from "@/db/repos/threads";
-import { emptyRetrieval, type RetrievalResult } from "@/mind/process/hot-path/assemble";
+import { rankMemories, type Scored } from "@/mind/memory/shared/ranking";
+import {
+  emptyRetrieval,
+  type RecalledFact,
+  type RetrievalResult,
+} from "@/mind/memory/shared/types";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { withTimeout } from "@/mind/platform/timeout";
-import { rankCandidates, type Scored } from "@/mind/memory/shared/ranking";
 
-/**
- * Hot-path retrieval. Read-only and never throws: any failure
- * degrades to whatever could still be retrieved, so a memory problem never costs
- * the user their reply. `answering` is a list so a multi-turn buffer fits. `excludeSensitive` (reach-outs)
- * keeps every `payload.sensitive` fact out: ranked, forced, due threads (by their latest fact) and the preoccupation.
- */
+type RetrieveDeps = Pick<Deps, "db" | "embedder" | "config" | "log">;
+
+export type RetrieveInput = {
+  /** The turns being answered; a list, so a multi-message buffer fits. */
+  answering: Turn[];
+  context: Turn[];
+  now: Date;
+  queryText?: string;
+  forceFactIds?: string[];
+  /** Reach-outs: keeps every sensitive memory out, whether ranked, forced, due or on her mind. */
+  excludeSensitive?: boolean;
+};
+
+/** A forced memory skips ranking, so its score breakdown is fixed. */
+function forcedRecall(factId: string, salience: number): RecalledFact {
+  return {
+    factId,
+    sim: 0,
+    fact_salience: salience,
+    entity_salience: 1,
+    recency: 1,
+    score: 0,
+    forced: true,
+  };
+}
+
+function isSensitive(fact: { payload: unknown }): boolean {
+  return (fact.payload as { sensitive?: unknown } | null)?.sensitive === true;
+}
+
 export async function retrieve(
-  deps: Pick<Deps, "db" | "embedder" | "config" | "log">,
+  deps: RetrieveDeps,
   userId: string,
-  input: {
-    answering: Turn[];
-    context: Turn[];
-    now: Date;
-    queryText?: string;
-    forceFactIds?: string[];
-    excludeSensitive?: boolean;
-  },
+  input: RetrieveInput,
 ): Promise<RetrievalResult> {
-  const { db, embedder, config, log } = deps;
   const result = emptyRetrieval();
   const seen = new Set<string>();
-  const excl = input.excludeSensitive === true;
-  const isSensitive = (f: { payload: unknown }) =>
-    (f.payload as { sensitive?: unknown } | null)?.sensitive === true;
 
-  let scored: Scored[] = [];
+  addRanked(result, seen, await rankAgainstConversation(deps, userId, input));
+
   try {
-    const text =
+    await addForcedFacts(deps, userId, input, result, seen);
+    await addDueThreads(deps, userId, input, result, seen);
+    await addPreoccupation(deps, userId, input, result, seen);
+  } catch (e) {
+    deps.log.error("forced retrieval failed", { userId, error: errorName(e) });
+  }
+
+  return result;
+}
+
+async function rankAgainstConversation(
+  deps: RetrieveDeps,
+  userId: string,
+  input: RetrieveInput,
+): Promise<Scored[]> {
+  const { db, embedder, config, log } = deps;
+
+  try {
+    const query =
       input.queryText ?? [...input.context, ...input.answering].map((t) => t.text).join("\n");
-    // An empty query (a check-in with no turns) has nothing to rank against: skip the embed.
-    if (text.trim() !== "") {
-      const [q] = await withTimeout(
-        embedder.embed([text], "query"),
-        config.retrieval.embed_timeout_ms,
-      );
-      if (!q) throw new Error("embedder returned no vector");
-      scored = rankCandidates(
-        await candidateFacts(db, userId, q, config.retrieval.candidate_pool, input.now, {
-          excludeSensitive: excl,
-        }),
-        input.now,
-        config.retrieval,
-      );
-    }
+    // A check-in with no turns has nothing to rank against, so skip the embed.
+    if (query.trim() === "") return [];
+
+    const [vector] = await withTimeout(
+      embedder.embed([query], "query"),
+      config.retrieval.embed_timeout_ms,
+    );
+    if (!vector) throw new Error("embedder returned no vector");
+
+    const candidates = await candidateFacts(
+      db,
+      userId,
+      vector,
+      config.retrieval.candidate_pool,
+      input.now,
+      { excludeSensitive: input.excludeSensitive === true },
+    );
+    return rankMemories(candidates, input.now, config.retrieval);
   } catch (e) {
     log.error("retrieval degraded", { userId, error: errorName(e) });
+    return [];
   }
-  for (const s of scored) {
-    seen.add(s.id);
-    result.facts[s.subject].push({
-      id: s.id,
-      content: s.content,
-      when: s.occurred_at ?? s.created_at,
+}
+
+function addRanked(result: RetrievalResult, seen: Set<string>, ranked: Scored[]): void {
+  for (const memory of ranked) {
+    seen.add(memory.id);
+    result.facts[memory.subject].push({
+      id: memory.id,
+      content: memory.content,
+      when: memory.occurred_at ?? memory.created_at,
     });
     result.recalled.push({
-      factId: s.id,
-      sim: s.sim,
-      fact_salience: s.salience,
-      entity_salience: s.entity_salience,
-      recency: s.recency,
-      score: s.score,
+      factId: memory.id,
+      sim: memory.sim,
+      fact_salience: memory.salience,
+      entity_salience: memory.entity_salience,
+      recency: memory.recency,
+      score: memory.score,
       forced: false,
     });
   }
+}
 
-  try {
-    // No future-dated filter here: the only caller (a reach-out's candidate) passes facts whose time has come.
-    for (const id of input.forceFactIds ?? []) {
-      if (seen.has(id)) continue;
-      const f = await getFact(db, userId, id);
-      if (!f || f.status === "superseded" || f.status === "stale" || (excl && isSensitive(f)))
-        continue;
-      seen.add(id);
-      result.facts[f.subject].push({
-        id: f.id,
-        content: f.content,
-        when: f.occurred_at ?? f.created_at,
-      });
-      result.recalled.push({
-        factId: f.id,
-        sim: 0,
-        fact_salience: f.salience,
-        entity_salience: 1,
-        recency: 1,
-        score: 0,
-        forced: true,
-      });
-    }
-    for (const t of await dueThreads(db, userId, input.now, config.retrieval.max_due_threads)) {
-      if (excl && t.sensitive) continue;
-      result.dueThreads.push({ id: t.id, title: t.title, detail: t.content });
-      if (t.fact_id && !seen.has(t.fact_id)) {
-        seen.add(t.fact_id);
-        result.recalled.push({
-          factId: t.fact_id,
-          sim: 0,
-          fact_salience: t.salience ?? 0,
-          entity_salience: 1,
-          recency: 1,
-          score: 0,
-          forced: true,
-        });
-      }
-    }
-    const pre = await getPreoccupationFact(db, userId, input.now);
-    if (pre && !(excl && isSensitive(pre))) {
-      const hit = result.facts.self.find((f) => f.id === pre.id);
-      if (hit) hit.onMind = true;
-      else if (!seen.has(pre.id)) {
-        seen.add(pre.id);
-        result.facts.self.push({
-          id: pre.id,
-          content: pre.content,
-          when: pre.occurred_at ?? pre.created_at,
-          onMind: true,
-        });
-        result.recalled.push({
-          factId: pre.id,
-          sim: 0,
-          fact_salience: pre.salience,
-          entity_salience: 1,
-          recency: 1,
-          score: 0,
-          forced: true,
-        });
-      }
-    }
-  } catch (e) {
-    log.error("forced retrieval failed", { userId, error: errorName(e) });
+/** No future-date filter: the only caller (a reach-out) passes memories whose time has come. */
+async function addForcedFacts(
+  deps: RetrieveDeps,
+  userId: string,
+  input: RetrieveInput,
+  result: RetrievalResult,
+  seen: Set<string>,
+): Promise<void> {
+  const excludeSensitive = input.excludeSensitive === true;
+
+  for (const id of input.forceFactIds ?? []) {
+    if (seen.has(id)) continue;
+
+    const fact = await getFact(deps.db, userId, id);
+    if (!fact || fact.status === "superseded" || fact.status === "stale") continue;
+    if (excludeSensitive && isSensitive(fact)) continue;
+
+    seen.add(id);
+    result.facts[fact.subject].push({
+      id: fact.id,
+      content: fact.content,
+      when: fact.occurred_at ?? fact.created_at,
+    });
+    result.recalled.push(forcedRecall(fact.id, fact.salience));
   }
-  return result;
+}
+
+/** A due thread is judged sensitive by its latest memory. */
+async function addDueThreads(
+  deps: RetrieveDeps,
+  userId: string,
+  input: RetrieveInput,
+  result: RetrievalResult,
+  seen: Set<string>,
+): Promise<void> {
+  const due = await dueThreads(deps.db, userId, input.now, deps.config.retrieval.max_due_threads);
+
+  for (const thread of due) {
+    if (input.excludeSensitive === true && thread.sensitive) continue;
+
+    result.dueThreads.push({ id: thread.id, title: thread.title, detail: thread.content });
+
+    if (thread.fact_id && !seen.has(thread.fact_id)) {
+      seen.add(thread.fact_id);
+      result.recalled.push(forcedRecall(thread.fact_id, thread.salience ?? 0));
+    }
+  }
+}
+
+/** Marks her preoccupation "on your mind lately", adding it if ranking didn't find it. */
+async function addPreoccupation(
+  deps: RetrieveDeps,
+  userId: string,
+  input: RetrieveInput,
+  result: RetrievalResult,
+  seen: Set<string>,
+): Promise<void> {
+  const preoccupation = await getPreoccupationFact(deps.db, userId, input.now);
+  if (!preoccupation) return;
+  if (input.excludeSensitive === true && isSensitive(preoccupation)) return;
+
+  const alreadyIncluded = result.facts.self.find((f) => f.id === preoccupation.id);
+  if (alreadyIncluded) {
+    alreadyIncluded.onMind = true;
+    return;
+  }
+  if (seen.has(preoccupation.id)) return;
+
+  seen.add(preoccupation.id);
+  result.facts.self.push({
+    id: preoccupation.id,
+    content: preoccupation.content,
+    when: preoccupation.occurred_at ?? preoccupation.created_at,
+    onMind: true,
+  });
+  result.recalled.push(forcedRecall(preoccupation.id, preoccupation.salience));
 }

@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
-import { rankCandidates, recencyFactor } from "@/mind/memory/shared/ranking";
+import { rankMemories, recencyFactor } from "@/mind/memory/shared/ranking";
 
 const now = new Date("2026-02-04T00:00:00Z");
-const c = (id: string, over: Partial<Parameters<typeof rankCandidates>[0][number]> = {}) => ({
+const c = (id: string, over: Partial<Parameters<typeof rankMemories>[0][number]> = {}) => ({
   id,
   subject: "user" as const,
   content: id,
@@ -23,7 +23,7 @@ test("recency halves every half-life and never exceeds 1", () => {
 });
 
 test("score = sim × salience × entity salience × recency; recall refreshes recency; top_n cut", () => {
-  const ranked = rankCandidates(
+  const ranked = rankMemories(
     [
       c("stale-ish", { created_at: new Date("2026-01-05T00:00:00Z") }),
       c("recalled", { created_at: new Date("2026-01-05T00:00:00Z"), last_recalled_at: now }),

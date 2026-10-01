@@ -1,3 +1,8 @@
+/**
+ * Reconcile: decides how a new memory relates to the closest ones already stored. It can be a
+ * duplicate, resolve an open one, contradict one (which supersedes it), or be new. The model is
+ * only asked when a near match exists.
+ */
 import { z } from "zod";
 import type { Neighbor } from "@/db/repos/facts";
 import type { Deps } from "@/mind/platform/deps";
@@ -13,33 +18,36 @@ export type Decision = {
   relation: "duplicate" | "resolves" | "contradicts" | "new";
   targetId: string | null;
 };
-const NEW: Decision = { relation: "new", targetId: null };
 
-export function buildReconcileInput(c: ExtractedFact, neighbors: Neighbor[]): string {
+const IS_NEW: Decision = { relation: "new", targetId: null };
+
+export function buildReconcileInput(candidate: ExtractedFact, neighbors: Neighbor[]): string {
   return [
-    `New fact (${c.subject}, ${c.kind}): ${c.content}`,
+    `New fact (${candidate.subject}, ${candidate.kind}): ${candidate.content}`,
     "Existing facts:",
     ...neighbors.map((n) => `- id=${n.id} [${n.status}] ${n.content}`),
   ].join("\n");
 }
 
-/** Approach A: only near-matches reach the classifier; any target outside `neighbors` is ignored. */
-export async function decide(
+/** A target the model names that isn't one of `neighbors` is ignored, so the memory counts as new. */
+export async function reconcileAgainstNeighbours(
   deps: Pick<Deps, "llm" | "config">,
-  c: ExtractedFact,
+  candidate: ExtractedFact,
   neighbors: Neighbor[],
 ): Promise<Decision> {
-  if (neighbors.length === 0) return NEW;
-  const raw = await deps.llm.classifyJson({
+  if (neighbors.length === 0) return IS_NEW;
+
+  const verdict = await deps.llm.classifyJson({
     purpose: "reconcile",
     model: "cheap",
     system: loadPrompt("reconcile", deps.config.prompts.reconcile),
-    input: buildReconcileInput(c, neighbors),
+    input: buildReconcileInput(candidate, neighbors),
     schema: ReconcileSchema,
     timeoutMs: deps.config.models.structured_timeout_ms,
     maxTokens: deps.config.reconcile.max_tokens,
   });
-  if (raw.relation === "new") return NEW;
-  const target = neighbors.find((n) => n.id === raw.target_fact_id);
-  return target ? { relation: raw.relation, targetId: target.id } : NEW;
+  if (verdict.relation === "new") return IS_NEW;
+
+  const target = neighbors.find((n) => n.id === verdict.target_fact_id);
+  return target ? { relation: verdict.relation, targetId: target.id } : IS_NEW;
 }

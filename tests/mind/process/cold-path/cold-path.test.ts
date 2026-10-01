@@ -130,7 +130,7 @@ test("atomic: a failure mid-write (after facts/entities/recall write-back) leave
     })
     .returning();
   const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
-  // markExtracted's UPDATE on session_log is applyExtraction's last write. A trigger that
+  // markExtracted's UPDATE on session_log is encodeExtraction's last write. A trigger that
   // raises there fires only after entities, facts and the recall write-back have already
   // run in the same (still-open) transaction, so this proves the whole write is atomic and
   // not just that a failure before any write leaves nothing behind.

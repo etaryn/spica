@@ -19,7 +19,8 @@ import {
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { withTimeout } from "@/mind/platform/timeout";
-import { assemblePrompt, gapLine, relationshipLine, type RetrievalResult } from "./assemble";
+import type { RetrievalResult } from "@/mind/memory/shared/types";
+import { assemblePrompt, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
 
 export type Composed = {

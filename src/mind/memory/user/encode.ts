@@ -1,3 +1,9 @@
+/**
+ * Encoding: writes one exchange's extraction into the user's memory. It covers entities, threads
+ * and facts (each reconciled against what's already stored), then the hot path's recall
+ * reinforcement. Runs inside the cold path's transaction; every id the model supplied is checked
+ * to belong to this user.
+ */
 import type { Db } from "@/db/client";
 import { normalizeName, upsertEntityMention } from "@/db/repos/entities";
 import { applyRecall, bumpDuplicate, getFact, insertFact, setFactStatus } from "@/db/repos/facts";
@@ -9,10 +15,10 @@ import {
   resolveThread,
   touchThread,
 } from "@/db/repos/threads";
+import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Config } from "@/mind/platform/config";
 import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract";
 import type { Decision } from "./reconcile";
-import type { RecalledFact } from "@/mind/memory/shared/types";
 
 export type PlannedFact = {
   fact: ExtractedFact;
@@ -20,10 +26,12 @@ export type PlannedFact = {
   decision: Decision;
   source?: "turn" | "inferred" | "generated";
 };
-export type ApplyInput = {
-  /** now: job run time (recall write-back, entity last_mentioned, thread resolve). exchangeAt: the earliest turn's created_at (inserted facts' created_at, thread open/touch). */
+
+export type EncodeInput = {
   userId: string;
+  /** When the job runs: recall write-back, entity last_mentioned, thread resolve. */
   now: Date;
+  /** The exchange's earliest turn: new facts' created_at, thread open and touch. */
   exchangeAt: Date;
   entities: ExtractedEntity[];
   facts: PlannedFact[];
@@ -34,7 +42,8 @@ export type ApplyInput = {
   replyTurnId: string | null;
   turnIds: string[];
 };
-export type ApplyOutcome = {
+
+export type EncodeOutcome = {
   inserted: number;
   duplicates: number;
   resolved: number;
@@ -46,41 +55,22 @@ export type ApplyOutcome = {
   factIds: (string | null)[];
 };
 
-const entityKey = (subject: "user" | "self", name: string) => `${subject}|${normalizeName(name)}`;
-const entitySubject = (s: ExtractedFact["subject"]): "user" | "self" =>
-  s === "self" ? "self" : "user";
+type EntitySubject = "user" | "self";
 
-/** Blank names dropped; mentions with the same subject + normalized name merged, so no alias is lost. */
-function mergeMentions(ms: ExtractedEntity[]): ExtractedEntity[] {
-  const byKey = new Map<string, ExtractedEntity>();
-  for (const m of ms) {
-    if (!normalizeName(m.name)) continue;
-    const aliases = m.aliases.filter((a) => normalizeName(a));
-    const k = entityKey(m.subject, m.name);
-    const prev = byKey.get(k);
-    byKey.set(
-      k,
-      prev
-        ? {
-            ...prev,
-            aliases: [...new Set([...prev.aliases, ...aliases])],
-            relation: prev.relation ?? m.relation,
-            type: prev.type === "other" ? m.type : prev.type,
-          }
-        : { ...m, aliases },
-    );
-  }
-  return [...byKey.values()];
+function entityKey(subject: EntitySubject, name: string): string {
+  return `${subject}|${normalizeName(name)}`;
 }
 
-/** Cold-path writes. Call inside the job's transaction; every id the model supplied is ownership-checked. */
-export async function applyExtraction(
+function entitySubjectOf(subject: ExtractedFact["subject"]): EntitySubject {
+  return subject === "self" ? "self" : "user";
+}
+
+export async function encodeExtraction(
   db: Db,
   config: Config,
-  input: ApplyInput,
-): Promise<ApplyOutcome> {
-  const { userId, now } = input;
-  const out: ApplyOutcome = {
+  input: EncodeInput,
+): Promise<EncodeOutcome> {
+  const outcome: EncodeOutcome = {
     inserted: 0,
     duplicates: 0,
     resolved: 0,
@@ -91,101 +81,189 @@ export async function applyExtraction(
     factIds: [],
   };
 
-  // 1. Entities: declared ones plus any named only in facts.
-  const mentions: ExtractedEntity[] = [...input.entities];
-  const known = () =>
-    new Set(mentions.flatMap((m) => [m.name, ...m.aliases].map((n) => entityKey(m.subject, n))));
-  for (const p of input.facts) {
-    for (const name of p.fact.entity_names) {
-      if (!normalizeName(name)) continue;
-      const subject = entitySubject(p.fact.subject);
-      if (!known().has(entityKey(subject, name)))
-        mentions.push({ name, aliases: [], type: "other", subject, relation: null });
-    }
-  }
-  const entityIds = new Map<string, string>();
-  const entOpts = {
+  const entityIds = await encodeEntities(db, config, input, outcome);
+  const threadIds = await encodeThreads(db, input, outcome);
+  await encodeFacts(db, config, input, entityIds, threadIds, outcome);
+  outcome.recalledUpdated = await writeBackRecall(db, config, input);
+
+  await markExtracted(db, input.userId, input.turnIds);
+  return outcome;
+}
+
+// ---------- Entities ----------
+
+/** Upserts the declared entities plus any named only inside a fact. Returns ids by entity key. */
+async function encodeEntities(
+  db: Db,
+  config: Config,
+  input: EncodeInput,
+  outcome: EncodeOutcome,
+): Promise<Map<string, string>> {
+  const mentions = withEntitiesNamedInFacts(input.entities, input.facts);
+  const settings = {
     newSalience: config.extraction.new_entity_salience,
     bump: config.extraction.entity_bump,
     cap: config.retrieval.recall_cap,
   };
-  for (const m of mergeMentions(mentions)) {
-    const existing = entityIds.get(entityKey(m.subject, m.name));
-    const { id, created } = existing
-      ? { id: existing, created: false }
-      : await upsertEntityMention(db, userId, m, now, entOpts);
-    if (created) out.entitiesCreated += 1;
-    for (const n of [m.name, ...m.aliases]) entityIds.set(entityKey(m.subject, n), id);
-  }
 
-  // 2. Threads (model-supplied thread_ids must belong to this user).
-  const threadIds = new Map<string, string>();
-  for (const t of input.threads) {
-    const byId = t.thread_id ? await getOwnedThread(db, userId, t.thread_id) : null;
-    const existing = byId ?? (await findOpenThreadByTitle(db, userId, t.title));
-    if (t.action === "open") {
-      if (existing && existing.status === "open") {
-        await touchThread(db, userId, existing.id, input.exchangeAt, t.next_checkpoint);
-        threadIds.set(normalizeName(t.title), existing.id);
-      } else {
-        const row = await insertThread(
-          db,
-          userId,
-          {
-            title: t.title,
-            subject: t.subject,
-            stakes: t.stakes,
-            next_checkpoint: t.next_checkpoint,
-          },
-          input.exchangeAt,
-        );
-        out.threadsOpened += 1;
-        threadIds.set(normalizeName(t.title), row.id);
-      }
-    } else if (existing) {
-      if (t.action === "touch")
-        await touchThread(db, userId, existing.id, input.exchangeAt, t.next_checkpoint);
-      else await resolveThread(db, userId, existing.id, now);
-      threadIds.set(normalizeName(t.title), existing.id);
-      threadIds.set(normalizeName(existing.title), existing.id);
+  const entityIds = new Map<string, string>();
+  for (const mention of mergeMentions(mentions)) {
+    const knownId = entityIds.get(entityKey(mention.subject, mention.name));
+    const { id, created } = knownId
+      ? { id: knownId, created: false }
+      : await upsertEntityMention(db, input.userId, mention, input.now, settings);
+    if (created) outcome.entitiesCreated += 1;
+
+    for (const name of [mention.name, ...mention.aliases]) {
+      entityIds.set(entityKey(mention.subject, name), id);
     }
   }
+  return entityIds;
+}
 
-  // 3. Facts.
+function withEntitiesNamedInFacts(
+  declared: ExtractedEntity[],
+  facts: PlannedFact[],
+): ExtractedEntity[] {
+  const mentions = [...declared];
+  const known = new Set(
+    mentions.flatMap((m) => [m.name, ...m.aliases].map((name) => entityKey(m.subject, name))),
+  );
+
+  for (const { fact } of facts) {
+    const subject = entitySubjectOf(fact.subject);
+    for (const name of fact.entity_names) {
+      if (!normalizeName(name)) continue;
+      const key = entityKey(subject, name);
+      if (known.has(key)) continue;
+
+      mentions.push({ name, aliases: [], type: "other", subject, relation: null });
+      known.add(key);
+    }
+  }
+  return mentions;
+}
+
+/** Drops blank names and merges mentions with the same subject and name, so no alias is lost. */
+function mergeMentions(mentions: ExtractedEntity[]): ExtractedEntity[] {
+  const byKey = new Map<string, ExtractedEntity>();
+
+  for (const mention of mentions) {
+    if (!normalizeName(mention.name)) continue;
+    const aliases = mention.aliases.filter((alias) => normalizeName(alias));
+    const key = entityKey(mention.subject, mention.name);
+    const earlier = byKey.get(key);
+
+    if (!earlier) {
+      byKey.set(key, { ...mention, aliases });
+      continue;
+    }
+    byKey.set(key, {
+      ...earlier,
+      aliases: [...new Set([...earlier.aliases, ...aliases])],
+      relation: earlier.relation ?? mention.relation,
+      type: earlier.type === "other" ? mention.type : earlier.type,
+    });
+  }
+  return [...byKey.values()];
+}
+
+// ---------- Threads ----------
+
+/** Opens, touches or resolves threads. Returns thread ids by normalized title. */
+async function encodeThreads(
+  db: Db,
+  input: EncodeInput,
+  outcome: EncodeOutcome,
+): Promise<Map<string, string>> {
+  const { userId } = input;
+  const threadIds = new Map<string, string>();
+
+  for (const update of input.threads) {
+    const byId = update.thread_id ? await getOwnedThread(db, userId, update.thread_id) : null;
+    const existing = byId ?? (await findOpenThreadByTitle(db, userId, update.title));
+
+    if (update.action === "open") {
+      if (existing && existing.status === "open") {
+        await touchThread(db, userId, existing.id, input.exchangeAt, update.next_checkpoint);
+        threadIds.set(normalizeName(update.title), existing.id);
+        continue;
+      }
+      const thread = await insertThread(
+        db,
+        userId,
+        {
+          title: update.title,
+          subject: update.subject,
+          stakes: update.stakes,
+          next_checkpoint: update.next_checkpoint,
+        },
+        input.exchangeAt,
+      );
+      outcome.threadsOpened += 1;
+      threadIds.set(normalizeName(update.title), thread.id);
+      continue;
+    }
+
+    if (!existing) continue;
+    if (update.action === "touch") {
+      await touchThread(db, userId, existing.id, input.exchangeAt, update.next_checkpoint);
+    } else {
+      await resolveThread(db, userId, existing.id, input.now);
+    }
+    threadIds.set(normalizeName(update.title), existing.id);
+    threadIds.set(normalizeName(existing.title), existing.id);
+  }
+  return threadIds;
+}
+
+// ---------- Facts ----------
+
+async function encodeFacts(
+  db: Db,
+  config: Config,
+  input: EncodeInput,
+  entityIds: Map<string, string>,
+  threadIds: Map<string, string>,
+  outcome: EncodeOutcome,
+): Promise<void> {
+  const { userId } = input;
   const payload = input.sensitive ? { sensitive: true } : null;
-  for (const p of input.facts) {
-    const f = p.fact;
-    const subject = entitySubject(f.subject);
-    const entity_refs = [
-      ...new Set(
-        f.entity_names
-          .map((n) => entityIds.get(entityKey(subject, n)))
-          .filter((x): x is string => !!x),
-      ),
-    ];
-    const thread_id = f.thread_title
-      ? (threadIds.get(normalizeName(f.thread_title)) ??
-        (await findOpenThreadByTitle(db, userId, f.thread_title))?.id ??
+
+  for (const planned of input.facts) {
+    const fact = planned.fact;
+    const subject = entitySubjectOf(fact.subject);
+
+    const entityRefs = fact.entity_names
+      .map((name) => entityIds.get(entityKey(subject, name)))
+      .filter((id): id is string => !!id);
+    const threadId = fact.thread_title
+      ? (threadIds.get(normalizeName(fact.thread_title)) ??
+        (await findOpenThreadByTitle(db, userId, fact.thread_title))?.id ??
         null)
       : null;
-    const base = {
-      subject: f.subject,
-      kind: f.kind,
-      content: f.content,
+
+    const row = {
+      subject: fact.subject,
+      kind: fact.kind,
+      content: fact.content,
       payload,
-      embedding: p.embedding,
-      entity_refs,
-      thread_id,
-      occurred_at: f.occurred_at,
+      embedding: planned.embedding,
+      entity_refs: [...new Set(entityRefs)],
+      thread_id: threadId,
+      occurred_at: fact.occurred_at,
       created_at: input.exchangeAt,
-      salience: f.salience,
-      valence: f.valence,
-      confidence: f.confidence,
-      source: p.source ?? "turn",
+      salience: fact.salience,
+      valence: fact.valence,
+      confidence: fact.confidence,
+      source: planned.source ?? "turn",
       source_ref: input.sourceRef,
     };
-    const target = p.decision.targetId ? await getFact(db, userId, p.decision.targetId) : null;
-    const relation = target ? p.decision.relation : "new";
+
+    const target = planned.decision.targetId
+      ? await getFact(db, userId, planned.decision.targetId)
+      : null;
+    const relation = target ? planned.decision.relation : "new";
 
     if (relation === "duplicate" && target) {
       await bumpDuplicate(
@@ -194,60 +272,70 @@ export async function applyExtraction(
         target.id,
         config.reconcile.duplicate_bump,
         config.retrieval.recall_cap,
-        f.confidence,
+        fact.confidence,
       );
-      out.duplicates += 1;
-      out.factIds.push(target.id);
-    } else if (relation === "resolves" && target) {
-      // A late job must not resolve a truth stated after this exchange (mirrors contradicts).
-      if (target.created_at <= input.exchangeAt) {
+      outcome.duplicates += 1;
+      outcome.factIds.push(target.id);
+      continue;
+    }
+
+    // A late job must never overturn something said after this exchange: when the target is
+    // newer, the new candidate is the outdated one.
+    const targetIsNewer = !!target && target.created_at > input.exchangeAt;
+
+    if (relation === "resolves" && target) {
+      if (!targetIsNewer) {
         await setFactStatus(db, userId, target.id, "resolved");
-        out.resolved += 1;
+        outcome.resolved += 1;
       }
-      const row = await insertFact(db, userId, { ...base, status: "resolved" });
-      out.inserted += 1;
-      out.factIds.push(row.id);
-    } else if (relation === "contradicts" && target) {
-      if (target.created_at > input.exchangeAt) {
-        // A late job: the target is newer than this exchange, so the candidate is the outdated one.
-        const row = await insertFact(db, userId, {
-          ...base,
+      const inserted = await insertFact(db, userId, { ...row, status: "resolved" });
+      outcome.inserted += 1;
+      outcome.factIds.push(inserted.id);
+      continue;
+    }
+
+    if (relation === "contradicts" && target) {
+      if (targetIsNewer) {
+        const inserted = await insertFact(db, userId, {
+          ...row,
           status: "superseded",
           superseded_by: target.id,
         });
-        out.factIds.push(row.id);
+        outcome.factIds.push(inserted.id);
       } else {
-        const row = await insertFact(db, userId, { ...base, status: "open" });
-        await setFactStatus(db, userId, target.id, "superseded", row.id);
-        out.factIds.push(row.id);
+        const inserted = await insertFact(db, userId, { ...row, status: "open" });
+        await setFactStatus(db, userId, target.id, "superseded", inserted.id);
+        outcome.factIds.push(inserted.id);
       }
-      out.superseded += 1;
-      out.inserted += 1;
-    } else {
-      const row = await insertFact(db, userId, { ...base, status: "open" });
-      out.inserted += 1;
-      out.factIds.push(row.id);
+      outcome.superseded += 1;
+      outcome.inserted += 1;
+      continue;
     }
+
+    const inserted = await insertFact(db, userId, { ...row, status: "open" });
+    outcome.inserted += 1;
+    outcome.factIds.push(inserted.id);
   }
+}
 
-  // 4. Recall write-back from the hot path's retrieval: a trace for every surviving fact, reinforcement
-  //    only for unforced recalls with sim >= reinforce_min_sim (skips facts deleted meanwhile).
-  out.recalledUpdated = (
-    await applyRecall(
-      db,
-      userId,
-      input.recalled,
-      now,
-      {
-        bump: config.retrieval.recall_bump,
-        cap: config.retrieval.recall_cap,
-        minSim: config.retrieval.reinforce_min_sim,
-      },
-      input.replyTurnId,
-    )
-  ).length;
+// ---------- Recall reinforcement ----------
 
-  // 5. Done.
-  await markExtracted(db, userId, input.turnIds);
-  return out;
+/**
+ * Writes back what the hot path recalled: a trace for every memory that still exists, and
+ * reinforcement only for unforced recalls with similarity at or above `reinforce_min_sim`.
+ */
+async function writeBackRecall(db: Db, config: Config, input: EncodeInput): Promise<number> {
+  const updated = await applyRecall(
+    db,
+    input.userId,
+    input.recalled,
+    input.now,
+    {
+      bump: config.retrieval.recall_bump,
+      cap: config.retrieval.recall_cap,
+      minSim: config.retrieval.reinforce_min_sim,
+    },
+    input.replyTurnId,
+  );
+  return updated.length;
 }

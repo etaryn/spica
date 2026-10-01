@@ -10,7 +10,7 @@ import { applyExchange } from "./transitions";
 
 const DAY = 86_400_000;
 
-/** Cold path, after applyExtraction, inside the job's transaction (a savepoint). */
+/** Cold path, after encodeExtraction, inside the job's transaction (a savepoint). */
 export async function applyRelationship(
   tx: Db,
   deps: Pick<Deps, "config" | "clock">,

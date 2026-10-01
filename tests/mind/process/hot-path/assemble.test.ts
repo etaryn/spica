@@ -1,11 +1,7 @@
 import { describe, expect, test } from "vitest";
-import {
-  assemblePrompt,
-  emptyRetrieval,
-  gapLine,
-  relationshipLine,
-} from "@/mind/process/hot-path/assemble";
+import { assemblePrompt, gapLine, relationshipLine } from "@/mind/process/hot-path/assemble";
 import { relativeDate } from "@/mind/platform/relative-date";
+import { emptyRetrieval } from "@/mind/memory/shared/types";
 import { splitParts } from "@/mind/process/hot-path/split-parts";
 import { resolveSessionId } from "@/mind/process/receive/session";
 

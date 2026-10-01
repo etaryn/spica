@@ -1,19 +1,27 @@
+/**
+ * Extraction: the cold path's first step. One strict-JSON model call reads a finished exchange and
+ * returns candidate memories, the people and things mentioned, thread updates, and the
+ * relationship signals from how the user treated her.
+ */
 import { z } from "zod";
 import type { EntityMention } from "@/db/repos/entities";
 import type { Turn } from "@/db/repos/session-log";
 import { entityType, factKind } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 import {
   normalizeSignals,
   RelationshipSignalsSchema,
   type Signals,
 } from "@/mind/state/user/relationship/signals";
-import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 
 const subject = z.enum(["user", "self", "shared"]);
 
-/** Sent to the model as the output format. No numeric/length bounds (unsupported); clamped after parsing. */
+/**
+ * The output format sent to the model. It carries no numeric or length bounds (the model API
+ * doesn't support them); values are clamped after parsing instead.
+ */
 export const ExtractionSchema = z.object({
   facts: z.array(
     z.object({
@@ -50,20 +58,23 @@ export const ExtractionSchema = z.object({
   relationship: RelationshipSignalsSchema.nullable(),
 });
 
-type Raw = z.infer<typeof ExtractionSchema>;
-export type ExtractedFact = Omit<Raw["facts"][number], "occurred_at"> & {
+type RawExtraction = z.infer<typeof ExtractionSchema>;
+
+export type ExtractedFact = Omit<RawExtraction["facts"][number], "occurred_at"> & {
   occurred_at: Date | null;
 };
 export type ExtractedEntity = EntityMention;
-export type ExtractedThread = Omit<Raw["threads"][number], "next_checkpoint"> & {
+export type ExtractedThread = Omit<RawExtraction["threads"][number], "next_checkpoint"> & {
   next_checkpoint: Date | null;
 };
+
 export type Extraction = {
   facts: ExtractedFact[];
   entities: ExtractedEntity[];
   threads: ExtractedThread[];
   relationship: Signals | null;
 };
+
 export type ExtractArgs = {
   newTurns: Turn[];
   contextTurns: Turn[];
@@ -71,78 +82,103 @@ export type ExtractArgs = {
   timezone: string | null;
 };
 
-const clamp = (x: number, lo: number, hi: number) =>
-  Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : lo;
-const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
-function parseDate(s: string | null): Date | null {
-  if (!s) return null;
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
+/** Clamps into [low, high]; anything not finite becomes `low`. */
+function clamp(value: number, low: number, high: number): number {
+  return Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : low;
 }
 
-export function buildExtractionInput(a: ExtractArgs): string {
-  const zone = a.timezone && isValidTimeZone(a.timezone) ? a.timezone : "UTC";
-  const line = (t: Turn) =>
-    `[${formatLocal(t.created_at, zone)}] ${t.role === "user" ? "User" : "Spica"}: ${t.text}`;
-  const parts = [`User's timezone: ${zone}`];
-  parts.push(
-    a.openThreads.length
-      ? `Open threads (id | title):\n${a.openThreads.map((t) => `- ${t.id} | ${t.title}`).join("\n")}`
+function tidy(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+function parseDate(text: string | null): Date | null {
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function buildExtractionInput(args: ExtractArgs): string {
+  const zone = args.timezone && isValidTimeZone(args.timezone) ? args.timezone : "UTC";
+  const line = (turn: Turn) => {
+    const speaker = turn.role === "user" ? "User" : "Spica";
+    return `[${formatLocal(turn.created_at, zone)}] ${speaker}: ${turn.text}`;
+  };
+
+  const sections = [`User's timezone: ${zone}`];
+
+  sections.push(
+    args.openThreads.length
+      ? `Open threads (id | title):\n${args.openThreads.map((t) => `- ${t.id} | ${t.title}`).join("\n")}`
       : "Open threads: none",
   );
-  if (a.contextTurns.length)
-    parts.push(
-      `Earlier conversation (context only, do not extract from it):\n${a.contextTurns.map(line).join("\n")}`,
+
+  if (args.contextTurns.length) {
+    sections.push(
+      `Earlier conversation (context only, do not extract from it):\n${args.contextTurns.map(line).join("\n")}`,
     );
-  parts.push(`New exchange (extract from this):\n${a.newTurns.map(line).join("\n")}`);
-  return parts.join("\n\n");
+  }
+
+  sections.push(`New exchange (extract from this):\n${args.newTurns.map(line).join("\n")}`);
+  return sections.join("\n\n");
 }
 
 /**
- * Validates (so callers can pass either an already-typed `Raw` value or the
- * model's raw JSON) then clamps numbers, parses dates and drops empties.
+ * Validates the model's output (or an already-typed value), then clamps numbers, parses dates
+ * and drops empty entries.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
-  // Lenient here (unlike the strict, required-nullable key sent to the model in ExtractionSchema): a
-  // schema-invalid relationship block must never fail the memory write. normalizeSignals
-  // already turns anything that doesn't validate into null.
+  // Lenient about the relationship block, unlike the schema sent to the model: a malformed block
+  // must never fail the memory write. normalizeSignals turns anything invalid into null.
   const raw = ExtractionSchema.extend({ relationship: z.unknown().optional() }).parse(input);
+
   const facts = raw.facts
-    .map((f) => ({
-      ...f,
-      content: tidy(f.content),
-      occurred_at: parseDate(f.occurred_at),
-      salience: clamp(f.salience, 0, 1),
-      valence: clamp(f.valence, -1, 1),
-      confidence: clamp(f.confidence, 0, 1),
-      entity_names: f.entity_names.map(tidy).filter(Boolean),
-      thread_title: f.thread_title && tidy(f.thread_title) ? tidy(f.thread_title) : null,
+    .map((fact) => ({
+      ...fact,
+      content: tidy(fact.content),
+      occurred_at: parseDate(fact.occurred_at),
+      salience: clamp(fact.salience, 0, 1),
+      valence: clamp(fact.valence, -1, 1),
+      confidence: clamp(fact.confidence, 0, 1),
+      entity_names: fact.entity_names.map(tidy).filter(Boolean),
+      thread_title: fact.thread_title && tidy(fact.thread_title) ? tidy(fact.thread_title) : null,
     }))
-    .filter((f) => f.content.length > 0)
+    .filter((fact) => fact.content.length > 0)
     .slice(0, maxCandidates);
+
   const entities = raw.entities
-    .map((e) => ({ ...e, name: tidy(e.name), aliases: e.aliases.map(tidy).filter(Boolean) }))
-    .filter((e) => e.name.length > 0);
+    .map((entity) => ({
+      ...entity,
+      name: tidy(entity.name),
+      aliases: entity.aliases.map(tidy).filter(Boolean),
+    }))
+    .filter((entity) => entity.name.length > 0);
+
   const threads = raw.threads
-    .map((t) => ({ ...t, title: tidy(t.title), next_checkpoint: parseDate(t.next_checkpoint) }))
-    .filter((t) => t.title.length > 0);
+    .map((thread) => ({
+      ...thread,
+      title: tidy(thread.title),
+      next_checkpoint: parseDate(thread.next_checkpoint),
+    }))
+    .filter((thread) => thread.title.length > 0);
+
   return { facts, entities, threads, relationship: normalizeSignals(raw.relationship ?? null) };
 }
 
-/** Cold-path step 3: strict-JSON extraction on the extract model. */
 export async function extract(
   deps: Pick<Deps, "llm" | "config">,
-  a: ExtractArgs,
+  args: ExtractArgs,
 ): Promise<Extraction> {
   const { config } = deps;
+
   const raw = await deps.llm.classifyJson({
     purpose: "extract",
     model: "extract",
     system: loadPrompt("extract", config.prompts.extract),
-    input: buildExtractionInput(a),
+    input: buildExtractionInput(args),
     schema: ExtractionSchema,
     timeoutMs: config.models.structured_timeout_ms,
     maxTokens: config.models.extract_max_tokens,
   });
+
   return normalizeExtraction(raw, config.extraction.max_candidates);
 }

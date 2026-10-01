@@ -1,22 +1,7 @@
 import { relativeDate } from "@/mind/platform/relative-date";
 import type { ChatMessage } from "@/mind/platform/llm/types";
-import type { RecalledFact } from "@/mind/memory/shared/types";
+import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import { HOUR } from "@/mind/platform/time";
-
-export type RetrievedFact = { id: string; content: string; when: Date; onMind?: boolean };
-export type DueThread = { id: string; title: string; detail?: string | null };
-
-export interface RetrievalResult {
-  facts: { user: RetrievedFact[]; self: RetrievedFact[]; shared: RetrievedFact[] };
-  dueThreads: DueThread[];
-  /** Everything included in the prompt, for the cold path's recall write-back and trace. */
-  recalled: RecalledFact[];
-}
-
-/** Retrieval output as the prompt sees it; empty when retrieval is degraded. */
-export function emptyRetrieval(): RetrievalResult {
-  return { facts: { user: [], self: [], shared: [] }, dueThreads: [], recalled: [] };
-}
 
 export interface AssembleInput {
   valuesDoc: string;

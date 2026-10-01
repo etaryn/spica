@@ -13,7 +13,7 @@ import * as inputs from "./inputs";
 const MIN = 60_000;
 
 /**
- * `outreach_tick` for one user (spec §6.1). A cheap unlocked pre-check skips users who can't be reached out to
+ * `outreach_tick` for one user. A cheap unlocked pre-check skips users who can't be reached out to
  * (no row written); otherwise one `reach_out_log` row records candidates, winner and gate, and a winner through
  * an open gate is scheduled `seededUnit × jitter_max_minutes` later as a `reach_out_send` job.
  */

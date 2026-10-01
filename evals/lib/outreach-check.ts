@@ -18,7 +18,7 @@ export type OutreachSnapshot = {
 };
 
 /**
- * Independent of the gate's own log (spec §9.2): recomputed from session_log, the shared life_day plans and
+ * Independent of the gate's own log: recomputed from session_log, the shared life_day plans and
  * relationship_event. Topics and kinds are the one thing only reach_out_log knows.
  *
  * Crisis windows are anchored on the `crisis` relationship events: their created_at is the cold path's `now`,
@@ -67,7 +67,7 @@ function crisisStarts(events: Date[], flagged: Date[]): { at: Date }[] {
   return [...starts].sort((a, b) => a - b).map((t) => ({ at: new Date(t) }));
 }
 
-/** Every gate rule (spec §5) recomputed over the whole run; one line per violating reach-out and rule. */
+/** Every gate rule recomputed over the whole run; one line per violating reach-out and rule. */
 export function gateViolations(s: OutreachSnapshot, cfg: Config): string[] {
   const out: string[] = [];
   const o = cfg.outreach;

@@ -12,11 +12,11 @@ type BaselineEntry = string | { status: string; runs: number; passedRuns: number
 
 /**
  * Guardrail checks (crisis, sensitive data, cross-user isolation) must pass on every run; everything else is memory
- * behaviour and passes on a majority. Ethan 2026-09-25: for Phase 1, memory that works matters more than memory that
- * never fails; fine-tuning and guarding come in later phases. `guard` assertions (Phase 2) are also every-run, and so
- * are `turn` assertions (Phase 3) unless `gate: majority` (grouping that depends on the real turn judge, design §9.6),
- * and `relationship` assertions (Phase 4) the same way (deterministic; `gate: majority` for a judge-driven signal source).
- * Judged types are annotations, never assertions (v2 §15), so status comes from deterministic checks only.
+ * behaviour and passes on a majority. Ethan 2026-09-25: memory that works matters more than memory that
+ * never fails; fine-tuning and guarding come in later phases. `guard` assertions are also every-run, and so
+ * are `turn` assertions unless `gate: majority` (grouping that depends on the real turn judge),
+ * and `relationship` assertions the same way (deterministic; `gate: majority` for a judge-driven signal source).
+ * Judged types are annotations, never assertions, so status comes from deterministic checks only.
  */
 const EVERY_RUN_CHECKS = new Set(["turn_flagged", "crisis_card_shown", "fact_flag", "prompt_mentions", "foreign_turn_count"]);
 
@@ -48,7 +48,7 @@ export function toBaseline(summaries: ScriptSummary[]): Record<string, BaselineE
 }
 
 /**
- * `--update-baseline` (v2 §15.4 #30): merges this run's entries into the existing baseline instead of
+ * `--update-baseline`: merges this run's entries into the existing baseline instead of
  * replacing the whole file, so a partial (`--only`) or fake run can no longer wipe real-run entries for
  * scripts it didn't run. Keys are re-sorted alphabetically, matching the file's existing convention.
  */

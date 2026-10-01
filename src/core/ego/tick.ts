@@ -10,7 +10,7 @@ import { dayLoad, driftStep, energyTarget, preoccupationExpired, stateOf, type E
 
 const sameHour = (a: Date | null, b: Date) => !!a && Math.floor(a.getTime() / HOUR) === Math.floor(b.getTime() / HOUR);
 
-/** `ego_tick` for one user (design §7.2): one drift step per UTC hour; missed hours aren't caught up. */
+/** `ego_tick` for one user: one drift step per UTC hour; missed hours aren't caught up. */
 export async function egoTickUser(deps: Pick<Deps, "db" | "config">, userId: string, now: Date): Promise<"not_due" | "done"> {
   const { db, config } = deps;
   const cfg = config.ego;

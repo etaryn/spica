@@ -1,6 +1,6 @@
 name: cook-pizza-grouped
 description: >
-  Directive trace 2, revised (design §2): a question taken back within the grouping window gets one reply that
+  Directive trace 2, revised: a question taken back within the grouping window gets one reply that
   reacts to the takeback and drops the question.
 profile: none
 sessions:

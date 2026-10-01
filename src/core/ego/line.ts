@@ -13,7 +13,7 @@ export function band(x: number, [lo, hi]: [number, number]): "low" | "neutral" |
   return x < lo ? "low" : x >= hi ? "high" : "neutral";
 }
 
-/** Slot 2 (design §7.4): one phrase per non-neutral dimension, never raw numbers; all neutral → null. */
+/** Slot 2: one phrase per non-neutral dimension, never raw numbers; all neutral → null. */
 export function egoLine(s: EgoState, cfg: EgoConfig, phrases: Phrases, seed: string): string | null {
   const parts: string[] = [];
   for (const dim of DIMS) {

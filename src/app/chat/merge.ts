@@ -8,12 +8,12 @@ export type UiMessage = {
   crisisCard: CrisisCard | null;
   status: "sent" | "pending" | "failed";
   /**
-   * Total part count for a companion reply (v2 §6.1). Set from the SSE event in `applyPart`, and to
+   * Total part count for a companion reply. Set from the SSE event in `applyPart`, and to
    * `parts.length` in `mergeHistory` (a history/POST copy is complete by definition). Unset for user
    * messages. `parts.length < of` means the bubble is still filling in — see `catchUpAnchor`.
    */
   of?: number;
-  /** "backchannel" renders as a small bubble (v2 §8.2); null when the turn wasn't one. */
+  /** "backchannel" renders as a small bubble; null when the turn wasn't one. */
   trigger?: string | null;
   /**
    * Sent from this tab and not yet seen in server history. A POST 202 marks it "sent" but says nothing about

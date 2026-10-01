@@ -29,7 +29,7 @@ export type ReceiveResult =
 
 const ACCEPTED: ReceiveResult = { status: "accepted" };
 
-/** Bounded, best-effort enqueue: a lost timer is recovered by `turn_sweep` (design §5.6). */
+/** Bounded, best-effort enqueue: a lost timer is recovered by `turn_sweep`. */
 async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>, what: string): Promise<void> {
   try {
     await withTimeout(fn(), deps.config.queue.enqueue_timeout_ms);
@@ -39,7 +39,7 @@ async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>
 }
 
 /**
- * POST /api/chat (v2 §6.1; design §5.1): receive → crisis check ∥ turn judge → buffer + timer (+ backchannel).
+ * POST /api/chat: receive → crisis check ∥ turn judge → buffer + timer (+ backchannel).
  * Replies are sent later by the `turn_timer` job, except on the crisis path, which replies here.
  */
 export async function receiveMessage(deps: Deps, userId: string, input: UserMessageInput): Promise<ReceiveResult> {
@@ -51,20 +51,20 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
     await setTimezone(db, userId, input.timezone).catch((e) => log.error("timezone update failed", { userId, error: errorName(e) }));
   }
 
-  // Phase 6 (D5): any NEW user message, crisis included, answers her latest reach-out. Own short transaction on
+  // Any NEW user message, crisis included, answers her latest reach-out. Own short transaction on
   // relationship + reach_out_log only; never holds the conversation_state lock. Run after the crisis decision so a
   // lock wait here never delays a crisis reply (rule 7: crisis bypasses waits); a crisis runs it once replied.
   // Retries (`existed`) return before either call site, and never re-mark.
   const markAnswered = () => (existed ? Promise.resolve() : markReachOutAnswered(deps, userId, turn.created_at));
 
-  // Retries (design §5.1 step 1): no second judge call.
+  // Retries: no second judge call.
   let rebuffer = false;
   if (existed) {
     const s = await getState(db, userId);
     if (s && (s.buffer_turn_ids.includes(turn.id) || s.inflight_turn_ids.includes(turn.id))) return ACCEPTED;
     const answered = await sessionLog.answeringReply(db, userId, turn);
     if (answered) {
-      // Rule 7 outranks design §5.1's "answered → 202": a retried crisis message must still surface the card.
+      // Rule 7 outranks "answered → 202": a retried crisis message must still surface the card.
       if (!answered.safety_flag?.flagged) return ACCEPTED;
       return { status: "replied", turnId: answered.id, text: answered.text, parts: splitParts(answered.text, config.chat.max_parts), crisisCard: crisisCardFor(answered.safety_flag, config) };
     }
@@ -113,7 +113,7 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
 
   const complete = verdict?.complete ?? true;
   const windowMs = waitWindowMs(config.turn, complete, turn.text);
-  // Availability (design §8.1): decided once, on the first message of a buffer. The unlocked `state` read is
+  // Availability: decided once, on the first message of a buffer. The unlocked `state` read is
   // fine: `T.append` applies `defer` only if the buffer is still empty under the lock.
   const freshBuffer = !state || state.buffer_turn_ids.length === 0;
   const avail = freshBuffer ? await availabilityFor(deps, userId, clock.now(), turn.id) : NO_DELAY;
@@ -160,7 +160,7 @@ export async function receiveMessage(deps: Deps, userId: string, input: UserMess
 }
 
 /**
- * Crisis path (rule 7; design §5.4): no waiting, pacing, backchannel or availability. Snapshots in-flight + buffered
+ * Crisis path (rule 7): no waiting, pacing, backchannel or availability. Snapshots in-flight + buffered
  * turns, bumps the epoch so a paced reply in flight is abandoned, replies in the request and returns the card.
  */
 export async function sendCrisisReply(deps: Deps, userId: string, userTurn: Turn, flag: SafetyFlag): Promise<ReceiveResult> {

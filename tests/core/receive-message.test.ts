@@ -87,7 +87,7 @@ describe("receiveMessage", () => {
     expect(deps.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
   });
 
-  test("final review fix: a failure in the judging branch never costs a crisis message its reply and card", async () => {
+  test("a failure in the judging branch never costs a crisis message its reply and card", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     deps.llm.classify = () => ({ flag: true, category: "self_harm" });
@@ -102,7 +102,7 @@ describe("receiveMessage", () => {
     }
   });
 
-  test("a retried crisis message returns the stored reply with its card, not a bare 202 (rule 7 outranks design §5.1's answered → 202)", async () => {
+  test("a retried crisis message returns the stored reply with its card, not a bare 202 (rule 7 outranks answered → 202)", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     deps.llm.classify = () => ({ flag: true, category: "self_harm" });

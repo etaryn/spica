@@ -1,5 +1,5 @@
 /**
- * Deterministic `context_complete?` (design §4.2): the judge's outage fallback, and the fake judge.
+ * Deterministic `context_complete?`: the judge's outage fallback, and the fake judge.
  * Incomplete when the last message trails off ("…"), ends on a cue word, or is a single word.
  */
 export function cueVerdict(buffer: string[], openQuestions: string[], cues: string[]) {

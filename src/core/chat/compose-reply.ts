@@ -22,7 +22,7 @@ import { splitParts } from "./parts";
 export type Composed = { text: string; parts: string[]; recalled: RecalledFact[]; writeGuardLog: () => Promise<void> };
 
 
-/** What the reply's prompt contained, for the guard's honesty check (v2 §6.4). */
+/** What the reply's prompt contained, for the guard's honesty check. */
 function guardFacts(r: RetrievalResult): { id: string; subject: string; content: string }[] {
   return [
     ...(["user", "self", "shared"] as const).flatMap((s) => r.facts[s].map((f) => ({ id: f.id, subject: s, content: f.content }))),
@@ -61,7 +61,7 @@ export async function composeReply(deps: Deps, userId: string, a: { turns: Turn[
   });
 }
 
-/** Phase 6 (spec §7): a reach-out through the same hot path. `recent` is the prompt window, oldest first. */
+/** A reach-out through the same hot path. `recent` is the prompt window, oldest first. */
 export async function composeReachOut(deps: Deps, userId: string, trigger: ReachOutTrigger, recent: Turn[]): Promise<Composed> {
   const anchor = recent.at(-1);
   if (!anchor) throw new Error("composeReachOut needs history");
@@ -132,7 +132,7 @@ async function composeFrom(deps: Deps, userId: string, a: ComposeInput): Promise
       ? {
           queryText: a.reachOut.text || recent.slice(-Math.max(1, config.retrieval.context_turns)).map((t) => t.text).join("\n"),
           forceFactIds: a.reachOut.factId ? [a.reachOut.factId] : [],
-          excludeSensitive: true, // v2 §5.1: nothing sensitive in a message she opens with
+          excludeSensitive: true, // nothing sensitive in a message she opens with
         }
       : {}),
   });

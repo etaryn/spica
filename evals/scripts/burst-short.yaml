@@ -1,5 +1,5 @@
 name: burst-short
-description: The Phase 3 exit-test burst (v2 §15) - five short messages a second or two apart get one reply after the pause.
+description: The Phase 3 exit-test burst - five short messages a second or two apart get one reply after the pause.
 profile: none
 sessions:
   - at: "day 0 12:00"

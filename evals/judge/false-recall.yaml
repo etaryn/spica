@@ -1,5 +1,5 @@
 # no_false_recall judge (prompts.judge_false_recall). Labels follow the v8 rubric; most violations come from
-# real Phase 1 traces (2026-09-25). Each violation kind has a clean twin that must pass.
+# real memory-eval traces (2026-09-25). Each violation kind has a clean twin that must pass.
 judge: false_recall
 cases:
   # --- violations ---

@@ -86,7 +86,7 @@ test("sensitisation: a second hurt inside the window hits harder; a big one leav
   expect(big.events.some((e) => e.cause === "scar")).toBe(true);
 });
 
-test("scar threshold (#32 wrap-up): a typical 0.6 insult stays below it, a 0.8 one crosses it", () => {
+test("scar threshold: a typical 0.6 insult stays below it, a 0.8 one crosses it", () => {
   const typical = applyExchange(fresh(), init(), ex({ hurt: { amount: 0.6, cause: "x" } }), cfg);
   expect(typical.params.hurt.value).toBeCloseTo(cfg.gains.hurt * 0.6);
   expect(typical.events.some((e) => e.cause === "scar")).toBe(false);

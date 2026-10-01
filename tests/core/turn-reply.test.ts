@@ -109,7 +109,7 @@ describe("runTurnTimer", () => {
     expect(replies[1]!.reply_to).toBe(late.clientMessageId);
   });
 
-  test("final review fix: a message during the later bubbles of a reply waits until its last bubble is out", async () => {
+  test("a message during the later bubbles of a reply waits until its last bubble is out", async () => {
     const deps = makeTestDeps();
     const clock = new HookedClock(deps.clock.now());
     deps.clock = clock;
@@ -142,7 +142,7 @@ describe("runTurnTimer", () => {
     expect(firstOfSecond).toBeGreaterThan(lastOfFirst);
   });
 
-  test("final review fix: a reply still sending blocks a commit; a crisis clears the marker", async () => {
+  test("a reply still sending blocks a commit; a crisis clears the marker", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     await receiveMessage(deps, u, msg("first thing here"));
@@ -307,7 +307,7 @@ describe("runTurnTimer", () => {
     expect((await listTurns(getTestDb(), u)).filter((t) => t.role === "companion")).toHaveLength(1);
   });
 
-  test("post-commit infra error: turns go back to the buffer and a retry timer is queued (§15.4 #24)", async () => {
+  test("post-commit infra error: turns go back to the buffer and a retry timer is queued", async () => {
     const deps = makeTestDeps();
     const userId = await createTestUser();
     const m = msg("hello there friend");

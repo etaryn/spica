@@ -54,7 +54,7 @@ test("stale: a row that isn't scheduled any more is ignored", async () => {
   expect((await listTurns(deps.db, u)).filter((t) => t.trigger === "reach_out")).toHaveLength(1);
 });
 
-test("R6: a job that runs far too late is dropped, nothing composed or typed", async () => {
+test("a job that runs far too late is dropped, nothing composed or typed", async () => {
   const { deps, u, logId } = await setup({ sendAt: new Date(now.getTime() - 3 * 3_600_000) });
   expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
   const row = await getReachOutLog(deps.db, u, logId);

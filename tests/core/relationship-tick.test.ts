@@ -17,7 +17,7 @@ function captureLog() {
 
 const HOUR = 3_600_000;
 
-/** Runs `tickUser` once per hour, `count` hourly cron steps starting at `start` (v2 §15.4 #33). Returns
+/** Runs `tickUser` once per hour, `count` hourly cron steps starting at `start`. Returns
  * the sequence of `last_tick` values read back after each step, so a test can count how many times it changed. */
 async function hourlySteps(deps: ReturnType<typeof makeTestDeps>, userId: string, start: Date, count: number): Promise<(string | null)[]> {
   const out: (string | null)[] = [];

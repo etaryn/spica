@@ -1,10 +1,10 @@
 # Spica — Project Context
 
 **Source of truth: `spica-design-spec-v3.md`** (2026-10-01). v3 is the
-default design, standalone, in its **test phase**. Older specs
-(`spica-build-spec-v2.md`, `Spica — MVP build spec.md`,
-`spica-build-directive.md`) are history only: do not build from them, and do
-not cite them in new work. Where they disagree with v3, v3 wins.
+default design, standalone, in its **test phase**. Everything before it (the
+v2 spec, the phase 0–6 design docs and plans, the old decision log) was
+deleted from the tree and lives in git at the tag `v2-final`: history only,
+never built from or cited.
 
 This file is a distilled summary. Re-read the relevant v3 section before any
 task that touches the mind (core or user), memory, scope, turn-taking,
@@ -30,6 +30,15 @@ and phases this summary compresses.
 - Definition of done: compiles, tests pass, the phase's exit test passes,
   **the leak canary passes**, and every new field, job, config key or prompt
   is added back into v3.
+- **Build on what exists, replace from the ground up** (v3 §0.2): a phase
+  that replaces a module rewrites it cleanly and deletes the old module, its
+  config keys, prompts, tests, eval scripts and DB columns in the same phase.
+  No shims, no flags keeping the old path alive, no dead code, no patches on
+  a module being replaced.
+- **Comments say why, not where from:** never cite spec sections, phases or
+  review item numbers in code. Delete prompt versions nothing configures.
+- **Backlog:** open items from the built phases are in v3 §25, each with a
+  target (a phase, tuning, before users, later).
 
 ## Product (v3 §1)
 Spica is a **best friend**, unapologetically standalone, meant to feel
@@ -191,10 +200,10 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: none started under v3.** The phase order is OPEN (v3 §21
-#9), including whether onboarding (which was next under v2, with
-`docs/phase-7-handoff.md` written for it) comes before the mind split.
-Confirm the order with Ethan before starting any phase.
+**Current phase: none started under v3.** The pre-v3 cleanup is done
+(2026-10-01). The phase order is OPEN (v3 §21 #9), including whether
+onboarding comes before the mind split. Confirm the order with Ethan before
+starting any phase; each phase starts with its own design doc.
 
 **Exit tests:** only the phase's own functionality, deterministic
 assertions; exit runs call the real API only for the phase's own LLM

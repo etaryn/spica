@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-/** Provider-neutral on purpose: the provider may change (see DECISIONS.md). */
+/** Provider-neutral on purpose: the provider may change. */
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export interface ReplyRequest {

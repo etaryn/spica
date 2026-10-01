@@ -1,7 +1,7 @@
 import type { Turn } from "@/db/repos/session-log";
 import type { TurnAssertion } from "./script";
 
-/** Deterministic turn-taking check over one session's session_log rows (design §9.3). */
+/** Deterministic turn-taking check over one session's session_log rows. */
 export function checkTurn(all: Turn[], range: { start: Date; end: Date }, a: TurnAssertion): { ok: boolean; detail?: string } {
   const turns = all.filter((t) => t.created_at >= range.start && t.created_at < range.end);
   const users = turns.filter((t) => t.role === "user");

@@ -1,5 +1,5 @@
 name: avail-burst-deferred
-description: Three messages during a deferral pile into one buffer and get one reply after it, with no backchannel (design §8.4).
+description: Three messages during a deferral pile into one buffer and get one reply after it, with no backchannel.
 profile: none
 relationship_seed: { closeness: 0.2 }
 config: { life: { timezone: UTC } }

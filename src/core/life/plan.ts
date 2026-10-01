@@ -17,7 +17,7 @@ export type PlanCheck = { ok: true; plan: LifePlan } | { ok: false; violations: 
 
 const HHMM = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
-/** Design §5.2: normalise busy levels and labels, then check times, overlap, busy count and total quiet. */
+/** normalise busy levels and labels, then check times, overlap, busy count and total quiet. */
 export function validatePlan(raw: RawPlan, cfg: LifeConfig): PlanCheck {
   const v: string[] = [];
   const blocks: LifeBlock[] = [];
@@ -79,7 +79,7 @@ async function generatePlan(deps: Pick<Deps, "db" | "llm" | "config" | "log">, d
   return { plan: fallbackPlan(config.life), source: "fallback" };
 }
 
-/** `life_plan` job (design §5.3): make sure her today and tomorrow have a shared plan. Idempotent. */
+/** `life_plan` job: make sure her today and tomorrow have a shared plan. Idempotent. */
 export async function ensurePlans(deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">, now: Date): Promise<{ created: string[] }> {
   const { db, config, clock, log } = deps;
   const today = lifeDate(config.life, now);

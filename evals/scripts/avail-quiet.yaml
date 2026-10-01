@@ -1,5 +1,5 @@
 name: avail-quiet
-description: A 02:00 message in her quiet block from a distant friend (0.05) waits until the quiet block ends at 08:00, never longer (design §8.2 cap).
+description: A 02:00 message in her quiet block from a distant friend (0.05) waits until the quiet block ends at 08:00, never longer (the block end caps it).
 profile: none
 relationship_seed: { closeness: 0.05 }
 config: { life: { timezone: UTC } }

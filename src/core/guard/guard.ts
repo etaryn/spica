@@ -50,8 +50,8 @@ export function renderGuardInput(input: GuardInput): string {
 }
 
 /**
- * The guard check (v2 §6.4). Never rejects: after `guard.retry_limit` retries it degrades to the
- * outage keyword list (spec §2, C), reported as `source: "keyword_fallback"`.
+ * The guard check. Never rejects: after `guard.retry_limit` retries it degrades to the
+ * outage keyword list, reported as `source: "keyword_fallback"`.
  */
 export async function checkMessage(deps: Pick<Deps, "llm" | "config" | "clock">, input: GuardInput): Promise<GuardVerdict> {
   const { llm, config, clock } = deps;

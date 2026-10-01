@@ -7,7 +7,7 @@ import { resolveSessionId } from "./session";
 
 export type UserMessageInput = { clientMessageId: string; text: string; timezone?: string };
 
-/** Receive (v2 §6.1 step 1): the stored user turn, inserting it unless this is a retry (`existed`). */
+/** Receive: the stored user turn, inserting it unless this is a retry (`existed`). */
 export async function receiveTurn(deps: Pick<Deps, "db" | "clock" | "config">, userId: string, input: UserMessageInput): Promise<{ turn: Turn; existed: boolean }> {
   const { db, clock, config } = deps;
   const existing = await sessionLog.getTurn(db, userId, input.clientMessageId);

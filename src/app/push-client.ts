@@ -1,5 +1,5 @@
 "use client";
-/** Browser side of Web Push (spec §8.3). Every call is safe to make where push isn't supported. */
+/** Browser side of Web Push. Every call is safe to make where push isn't supported. */
 export const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
 function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {

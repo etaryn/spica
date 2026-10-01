@@ -23,7 +23,7 @@ const plus = (d: Date, ms: number) => new Date(d.getTime() + ms);
 type Recheck = { gate: GateResult[]; topicUsed: boolean; epochChanged: boolean; newTurn: boolean };
 
 /**
- * `reach_out_send` (spec §6.2). Compose outside any lock (typing shows meanwhile), then under the conversation-
+ * `reach_out_send`. Compose outside any lock (typing shows meanwhile), then under the conversation-
  * state lock re-run the whole gate and the topic check on fresh state and insert the turn in the same transaction,
  * so a user message or crisis that arrived during the jitter or typing wins. Paced like a reply; `sending_since`
  * makes a user message arriving mid-bubbles buffer behind them; released in a finally. An unlocked precheck of the same
@@ -40,7 +40,7 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
   const drop = async (reason: string, recheck?: Recheck): Promise<"dropped" | "stale"> =>
     (await dropScheduled(db, userId, logId, { tick: row.gate_results, dropped: reason, ...(recheck ? { recheck } : {}) })) ? "dropped" : "stale";
 
-  // A job that runs long after its slot (worker down) is dropped rather than sent out of context (ruling R6).
+  // A job that runs long after its slot (worker down) is dropped rather than sent out of context.
   if (row.send_at && clock.now().getTime() > row.send_at.getTime() + config.outreach.pending_max_age_minutes * 60_000) return drop("late");
 
   const recent = await sessionLog.recentTurns(db, userId, config.chat.recent_turns);
@@ -53,7 +53,7 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
   const preTopicUsed = (await usedTopics(db, userId)).includes(winner.topic);
   if (!pre.pass || preTopicUsed) return drop("precheck", { gate: pre.results, topicUsed: preTopicUsed, epochChanged: false, newTurn: false });
 
-  // R7: a crisis (epoch bump) or a new turn landing during compose/typing must win over this reach-out.
+  // A crisis (epoch bump) or a new turn landing during compose/typing must win over this reach-out.
   const startEpoch = (await getState(db, userId))?.reply_epoch ?? 0;
   const lastTurnId = recent.at(-1)!.id;
 

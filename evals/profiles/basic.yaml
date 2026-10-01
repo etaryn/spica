@@ -1,4 +1,4 @@
-# Arbitrary basic onboarding profile (stand-in for the Phase 7 survey, v2 §12).
+# Arbitrary basic onboarding profile (stand-in for the onboarding survey).
 # Deliberately avoids every topic the eval scripts test (siblings, pets, jobs, cities, food, hobbies, health).
 confidence: 0.6
 salience: 0.5

@@ -1,4 +1,4 @@
-/** A new session starts when the gap since the user's previous turn exceeds the idle gap (design §4.3.1). */
+/** A new session starts when the gap since the user's previous turn exceeds the idle gap. */
 export function resolveSessionId(
   prev: { session_id: string; created_at: Date } | null,
   now: Date,

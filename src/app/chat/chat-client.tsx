@@ -18,7 +18,7 @@ export function ChatClient({ initial, vapidPublicKey }: { initial: UiMessage[]; 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages, typing]);
 
-  // One stream per tab: replies, backchannels and typing arrive here (v2 §4). On every (re)connect, catch up from history.
+  // One stream per tab: replies, backchannels and typing arrive here. On every (re)connect, catch up from history.
   useEffect(() => {
     let es: EventSource;
     let backoff = RECONNECT_MIN_MS;

@@ -27,8 +27,8 @@ const notYetHappened = (now: Date) =>
   sql`(${fact.source} <> 'generated' OR ${fact.occurred_at} IS NULL OR ${fact.occurred_at} <= ${now.toISOString()}::timestamptz)`;
 
 /**
- * Nearest active private facts for this user, with max entity salience (v2 §6.2 step 1). `excludeSensitive`
- * drops `payload.sensitive` facts before the limit (a reach-out never carries them, v2 §5.1).
+ * Nearest active private facts for this user, with max entity salience. `excludeSensitive`
+ * drops `payload.sensitive` facts before the limit (a reach-out never carries them).
  */
 export async function candidateFacts(
   db: Db, userId: string, queryVec: number[], limit: number, now: Date, opts: { excludeSensitive?: boolean } = {},
@@ -142,7 +142,7 @@ export async function getPreoccupationFact(db: Db, userId: string, now: Date): P
   return rows[0]?.f ?? null;
 }
 
-/** The "what I remember" list (spec §7). */
+/** The "what I remember" list. */
 export async function listRememberedFacts(db: Db, userId: string) {
   return db.select({ id: fact.id, kind: fact.kind, content: fact.content, created_at: fact.created_at })
     .from(fact)
@@ -150,7 +150,7 @@ export async function listRememberedFacts(db: Db, userId: string) {
     .orderBy(desc(fact.created_at));
 }
 
-/** Onboarding facts the guard may treat as known (spec §5). Superseded and stale ones are excluded. */
+/** Onboarding facts the guard may treat as known. Superseded and stale ones are excluded. */
 export async function listOnboardingFacts(db: Db, userId: string): Promise<{ id: string; content: string }[]> {
   return db.select({ id: fact.id, content: fact.content }).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.source, "onboarding"), eq(fact.scope, "private"),
@@ -159,7 +159,7 @@ export async function listOnboardingFacts(db: Db, userId: string): Promise<{ id:
 }
 
 /**
- * User-initiated hard delete (v2 §7.5). False for malformed or foreign ids. A thread left with no
+ * User-initiated hard delete. False for malformed or foreign ids. A thread left with no
  * facts (any status) is deleted too, so a forgotten storyline isn't asked about again.
  */
 export async function forgetFact(db: Db, userId: string, factId: string): Promise<boolean> {
@@ -178,7 +178,7 @@ export async function forgetFact(db: Db, userId: string, factId: string): Promis
   });
 }
 
-/** Her copied schedule blocks for one of her local dates (Phase 5 design §6.2). Stale blocks still count; superseded don't. */
+/** Her copied schedule blocks for one of her local dates. Stale blocks still count; superseded don't. */
 export async function listGeneratedBlockRows(db: Db, userId: string, lifeDay: string): Promise<{ id: string; payload: unknown }[]> {
   return db.select({ id: fact.id, payload: fact.payload }).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.scope, "private"), eq(fact.source, "generated"), sql`${fact.status} <> 'superseded'`,
@@ -186,7 +186,7 @@ export async function listGeneratedBlockRows(db: Db, userId: string, lifeDay: st
   ));
 }
 
-/** Her recent self facts for the event generator (design §6.3), excluding copied schedule blocks. */
+/** Her recent self facts for the event generator, excluding copied schedule blocks. */
 export async function listRecentSelfFacts(db: Db, userId: string, limit: number): Promise<{ content: string; when: Date }[]> {
   if (limit <= 0) return [];
   const rows = await db.select({ content: fact.content, occurred_at: fact.occurred_at, created_at: fact.created_at }).from(fact).where(and(
@@ -201,7 +201,7 @@ const sensitiveCol = sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::bool
 const outreachCols = { id: fact.id, content: fact.content, salience: fact.salience, sensitive: sensitiveCol };
 
 /**
- * Spec §4.1 `user_event`: the user's events/promises whose time passed in (from, to], not talked about since.
+ * Outreach `user_event` candidates: the user's events/promises whose time passed in (from, to], not talked about since.
  * R10: a fact attached to a thread is followed up only through that thread (its checkpoint), never as its own event.
  */
 export async function listOutreachUserEvents(db: Db, userId: string, from: Date, to: Date): Promise<OutreachFact[]> {
@@ -213,7 +213,7 @@ export async function listOutreachUserEvents(db: Db, userId: string, from: Date,
   ));
 }
 
-/** Spec §4.1 `her_day`: her generated personal events (not day blocks) whose time passed in (from, to]. */
+/** Outreach `her_day` candidates: her generated personal events (not day blocks) whose time passed in (from, to]. */
 export async function listOutreachHerDay(db: Db, userId: string, from: Date, to: Date): Promise<OutreachFact[]> {
   return db.select(outreachCols).from(fact).where(and(
     eq(fact.user_id, userId), eq(fact.subject, "self"), eq(fact.source, "generated"), eq(fact.scope, "private"),

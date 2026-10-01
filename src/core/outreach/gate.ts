@@ -2,7 +2,7 @@ import type { OutreachConfig } from "../config";
 import { HOUR } from "../time";
 import type { GateInputs, GateOutcome, GateResult } from "./types";
 
-/** Spec §5. Pure; every rule evaluated and reported (no short-circuit) so the log shows the whole picture. */
+/** The reach-out send gate. Pure; every rule evaluated and reported (no short-circuit) so the log shows the whole picture. */
 export function evaluateGate(g: GateInputs, cfg: OutreachConfig, now: Date): GateOutcome {
   const within = (hours: number) => g.sentAt.filter((t) => now.getTime() - t.getTime() < hours * HOUR).length;
   const day = within(24);

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "../client";
 
-/** System job, unscoped by design: one day of decay across all users (v2 §7.2). */
+/** System job, unscoped by design: one day of decay across all users. */
 export async function adminDecayFacts(
   db: Db, now: Date, cfg: { grace_days: number; rate: number; stale_floor: number; dormant_after_days: number },
 ): Promise<{ decayed: number; staled: number; dormant: number }> {

@@ -160,7 +160,7 @@ describe("guardOutgoing", () => {
     expect(rows.every((row) => row.turn_id === turnId)).toBe(true);
   });
 
-  test("guardOutgoing does not write judge_log until writeLog() is called (written after the send, §15.2 #1)", async () => {
+  test("guardOutgoing does not write judge_log until writeLog() is called (written after the send)", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } }); scripted(deps);
     const u = await createTestUser();
     const r = await guardOutgoing(deps, args(u, "hey there"));
@@ -182,7 +182,7 @@ describe("guardOutgoing", () => {
     expect((await listJudgeLogs(getTestDb(), u)).map((r) => [r.source, r.outcome])).toEqual(expect.arrayContaining([["keyword_fallback", "passed"], ["keyword_fallback", "fallback"]]));
   });
 
-  describe("policy fix: second guard failure from a keyword-fallback outage (spec §4.3, 2026-09-26)", () => {
+  describe("policy fix: second guard failure from a keyword-fallback outage", () => {
     test("c1 honesty-only, c2's guard is down but its keyword check is clean: c2 sent as guard_unavailable", async () => {
       const deps = makeTestDeps({ guard: { enabled: true } }); scriptedWithOutage(deps);
       const u = await createTestUser();

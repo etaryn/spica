@@ -41,7 +41,7 @@ export function nextLocalDate(date: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** The local hour-of-day (0-23) of `d` in `tz` (v2 §15.4 #33: the tick's local-hour gate). */
+/** The local hour-of-day (0-23) of `d` in `tz` (the tick's local-hour gate). */
 export function localHour(d: Date, tz: string): number {
   return Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hourCycle: "h23" }).format(d));
 }
@@ -50,7 +50,7 @@ const MIN = 60_000;
 const HOUR = 60 * MIN;
 
 /**
- * The **start** of local date "YYYY-MM-DD" `date` in `tz` (v2 §15.4 #34): the earliest instant whose local
+ * The **start** of local date "YYYY-MM-DD" `date` in `tz`: the earliest instant whose local
  * date is ≥ `date`. This is usually literal local midnight, but not always — a zone whose clocks spring
  * forward across midnight (e.g. America/Santiago, 00:00 → 01:00) has no instant that reads as `date` at
  * 00:00, so the day's start is its first surviving instant instead (01:00 there); a zone that falls back

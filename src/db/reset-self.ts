@@ -2,13 +2,13 @@ import { eq } from "drizzle-orm";
 import type { Db } from "./client";
 import { entity, fact, identity, thread } from "./schema";
 
-/** The persona switch wipe (Phase 5 design §3) only ever runs against a local dev database. */
+/** The persona switch wipe only ever runs against a local dev database. */
 export function assertLocalDatabase(url: string): void {
   const host = new URL(url).hostname;
   if (host !== "localhost" && host !== "127.0.0.1") throw new Error(`refusing to reset self facts on non-local database host "${host}"`);
 }
 
-/** Dev only, every user: hard-deletes her self facts, entities and threads (persona v1 scrapped, design D3). */
+/** Dev only, every user: hard-deletes her self facts, entities and threads (for a persona change). */
 export async function adminResetSelf(db: Db): Promise<{ facts: number; entities: number; threads: number }> {
   return db.transaction(async (tx) => {
     // life_last_date is cleared too, so the next life tick re-copies today's blocks as self facts.

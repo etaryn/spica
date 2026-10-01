@@ -4,7 +4,7 @@ import type { Signals } from "./signals";
 import { PARAM_NAMES, type ParamName, type Params, type RelCause, type RelConfig, type RelEvent, type RelState } from "./types";
 
 export type Transition = { state: RelState; params: Params; events: RelEvent[] };
-/** `exchangeAt` is the exchange's newest user-turn `created_at` (v2 §15.4 #36): stamps `end_pending_since`
+/** `exchangeAt` is the exchange's newest user-turn `created_at`: stamps `end_pending_since`
  * on the same clock as `last_contact`, not the cold path's processing time. `now` stays the cold path clock
  * for fades and everything else. */
 export type ExchangeInput = { now: Date; exchangeAt: Date; signals: Signals | null; crisis: boolean; hurtFactId: string | null; replies: number; msgs24h: number };
@@ -53,7 +53,7 @@ function relieve(b: Builder, factor: number, cause: "make_up" | "apology", cfg: 
   if (b.t.state.make_up_state !== "none") b.t.state = { ...b.t.state, make_up_state: "none", make_up_replies: 0, hurt_cause_fact: null };
 }
 
-/** Cold path, once per exchange (design §6). Order: fade → frequency → crisis → make-up progress → signals → clear. */
+/** Cold path, once per exchange. Order: fade → frequency → crisis → make-up progress → signals → clear. */
 export function applyExchange(state: RelState, params: Params, a: ExchangeInput, cfg: RelConfig): Transition {
   const b = builder(state, params, cfg);
   const eps = cfg.variance_epsilon;
@@ -105,7 +105,7 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
       b.set("hurt", nudge(before, amount), "signal", { signal: s.hurt.amount, sensitised });
       b.t.state = { ...b.t.state, last_hurt_at: a.now };
       if (b.t.params.hurt.value - before >= cfg.scar_threshold) {
-        // Spec §4.3: a scar never recovers by itself — dent the baseline so the daily EMA doesn't erase it,
+        // a scar never recovers by itself — dent the baseline so the daily EMA doesn't erase it,
         // and dent the value too (via `set`) so current trust reads as scarred, not merely "at baseline".
         const trust = b.t.params.trust;
         b.t.params.trust = { ...trust, baseline: Math.max(0, trust.baseline - cfg.scar_trust_dent) };
@@ -115,7 +115,7 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
         if (b.t.state.make_up_state === "none") {
           b.t.state = { ...b.t.state, make_up_state: "due", make_up_replies: 0, hurt_cause_fact: a.hurtFactId };
         } else if (a.hurtFactId) {
-          // Phase 4 wrap-up deferred minor: a second hurt while a make-up is already due or offered
+          // A second hurt while a make-up is already due or offered
           // re-points hurt_cause_fact at the newest cause, so she brings up the latest hurt, not a stale
           // one from before the make-up was first offered.
           b.t.state = { ...b.t.state, hurt_cause_fact: a.hurtFactId };
@@ -137,7 +137,7 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
         if (pending && a.exchangeAt.getTime() - pending.getTime() >= cfg.end_reconfirm_min_minutes * 60_000) {
           confirmEnding(b, a.now, cfg, "signal");
         } else if (pending) {
-          // v2 §15.4 #35: a re-scored "we're done" inside the reconfirm window only restarts the pending
+          // a re-scored "we're done" inside the reconfirm window only restarts the pending
           // window, so continued warm chat still clears it at the timeout (the implicit retraction); a
           // genuine "I mean it" followed by silence still confirms there, and a later second statement
           // outside the window confirms by signal.
@@ -163,7 +163,7 @@ export function applyExchange(state: RelState, params: Params, a: ExchangeInput,
   return b.t;
 }
 
-/** Daily tick (design §8.1). Order: fade → frequency refresh → absence → baselines → ending timeout → repair → clear. */
+/** Daily tick. Order: fade → frequency refresh → absence → baselines → ending timeout → repair → clear. */
 export function applyTick(state: RelState, params: Params, a: TickInput, cfg: RelConfig): Transition {
   if (state.last_tick === a.localDate) return { state, params, events: [] };
   const b = builder(state, params, cfg);
@@ -177,7 +177,7 @@ export function applyTick(state: RelState, params: Params, a: TickInput, cfg: Re
     if (a.now.getTime() - a.lastContact.getTime() > graceMs) {
       b.set("closeness", Math.max(0, b.t.params.closeness.value - cfg.closeness_absence_drift), "absence");
     }
-    // Rule 3 / spec §6.4: once she's let go, absence no longer hurts her and can't start a make-up. Closeness
+    // Rule 3 / once she's let go, absence no longer hurts her and can't start a make-up. Closeness
     // still drifts down above (that's just distance, not a grievance).
     if (b.t.state.status !== "ended_by_user") {
       // The frequency deviation is read before today's sample dilutes the baseline.

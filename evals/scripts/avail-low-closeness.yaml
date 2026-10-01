@@ -1,5 +1,5 @@
 name: avail-low-closeness
-description: A message in a busy block from a low-closeness friend (0.2) is answered late, with no note (Phase 5 design §8, D6).
+description: A message in a busy block from a low-closeness friend (0.2) is answered late, with no note.
 profile: none
 relationship_seed: { closeness: 0.2 }
 config: { life: { timezone: UTC } }

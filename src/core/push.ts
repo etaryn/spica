@@ -1,4 +1,4 @@
-/** Spec §8.2. Out-of-app delivery of her messages; the service worker hides it while a Spica tab is visible. */
+/** Out-of-app delivery of her messages; the service worker hides it while a Spica tab is visible. */
 export type PushMessage = { tag: string; body: string; url: string };
 
 export interface Pusher {

@@ -2,7 +2,7 @@ import type { Cadence } from "@/db/repos/relationship";
 import { HOUR } from "../time";
 import type { RelConfig } from "./types";
 
-/** Median gap between consecutive session starts (design §4.4); any input order. */
+/** Median gap between consecutive session starts; any input order. */
 export function medianGapHours(starts: Date[], cfg: RelConfig): number {
   if (starts.length < cfg.min_sessions_for_gap) return cfg.default_median_gap_hours;
   const ts = starts.map((s) => s.getTime()).sort((a, b) => b - a);

@@ -12,7 +12,7 @@ export interface RetrievalResult {
   recalled: RecalledFact[];
 }
 
-/** Phase 0 has no retrieval; Phase 1 fills this without changing the pipeline. */
+/** Retrieval output as the prompt sees it; empty when retrieval is degraded. */
 export function emptyRetrieval(): RetrievalResult {
   return { facts: { user: [], self: [], shared: [] }, dueThreads: [], recalled: [] };
 }
@@ -21,16 +21,16 @@ export interface AssembleInput {
   valuesDoc: string;
   egoLine: string | null;
   relationshipSummary: string | null;
-  /** Her day (v2 §6.2 slot 4, Phase 5). */
+  /** Her day: what she is doing now and next. */
   lifeState?: string | null;
   retrieval: RetrievalResult;
   recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
   now: Date;
   /** Mark the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
-  /** The user's unanswered questions (v2 §6.2 slot 7). */
+  /** The user's unanswered questions. */
   openQuestions?: string[];
-  /** Phase 6 slot 7b: why she's writing first, and the trailing user-role cue the model answers. */
+  /** Slot 7b: why she's writing first, and the trailing user-role cue the model answers. */
   reachOut?: { slot: string; cue: string } | null;
 }
 
@@ -52,7 +52,7 @@ function factList(title: string, facts: RetrievedFact[], now: Date): string | nu
   return `### ${title}\n${facts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})${f.onMind ? " (on your mind lately)" : ""}`).join("\n")}`;
 }
 
-/** Fixed slot order from v2 §6.2 step 2. Empty slots are skipped. */
+/** Fixed slot order of the reply prompt. Empty slots are skipped. */
 export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
   const { retrieval, now } = input;
   const memory = [
@@ -103,14 +103,14 @@ function elapsed(hours: number): string {
   return `about ${Math.round(days / 7)} weeks`;
 }
 
-/** Factual relationship line (spec §6): how well she knows them, so she doesn't guess. */
+/** Factual relationship line: how well she knows them, so she doesn't guess. */
 export function relationshipLine(s: { sessions: number; days: number; first: Date | null }, now: Date): string {
   if (!s.first || s.sessions <= 1) return "This is your first conversation with them.";
   if (s.days <= 1) return "You've already talked earlier today.";
   return `You first talked ${relativeDate(s.first, now)}, and have talked on ${s.days} different days.`;
 }
 
-/** Phase 1 relationship line: time since the previous turn, omitted under `minHours` (v2 §6.2 slot 3). */
+/** The gap line: time since the previous turn, omitted under `minHours`. */
 export function gapLine(prevAt: Date | null, now: Date, minHours: number): string | null {
   if (!prevAt) return null;
   const hours = (now.getTime() - prevAt.getTime()) / HOUR;

@@ -2,7 +2,7 @@ import { adminBumpExtractAttempts, adminFindUnextractedExchanges } from "@/db/re
 import type { Deps } from "../deps";
 import { COLD_PATH_QUEUE } from "../queue";
 
-/** Re-enqueue exchanges whose cold path never completed (v2 §6.3 failures), with a per-exchange attempt cap. */
+/** Re-enqueue exchanges whose cold path never completed, with a per-exchange attempt cap. */
 export async function sweepUnextracted(deps: Pick<Deps, "db" | "queue" | "config" | "log">, now: Date): Promise<number> {
   const { db, queue, config, log } = deps;
   const olderThan = new Date(now.getTime() - config.cold_path.sweep_min_age_minutes * 60_000);

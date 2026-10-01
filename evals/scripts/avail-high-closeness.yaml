@@ -1,5 +1,5 @@
 name: avail-high-closeness
-description: A message in a busy block from a close friend (0.9) overrides busy, normal latency, no note (Phase 5 design §8, D6).
+description: A message in a busy block from a close friend (0.9) overrides busy, normal latency, no note.
 profile: none
 relationship_seed: { closeness: 0.9 }
 config: { life: { timezone: UTC } }

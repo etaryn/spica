@@ -38,7 +38,7 @@ const dbUrl = process.env.EVAL_DATABASE_URL ?? "postgres://spica:spica@localhost
 assertDisposableDatabase(dbUrl);
 
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
-// Exit profiles (v2 §15, design §9.6): each call purpose is real only when listed; everything else is fake.
+// Exit profiles: each call purpose is real only when listed; everything else is fake.
 const { realPurposes, realCalls, anyReal, realScripts, fake } = resolveProfile({ llm: args.llm!, real: args.real, annotate: args.annotate });
 
 const usage = new UsageTally();
@@ -94,7 +94,7 @@ for (const script of scripts) {
   for (const a of s.assertions.filter((x) => x.status !== "pass")) {
     console.log(`          ${a.status}: ${a.type}${a.check ? `/${a.check}` : ""} ${a.passes}/${a.runs}${a.detail ? ` — ${a.detail}` : ""}`);
   }
-  // Annotations are review notes (v2 §15): printed, never counted.
+  // Annotations are review notes: printed, never counted.
   for (const [k, attempt] of attempts.entries()) {
     for (const n of attempt.annotations) {
       console.log(`  note${runs > 1 ? ` (run ${k + 1})` : ""}: ${n.type} ${n.verdict}${n.detail ? ` — ${n.detail}` : ""}`);
@@ -118,7 +118,7 @@ if (args.review) {
 
 const baselinePath = path.join(root, "baseline.json");
 if (args["update-baseline"]) {
-  // Merge (v2 §15.4 #30): a partial (--only) or fake run must not wipe the entries of scripts it didn't run.
+  // Merge: a partial (--only) or fake run must not wipe the entries of scripts it didn't run.
   const existing = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, "utf8")) : {};
   writeFileSync(baselinePath, JSON.stringify(mergeBaseline(existing, summaries), null, 2) + "\n");
   console.log(`baseline written: ${baselinePath}`);

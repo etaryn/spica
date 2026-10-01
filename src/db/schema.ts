@@ -58,7 +58,7 @@ export const verification = pgTable("verification", {
   updatedAt: ts("updated_at"),
 });
 
-// ---------- Enums (v2 §5) ----------
+// ---------- Enums ----------
 
 export const factSubject = pgEnum("fact_subject", ["user", "self", "shared"]);
 export const entitySubject = pgEnum("entity_subject", ["user", "self"]);
@@ -81,7 +81,7 @@ export const relationshipCause = pgEnum("relationship_cause", ["signal", "freque
 
 const userRef = () => uuid("user_id").notNull().references(() => user.id, { onDelete: "cascade" });
 
-// ---------- Spec §3 tables ----------
+// ---------- Domain tables ----------
 
 export const thread = pgTable("thread", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -172,13 +172,13 @@ export const identity = pgTable("identity", {
   check("identity_energy_range", sql`${t.energy} BETWEEN 0 AND 1`),
 ]);
 
-/** One row per user (v2 §5.5, Phase 4 design §3.1). Params live in relationship_param. */
+/** One row per user. Params live in relationship_param. */
 export const relationship = pgTable("relationship", {
   user_id: userRef().primaryKey(),
   status: relationshipStatus("status").notNull().default("active"),
   cadence: jsonb("cadence").notNull(),
   last_contact: ts("last_contact"),
-  unanswered_reach_outs: integer("unanswered_reach_outs").notNull().default(0), // Phase 6
+  unanswered_reach_outs: integer("unanswered_reach_outs").notNull().default(0),
   end_pending_since: ts("end_pending_since"),
   ended_at: ts("ended_at"),
   repair_started_at: ts("repair_started_at"),
@@ -215,7 +215,7 @@ export const session_log = pgTable("session_log", {
   uniqueIndex("session_log_reply_to_uq").on(t.reply_to),
 ]);
 
-/** Extensible homeostatic params (v2 §8): a new param needs no migration. */
+/** Extensible homeostatic params: a new param needs no migration. */
 export const relationship_param = pgTable("relationship_param", {
   user_id: userRef(),
   name: text("name").notNull(),
@@ -228,7 +228,7 @@ export const relationship_param = pgTable("relationship_param", {
   check("relationship_param_variance_nonneg", sql`${t.variance} >= 0`),
 ]);
 
-/** Every relationship change (v2 §5.8). Diagnostic only: never read by the chat loop. */
+/** Every relationship change. Diagnostic only: never read by the chat loop. */
 export const relationship_event = pgTable("relationship_event", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),
@@ -245,11 +245,11 @@ export const relationship_event = pgTable("relationship_event", {
 export type OpenQuestion = { turn_id: string; text: string };
 
 export type LifeBlockKind = "busy" | "downtime" | "quiet";
-/** One block of her shared day plan (Phase 5 design §5.2); times are "HH:MM" in her zone, "24:00" = midnight. */
+/** One block of her shared day plan; times are "HH:MM" in her zone, "24:00" = midnight. */
 export type LifeBlock = { start: string; end: string; kind: LifeBlockKind; busy: number; label: string };
 export type LifePlan = { blocks: LifeBlock[] };
 
-// ---------- Turn-taking (v2 §5.7; design §3.1) ----------
+// ---------- Turn-taking ----------
 
 export const conversation_state = pgTable("conversation_state", {
   user_id: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
@@ -269,7 +269,7 @@ export const conversation_state = pgTable("conversation_state", {
   updated_at: ts("updated_at").notNull(),
 }, (t) => [index("conversation_state_wait_idx").on(t.wait_until)]);
 
-// ---------- Inspector trace tables (design §4.3.2) — diagnostic only, never read by the chat loop ----------
+// ---------- Inspector trace tables — diagnostic only, never read by the chat loop ----------
 
 export const retrieval_trace = pgTable("retrieval_trace", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -296,7 +296,7 @@ export const ego_tick = pgTable("ego_tick", {
   created_at: ts("created_at").notNull(),
 }, (t) => [index("ego_tick_user_created_idx").on(t.user_id, t.created_at)]);
 
-/** Her shared day plan (Phase 5 design §5): canon for that day, like the persona file. No user data, so no user_id. */
+/** Her shared day plan: canon for that day, like the persona file. No user data, so no user_id. */
 export const life_day = pgTable("life_day", {
   date: date("date", { mode: "string" }).primaryKey(),
   plan: jsonb("plan").$type<LifePlan>().notNull(),
@@ -306,7 +306,7 @@ export const life_day = pgTable("life_day", {
   generated_at: ts("generated_at").notNull(),
 });
 
-/** Every personal-event attempt (Phase 5 design §6.3). Diagnostic only, never read by the chat loop. */
+/** Every personal-event attempt. Diagnostic only, never read by the chat loop. */
 export const life_event_log = pgTable("life_event_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),
@@ -321,7 +321,7 @@ export const life_event_log = pgTable("life_event_log", {
   created_at: ts("created_at").notNull(),
 }, (t) => [index("life_event_log_user_created_idx").on(t.user_id, t.created_at)]);
 
-/** Phase 6 (spec §3.1): one row per outreach evaluation that got past the pre-check. `send_at` is the actual send time once `sent`. */
+/** One row per outreach evaluation that got past the pre-check. `send_at` is the actual send time once `sent`. */
 export const reach_out_log = pgTable("reach_out_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),
@@ -340,7 +340,7 @@ export const reach_out_log = pgTable("reach_out_log", {
   index("reach_out_log_user_sent_idx").on(t.user_id, t.send_at).where(sql`${t.status} = 'sent'`),
 ]);
 
-/** Web Push subscriptions (spec §3.1). One row per browser endpoint; the endpoint moves to whoever subscribed last. */
+/** Web Push subscriptions. One row per browser endpoint; the endpoint moves to whoever subscribed last. */
 export const push_subscription = pgTable("push_subscription", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),
@@ -350,7 +350,7 @@ export const push_subscription = pgTable("push_subscription", {
   created_at: ts("created_at").notNull(),
 }, (t) => [index("push_subscription_user_idx").on(t.user_id)]);
 
-/** Every guard decision (Phase 2) and turn-taking judge decision (Phase 3), v2 §5.8. Never read by the chat loop. */
+/** Every guard decision and turn-taking judge decision. Never read by the chat loop. */
 export const judge_log = pgTable("judge_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   user_id: userRef(),

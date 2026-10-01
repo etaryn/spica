@@ -28,7 +28,7 @@ export async function getOwnedThread(db: Db, userId: string, id: string): Promis
   return rows[0] ?? null;
 }
 
-/** `at` is the exchange time, so a late job still opens the thread before its checkpoint (§15.1 #8). */
+/** `at` is the exchange time, so a late job still opens the thread before its checkpoint. */
 export async function insertThread(
   db: Db, userId: string,
   t: { title: string; subject: "user" | "self" | "shared"; stakes: (typeof threadStakes.enumValues)[number]; next_checkpoint: Date | null },
@@ -40,7 +40,7 @@ export async function insertThread(
   }).returning());
 }
 
-/** `at` is the exchange time; an older exchange never moves last_touched backwards (§15.1 #8). */
+/** `at` is the exchange time; an older exchange never moves last_touched backwards. */
 export async function touchThread(db: Db, userId: string, id: string, at: Date, nextCheckpoint: Date | null): Promise<void> {
   await db.update(thread).set({
     last_touched: sql`GREATEST(${thread.last_touched}, ${at.toISOString()}::timestamptz)`,
@@ -57,7 +57,7 @@ export type DueThread = {
   stakes: "low" | "med" | "high"; sensitive: boolean;
 };
 
-/** Open threads whose checkpoint has passed, each with its latest active fact (v2 §6.2 force-include). */
+/** Open threads whose checkpoint has passed, each with its latest active fact (force-included by retrieval). */
 export async function dueThreads(db: Db, userId: string, now: Date, limit: number): Promise<DueThread[]> {
   const res = await db.execute(sql`
     SELECT t.id, t.title, t.next_checkpoint, t.stakes, lf.id AS fact_id, lf.content, lf.salience, lf.sensitive

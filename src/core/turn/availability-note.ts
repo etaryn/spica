@@ -16,7 +16,7 @@ export function pickNote(phrases: Phrases, kind: "busy" | "quiet", seed: string)
   return list.length ? list[Math.floor(seededUnit(seed) * list.length)]! : null;
 }
 
-/** The "busy, later?" note (design §8.3): once per block, only while the deferral is pending, never a memory. */
+/** The "busy, later?" note: once per block, only while the deferral is pending, never a memory. */
 export async function runAvailabilityNote(deps: Deps, job: BackchannelJob): Promise<"sent" | "skipped" | "dropped"> {
   const { db, clock, config } = deps;
   if (!job.blockKind || !job.blockStart) return "skipped";

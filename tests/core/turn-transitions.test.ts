@@ -133,7 +133,7 @@ describe("backchannel and recover", () => {
   });
 });
 
-describe("availability deferral (Phase 5)", () => {
+describe("availability deferral", () => {
   test("a deferred first turn holds wait_until past max_wait; later turns keep it", () => {
     const now = new Date("2026-01-05T10:30:00Z");
     const until = new Date(now.getTime() + 20 * 60_000);

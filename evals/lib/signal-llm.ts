@@ -5,7 +5,7 @@ const NONE: Signals = { warmth: 0, trust: 0, tension: 0, hurt: null, apology: fa
 const MARKER = "New exchange (extract from this):";
 
 /**
- * Fake-mode relationship signals (design §8.3): the extraction's `relationship` block comes from the script's
+ * Fake-mode relationship signals: the extraction's `relationship` block comes from the script's
  * `signals` for the newest scripted user turn in the new exchange. Turn texts with signals must be unique per
  * script (enforced by the runner). Lines are matched whole (not by substring) so a scripted text that's a
  * prefix of a longer, unscripted line never collides with it; while SignalLLM is active, a `relationship:

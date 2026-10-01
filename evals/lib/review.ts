@@ -33,7 +33,7 @@ function decisionLine(d: TraceDecision): string {
   return `${d.kind} (${d.source}): ${fmt(d.output)}`;
 }
 
-/** The relationship snapshot right after a session (design §8.3): state, params and event counts. No pass/fail. */
+/** The relationship snapshot right after a session: state, params and event counts. No pass/fail. */
 function renderRelationship(snap: RelSnapshot): string[] {
   const counts = new Map<string, number>();
   for (const e of snap.events) counts.set(e.cause, (counts.get(e.cause) ?? 0) + 1);
@@ -75,7 +75,7 @@ function renderSession(out: string[], turns: TraceTurn[], decisions: TraceDecisi
 }
 
 /**
- * The `--review` file (design §9.6): every input and output of a run, for manual analysis. It carries no
+ * The `--review` file: every input and output of a run, for manual analysis. It carries no
  * pass/fail verdict on quality; deterministic checks are listed as facts about the run.
  */
 export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {

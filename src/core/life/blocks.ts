@@ -12,7 +12,7 @@ function partOfDay(start: string): string {
   return h < 5 ? "night" : h < 12 ? "morning" : h < 17 ? "afternoon" : h < 21 ? "evening" : "night";
 }
 
-/** Self-contained and tense-free, so it reads true whether retrieved before or after the block (design §6.2). */
+/** Self-contained and tense-free, so it reads true whether retrieved before or after the block. */
 export function blockContent(b: LifeBlock): string {
   return `Spica's ${partOfDay(b.start)}: ${b.label}.`;
 }

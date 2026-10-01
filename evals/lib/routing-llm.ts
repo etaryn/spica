@@ -1,7 +1,7 @@
 import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/core/llm/types";
 
 /**
- * Exit profiles (v2 §15, design §9.6): a call goes to the real provider only when its purpose is listed, so an
+ * Exit profiles: a call goes to the real provider only when its purpose is listed, so an
  * exit run pays only for the phase's own LLM processes. The reply's purpose is "reply".
  */
 export class RoutingLLM implements LLMProvider {

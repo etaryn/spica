@@ -20,7 +20,7 @@ export function buildReconcileInput(c: ExtractedFact, neighbors: Neighbor[]): st
   ].join("\n");
 }
 
-/** Approach A (v2 §6.3): only near-matches reach the classifier; any target outside `neighbors` is ignored. */
+/** Approach A: only near-matches reach the classifier; any target outside `neighbors` is ignored. */
 export async function decide(deps: Pick<Deps, "llm" | "config">, c: ExtractedFact, neighbors: Neighbor[]): Promise<Decision> {
   if (neighbors.length === 0) return NEW;
   const raw = await deps.llm.classifyJson({

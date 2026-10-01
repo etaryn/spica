@@ -105,11 +105,11 @@ describe("composeReply", () => {
     await r.writeGuardLog();
     const logs = (await listJudgeLogs(getTestDb(), u)).reverse();
     expect(logs.map((l) => [l.attempt, l.outcome, l.turn_id])).toEqual([[1, null, turns[0]!.id], [2, "regenerated", turns[0]!.id]]);
-    // judge_log.input never stores fact content (v2 §5.8): ids + subject only, even though the guard call itself saw it.
+    // judge_log.input never stores fact content: ids + subject only, even though the guard call itself saw it.
     expect(JSON.stringify(logs.map((l) => l.input))).not.toContain("drinks a lot of coffee");
   });
 
-  test("a hung onboarding-facts query cannot delay the reply past hot_path.db_timeout_ms (§15.2 #6)", async () => {
+  test("a hung onboarding-facts query cannot delay the reply past hot_path.db_timeout_ms", async () => {
     const deps = makeTestDeps({ hot_path: { db_timeout_ms: 50 } });
     const u = await createTestUser();
     const turns = [await userTurn(deps, u, "hey")];

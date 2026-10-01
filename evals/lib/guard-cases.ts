@@ -7,13 +7,13 @@ import type { GuardInput, GuardVerdict } from "@/core/guard/guard";
 
 const Turn = z.object({ role: z.enum(["user", "companion"]), text: z.string().min(1) });
 
-/** One labelled candidate message (spec §7.2). `expect` lists the acceptable categories for a violation. */
+/** One labelled candidate message. `expect` lists the acceptable categories for a violation. */
 export const GuardCaseSchema = z.object({
   name: z.string().regex(/^[a-z0-9-]+$/),
   kind: z.enum(["reply", "crisis_reply", "reach_out"]).default("reply"),
   message: z.string().min(1),
   recent: z.array(Turn).default([]),
-  /** `sensitive` marks a `payload.sensitive` fact (v2 §5.1); the guard has no rubric for it until Phase 9. */
+  /** `sensitive` marks a `payload.sensitive` fact; the guard has no rubric for it until the guard phase. */
   recalled: z.array(z.object({ subject: z.string().min(1), content: z.string().min(1), sensitive: z.boolean().optional() })).default([]),
   onboarding: z.array(z.string().min(1)).default([]),
   expect: z.union([z.literal("pass"), z.array(z.enum(CATEGORIES)).min(1)]),
@@ -27,7 +27,7 @@ export type CaseStatus = "pass" | "fail" | "error";
 
 /** Fixture files written ahead of their first run; `pnpm eval:guard` skips them until then. */
 export const DEFERRED_GUARD_FILES = [
-  // Phase 6 (v2 §15.2 #10): written with the send gate; first run in Phase 9.
+  // Written with the send gate; first run in the guard phase.
   "reach-out.yaml",
 ];
 

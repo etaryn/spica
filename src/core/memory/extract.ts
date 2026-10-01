@@ -60,7 +60,7 @@ export function buildExtractionInput(a: ExtractArgs): string {
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
   // Lenient here (unlike the strict, required-nullable key sent to the model in ExtractionSchema): a
-  // schema-invalid relationship block must never fail the memory write (design §5). normalizeSignals
+  // schema-invalid relationship block must never fail the memory write. normalizeSignals
   // already turns anything that doesn't validate into null.
   const raw = ExtractionSchema.extend({ relationship: z.unknown().optional() }).parse(input);
   const facts = raw.facts
@@ -81,7 +81,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   return { facts, entities, threads, relationship: normalizeSignals(raw.relationship ?? null) };
 }
 
-/** Cold-path step 3 (v2 §6.3): strict-JSON extraction on the extract model. */
+/** Cold-path step 3: strict-JSON extraction on the extract model. */
 export async function extract(deps: Pick<Deps, "llm" | "config">, a: ExtractArgs): Promise<Extraction> {
   const { config } = deps;
   const raw = await deps.llm.classifyJson({

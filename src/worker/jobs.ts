@@ -32,7 +32,7 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
   await boss.createQueue(TURN_SWEEP_QUEUE);
   await boss.createQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 });
   await boss.updateQueue(RELATIONSHIP_TICK_QUEUE, { retryLimit: 0 }); // a retry would sample the baseline twice
-  // Phase 5-6: hourly, idempotent jobs; the next hour is the retry.
+  // Hourly, idempotent jobs; the next hour is the retry.
   for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, EGO_TICK_QUEUE, OUTREACH_TICK_QUEUE]) {
     await boss.createQueue(q, { retryLimit: 0 });
     await boss.updateQueue(q, { retryLimit: 0 });

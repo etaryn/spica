@@ -1,4 +1,4 @@
-# Full-personality-test end of the "how much profile data" experiment (onboarding-profile-data spec §1):
+# Full-personality-test end of the "how much profile data" experiment:
 # every category, 2-3 facts each. Same exclusions as basic.yaml (no topic an eval script probes: siblings, pets,
 # jobs, cities, food, bouldering, health) and nothing sensitive. Occupation and city are omitted for the same reason.
 confidence: 0.6

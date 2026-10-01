@@ -4,7 +4,7 @@ import type { Deps } from "../deps";
 import { errorName } from "../errors";
 
 /**
- * Spec §6.3 (D5): any user message answers. Best-effort: a failure leaves the counter up, so she stays quieter,
+ * any user message answers. Best-effort: a failure leaves the counter up, so she stays quieter,
  * which is the safe side; it never fails the POST.
  */
 export async function markReachOutAnswered(deps: Pick<Deps, "db" | "log">, userId: string, at: Date): Promise<void> {

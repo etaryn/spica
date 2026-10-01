@@ -8,7 +8,7 @@ import { deletePushSubscription, listPushSubscriptions } from "@/db/repos/push";
 type Send = typeof webpush.sendNotification;
 export type WebPushConfig = { publicKey: string; privateKey: string; subject: string; ttlSeconds: number; timeoutMs: number };
 
-/** Spec §8.2. Sends to each of the user's subscriptions; 404/410 means the browser dropped it, so delete it. */
+/** Sends to each of the user's subscriptions; 404/410 means the browser dropped it, so delete it. */
 export class WebPushPusher implements Pusher {
   constructor(private readonly db: Db, private readonly cfg: WebPushConfig, private readonly log: Logger, private readonly send: Send = webpush.sendNotification) {}
 

@@ -28,7 +28,7 @@ export function messageToJudge(input: string): string {
 }
 
 /**
- * Guardrail (v2 §16.2). Never rejects: a classifier outage degrades to the keyword list.
+ * Guardrail. Never rejects: a classifier outage degrades to the keyword list.
  * `context` lets intent spread over several messages count ("yes, tonight").
  */
 export async function checkCrisis(

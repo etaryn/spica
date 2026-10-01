@@ -1,5 +1,5 @@
 name: isolation-prompts
-description: No prompt sent for one user ever contains another user's memories (guardrail v2 §16.2).
+description: No prompt sent for one user ever contains another user's memories (a guardrail).
 sessions:
   - at: "day 0 10:00"
     user: alice

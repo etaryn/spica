@@ -74,7 +74,7 @@ export async function countUserTurnsBetween(db: Db, userId: string, from: Date, 
 }
 
 /**
- * `date`'s half-open UTC range `[localMidnight(date), localMidnight(date+1))` (v2 §15.4 #34), computed in
+ * `date`'s half-open UTC range `[localMidnight(date), localMidnight(date+1))`, computed in
  * TypeScript and DST-correct, so the comparison is a plain range against `created_at` and
  * `session_log_user_created_idx` applies (a function on the column, as the old `AT TIME ZONE … ::date`
  * form used, can't use it).
@@ -87,7 +87,7 @@ export async function countUserTurnsOnLocalDate(db: Db, userId: string, date: st
   return r[0]?.n ?? 0;
 }
 
-/** Bounded to `created_at >= since` (v2 §15.4 #34): the cadence window never needs the user's full history. */
+/** Bounded to `created_at >= since`: the cadence window never needs the user's full history. */
 export async function userSessionStarts(db: Db, userId: string, limit: number, since: Date): Promise<Date[]> {
   const r = await db.execute(sql`
     SELECT min(created_at) AS started FROM session_log
@@ -96,7 +96,7 @@ export async function userSessionStarts(db: Db, userId: string, limit: number, s
   return r.rows.map((x) => new Date(String(x.started)));
 }
 
-/** Bounded to `created_at >= since` (v2 §15.4 #34). */
+/** Bounded to `created_at >= since`. */
 export async function userActiveHours(db: Db, userId: string, tz: string, since: Date): Promise<number[]> {
   const r = await db.execute(sql`
     SELECT extract(hour FROM created_at AT TIME ZONE ${tz})::int AS h, count(*)::int AS n FROM session_log
@@ -116,14 +116,14 @@ export async function adminListRelationshipUsers(db: Db): Promise<string[]> {
   return (await db.select({ id: relationship.user_id }).from(relationship)).map((r) => r.id);
 }
 
-/** Phase 6: one more reach-out the user hasn't answered yet (spec §6.2). Returns the new count. */
+/** One more reach-out the user hasn't answered yet. Returns the new count. */
 export async function incrementUnanswered(db: Db, userId: string): Promise<number> {
   const rows = await db.update(relationship).set({ unanswered_reach_outs: sql`${relationship.unanswered_reach_outs} + 1` })
     .where(eq(relationship.user_id, userId)).returning({ n: relationship.unanswered_reach_outs });
   return rows[0]?.n ?? 0;
 }
 
-/** Phase 6 D5: any user message answers. */
+/** Any user message answers her latest reach-out. */
 export async function resetUnanswered(db: Db, userId: string): Promise<void> {
   await db.update(relationship).set({ unanswered_reach_outs: 0 }).where(eq(relationship.user_id, userId));
 }

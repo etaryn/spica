@@ -10,7 +10,7 @@ import {
   TURN_TIMER_QUEUE,
 } from "@/core/queue";
 
-/** pg-boss lives in the same Postgres database: the spec's one-database rule holds. */
+/** pg-boss lives in the same Postgres database: one database for everything. */
 export class PgBossQueue implements JobQueue {
   private ready: Promise<void> | null = null;
 

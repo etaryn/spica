@@ -6,9 +6,9 @@ import { mutateState } from "./state";
 import * as T from "./transitions";
 
 /**
- * turn_sweep (design §5.6): requeue buffers whose timer was lost and replies stuck in flight after a crash.
+ * turn_sweep: requeue buffers whose timer was lost and replies stuck in flight after a crash.
  * Never double-sends: every timer is version-checked, and recover bumps the version. One user's failure (a
- * transient DB error on their row) must not abort the rest of the batch (§15.4 #26).
+ * transient DB error on their row) must not abort the rest of the batch.
  */
 export async function sweepTurns(deps: Pick<Deps, "db" | "queue" | "config" | "log">, now: Date): Promise<number> {
   const { db, queue, config, log } = deps;

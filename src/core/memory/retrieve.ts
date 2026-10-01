@@ -8,9 +8,9 @@ import { withTimeout } from "../timeout";
 import { rankCandidates, type Scored } from "./score";
 
 /**
- * Hot-path retrieval (v2 §6.2 step 1). Read-only and never throws: any failure
+ * Hot-path retrieval. Read-only and never throws: any failure
  * degrades to whatever could still be retrieved, so a memory problem never costs
- * the user their reply. `answering` is a list so the Phase 3 turn buffer fits. `excludeSensitive` (reach-outs)
+ * the user their reply. `answering` is a list so a multi-turn buffer fits. `excludeSensitive` (reach-outs)
  * keeps every `payload.sensitive` fact out: ranked, forced, due threads (by their latest fact) and the preoccupation.
  */
 export async function retrieve(

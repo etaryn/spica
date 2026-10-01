@@ -14,7 +14,7 @@ import type { CandidateInputs, GateInputs } from "./types";
 
 const DAY = 24 * HOUR;
 
-/** Spec §4.1: everything the pure candidate builder needs. Read-only. */
+/** everything the pure candidate builder needs. Read-only. */
 export async function loadCandidateInputs(deps: Pick<Deps, "db" | "config">, userId: string, now: Date, db: Db = deps.db): Promise<CandidateInputs> {
   const { config } = deps;
   const cfg = config.outreach;
@@ -59,7 +59,7 @@ export async function effectiveCrisisQuietUntil(
   return !stored || fromTurn > stored ? fromTurn : stored;
 }
 
-/** Spec §5: gate inputs, or null when the user has no relationship row yet. */
+/** gate inputs, or null when the user has no relationship row yet. */
 export async function loadGateInputs(
   deps: Pick<Deps, "db" | "config">, userId: string, now: Date, db: Db = deps.db, conv?: ConvState | null,
 ): Promise<GateInputs | null> {

@@ -1,4 +1,4 @@
-# Memory honesty (v2 §6.4), from the Phase 1 traces. Each presumption has a supported twin that must pass.
+# Memory honesty, from the early memory-eval traces. Each presumption has a supported twin that must pass.
 gate: majority
 cases:
   - name: ff-role-again

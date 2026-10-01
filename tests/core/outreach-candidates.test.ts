@@ -80,7 +80,7 @@ test("the same fact in user events and her day is one candidate (first kind wins
   expect(buildCandidates(i, cfg, now)).toHaveLength(1);
 });
 
-test("a fact behind a due thread is not also a user_event candidate (R2)", () => {
+test("a fact behind a due thread is not also a user_event candidate", () => {
   const i = empty();
   const cp = new Date("2026-01-10T09:00:00Z");
   i.dueThreads = [{ id: "t1", title: "interview", detail: null, stakes: "high", next_checkpoint: cp, fact_id: "f1", sensitive: false }];

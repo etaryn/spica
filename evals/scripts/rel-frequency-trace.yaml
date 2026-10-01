@@ -1,5 +1,5 @@
 name: rel-frequency-trace
-description: v2 §8 frequency trace — 40 on day 1 against baseline 5, ~36/day for two weeks, then 2.
+description: The frequency trace — 40 on day 1 against baseline 5, ~36/day for two weeks, then 2.
 profile: none
 sessions:
   - { at: "day 1 10:00", seed_turns: { count: 39 }, turns: ["first day and i can't stop texting you"] }

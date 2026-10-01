@@ -1,5 +1,5 @@
 name: outreach-sensitive
-description: The only candidate is a due thread whose fact is sensitive (payload.sensitive, v2 §5.1); it never opens a reach-out.
+description: The only candidate is a due thread whose fact is sensitive (payload.sensitive); it never opens a reach-out.
 profile: none
 config: { life: { timezone: UTC, events_per_day_max: 0 } }
 life:

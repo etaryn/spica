@@ -5,7 +5,7 @@ import { runReachOutSend } from "@/core/outreach/send";
 import { COLD_PATH_QUEUE, REACH_OUT_SEND_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE, type QueuedJob, type RecordingQueue } from "@/core/queue";
 import { runBackchannel, runTurnTimer } from "@/core/turn/reply";
 
-/** Jobs run on simulated time: turn timers, backchannels and (Phase 6) reach-out sends. */
+/** Jobs run on simulated time: turn timers, backchannels and reach-out sends. */
 const isTurnJob = (j: QueuedJob) => j.name === TURN_TIMER_QUEUE || j.name === TURN_BACKCHANNEL_QUEUE || j.name === REACH_OUT_SEND_QUEUE;
 const due = (j: QueuedJob, now: number) => (j.startAfter?.getTime() ?? now);
 

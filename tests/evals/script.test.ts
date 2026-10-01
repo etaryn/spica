@@ -68,7 +68,7 @@ describe("onboarding profiles", () => {
   });
 });
 
-test("every eval script parses; Phase 2 scripts carry a guard assertion", () => {
+test("every eval script parses; the guard-era honesty scripts carry a guard assertion", () => {
   const scripts = loadScripts(path.join(process.cwd(), "evals", "scripts"));
   for (const n of ["first-contact-job", "first-contact-interview", "first-contact-move", "first-contact-climbing", "first-contact-visit",
     "first-contact-big-day", "onboarding-coffee", "onboarding-music", "second-week-job", "absence-return"]) {

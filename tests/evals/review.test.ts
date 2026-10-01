@@ -8,7 +8,7 @@ test("renders every turn, decision, fact and annotation, with no pass/fail verdi
     annotations: [{ type: "reply_about", user: "main", verdict: "yes", detail: "mentions the driving test" }],
     trace: {
       transcripts: {},
-      // R2: the memory dump is { facts, threads, entities } per user.
+      // The memory dump is { facts, threads, entities } per user.
       memory: { main: { facts: [{ subject: "user", kind: "event", content: "The user passed their driving test.", status: "active" }], threads: [], entities: [] } },
       turns: { main: [
         { session: 1, created_at: at(0), role: "user", trigger: null, text: "omg", reply_to: null, id: "u1" },

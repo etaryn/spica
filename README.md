@@ -1,6 +1,6 @@
 # Spica
 
-A standalone AI best friend. Source of truth: `spica-build-spec-v2.md`. Agent context: `CLAUDE.md`.
+A standalone AI best friend. Source of truth: `spica-design-spec-v3.md`. Agent context: `CLAUDE.md`.
 
 ## Run locally
 
@@ -8,7 +8,7 @@ A standalone AI best friend. Source of truth: `spica-build-spec-v2.md`. Agent co
 2. `cp .env.example .env`. Set `BETTER_AUTH_SECRET` and `ANTHROPIC_API_KEY`. After signing up, put your user id in `INSPECTOR_ADMIN_USER_IDS` to open `/inspector` (see `.env.example`).
 3. `pnpm install`
 4. `pnpm db:up && pnpm db:migrate`. Re-run `pnpm db:migrate` after pulling new migrations: tests migrate their own database, the dev database does not.
-5. `pnpm dev` (app on http://localhost:3000) and `pnpm worker` (cold-path jobs)
+5. `pnpm dev` (app on http://localhost:3000) and `pnpm worker` (background jobs)
 
 ## Checks
 

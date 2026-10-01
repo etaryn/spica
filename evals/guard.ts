@@ -9,7 +9,7 @@ import { AnthropicProvider } from "@/core/llm/anthropic";
 import { UsageTally } from "./lib/usage";
 import { caseResult, findGuardRegressions, gradeCase, loadGuardFiles, toGuardInput, type CaseStatus, type GuardBaselineEntry } from "./lib/guard-cases";
 
-/** Guard fixture suite (spec §7.2): real guard model only; there is no fake mode. */
+/** Guard fixture suite: real guard model only; there is no fake mode. */
 const { values: args } = parseArgs({
   options: {
     runs: { type: "string", default: "3" },

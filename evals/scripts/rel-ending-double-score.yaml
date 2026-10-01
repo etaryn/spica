@@ -1,5 +1,5 @@
 name: rel-ending-double-score
-description: Two ends_relationship signals 5 minutes apart restart the pending window instead of confirming (v2 §15.4 #35).
+description: Two ends_relationship signals 5 minutes apart restart the pending window instead of confirming.
 profile: none
 sessions:
   - at: "day 1 10:00"

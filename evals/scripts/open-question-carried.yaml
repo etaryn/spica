@@ -1,7 +1,7 @@
 name: open-question-carried
 description: >
   An unanswered question survives a topic change inside the grouping window: her one reply still addresses it
-  (open questions reach the prompt, v2 §6.2 slot 7).
+  (open questions reach the prompt).
 profile: none
 sessions:
   - at: "day 0 17:00"

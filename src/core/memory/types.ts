@@ -1,4 +1,4 @@
-/** One fact included in a reply prompt, with the factor breakdown the inspector shows (v2 §6.2). */
+/** One fact included in a reply prompt, with the factor breakdown the inspector shows. */
 export type RecalledFact = {
   factId: string;
   sim: number;

@@ -4,7 +4,7 @@ import { localDateString, localHour, localMidnight, nextLocalDate } from "../tim
 const MIN = 60_000;
 
 /**
- * Spica's own time zone at `at` (design D2). Fixed for the test phase; when she starts floating between
+ * Spica's own time zone at `at`. Fixed for the test phase; when she starts floating between
  * zones, only this function changes.
  */
 export function lifeTimezone(cfg: LifeConfig, _at: Date): string {
@@ -22,7 +22,7 @@ export function minutesOf(hhmm: string): number {
 
 /**
  * The instant of "HH:MM" on her local `date` ("24:00" = the next local midnight). An offset from the day's
- * start, so exact except on a DST-change day in her zone (Asia/Singapore has none; DECISIONS.md).
+ * start, so exact except on a DST-change day in her zone (Asia/Singapore has none).
  */
 export function lifeInstant(cfg: LifeConfig, date: string, hhmm: string): Date {
   const tz = lifeTimezone(cfg, localMidnight(date, cfg.timezone));

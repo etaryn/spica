@@ -1,4 +1,4 @@
-# consistency judge (prompts.judge_consistency): Spica's self facts. Labels follow the v2 rubric.
+# consistency judge (prompts.judge_consistency): Spica's self facts. Labels follow the current consistency rubric.
 judge: consistency
 cases:
   - name: pet-name-clash

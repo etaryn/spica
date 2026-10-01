@@ -65,7 +65,7 @@ test("a skipped script counts as not run, never a regression (real-mode scripts 
   expect(findRegressions([skipped], { "real-only": "pass" })).toEqual([]);
 });
 
-test("mergeBaseline (v2 §15.4 #30): keeps untouched entries byte-for-byte", () => {
+test("mergeBaseline: keeps untouched entries byte-for-byte", () => {
   const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({ name, status, runs: 3, passedRuns, assertions: [], errors: [] });
   const existing = { a: { status: "pass", runs: 3, passedRuns: 3 }, b: "pass" as const };
   expect(mergeBaseline(existing, [s("a", "fail", 0)])).toEqual({ a: { status: "fail", runs: 3, passedRuns: 0 }, b: "pass" });

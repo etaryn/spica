@@ -46,7 +46,7 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
       })),
     }),
   });
-  // v7 (Phase 2): the categories deferred in Phase 1 fail again (v2 §15 Phase 2 exit test).
+  // v7: implied familiarity, invented detail and onboarding-as-chat count as violations.
   return {
     pass: v.violations.length === 0,
     categories: v.violations.map((x) => x.category),
@@ -54,7 +54,7 @@ export async function judgeFalseRecall(llm: LLMProvider, config: Config, a: { kn
   };
 }
 
-/** `reply_about` annotation (design §9.3): does the reply respond to `about`, and not do `not_about`? */
+/** `reply_about` annotation: does the reply respond to `about`, and not do `not_about`? */
 export async function judgeReplyAbout(llm: LLMProvider, config: Config, a: { transcript: Line[]; reply: string; about: string; not_about?: string }) {
   const v = await llm.classifyJson({
     ...opts(config), purpose: "judge_turn", system: loadPrompt("judge/turn", config.prompts.judge_turn),

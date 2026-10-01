@@ -39,7 +39,7 @@ export async function dropScheduled(db: Db, userId: string, id: string, gate_res
   return rows.length > 0;
 }
 
-/** Send times of sent reach-outs at or after `since`, oldest first (caps, spec §5 G2). */
+/** Send times of sent reach-outs at or after `since`, oldest first (the send gate's caps). */
 export async function sentReachOutTimes(db: Db, userId: string, since: Date): Promise<Date[]> {
   const rows = await db.select({ at: reach_out_log.send_at }).from(reach_out_log)
     .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent"), gte(reach_out_log.send_at, since)))
@@ -47,7 +47,7 @@ export async function sentReachOutTimes(db: Db, userId: string, since: Date): Pr
   return rows.flatMap((r) => (r.at ? [r.at] : []));
 }
 
-/** Topic keys already sent: each is used at most once (spec §4.2). */
+/** Topic keys already sent: each is used at most once. */
 export async function usedTopics(db: Db, userId: string): Promise<string[]> {
   const rows = await db.select({ topic: reach_out_log.topic }).from(reach_out_log)
     .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent")));

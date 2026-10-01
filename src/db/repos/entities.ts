@@ -54,7 +54,7 @@ export async function listSelfEntityNames(db: Db, userId: string): Promise<strin
   return rows.flatMap((r) => [r.name, ...r.aliases]);
 }
 
-/** When her newest self entity was first seen (the one-new-entity-a-week rule, design §6.3). */
+/** When her newest self entity was first seen (the one-new-entity-a-week rule). */
 export async function latestSelfEntityFirstSeen(db: Db, userId: string): Promise<Date | null> {
   const rows = await db.select({ at: entity.first_seen }).from(entity).where(and(eq(entity.user_id, userId), eq(entity.subject, "self")))
     .orderBy(desc(entity.first_seen)).limit(1);

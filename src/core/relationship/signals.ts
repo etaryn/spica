@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** The extraction's relationship block (Phase 4 design §5). No numeric bounds (unsupported by structured outputs). */
+/** The extraction's relationship block. No numeric bounds (unsupported by structured outputs). */
 export const RelationshipSignalsSchema = z.object({
   warmth: z.number(), trust: z.number(), tension: z.number(),
   hurt: z.object({ amount: z.number(), cause: z.string() }).nullable(),

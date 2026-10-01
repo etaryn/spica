@@ -17,7 +17,7 @@ export class LockBusyError extends Error {}
 export type ColdPathOutcome = { status: "done" | "skipped"; applied?: ApplyOutcome };
 
 /**
- * Cold path (v2 §6.3): extract → embed → reconcile → apply, all inside one transaction
+ * Cold path: extract → embed → reconcile → apply, all inside one transaction
  * holding a per-user advisory lock, so a crash writes nothing and two exchanges from
  * one user never reconcile concurrently. Throws on failure so pg-boss retries.
  */
@@ -39,10 +39,10 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
     });
 
     const crisis = turns.some((t) => t.safety_flag?.flagged);
-    // Phase 6 (spec §6.2 step 5): a reach-out alone is her words only; no user behaviour to score, no exchange tone.
+    // A reach-out alone is her words only; no user behaviour to score, no exchange tone.
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
-    // The hurt cause lives in the fact store (design §5): one self `feeling` fact, reconciled like any other.
+    // The hurt cause lives in the fact store: one self `feeling` fact, reconciled like any other.
     const facts: { fact: ExtractedFact; source: "turn" | "inferred" }[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
     // Same deadzone comparison applyExchange uses (`>=`): a hurt too small to move the param writes no fact.
     const hurt = signals?.hurt && signals.hurt.amount >= config.relationship.signal_deadzone ? signals.hurt : null;
@@ -90,7 +90,7 @@ export async function handleColdPath(deps: Deps, job: ColdPathJob): Promise<Cold
       }
     }
 
-    // Phase 5 (design §7.3): its own savepoint, so an ego failure never loses the memory or relationship writes.
+    // Its own savepoint, so an ego failure never loses the memory or relationship writes.
     if (hasUserTurn) {
       try {
         await tx.transaction(async (sp) => {

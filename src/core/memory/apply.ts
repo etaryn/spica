@@ -24,7 +24,7 @@ export type ApplyOutcome = {
 const entityKey = (subject: "user" | "self", name: string) => `${subject}|${normalizeName(name)}`;
 const entitySubject = (s: ExtractedFact["subject"]): "user" | "self" => (s === "self" ? "self" : "user");
 
-/** Blank names dropped; mentions with the same subject + normalized name merged, so no alias is lost (§15.1 #10). */
+/** Blank names dropped; mentions with the same subject + normalized name merged, so no alias is lost. */
 function mergeMentions(ms: ExtractedEntity[]): ExtractedEntity[] {
   const byKey = new Map<string, ExtractedEntity>();
   for (const m of ms) {
@@ -39,7 +39,7 @@ function mergeMentions(ms: ExtractedEntity[]): ExtractedEntity[] {
   return [...byKey.values()];
 }
 
-/** Cold-path writes (v2 §6.3 steps 5–7). Call inside the job's transaction; every id the model supplied is ownership-checked. */
+/** Cold-path writes. Call inside the job's transaction; every id the model supplied is ownership-checked. */
 export async function applyExtraction(db: Db, config: Config, input: ApplyInput): Promise<ApplyOutcome> {
   const { userId, now } = input;
   const out: ApplyOutcome = { inserted: 0, duplicates: 0, resolved: 0, superseded: 0, entitiesCreated: 0, threadsOpened: 0, recalledUpdated: 0, factIds: [] };
@@ -107,7 +107,7 @@ export async function applyExtraction(db: Db, config: Config, input: ApplyInput)
       out.duplicates += 1;
       out.factIds.push(target.id);
     } else if (relation === "resolves" && target) {
-      // A late job must not resolve a truth stated after this exchange (§15.1 #9, mirrors contradicts).
+      // A late job must not resolve a truth stated after this exchange (mirrors contradicts).
       if (target.created_at <= input.exchangeAt) {
         await setFactStatus(db, userId, target.id, "resolved");
         out.resolved += 1;

@@ -5,7 +5,7 @@ import { KIND_ORDER, type Candidate, type CandidateInputs, type CandidateKind } 
 type Raw = Omit<Candidate, "score" | "filtered"> & { sensitive: boolean };
 
 /**
- * Spec §4: every candidate with its score and, if it can't win, why. Pure. Sorted best first
+ * every candidate with its score and, if it can't win, why. Pure. Sorted best first
  * (score desc, then kind order, then topic), filtered ones included so the log shows them.
  */
 export function buildCandidates(i: CandidateInputs, cfg: OutreachConfig, now: Date): Candidate[] {
@@ -19,7 +19,7 @@ export function buildCandidates(i: CandidateInputs, cfg: OutreachConfig, now: Da
       text: t.detail ? `${t.title} (latest: ${t.detail})` : t.title,
       strength: cfg.stakes_strength[t.stakes], factId: t.fact_id, threadId: t.id, sensitive: t.sensitive,
     });
-    // R2: Reserve fact_id from due threads so they don't become user_event/her_day candidates
+    // Reserve fact_id from due threads so they don't become user_event/her_day candidates
     if (t.fact_id) seenFacts.add(t.fact_id);
   }
 
@@ -58,7 +58,7 @@ export function buildCandidates(i: CandidateInputs, cfg: OutreachConfig, now: Da
   }).sort((a, b) => b.score - a.score || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || a.topic.localeCompare(b.topic));
 }
 
-/** Spec §4.3: the best unfiltered candidate, or none. */
+/** the best unfiltered candidate, or none. */
 export function pickWinner(cands: Candidate[]): Candidate | null {
   return cands.find((c) => c.filtered === null) ?? null;
 }

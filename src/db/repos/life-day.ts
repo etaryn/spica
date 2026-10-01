@@ -4,7 +4,7 @@ import { life_day } from "../schema";
 
 export type LifeDayRow = typeof life_day.$inferSelect;
 
-/** Her shared plan for one of her local dates. Not user-scoped: it holds no user data (design §4.1). */
+/** Her shared plan for one of her local dates. Not user-scoped: it holds no user data. */
 export async function getLifeDay(db: Db, date: string): Promise<LifeDayRow | null> {
   return (await db.select().from(life_day).where(eq(life_day.date, date)))[0] ?? null;
 }

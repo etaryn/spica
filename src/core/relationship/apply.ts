@@ -10,7 +10,7 @@ import { applyExchange } from "./transitions";
 
 const DAY = 86_400_000;
 
-/** Cold path, after applyExtraction, inside the job's transaction (a savepoint; design §6.1). */
+/** Cold path, after applyExtraction, inside the job's transaction (a savepoint). */
 export async function applyRelationship(tx: Db, deps: Pick<Deps, "config" | "clock">,
   a: { userId: string; turns: Turn[]; signals: Signals | null; crisis: boolean; hurtFactId: string | null }): Promise<void> {
   const cfg = deps.config.relationship;
@@ -24,7 +24,7 @@ export async function applyRelationship(tx: Db, deps: Pick<Deps, "config" | "clo
   const replies = a.turns.filter((t) => t.role === "companion" && t.reply_to).length;
   const userTurns = a.turns.filter((x) => x.role === "user");
   const lastUser = userTurns.at(-1);
-  // v2 §15.4 #36: stamp end_pending_since with the exchange's own turn time, the same clock last_contact
+  // stamp end_pending_since with the exchange's own turn time, the same clock last_contact
   // uses below, not the cold path's processing clock. Falls back to `now` when the exchange has no user
   // turn (shouldn't happen for a scored exchange, but keeps this total).
   const exchangeAt = lastUser?.created_at ?? now;

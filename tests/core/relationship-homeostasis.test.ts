@@ -13,7 +13,7 @@ test("effect is bounded and signed by the deviation from baseline", () => {
   expect(effect(p(2, 30, 100), cfg.variance_epsilon)).toBeLessThan(-0.99);
 });
 
-test("frequency trace (v2 §8): 40 on day 1, ~36/day for 13 days, then 2", () => {
+test("frequency trace: 40 on day 1, ~36/day for 13 days, then 2", () => {
   let m = p(5, 5, 25);
   m = { ...m, value: 40 };
   expect(effect(m, cfg.variance_epsilon)).toBeGreaterThan(0.99);

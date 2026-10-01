@@ -21,7 +21,7 @@ describe("resolveSessionId", () => {
 });
 
 describe("assemblePrompt", () => {
-  test("Phase 0: system is the values doc only; turns map to user/assistant", () => {
+  test("system is the values doc only; turns map to user/assistant", () => {
     const p = assemblePrompt({ ...base, recentTurns: [
       { role: "user", text: "hi" }, { role: "companion", text: "hey" }, { role: "user", text: "sup" },
     ] });
@@ -38,7 +38,7 @@ describe("assemblePrompt", () => {
     expect(p.messages).toEqual([{ role: "user", content: "hi" }]);
   });
 
-  test("renders slots in fixed spec order and skips empty ones", () => {
+  test("renders slots in fixed slot order and skips empty ones", () => {
     const p = assemblePrompt({
       ...base,
       egoLine: "You're a bit tired today.",

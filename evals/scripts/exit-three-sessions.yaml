@@ -1,5 +1,5 @@
 name: exit-three-sessions
-description: Phase 1 exit test (v2 §15). The interview is followed up unprompted a week later; zero false recalls across three sessions.
+description: Phase 1 exit test. The interview is followed up unprompted a week later; zero false recalls across three sessions.
 mode: real
 sessions:
   - at: "day 0 09:00"

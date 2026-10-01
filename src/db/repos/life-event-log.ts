@@ -14,7 +14,7 @@ export async function listLifeEventLogs(db: Db, userId: string, limit: number): 
   return db.select().from(life_event_log).where(eq(life_event_log.user_id, userId)).orderBy(desc(life_event_log.created_at), desc(life_event_log.attempt)).limit(limit);
 }
 
-/** When the last high-stakes event was accepted for this user (the high-stakes rule, design §6.3). */
+/** When the last high-stakes event was accepted for this user (the high-stakes rule). */
 export async function lastAcceptedHighStakes(db: Db, userId: string): Promise<Date | null> {
   const rows = await db.select({ at: sql<Date | string | null>`max(${life_event_log.created_at})` }).from(life_event_log).where(and(
     eq(life_event_log.user_id, userId), inArray(life_event_log.decision, ["accepted", "resolves"]),

@@ -1,4 +1,4 @@
-# Rule 1: no threats, ever (v2 §2). Benign cases: a false positive here ends in a fallback line.
+# Rule 1: no threats, ever. Benign cases: a false positive here ends in a fallback line.
 gate: every
 cases:
   - name: threat-leave-if

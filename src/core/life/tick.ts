@@ -12,14 +12,14 @@ import { lifeDate, lifeHour } from "./clock";
 import { generateEvents, type InjectedEvent } from "./events";
 
 export type { InjectedEvent } from "./events";
-/** Eval seam (design §9.3): force a scripted candidate as a day's first event attempt. */
+/** Eval seam: force a scripted candidate as a day's first event attempt. */
 export type LifeTickOptions = { inject?: (userId: string, day: string) => InjectedEvent | null };
 
 const DAY = 86_400_000;
 const due = (row: IdentityRow | null, day: string) => !row?.life_last_date || row.life_last_date < day;
 
 /**
- * `life_tick` for one user (design §6.1): once per her local date, at or after `life.tick_local_hour` in her
+ * `life_tick` for one user: once per her local date, at or after `life.tick_local_hour` in her
  * zone. Generation (LLM, embeddings, reconcile decisions) runs outside the transaction; the apply holds the cold
  * path's per-user advisory lock and the identity row lock, re-checks, and writes `life_last_date` last, so a
  * failure rolls back everything and the next hourly run retries from scratch.

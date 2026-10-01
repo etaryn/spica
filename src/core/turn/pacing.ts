@@ -11,7 +11,7 @@ export function seededUnit(seed: string): number {
   return (h >>> 0) / 2 ** 32;
 }
 
-/** How long to wait for more messages after this one (v2 §6.1; design §5.1 step 4), before any stretch. */
+/** How long to wait for more messages after this one, before any stretch. */
 export function waitWindowMs(t: TurnConfig, complete: boolean, lastText: string): number {
   if (complete) return t.settle_ms;
   return t.wait_ms + (lastText.trim().length < t.short_message_chars ? t.short_wait_bonus_ms : 0);

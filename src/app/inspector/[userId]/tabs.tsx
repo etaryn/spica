@@ -254,7 +254,7 @@ export async function TurnStateTab({ db, userId }: { db: Db; userId: string }) {
 
 type FactRef = { id: string };
 
-/** `judge_log.input` holds fact ids only (v2 §5.8); resolve them to current content for display, "(deleted)" if gone. */
+/** `judge_log.input` holds fact ids only; resolve them to current content for display, "(deleted)" if gone. */
 function resolveJudgeInput(input: unknown, facts: Map<string, string>): unknown {
   if (!input || typeof input !== "object") return input;
   const i = input as Record<string, unknown>;

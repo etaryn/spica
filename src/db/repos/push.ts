@@ -5,7 +5,7 @@ import { push_subscription } from "../schema";
 export type PushSubscriptionRow = typeof push_subscription.$inferSelect;
 export type PushKeys = { endpoint: string; p256dh: string; auth: string };
 
-/** Upsert by endpoint; a browser re-subscribing under another account moves to that account (spec §8.3). */
+/** Upsert by endpoint; a browser re-subscribing under another account moves to that account. */
 export async function upsertPushSubscription(db: Db, userId: string, s: PushKeys, now: Date): Promise<void> {
   await db.insert(push_subscription).values({ user_id: userId, ...s, created_at: now })
     .onConflictDoUpdate({ target: push_subscription.endpoint, set: { user_id: userId, p256dh: s.p256dh, auth: s.auth, created_at: now } });

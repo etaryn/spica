@@ -3,7 +3,7 @@ import type { Deps } from "../deps";
 import { blockAt, listLifeBlocks, type BlockFact } from "./blocks";
 import { lifeDate } from "./clock";
 
-/** Slot 4 (design §7.5). Null when she has no blocks today and the reply wasn't deferred. */
+/** Slot 4. Null when she has no blocks today and the reply wasn't deferred. */
 export function lifeStateLines(blocks: BlockFact[], now: Date, deferredLabel: string | null): string | null {
   if (blocks.length === 0 && !deferredLabel) return null;
   const lines: string[] = [];

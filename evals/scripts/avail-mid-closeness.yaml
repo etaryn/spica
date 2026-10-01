@@ -1,5 +1,5 @@
 name: avail-mid-closeness
-description: A message in a busy block from a mid-closeness friend (0.5) gets one note, then the delayed reply (Phase 5 design §8, D6).
+description: A message in a busy block from a mid-closeness friend (0.5) gets one note, then the delayed reply.
 profile: none
 relationship_seed: { closeness: 0.5 }
 config: { life: { timezone: UTC } }

@@ -12,7 +12,7 @@ const notDue = (lastTick: string | null, localDate: string) => lastTick !== null
 
 /**
  * The hourly cron (`relationship.tick_cron`) calls this once per user per run; it ticks a user only on the
- * first run at or after `tick_local_hour` local on a local date they haven't ticked yet (v2 §15.4 #33), so
+ * first run at or after `tick_local_hour` local on a local date they haven't ticked yet, so
  * every local date gets exactly one tick, DST included. A cheap unlocked pre-check (read, not `for update`)
  * answers "not due" without ever taking the row lock; the semantics of the tick itself (what a tick on
  * local date D samples and processes) are unchanged from the daily-cron version.
@@ -42,7 +42,7 @@ export async function tickUser(deps: Pick<Deps, "db" | "config">, userId: string
   });
 }
 
-/** Daily tick over every user (design §8.1); per-user isolation, never retried. */
+/** Daily tick over every user; per-user isolation, never retried. */
 export async function relationshipTick(deps: Pick<Deps, "db" | "config" | "log">, now: Date): Promise<{ users: number; failed: number }> {
   const users = await rel.adminListRelationshipUsers(deps.db);
   let failed = 0;

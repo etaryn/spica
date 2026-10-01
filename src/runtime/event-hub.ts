@@ -8,7 +8,7 @@ type Sub = { fn: Listener; onReset?: () => void };
 
 /**
  * One LISTEN connection per process, fanning notifications out to in-memory subscribers by userId
- * (design §8.1). Reconnects with backoff; on loss every subscriber's `onReset` fires so its caller
+ *. Reconnects with backoff; on loss every subscriber's `onReset` fires so its caller
  * (the SSE handler) can close the stream and let the client reconnect and catch up from history —
  * an open stream that just keeps heart-beating would never know it missed anything.
  */

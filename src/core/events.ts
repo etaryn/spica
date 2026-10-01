@@ -2,8 +2,8 @@ import type { Deps } from "./deps";
 import { errorName } from "./errors";
 
 /**
- * Server → client notifications (v2 §4: SSE fed by LISTEN/NOTIFY). Never message text: the SSE route
- * reads the turn from session_log (design §8.1), keeping text out of Postgres logs and under NOTIFY's 8 KB.
+ * Server → client notifications (SSE fed by LISTEN/NOTIFY). Never message text: the SSE route
+ * reads the turn from session_log, keeping text out of Postgres logs and under NOTIFY's 8 KB.
  */
 export type ChatEvent =
   | { type: "typing"; on: boolean }

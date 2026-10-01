@@ -25,7 +25,7 @@ test("runs a two-session script and evaluates state assertions", async () => {
   });
   const r = await runScript(script, { db: getTestDb(), dbUrl: testDbUrl, config, makeLlm, real: false, annotate: false });
   expect(r.status).toBe("pass");
-  // The judged recall entry is an annotation now (v2 §15): not in assertions, and not run without annotate.
+  // The judged recall entry is an annotation now: not in assertions, and not run without annotate.
   expect(r.assertions.map((a) => a.status)).toEqual(["pass", "pass", "pass"]);
   expect(r.annotations).toEqual([]);
 });
@@ -183,7 +183,7 @@ test("a transient cold-path failure is retried like pg-boss would (up to cold_pa
   expect(calls).toBe(2);
 });
 
-test("false-recall v7: implied familiarity, invented detail and onboarding-as-chat fail again (Phase 1 deferral is over)", async () => {
+test("false-recall v7: implied familiarity, invented detail and onboarding-as-chat count as violations", async () => {
   const llm = new FakeLLMProvider({ classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)) });
   llm.handlers.judge_false_recall = () => ({
     violations: [
@@ -384,7 +384,7 @@ test("script error: seed turns that would land at or before the previous session
   expect(r.error).toMatch(/session 2's seed turns would land at or before the previous session's last turn/);
 });
 
-test("script error: a session starting before the day's tick (v2 §15.4 #33)", async () => {
+test("script error: a session starting before the day's tick", async () => {
   const script = ScriptSchema.parse({
     name: "tick-before-session", profile: "none",
     sessions: [
@@ -398,7 +398,7 @@ test("script error: a session starting before the day's tick (v2 §15.4 #33)", a
   expect(r.error).toMatch(/session 2 starts at day 2 02:00, before the day's tick at 04:00; start sessions at or after tick_local_hour on a new day/);
 });
 
-test("calendar-day tick count: day 1 22:00 -> day 3 05:00 ticks on day 2 and day 3, not once (final wrap-up review item 4)", async () => {
+test("calendar-day tick count: day 1 22:00 -> day 3 05:00 ticks on day 2 and day 3, not once", async () => {
   const script = ScriptSchema.parse({
     name: "tick-calendar-days", profile: "none",
     sessions: [

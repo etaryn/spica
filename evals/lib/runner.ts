@@ -41,10 +41,10 @@ const HOUR = 3_600_000;
 
 export type AssertionResult = {
   type: string; check?: string; user?: string; status: "pass" | "fail" | "skipped" | "error"; detail?: string;
-  /** `turn` and `relationship` assertions only: `majority` passes on a majority of runs instead of every run (design §9.6, §8.3). */
+  /** `turn` and `relationship` assertions only: `majority` passes on a majority of runs instead of every run. */
   gate?: "every" | "majority";
 };
-/** A judged review note (v2 §15): never part of status or the exit code. */
+/** A judged review note: never part of status or the exit code. */
 export type Annotation = { type: string; user: string; verdict: "yes" | "no" | "n/a"; detail?: string };
 export type ScriptResult = {
   name: string; status: "pass" | "fail" | "skipped" | "error"; assertions: AssertionResult[]; error?: string;
@@ -71,9 +71,9 @@ export type RunTrace = {
   errorChain?: string[];
   /** Per user, per session (index = session − 1): the relationship snapshot right after that session. */
   relationship?: Record<string, (RelSnapshot | null)[]>;
-  /** Per user: the life snapshot at the end of a script with a `life` key (Phase 5). */
+  /** Per user: the life snapshot at the end of a script with a `life` key. */
   life?: Record<string, LifeSnapshot>;
-  /** Per user: the outreach snapshot at the end of a script with an `outreach` key (Phase 6), for review. */
+  /** Per user: the outreach snapshot at the end of a script with an `outreach` key, for review. */
   outreach?: Record<string, OutreachSnapshot>;
 };
 
@@ -110,7 +110,7 @@ export interface RunOptions {
   turnJudgeReal?: boolean;
   /** This run's extract purpose is real (`--real extract` or `--llm=real`): a script's `signal_source: "model"` then skips SignalLLM. Default false. */
   extractReal?: boolean;
-  /** This run's real purposes, for `needs_real` (Phase 5). */
+  /** This run's real purposes, for `needs_real`. */
   realPurposes?: ReadonlySet<string>;
 }
 
@@ -210,7 +210,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const byText = new Map<string, Partial<Signals>>();
   for (const s of script.sessions) for (const t of s.turns) {
     if (typeof t === "string" || !t.signals) continue;
-    // SignalLLM matches on text alone (design §8.3): a repeated scripted text would be ambiguous about which
+    // SignalLLM matches on text alone: a repeated scripted text would be ambiguous about which
     // exchange's signals apply, so it's a script error rather than a silent "last one wins".
     if (byText.has(t.text)) {
       return { name: script.name, status: "error", assertions: [], annotations: [],
@@ -239,7 +239,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const lifeLoop = script.life
     ? makeLifeLoop(deps, clock, script.life, first, script.outreach ? { queue, script: script.outreach, userIds: () => Object.values(userIds) } : undefined)
     : null;
-  /** Phase 6: what the `reach_out` assertion reads for one user (sent turns, her blocks, endings, pushes, reach-out prompts). */
+  /** What the `reach_out` assertion reads for one user (sent turns, her blocks, endings, pushes, reach-out prompts). */
   const outreachSnap = (id: string) => outreachSnapshot(db, id, {
     pushTags: pusher.pushes.filter((p) => p.userId === id).map((p) => p.msg.tag),
     composedPrompts: llm.prompts.filter((p) => p.includes("## Why you're writing")).length,
@@ -287,7 +287,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       }
     }
     if (script.seed_user_facts.length) {
-      // User facts (and threads) that exist before day 0, as if the user had said them (Phase 6 outreach scripts).
+      // User facts (and threads) that exist before day 0, as if the user had said them (outreach scripts).
       const before = new Date(first.getTime() - DAY);
       const vectors = await deps.embedder.embed(script.seed_user_facts.map((f) => f.content), "document");
       for (const id of Object.values(userIds)) {
@@ -311,14 +311,14 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     for (const [i, s] of script.sessions.entries()) {
       const start = parseAt(s.at, prevStart);
       if (start.getTime() < clock.now().getTime()) throw new Error(`session "${s.at}" starts before the previous session ended`);
-      // v2 §10.1: a session whose `at` advances the clock by N days (from the previous session's start) runs N decay passes.
-      // Counted as calendar days (UTC; eval users are UTC, §14.4), matching how the tick loop below anchors to
+      // a session whose `at` advances the clock by N days (from the previous session's start) runs N decay passes.
+      // Counted as calendar days (UTC; eval users are UTC), matching how the tick loop below anchors to
       // `prevMidnight`: a 24-hour count would under/over-count whenever a session doesn't start on the hour that
       // the previous one did (e.g. day 1 22:00 -> day 3 05:00 is 31 hours, rounding to 1, but crosses two
-      // calendar-day boundaries and needs a tick on day 2 *and* day 3; final wrap-up review item 4).
+      // calendar-day boundaries and needs a tick on day 2 *and* day 3).
       const days = prevStart ? Math.floor(start.getTime() / DAY) - Math.floor(prevStart.getTime() / DAY) : 0;
-      // Eval users are always UTC (§14.4), so the tick's local date is just the UTC calendar date. Tick at
-      // that date's `tick_local_hour` (v2 §15.4 #33), not at the previous session's own clock-of-day: this
+      // Eval users are always UTC, so the tick's local date is just the UTC calendar date. Tick at
+      // that date's `tick_local_hour`, not at the previous session's own clock-of-day: this
       // keeps the same calendar date ticked either way (only the hour-of-day changes), satisfies
       // `tickUser`'s local-hour gate regardless of what hour a script's sessions fall at, and still lands
       // before the next session start (every rel-* script starts at or after `tick_local_hour`).
@@ -353,7 +353,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         }
       }
       if (s.seed_turns) {
-        // Bulk user turns (design §8.3), before the session start so they count for that local day and need no reply.
+        // Bulk user turns, before the session start so they count for that local day and need no reply.
         // They occupy the `count` minutes right before `at`, so a script must leave that much room since the
         // previous session's own last turn (and a start just after midnight spills seeds into the previous local day).
         const earliest = start.getTime() - s.seed_turns.count * 60_000;
@@ -366,7 +366,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
             created_at: new Date(start.getTime() - (s.seed_turns.count - k) * 60_000), extracted: true });
         }
       }
-      // Simulated turn scheduling (design §9.1): each message arrives at its scripted time; turn jobs due before
+      // Simulated turn scheduling: each message arrives at its scripted time; turn jobs due before
       // it run first (their pacing sleeps advance the clock, so a message due mid-reply arrives after it).
       let at = start.getTime();
       for (const [k, raw] of s.turns.entries()) {
@@ -374,7 +374,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         if (k > 0) at += (typeof raw === "string" ? script.turn_gap_seconds : (raw.after_s ?? script.turn_gap_seconds)) * 1000;
         await recording(s.user, () => runDueJobs(deps, queue, clock, new Date(at)));
         if (clock.now().getTime() < at) clock.set(new Date(at));
-        // A client retry (design: repeat_previous_id) re-POSTs the previous turn's id with the same text.
+        // A client retry (repeat_previous_id) re-POSTs the previous turn's id with the same text.
         const wantsRepeat = typeof raw !== "string" && raw.repeat_previous_id;
         if (wantsRepeat && !lastIdByUser[s.user]) {
           throw new Error(`script error: repeat_previous_id used for user "${s.user}" before that user sent any turn`);
@@ -384,10 +384,10 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         // Replies are read back from session_log after the session.
         await recording(s.user, () => receiveMessage(deps, userId, { clientMessageId: id, text }));
       }
-      // End of session: every pending reply lands (design §9.2).
+      // End of session: every pending reply lands.
       await recording(s.user, () => runAllJobs(deps, queue, clock));
       lastSessionEnd = clock.now();
-      // Snapshot every user's relationship state as of this session, for `relationship` assertions (design §8.3).
+      // Snapshot every user's relationship state as of this session, for `relationship` assertions.
       for (const key of Object.keys(userIds)) {
         (relSnaps[key] ??= [])[i] = await relationshipSnapshot(db, userIds[key]!, clock.now(), config.relationship);
       }
@@ -450,7 +450,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         push({ type: "state", check: a.check, user: a.user, status: ok ? "pass" : "fail",
           detail: ok ? undefined : `expected ${JSON.stringify(a.expect)}, got ${JSON.stringify(actual)}` });
       } else if (a.type === "recall" || a.type === "no_false_recall" || a.type === "consistency" || a.type === "reply_about") {
-        // Judged entries are review annotations (v2 §15): never assertions, run only with annotate.
+        // Judged entries are review annotations: never assertions, run only with annotate.
         if (!opts.annotate) continue;
         const note = (v: { pass: boolean; detail: string }) => {
           const detail = [reason ? `known failure (${reason})` : "", v.detail].filter(Boolean).join(": ");
@@ -514,7 +514,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         const r = checkReachOut(await outreachSnap(userIds[a.user]!), a, config);
         push({ type: "reach_out", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
       } else {
-        // No deferred types remain after Phase 6; kept for later phases' reserved types.
+        // No deferred types remain; kept for later phases' reserved types.
         const type = (a as { type: string }).type;
         push({ type, status: "skipped", detail: `implemented in Phase ${DEFERRED[type]}` });
       }

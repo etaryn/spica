@@ -10,7 +10,7 @@ const clampState = (s: EgoState): EgoState => ({
 
 export const stateOf = (r: EgoState): EgoState => ({ mood_valence: r.mood_valence, mood_arousal: r.mood_arousal, energy: r.energy });
 
-/** Daily energy curve in her zone (design §7.2), peaking at `energy_peak_hour`. */
+/** Daily energy curve in her zone, peaking at `energy_peak_hour`. */
 export function rhythm(hour: number, cfg: EgoConfig): number {
   return 1 + cfg.energy_amplitude * Math.cos((2 * Math.PI * (hour - cfg.energy_peak_hour)) / 24);
 }
@@ -44,7 +44,7 @@ export function applyEvent(s: EgoState, valence: number, cfg: EgoConfig): EgoSta
   return clampState({ ...s, mood_valence: s.mood_valence + cfg.event_gain * valence, mood_arousal: s.mood_arousal + cfg.event_arousal_gain * Math.abs(valence) });
 }
 
-/** The exchange's tone (design §7.3): salience-weighted mean valence of its facts with non-zero valence. */
+/** The exchange's tone: salience-weighted mean valence of its facts with non-zero valence. */
 export function exchangeTone(facts: { valence: number; salience: number }[]): number | null {
   const xs = facts.filter((f) => f.valence !== 0);
   if (xs.length === 0) return null;

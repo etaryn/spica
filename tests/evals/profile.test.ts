@@ -8,7 +8,7 @@ test("fake by default: nothing real, mode: real scripts stay skipped", () => {
   expect(p.fake).toEqual([...ALL_PURPOSES, ...JUDGE_PURPOSES]);
 });
 
-test("--real turn_judge (the Phase 3 exit profile) makes real calls but does not unlock mode: real scripts", () => {
+test("--real turn_judge (a single-purpose exit profile) makes real calls but does not unlock mode: real scripts", () => {
   const p = resolveProfile({ llm: "fake", real: "turn_judge" });
   expect([...p.realPurposes]).toEqual(["turn_judge"]);
   expect(p).toMatchObject({ anyReal: true, realScripts: false, realCalls: ["turn_judge"] });

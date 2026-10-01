@@ -8,7 +8,7 @@ export function recencyFactor(ageDays: number, halfLifeDays: number): number {
 
 export type Scored = CandidateFact & { recency: number; score: number };
 
-/** v2 §6.2: score = sim × salience × max(entity salience) × recency(max(created_at, last_recalled_at)). */
+/** score = sim × salience × max(entity salience) × recency(max(created_at, last_recalled_at)). */
 export function rankCandidates(
   cands: CandidateFact[], now: Date, cfg: { top_n: number; recency_half_life_days: number },
 ): Scored[] {

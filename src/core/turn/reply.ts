@@ -26,11 +26,11 @@ async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>
 }
 
 /**
- * turn_timer (design §5.2–5.3, §5.5): commit the buffer, compose one reply to all of it, and send it on a
+ * turn_timer: commit the buffer, compose one reply to all of it, and send it on a
  * target timeline (read delay → typing → bubbles). Generation runs during the read delay, so model and guard
  * latency is absorbed as typing time. A crisis reply meanwhile (epoch bump) abandons this one: before the
- * insert via `finish`'s epoch/turn check, or between bubbles via an explicit re-read — the design's "the
- * epoch check stops any further ones" (§5.4), not just the first (rule 7: crisis suspends all friction).
+ * insert via `finish`'s epoch/turn check, or between bubbles via an explicit re-read, so every later bubble
+ * stops, not just the first (rule 7: crisis suspends all friction).
  */
 export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stale" | "busy" | "sent" | "abandoned" | "retry" | "failed"> {
   const { db, clock, config, log } = deps;
@@ -47,7 +47,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
 
   /**
    * A post-commit infrastructure error (before the reply row exists) must not strand the committed turns in
-   * limbo: put them back in the buffer and queue a retry, same as a generation failure (§15.4 #24). Past
+   * limbo: put them back in the buffer and queue a retry, same as a generation failure. Past
    * `retry_limit`, give up instead — no reply row exists yet, so `reply_failed` is still correct there.
    */
   const fail = async (e: unknown): Promise<"retry" | "abandoned" | "failed"> => {
@@ -114,7 +114,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
     // finish + the insert share one transaction: `insertReplyIfAbsent` never throws on a `reply_to` collision
     // (ON CONFLICT DO NOTHING), so a concurrent duplicate can't abort this transaction out from under the
     // `finish` patch that clears inflight. `companion` stays `undefined` unless the transaction commits, so a
-    // thrown error here (nothing persisted, transactional) is still safe to restore and retry (§15.4 #24); an
+    // thrown error here (nothing persisted, transactional) is still safe to restore and retry; an
     // error after that point (companion assigned) rethrows as before.
     let companion: Turn | null | undefined;
     try {
@@ -180,7 +180,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<"stal
   }
 }
 
-/** turn_backchannel (design §5.1 step 5, §7): once per buffer, rate-limited, keyword-guarded, never a memory. */
+/** turn_backchannel: once per buffer, rate-limited, keyword-guarded, never a memory. */
 export async function runBackchannel(deps: Deps, job: BackchannelJob): Promise<"sent" | "skipped" | "dropped"> {
   if (job.trigger === "availability") return runAvailabilityNote(deps, job);
   const { db, clock, config } = deps;

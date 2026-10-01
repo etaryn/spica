@@ -2,7 +2,7 @@ import type { ConvState, StatePatch } from "@/db/repos/conversation-state";
 import type { OpenQuestion } from "@/db/schema";
 
 /**
- * Pure conversation_state transitions (design §5). Each returns the patch to write (null = no write) and a
+ * Pure conversation_state transitions. Each returns the patch to write (null = no write) and a
  * result; `mutateState` applies them inside one short transaction holding the row lock.
  */
 export type Step<R> = { patch: StatePatch | null; result: R };
@@ -30,10 +30,10 @@ export function skip(s: ConvState, now: Date) {
 
 export function append(s: ConvState, a: {
   turnId: string; now: Date; windowMs: number; maxWaitMs: number; openQuestions: OpenQuestion[];
-  /** Availability (Phase 5 design §8.4): only applied to the first turn of a buffer. */
+  /** Availability: only applied to the first turn of a buffer. */
   defer?: { until: Date; factId: string | null } | null;
 }) {
-  // A race with a reply already in flight for this turn (design §5.2/§5.6 forward-looking guard): never re-buffer
+  // A race with a reply already in flight for this turn (a forward-looking guard): never re-buffer
   // a turn that's mid-reply, or it could be answered twice once the turn_timer job (Task 8) exists.
   if (s.inflight_turn_ids.includes(a.turnId)) return skip(s, a.now);
   const fresh = s.buffer_turn_ids.length === 0;
@@ -75,7 +75,7 @@ export function commit(s: ConvState, a: { version: number; now: Date }): Step<Co
 }
 
 /**
- * Just before the paced reply is inserted: false when a crisis reply went out meanwhile (design §5.2 step 4),
+ * Just before the paced reply is inserted: false when a crisis reply went out meanwhile,
  * or when the inflight snapshot no longer matches the turns this call is responsible for (someone else's
  * commit already occupies the slot) — either way, inflight is left untouched rather than cleared out from
  * under whoever does own it. On success the turns leave inflight (the reply row now answers them) and the
@@ -160,7 +160,7 @@ export function recover(s: ConvState, a: { now: Date; graceMs: number; inflightM
 }
 
 /**
- * The availability note (Phase 5 design §8.3): allowed only while this buffer's deferral is still pending.
+ * The availability note: allowed only while this buffer's deferral is still pending.
  * Not version-checked (later messages join the same deferred buffer) and sets nothing: once-per-block is read
  * from session_log.
  */

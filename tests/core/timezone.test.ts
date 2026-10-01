@@ -37,7 +37,7 @@ test("localHour reads the local wall-clock hour", () => {
   expect(localHour(new Date("2026-01-05T02:30:00Z"), "Asia/Tokyo")).toBe(11); // UTC+9
 });
 
-test("localMidnight finds the start of the local date (v2 §15.4 #34), including where literal midnight doesn't exist", () => {
+test("localMidnight finds the start of the local date, including where literal midnight doesn't exist", () => {
   // Plain UTC: local midnight is just midnight.
   expect(localMidnight("2026-01-05", "UTC").toISOString()).toBe("2026-01-05T00:00:00.000Z");
   // EST (UTC-5) outside DST: local midnight is 05:00 UTC.

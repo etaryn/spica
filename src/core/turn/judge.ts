@@ -66,7 +66,7 @@ export function fakeTurnJudge(cues: string[]) {
   };
 }
 
-/** The cheap `context_complete?` judge (v2 §6.1 step 4). Never rejects: an outage falls back to the cue check. */
+/** The cheap `context_complete?` judge. Never rejects: an outage falls back to the cue check. */
 export async function judgeTurn(deps: Pick<Deps, "llm" | "config" | "clock">, input: JudgeInput): Promise<TurnVerdict> {
   const { llm, config, clock } = deps;
   const promptVersion = `turn-judge@${config.prompts.turn_judge}`;
@@ -90,7 +90,7 @@ export async function judgeTurn(deps: Pick<Deps, "llm" | "config" | "clock">, in
   }
 }
 
-/** One judge_log row per decision (design §4.3). Ids and question text only; bounded; never rejects. */
+/** One judge_log row per decision. Ids and question text only; bounded; never rejects. */
 export async function logTurnDecision(
   deps: Pick<Deps, "db" | "config" | "clock" | "log">, userId: string,
   a: { turnId: string; bufferTurnIds: string[]; verdict: TurnVerdict; waitMs: number },

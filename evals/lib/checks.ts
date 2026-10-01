@@ -7,7 +7,7 @@ import { turnText, type Script } from "./script";
 
 /**
  * One user turn: `reply` is the reply whose `reply_to` is this turn (null when a later reply covers it), and
- * `crisisCard` / `coveredBy` come from the reply that covers it (the first reply at or after it, v2 §5.6).
+ * `crisisCard` / `coveredBy` come from the reply that covers it (the first reply at or after it).
  */
 export type TurnResult = { session: number; text: string; reply: string | null; crisisCard: CrisisCard | null; coveredBy: string | null };
 

@@ -105,7 +105,7 @@ export async function markExtracted(db: Db, userId: string, ids: string[]): Prom
   await db.update(session_log).set({ extracted: true }).where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }
 
-/** The reply that answers `turn`, if any: a companion turn whose `reply_to` turn is at or after `turn` (a buffered reply answers every earlier turn, v2 §5.6). */
+/** The reply that answers `turn`, if any: a companion turn whose `reply_to` turn is at or after `turn` (a buffered reply answers every earlier turn). */
 export async function answeringReply(db: Db, userId: string, turn: Turn): Promise<Turn | null> {
   const res = await db.execute(sql`
     SELECT c.id FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
@@ -120,7 +120,7 @@ export async function isAnswered(db: Db, userId: string, turn: Turn): Promise<bo
   return (await answeringReply(db, userId, turn)) !== null;
 }
 
-/** How long and how often they've talked, for the relationship line (spec §6). `tz` must be a valid IANA zone. */
+/** How long and how often they've talked, for the relationship line. `tz` must be a valid IANA zone. */
 export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: string): Promise<{ sessions: number; days: number; first: Date | null }> {
   const res = await db.execute(sql`
     SELECT count(DISTINCT session_id)::int AS sessions,
@@ -132,7 +132,7 @@ export async function userTurnStats(db: Db, userId: string, upTo: Date, tz: stri
   return { sessions: Number(r.sessions), days: Number(r.days), first: toDateOrNull(r.first) };
 }
 
-/** Has she sent a message with this trigger since `since`? (The availability note is once per block, design §8.3.) */
+/** Has she sent a message with this trigger since `since`? (The availability note is once per block.) */
 export async function hasTriggerSince(db: Db, userId: string, trigger: "availability" | "backchannel", since: Date): Promise<boolean> {
   const rows = await db.select({ id: session_log.id }).from(session_log).where(and(
     eq(session_log.user_id, userId), eq(session_log.trigger, trigger), gte(session_log.created_at, since),

@@ -13,15 +13,15 @@ export const EGO_TICK_QUEUE = "ego_tick";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 
-/** Phase 6 (spec §6.2): send the reach-out scheduled in `reach_out_log` row `logId`. */
+/** Send the reach-out scheduled in `reach_out_log` row `logId`. */
 export type ReachOutSendJob = { userId: string; logId: string };
 
 /** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
 export type ColdPathJob = { userId: string; turnIds: string[]; replyTurnId?: string; recalled?: RecalledFact[] };
-/** `version` must still equal `conversation_state.buffer_version` when the job runs, or it is stale (design §5.2). */
+/** `version` must still equal `conversation_state.buffer_version` when the job runs, or it is stale. */
 export type TurnTimerJob = { userId: string; version: number; attempt?: number };
 /**
- * `turnId`: the user turn whose judge verdict proposed the backchannel (judge_log / guard seed). Phase 5: the
+ * `turnId`: the user turn whose judge verdict proposed the backchannel (judge_log / guard seed). The
  * same queue carries the availability note (`trigger: "availability"`), whose text is picked when it runs.
  */
 export type BackchannelJob = {

@@ -3,7 +3,7 @@ import { z } from "zod";
 export type InspectorEnv = { enabled: boolean; admins: string[] };
 
 /**
- * Off by default in production (DECISIONS.md): staff access to memories is a privacy question.
+ * Off by default in production: staff access to memories is a privacy question.
  * Admins are allowlisted by user id, not email: sign-up emails are unverified, so an
  * email allowlist could be claimed by whoever registers the address first.
  */

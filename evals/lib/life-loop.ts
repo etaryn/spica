@@ -18,13 +18,13 @@ import { BASE, type LifeScript, type OutreachScript } from "./script";
 
 const DAY = 86_400_000;
 
-/** Phase 6: run the outreach tick and due reach-out sends in the loop, and answer reach-outs per the script. */
+/** Run the outreach tick and due reach-out sends in the loop, and answer reach-outs per the script. */
 export type LoopOutreach = { queue: RecordingQueue; script: OutreachScript; userIds: () => string[] };
 
 /**
  * Runs the production hourly life jobs (plan, life tick, ego tick) at every whole simulated hour between
- * sessions (design §9.3), never moving the clock backwards. Scripted plans are inserted instead of generated.
- * With `outreach` (Phase 6), each hour first runs due jobs (reach-out sends, simulated replies' turn timers),
+ * sessions, never moving the clock backwards. Scripted plans are inserted instead of generated.
+ * With `outreach`, each hour first runs due jobs (reach-out sends, simulated replies' turn timers),
  * then the script's auto-replies to reach-outs, then the life jobs and the outreach tick.
  */
 export function makeLifeLoop(deps: Deps, clock: SimClock, life: LifeScript, start: Date, outreach?: LoopOutreach) {

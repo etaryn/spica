@@ -97,7 +97,7 @@ export async function resolveFactContents(db: Db, userId: string, ids: string[])
   return new Map([...facts, ...threads].map((r) => [r.id, r.content]));
 }
 
-/** The Life tab (Phase 5 design §9.2). The plan is global; facts and the event log are this user's. */
+/** The Life tab. The plan is global; facts and the event log are this user's. */
 export async function getLifeView(db: Db, userId: string, day: string) {
   const [plan, facts, log] = await Promise.all([
     getLifeDay(db, day),

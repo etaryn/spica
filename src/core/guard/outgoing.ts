@@ -16,16 +16,16 @@ export type OutgoingArgs = {
   first: string;
   regenerate?: (correction: string) => Promise<string>;
 };
-/** `writeLog` is deferred: the caller writes judge_log after the message is sent (v2 §15.2 #1). */
+/** `writeLog` is deferred: the caller writes judge_log after the message is sent. */
 export type OutgoingResult = { text: string; outcome: GuardOutcome; writeLog: () => Promise<void> };
 type Checked = { text: string; verdict: GuardVerdict };
 
 /**
- * The regenerate/fallback policy (spec §4.3). The single entry point for every outgoing message:
+ * The regenerate/fallback policy. The single entry point for every outgoing message:
  * replies now; reach-outs, backchannels and availability messages in later phases.
  */
 export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">, a: OutgoingArgs): Promise<OutgoingResult> {
-  // Test phase (Ethan 2026-09-28): the guard is off until Phase 9, so Spica's full range can be observed.
+  // Test phase (Ethan 2026-09-28): the guard is off until the guard phase, so Spica's full range can be observed.
   // One judge_log row still records that nothing was checked.
   if (!deps.config.guard.enabled) {
     const text = a.first.trim();
@@ -42,8 +42,8 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
     ({ text, outcome, writeLog: () => writeLog(deps, a, checked, outcome) });
   const fallback = () => fallbackLine(deps.config, a.input.kind === "crisis_reply" ? "crisis_reply" : "reply", a.turnId);
 
-  // Backchannels (design §7): a few words can't carry a threat or invented detail the keyword list misses,
-  // so they skip the model call; a hit drops the backchannel rather than sending a fallback line. Same for availability notes (Phase 5), which are picked from a fixed list.
+  // Backchannels: a few words can't carry a threat or invented detail the keyword list misses,
+  // so they skip the model call; a hit drops the backchannel rather than sending a fallback line. Same for availability notes, which are picked from a fixed list.
   if (a.input.kind === "backchannel" || a.input.kind === "availability") {
     const text = a.first.trim();
     const hit = matchKeyword(text, deps.config.guard.fallback_keywords);
@@ -82,7 +82,7 @@ export async function guardOutgoing(deps: Pick<Deps, "db" | "llm" | "config" | "
 }
 
 /**
- * `input` never stores fact content (v2 §5.8): recalled and onboarding facts go in as id + subject only.
+ * `input` never stores fact content: recalled and onboarding facts go in as id + subject only.
  * The guard call itself still receives the content (`a.input`, unprojected); only the log row is stripped,
  * and only here, so the no-fact-content rule has one place to hold.
  */
@@ -116,7 +116,7 @@ async function writeLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: 
   }
 }
 
-/** Guard-off path (v2 §16.2, Ethan 2026-09-28): still records one row per outgoing message. */
+/** Guard-off path (test phase): still records one row per outgoing message. */
 async function writeDisabledLog(deps: Pick<Deps, "db" | "config" | "clock" | "log">, a: OutgoingArgs, text: string) {
   const row: NewJudgeLog = {
     kind: "guard", turn_id: a.turnId, attempt: 1, input: logInput(a.input, text), output: {},

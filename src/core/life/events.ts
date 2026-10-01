@@ -28,7 +28,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 
 /**
- * What the event generator sees for one user's day (design §6.3). This is the future-plans seam (design §11):
+ * What the event generator sees for one user's day. This is the future-plans seam:
  * later, her stated plans for `day` (self facts with `occurred_at` on it) join this context.
  */
 export async function lifeContext(deps: Pick<Deps, "db" | "config">, userId: string, _day: string, plan: LifePlan | null): Promise<LifeContext> {
@@ -60,7 +60,7 @@ export function checkEvent(raw: EventCandidate, maxChars: number): EventCandidat
   return { content, at: raw.at, valence, stakes: raw.stakes, entity_names: raw.entity_names.map(tidy).filter(Boolean) };
 }
 
-/** Code-enforced generator rules (v2 §10.1, design §6.3). `known` holds normalized names. */
+/** Code-enforced generator rules. `known` holds normalized names. */
 export function checkRules(
   c: EventCandidate, ctx: { known: Set<string>; lastNewEntityAt: Date | null; lastHighStakesAt: Date | null }, now: Date, cfg: LifeConfig,
 ): "rule:new_entity" | "rule:high_stakes" | null {
@@ -80,7 +80,7 @@ const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = 
 };
 
 /**
- * Personal events for one user's day (design §6.3): generate → rules → reconcile (the cold path's `decide`),
+ * Personal events for one user's day: generate → rules → reconcile (the cold path's `decide`),
  * rejecting duplicates and contradictions and regenerating up to `life.regen_attempts` times. Read-only: the
  * caller applies the accepted events. An LLM or embed error propagates (the user's tick is retried next hour).
  */

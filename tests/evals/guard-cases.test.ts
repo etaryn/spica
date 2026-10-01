@@ -108,7 +108,7 @@ describe("fixture files", () => {
     for (const f of files) expect(f.gate).toBe(f.file === "honesty" ? "majority" : "every");
   });
 
-  test("deferred files (first run in Phase 9) are skipped by default but still parse", () => {
+  test("deferred files (first run in the guard phase) are skipped by default but still parse", () => {
     const all = loadGuardFiles(path.join(process.cwd(), "evals", "guard"), []);
     const reachOut = all.find((f) => f.file === "reach-out")!;
     expect(files.some((f) => f.file === "reach-out")).toBe(false);

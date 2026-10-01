@@ -56,7 +56,7 @@ test("sweep clears a sender that crashed mid-bubbles, and the buffer behind it g
   expect((await listTurns(getTestDb(), u)).filter((t) => t.role === "companion")).toHaveLength(1);
 });
 
-test("one failing user doesn't abort the sweep batch (§15.4 #26)", async () => {
+test("one failing user doesn't abort the sweep batch", async () => {
   const deps = makeTestDeps();
   const u1 = await createTestUser();
   deps.queue.failNext = true; // the timer enqueue is lost

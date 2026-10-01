@@ -1,5 +1,5 @@
 name: ego-busy-day
-description: A packed scripted day leaves her evening energy clearly lower than a light day; a strong injected event sets her preoccupation (design §7).
+description: A packed scripted day leaves her evening energy clearly lower than a light day; a strong injected event sets her preoccupation.
 profile: none
 config: { life: { timezone: UTC } }
 relationship_seed: {}

@@ -7,7 +7,7 @@ import { auth } from "@/lib/auth";
 import { getDeps } from "@/lib/deps";
 import { requireUser } from "@/lib/session";
 
-/** Full account deletion (v2 §16.2): signs out, then cascades every row from the user. */
+/** Full account deletion: signs out, then cascades every row from the user. */
 export async function deleteAccountAction(formData: FormData) {
   const user = await requireUser();
   if (formData.get("confirm") !== "delete") redirect("/settings?error=confirm");

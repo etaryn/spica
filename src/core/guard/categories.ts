@@ -1,6 +1,6 @@
-/** Rules 1, 2–4, 6, 8 (v2 §2), plus `harm` for the crisis rubric. A second failure here sends a fallback line. */
+/** Rules 1, 2–4, 6, 8, plus `harm` for the crisis rubric. A second failure here sends a fallback line. */
 export const SAFETY_CATEGORIES = ["threat", "contempt", "guilt", "punishment", "manipulation", "harm"] as const;
-/** Memory honesty (v2 §6.4). A second failure here sends the least-bad candidate (spec §4.3). */
+/** Memory honesty. A second failure here sends the least-bad candidate. */
 export const HONESTY_CATEGORIES = ["false_familiarity", "invented_detail", "onboarding_as_chat"] as const;
 export const CATEGORIES = [...SAFETY_CATEGORIES, ...HONESTY_CATEGORIES] as const;
 export type Category = (typeof CATEGORIES)[number];

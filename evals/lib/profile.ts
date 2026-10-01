@@ -1,4 +1,4 @@
-/** Call purposes an eval run can make real (v2 §15, design §9.6). `embed` is the Voyage embedder. */
+/** Call purposes an eval run can make real. `embed` is the Voyage embedder. */
 export const ALL_PURPOSES = ["reply", "crisis", "extract", "reconcile", "guard", "guard_crisis", "turn_judge", "life_plan", "life_event", "embed"];
 /** The annotation judges, made real by `--annotate`. */
 export const JUDGE_PURPOSES = ["judge_recall", "judge_false_recall", "judge_consistency", "judge_turn"];

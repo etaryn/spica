@@ -5,7 +5,7 @@ import { ego_tick, identity, relationship } from "../schema";
 export type IdentityRow = typeof identity.$inferSelect;
 export type EgoBaseline = { mood_valence: number; mood_arousal: number; energy: number };
 
-/** Creates her per-user ego row on first use (Phase 5 design §4.1), at the configured baseline. */
+/** Creates her per-user ego row on first use, at the configured baseline. */
 export async function ensureIdentity(tx: Db, userId: string, baseline: EgoBaseline): Promise<void> {
   await tx.insert(identity).values({
     user_id: userId, mood_valence: baseline.mood_valence, mood_arousal: baseline.mood_arousal, energy: baseline.energy, baseline,

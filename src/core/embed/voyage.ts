@@ -2,7 +2,7 @@ import type { Embedder } from "./types";
 
 type VoyageResponse = { data: { index: number; embedding: number[] }[] };
 
-/** Wired in Phase 0, first used by Phase 1 retrieval and extraction. */
+/** Voyage embeddings for retrieval, reconcile and life-event checks. */
 export class VoyageEmbedder implements Embedder {
   readonly dimensions: number;
   private readonly apiKey: string | undefined;

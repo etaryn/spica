@@ -1,5 +1,6 @@
 /**
- * Phrase files: a prompt file of `key: phrase` lines, read into lists by key.
+ * Phrase files: a prompt file of `## key` headings, each followed by `- phrase` lines, read into
+ * lists by key.
  */
 
 /** Phrase lists by heading, parsed from a prompt file of `## heading` and `- phrase` lines. */

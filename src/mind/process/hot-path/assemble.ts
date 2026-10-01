@@ -1,5 +1,4 @@
 /**
-/**
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
  * empty: core values, who she is lately, how she is feeling, her day, you and them, what she
  * remembers (about them, between you, what she has told them, from her own life), things to ask

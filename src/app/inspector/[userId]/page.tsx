@@ -40,7 +40,7 @@ export default async function InspectUser({
   await assertInspectorAccess();
   const userId = parseUserIdParam((await params).userId);
   if (!userId) notFound();
-  const { db, clock, config } = getDeps();
+  const { db, core, clock, config } = getDeps();
   const target = await adminGetUser(db, userId);
   if (!target) notFound();
   const sp = await searchParams;
@@ -67,7 +67,7 @@ export default async function InspectUser({
       {tab === "relationship" && (
         <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />
       )}
-      {tab === "life" && <LifeTab db={db} now={clock.now()} cfg={config.life} />}
+      {tab === "life" && <LifeTab db={db} core={core} now={clock.now()} cfg={config.life} />}
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
       {tab === "turn" && <TurnStateTab db={db} userId={userId} />}
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}

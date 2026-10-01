@@ -183,7 +183,8 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     [] as { id: string; content: string }[],
   );
   const relationshipLinePromise = loadRelationshipLine(deps, userId, input.anchor);
-  // A crisis reply carries no relationship friction, no mood colouring, and never mentions being busy.
+  // A crisis reply carries no relationship friction, no mood colouring, and never mentions being
+  // busy.
   const relationshipSummary = inCrisis
     ? Promise.resolve(null)
     : bounded(

@@ -3,7 +3,7 @@ import type { LifeConfig } from "@/mind/platform/config";
 import { lifeDate } from "@/mind/world/her-clock";
 import type { RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
-import { createCoreLayer } from "@/db/repos/core";
+import type { Deps } from "@/mind/platform/deps";
 import * as r from "@/db/repos/admin/inspector";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { listTurns } from "@/db/repos/user/session-log";
@@ -509,10 +509,20 @@ export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
   );
 }
 
-export async function LifeTab({ db, now, cfg }: { db: Db; now: Date; cfg: LifeConfig }) {
+export async function LifeTab({
+  db,
+  core,
+  now,
+  cfg,
+}: {
+  db: Db;
+  core: Deps["core"];
+  now: Date;
+  cfg: LifeConfig;
+}) {
   const day = lifeDate(cfg, now);
   const v = await r.getLifeView(db, day);
-  const events = await createCoreLayer(db).world.events(day);
+  const events = await core.world.events(day);
   return (
     <>
       <h3>

@@ -1,7 +1,7 @@
 /**
- * Reconcile: decides how a new memory, from either mind, relates to the closest ones already stored. It can be a
- * duplicate, resolve an open one, contradict one (which supersedes it), or be new. The model is
- * only asked when a near match exists.
+ * Reconcile: decides how a new memory, from either mind, relates to the closest ones already
+ * stored. It can be a duplicate, resolve an open one, contradict one (which supersedes it), or be
+ * new. The model is only asked when a near match exists.
  */
 import { z } from "zod";
 import type { Deps } from "@/mind/platform/deps";
@@ -18,7 +18,10 @@ export type Decision = {
   targetId: string | null;
 };
 
-/** The new memory, described the same way for either mind: "user, event", "self, opinion", "episode". */
+/**
+ * The new memory, described the same way for either mind: "user, event", "self, opinion",
+ * "episode".
+ */
 export type ReconcileCandidate = { label: string; content: string };
 
 const IS_NEW: Decision = { relation: "new", targetId: null };
@@ -31,7 +34,7 @@ export function buildReconcileInput(candidate: ReconcileCandidate, neighbors: Ne
   ].join("\n");
 }
 
-/** A target the model names that isn't one of `neighbors` is ignored, so the memory counts as new. */
+/** A target the model names that isn't one of `neighbors` is ignored: the memory counts as new. */
 export async function reconcileAgainstNeighbours(
   deps: Pick<Deps, "llm" | "config">,
   candidate: ReconcileCandidate,

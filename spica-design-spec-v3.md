@@ -434,8 +434,10 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 - Her relationships with Alcor and other agents.
 - Minor voice habits (tics, favourite phrasings).
 
-The persona file is restructured into a `## Core values` part and a
-`## Seed self` part (the starting snapshot, version 0).
+The persona file is split by its top-level headings into a `# Core values`
+part and a `# Seed self` part (the starting snapshot, version 0); the seed
+self's own sections are `###`, so they nest under the reply's "Who you are
+lately".
 
 ### 7.3 Drift watch (DECIDED: watched; PROPOSED: mechanics)
 
@@ -510,7 +512,7 @@ preoccupation expiry, event nudges. Keys moved from `ego.*` to
 an event's feeling must be to take over her mind), `event_gain` and
 `event_arousal_gain` (how far an event moves mood), and `bands` (the ranges
 that turn values into the phrases of the "How you're feeling" line, from
-`prompts/core-state/line`). Needs and goal progress are not built yet.
+`prompts/core-state/line/v2.md`). Needs and goal progress are not built yet.
 
 ### 8.3 World
 
@@ -548,7 +550,11 @@ that turn values into the phrases of the "How you're feeling" line, from
   `open`) that stays on her mind through the preoccupation; she has no
   per-user threads for her own life. Other keys: `event_max_tokens`,
   `event_max_chars`, `injected_event_at` (eval-injected events), and
-  `canon_entities` (Alcor). Her memories whose `occurred_at` is later than
+  `canon_entities` (Alcor, seeded into `core_entity` with snapshot v0 at
+  worker start, in the eval runner and by `pnpm db:reset-self`, and never
+  counted by the new-entity rule). The generator writes from her core values
+  plus her latest snapshot (the seed self until one exists). Her memories
+  whose `occurred_at` is later than
   now (events are recorded about 00:10 her time, dated to their hour) are
   never surfaced by core retrieval or by outreach `her_day`. Without a plan
   for today the tick still generates a generic event.
@@ -731,8 +737,9 @@ when the guard is on.
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
-seed self come from `prompts/persona/v3.md`; the reply prompt is
-`prompts/reply/v9.md`.
+seed self come from `prompts/persona/v4.md`; the reply prompt is
+`prompts/reply/v10.md` (its rules about her own self sit under "Being
+yourself", so no heading repeats the persona's).
 
 Crisis replies skip slots 3–7 except plain context; the crisis rubric
 applies.
@@ -1223,7 +1230,7 @@ and life tick) were dropped; the replacement is designed fresh.
   superseded fact can still get through. *Tuning / guard phase.*
 - **B5.** Reconcile misses low-similarity contradictions (below
   `reconcile.near_match_similarity` nothing is classified). Matters more once
-  core memory reconciles core events. *Phase 7 / tuning.*
+  core memory reconciles core events (it does now). *Tuning.*
 - **B6.** Onboarding facts decay like any other, so even the user's name can
   go `stale`; decide a floor. Run the `minimal` / `basic` / `rich` profile
   experiment; cap onboarding facts in the guard input. *Phase 11.*
@@ -1244,9 +1251,9 @@ and life tick) were dropped; the replacement is designed fresh.
   records the window, not the deferred wait; the once-per-block note check
   and the first-message deferral read run outside the lock (fail open).
   *Later.*
-- **B11.** `compose-reply.ts`: the `earlier` fallback is inexact when the
+- **B11.** `compose.ts`: the `earlier` fallback is inexact when the
   buffer's first turn falls outside the recent-turns window (needs a 20+
-  message buffer in 40 s). *Phase 7* (reply assembly is rebuilt).
+  message buffer in 40 s). The rebuilt reply assembly kept it. *Later.*
 - **B12.** `EventHub.stop()` leaves a pending retry promise unsettled (test
   teardown only). `recentTurns` orders by `created_at` then role, so ties
   could misorder. *Later.*
@@ -1268,7 +1275,8 @@ and life tick) were dropped; the replacement is designed fresh.
   *Later.*
 - **B17.** Exchange tone averages every extracted fact with non-zero valence,
   including her own and the hurt `feeling` fact, so one hurt counts twice.
-  Decide what tone reads when the nudge moves to user affect. *Phase 7.*
+  The nudge now moves user affect; what tone should read is a question for
+  Ethan. *Tuning, with Ethan.*
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts
@@ -1298,10 +1306,11 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B55.** Core loops should run on a separate Postgres role with no grants on
   user tables, so the scope rule holds in the database as well as in code.
   *Before users.*
-- **B56.** Afterglow learns a baseline, so a negative deviation has no summary
-  phrase. *Tuning.*
 - **B57.** The `core-state/line` and `relationship/summary` phrase files
   (including the affect phrases) need a pass. *Tuning.*
+- **B58.** Appraise events at their `occurred_at`, not at the 00:10 world
+  tick: today the mood nudge decays from midnight and `preoccupation_since`
+  anchors there. *Phase 8* (`core_appraise`).
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

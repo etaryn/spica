@@ -285,7 +285,7 @@ parameter named `userId`/`user_id` (checked over the interface source); core tab
   carried into whatever that step writes.
 - **Recording LLM** wraps both and keeps every `(purpose, system, messages)` call.
 
-### 10.3 Exit run (all fake; `evals/scripts/mind-split-exit.yaml` plus a Vitest exit test)
+### 10.3 Exit run (all fake; `tests/exit/mind-split.test.ts`)
 
 Two users, A and B, three simulated days, hourly jobs between sessions.
 

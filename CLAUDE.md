@@ -122,9 +122,9 @@ snapshot** (versioned, rewritten nightly by core loops, free to drift), and
 the **user layer**. A **drift watch** checks each snapshot against the core
 values, diffs it and tracks the trend; it logs, never blocks (test phase).
 Different faces across users are allowed; "too drastic" is tested, not
-fixed. Persona file `prompts/persona/v<N>.md` (v2 is Ethan's draft: openly an
-AI, sibling Alcor, loves stars / old films / books, no body), to be split
-into `## Core values` and `## Seed self` (snapshot v0). `interest_alignment:
+fixed. Persona file `prompts/persona/v<N>.md` (now v4, from Ethan's draft:
+openly an AI, sibling Alcor, loves stars / old films / books, no body), split
+into `# Core values` and `# Seed self` (snapshot v0). `interest_alignment:
 adjacent` applies at reply time only. Identity disclosure: honest, in her own
 voice.
 
@@ -212,11 +212,11 @@ is never an exit criterion: on-demand review runs log every input and output.
 
 ## Open decisions: ask Ethan, don't settle (v3 §21)
 1 big-event triggers · 2 core values split · 3 faces limit · 4 core vs what
-she told a user · 5 core memory storage (`fact` with `scope = 'core'` or
-separate tables; build behind `CoreMemory`) · 6 drift response · 7 user-loop
+she told a user · 6 drift response · 7 user-loop
 outputs feeding outreach · 8 attachment at onboarding · 9 phase order · 10
 hurt/tension ceilings (guard phase) · 11 jab vs contempt and the suspended
-rules (guard phase). Settled: fixed Spica; `adjacent` interests (reply time
+rules (guard phase). Settled: fixed Spica; core memory storage (#5:
+separate core tables behind `CoreMemory`); `adjacent` interests (reply time
 only); backchannel style global `judge`; shared day plan; reach-out caps
 1/day, 3/week, silence after 2 unanswered; honest identity disclosure.
 

@@ -1,9 +1,9 @@
 /**
  * The cold path: after she has replied, it turns the exchange into memory and relationship state.
  * The steps are extract, embed, reconcile against near memories, encode, then update the
- * relationship, including her feelings toward them. It all runs in one transaction holding a per-user advisory lock, so a
- * crash writes nothing and two exchanges from one user never reconcile at once. It throws on
- * failure so pg-boss retries, and it never delays a reply.
+ * relationship, including her feelings toward them. It all runs in one transaction holding a
+ * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
+ * reconcile at once. It throws on failure so pg-boss retries, and it never delays a reply.
  */
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
@@ -104,7 +104,10 @@ async function extractExchange(
   });
 }
 
-/** The same deadzone comparison the relationship uses (`>=`): a hurt too small to move it writes nothing. */
+/**
+ * The same deadzone comparison the relationship uses (`>=`): a hurt too small to move it writes
+ * nothing.
+ */
 function significantHurt(signals: Signals | null, deadzone: number): Signals["hurt"] {
   const hurt = signals?.hurt;
   return hurt && hurt.amount >= deadzone ? hurt : null;

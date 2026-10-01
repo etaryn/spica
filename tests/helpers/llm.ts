@@ -1,7 +1,7 @@
 /**
- * Scripted model outputs for tests: `sequence` returns each output in turn (repeating the last), and
- * an Error output is thrown, so one handler can walk every branch of a process. `CapturingLLM` is
- * the worst-case model the leak test runs against.
+ * Scripted model outputs for tests: `sequence` returns each output in turn (repeating the last),
+ * and an Error output is thrown, so one handler can walk every branch of a process. `CapturingLLM`
+ * is the worst-case model the leak test runs against.
  */
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import type { ClassifyRequest, ReplyRequest } from "@/mind/platform/llm/types";

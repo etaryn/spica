@@ -1,3 +1,7 @@
+/**
+ * The core data layer against Postgres: memory, people, snapshots, state and world, with no user id
+ * anywhere.
+ */
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { createCoreLayer } from "@/db/repos/core";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";

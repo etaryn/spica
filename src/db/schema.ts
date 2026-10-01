@@ -420,7 +420,10 @@ export const life_day = pgTable("life_day", {
   generated_at: ts("generated_at").notNull(),
 });
 
-/** One row per outreach evaluation that got past the pre-check. `send_at` is the actual send time once `sent`. */
+/**
+ * One row per outreach evaluation that got past the pre-check. `send_at` is the actual send time
+ * once `sent`.
+ */
 export const reach_out_log = pgTable(
   "reach_out_log",
   {
@@ -445,7 +448,10 @@ export const reach_out_log = pgTable(
   ],
 );
 
-/** Web Push subscriptions. One row per browser endpoint; the endpoint moves to whoever subscribed last. */
+/**
+ * Web Push subscriptions. One row per browser endpoint; the endpoint moves to whoever subscribed
+ * last.
+ */
 export const push_subscription = pgTable(
   "push_subscription",
   {
@@ -546,7 +552,8 @@ export const core_state = pgTable(
     preoccupation_since: ts("preoccupation_since"),
     baseline: jsonb("baseline").$type<CoreMoodJson>().notNull(),
     last_tick: ts("last_tick"),
-    // Her local date of the last finished event generation, so a retried world tick never doubles a day.
+    // Her local date of the last finished event generation, so a retried world tick never doubles
+    // a day.
     last_event_day: date("last_event_day", { mode: "string" }),
   },
   (t) => [

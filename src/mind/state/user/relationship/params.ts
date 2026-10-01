@@ -1,6 +1,7 @@
 /**
  * The maths of a homeostatic param: how far it sits from this user's baseline, how the baseline
- * learns from daily samples, how a nudge moves it, and how hurt, tension and afterglow fade on their own.
+ * learns from daily samples, how a nudge moves it, and how hurt, tension and afterglow fade on
+ * their own.
  */
 import { HOUR } from "@/mind/platform/time";
 import type { HomeostaticParam, Params, RelationshipConfig } from "./types";
@@ -9,7 +10,7 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/** How far the value sits from this user's baseline, in units of their variance, bounded to (-1, 1). */
+/** How far the value sits from this user's baseline, in units of its variance, within (-1, 1). */
 export function deviationOf(param: HomeostaticParam, epsilon: number): number {
   return Math.tanh((param.value - param.baseline) / Math.sqrt(param.variance + epsilon));
 }

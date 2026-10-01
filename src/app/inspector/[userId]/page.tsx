@@ -8,7 +8,6 @@ import styles from "../inspector.module.css";
 import {
   EntitiesThreadsTab,
   FactsTab,
-  IdentityTab,
   JudgeLogTab,
   LifeTab,
   ReachOutsTab,
@@ -22,7 +21,6 @@ const TABS = {
   transcript: "Transcript",
   facts: "Facts",
   graph: "Entities & Threads",
-  identity: "Identity",
   relationship: "Relationship",
   life: "Life",
   retrieval: "Retrieval",
@@ -65,11 +63,10 @@ export default async function InspectUser({
       {tab === "transcript" && <TranscriptTab db={db} userId={userId} />}
       {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}
       {tab === "graph" && <EntitiesThreadsTab db={db} userId={userId} base={base} />}
-      {tab === "identity" && <IdentityTab db={db} userId={userId} />}
       {tab === "relationship" && (
         <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />
       )}
-      {tab === "life" && <LifeTab db={db} userId={userId} now={clock.now()} cfg={config.life} />}
+      {tab === "life" && <LifeTab db={db} now={clock.now()} cfg={config.life} />}
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}
       {tab === "turn" && <TurnStateTab db={db} userId={userId} />}
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}

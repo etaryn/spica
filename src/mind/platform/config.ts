@@ -278,23 +278,6 @@ const life = z.object({
       }),
     )
     .min(1),
-  tick_cron: cron,
-  tick_local_hour: hourOfDay,
-  lock_timeout_ms: positiveInt,
-  events_per_day_max: countFromZero,
-  event_probability: unit,
-  event_context_facts: countFromZero,
-  event_max_tokens: positiveInt,
-  event_max_chars: positiveInt,
-  injected_event_at: clockTime,
-  event_salience: unit,
-  event_confidence: unit,
-  regen_attempts: countFromZero,
-  new_entity_days: nonNegative,
-  high_stakes_min_days: nonNegative,
-  high_stakes_checkpoint_days: nonNegative,
-  preoccupation_min_valence: unit,
-  canon_entities: z.array(text),
 });
 
 /** A [low, high] threshold pair for turning a value into low / neutral / high. */
@@ -322,18 +305,26 @@ const coreState = z.object({
   bands: z.object({ energy: band, mood_valence: band, mood_arousal: band }),
 });
 
-const core = z.object({ state: coreState });
-
-// The per-user mood the legacy life tick still nudges; goes with that tick.
-const ego = z.object({
-  baseline: z.object({
-    mood_valence: z.number().min(-1).max(1),
-    mood_arousal: unit,
-    energy: unit,
-  }),
-  event_gain: unit,
-  event_arousal_gain: unit,
+const coreWorld = z.object({
+  tick_cron: cron,
+  events_local_hour: hourOfDay,
+  events_per_day_max: countFromZero,
+  event_probability: unit,
+  event_context_items: countFromZero,
+  event_context_days: nonNegative,
+  event_max_tokens: positiveInt,
+  event_max_chars: positiveInt,
+  injected_event_at: clockTime,
+  event_salience: unit,
+  event_confidence: unit,
+  entity_salience: unit,
+  regen_attempts: countFromZero,
+  new_entity_days: nonNegative,
+  high_stakes_min_days: nonNegative,
+  canon_entities: z.array(text),
 });
+
+const core = z.object({ state: coreState, world: coreWorld });
 
 const availability = z.object({
   override_closeness: z.number().gt(0).max(1),
@@ -365,6 +356,7 @@ const outreach = z.object({
   check_in_gap_factor: z.number().positive(),
   jitter_max_minutes: nonNegative,
   due_threads_limit: positiveInt,
+  her_day_limit: positiveInt,
   pending_max_age_minutes: z.number().positive(),
   log_list_limit: positiveInt,
 });
@@ -424,7 +416,6 @@ export const ConfigSchema = z.object({
   relationship,
   life,
   core,
-  ego,
   availability,
   outreach,
   push,
@@ -435,7 +426,6 @@ export type Config = z.infer<typeof ConfigSchema>;
 export type CrisisCard = z.infer<typeof CrisisCardSchema>;
 export type TurnConfig = Config["turn"];
 export type LifeConfig = Config["life"];
-export type EgoConfig = Config["ego"];
 export type CoreStateConfig = Config["core"]["state"];
 export type AvailabilityConfig = Config["availability"];
 export type OutreachConfig = Config["outreach"];

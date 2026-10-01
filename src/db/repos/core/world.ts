@@ -1,9 +1,9 @@
 /**
- * Her world in Postgres: the shared day plan and the events that happened.
+ * Her world in Postgres: the shared day plan, the events that happened and the generator's attempts.
  */
 import { desc, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { world_event } from "@/db/schema";
+import { life_event_log, world_event } from "@/db/schema";
 import type { World } from "@/mind/world/types";
 import { one } from "../util";
 import { getLifeDay } from "../world/life-day";
@@ -47,6 +47,10 @@ export function worldRepo(db: Db): World {
           .limit(1)
       )[0];
       return row?.at ?? null;
+    },
+
+    async logEventAttempts(attempts) {
+      if (attempts.length) await db.insert(life_event_log).values(attempts);
     },
   };
 }

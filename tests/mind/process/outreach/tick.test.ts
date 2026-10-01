@@ -17,7 +17,10 @@ afterAll(closeTestDb);
 
 const now = new Date("2026-01-05T15:20:00Z"); // life zone UTC below; 15:20 is free
 async function setup() {
-  const deps = makeTestDeps({ life: { timezone: "UTC", events_per_day_max: 0 } });
+  const deps = makeTestDeps({
+    life: { timezone: "UTC" },
+    core: { world: { events_per_day_max: 0 } },
+  });
   deps.clock.set(now);
   const u = await createTestUser();
   await ensureRelationship(deps.db, u, now, deps.config.relationship);
@@ -70,6 +73,27 @@ test("a winner through an open gate is scheduled with deterministic jitter and a
   const delay = r!.send_at!.getTime() - now.getTime();
   expect(delay).toBeGreaterThanOrEqual(0);
   expect(delay).toBeLessThanOrEqual(40 * 60_000);
+});
+
+test("her day comes from her core episodes: topic core:<id> and the core memory id", async () => {
+  const { deps, u } = await setup();
+  const id = await deps.core.memory.insert({
+    kind: "episode",
+    content: "Spica got the telescope images.",
+    embedding: vec(),
+    occurred_at: new Date(now.getTime() - 2 * 3_600_000),
+    created_at: now,
+    status: "resolved",
+    salience: 0.8,
+    valence: 0.6,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  expect(await outreachTickUser(deps, u, now)).toBe("scheduled");
+  const [r] = await rows(deps, u);
+  expect(r!.topic).toBe(`core:${id}`);
+  expect(r!.winner).toMatchObject({ kind: "her_day", coreMemoryId: id, factId: null });
 });
 
 test("no candidate → a 'none' row and no job", async () => {

@@ -1,7 +1,7 @@
 name: outreach-sensitive
 description: The only candidate is a due thread whose fact is sensitive (payload.sensitive); it never opens a reach-out.
 profile: none
-config: { life: { timezone: UTC, events_per_day_max: 0 } }
+config: { life: { timezone: UTC }, core: { world: { events_per_day_max: 0 } } }
 life:
   plan: scripted
   plans:

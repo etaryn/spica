@@ -6,7 +6,7 @@ import {
   DECAY_QUEUE,
   CORE_STATE_TICK_QUEUE,
   LIFE_PLAN_QUEUE,
-  LIFE_TICK_QUEUE,
+  CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
   TURN_SWEEP_QUEUE,
 } from "@/mind/platform/jobs";
@@ -104,7 +104,7 @@ test("ensureSystemQueues creates the phase 5 queues without retries", async () =
   await boss.start();
   started = true;
   await ensureSystemQueues(boss);
-  for (const q of [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE, CORE_STATE_TICK_QUEUE])
+  for (const q of [LIFE_PLAN_QUEUE, CORE_WORLD_TICK_QUEUE, CORE_STATE_TICK_QUEUE])
     expect(await boss.getQueue(q)).toMatchObject({ retryLimit: 0 });
 });
 

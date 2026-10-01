@@ -5,7 +5,7 @@
  * scheduled as a `reach_out_send` job, jittered up to `jitter_max_minutes` later.
  */
 
-import { adminListLifeUsers } from "@/db/repos/admin/life";
+import { adminListOutreachUsers } from "@/db/repos/admin/relationship";
 import { hasPendingScheduled, insertReachOutLog } from "@/db/repos/user/reach-out";
 import { getRelationshipRow } from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
@@ -102,8 +102,8 @@ export async function outreachTick(
   deps: Deps,
   now: Date,
 ): Promise<{ users: number; failed: number; scheduled: number }> {
-  // Active or repairing: the same population as the life tick.
-  const users = await adminListLifeUsers(deps.db);
+  // Active or repairing: an ended friendship never hears from her first.
+  const users = await adminListOutreachUsers(deps.db);
   let failed = 0;
   let scheduled = 0;
 

@@ -237,8 +237,8 @@ const ScriptBlock = z.object({
   label: z.string().min(1),
 });
 /**
- * When present, the runner runs the hourly life jobs (plan, life tick, ego tick) from the
- * script start. `plans` keys are day indexes from her local date at day 0, or "*" for every other day.
+ * When present, the runner runs the hourly world jobs (plan, world tick, core state tick) from
+ * the script start. `plans` keys are day indexes from her local date at day 0, or "*" for every other day.
  */
 export const LifeScript = z
   .object({
@@ -261,12 +261,13 @@ export const LifeScript = z
   );
 export type LifeScript = z.infer<typeof LifeScript>;
 
-/** Deterministic. `needs_real`: skipped unless every listed purpose is real in this run. */
+/**
+ * Her shared world, the same for every user. `events` counts world events; `not_stored` checks her
+ * core memory. Deterministic. `needs_real`: skipped unless every listed purpose is real in this run.
+ */
 export const LifeAssertion = z.object({
   type: z.literal("life"),
-  user: z.string().default("main"),
   plans: MinMax.optional(),
-  block_days: MinMax.optional(),
   events: MinMax.optional(),
   decision: z
     .object({ content_includes: z.string().min(1), in: z.array(z.string().min(1)).min(1) })
@@ -276,10 +277,9 @@ export const LifeAssertion = z.object({
   known_failure: knownFailure,
 });
 export type LifeAssertion = z.infer<typeof LifeAssertion>;
-/** Reads ego_tick history. Times are "day N HH:MM". */
-export const EgoAssertion = z.object({
-  type: z.literal("ego"),
-  user: z.string().default("main"),
+/** Her core mind, shared by every user: core state tick history and core memory. Times are "day N HH:MM". */
+export const CoreAssertion = z.object({
+  type: z.literal("core"),
   energy: z
     .object({ at: z.string(), lt: z.number().optional(), gt: z.number().optional() })
     .optional(),
@@ -287,9 +287,11 @@ export const EgoAssertion = z.object({
     .object({ at: z.string(), than: z.string(), by: z.number().min(0).default(0) })
     .optional(),
   preoccupation_set: z.boolean().optional(),
+  episodes: MinMax.optional(),
+  world_events: MinMax.optional(),
   known_failure: knownFailure,
 });
-export type EgoAssertion = z.infer<typeof EgoAssertion>;
+export type CoreAssertion = z.infer<typeof CoreAssertion>;
 
 export const ScriptSchema = z
   .object({
@@ -309,9 +311,9 @@ export const ScriptSchema = z
     sessions: z.array(Session).min(1),
     life: LifeScript.optional(),
     outreach: OutreachScript.optional(),
-    /** Her own facts that exist before day 0 (source turn, as if she'd said them), embedded with the run's embedder. */
-    seed_self_facts: z.array(z.string().min(1)).default([]),
-    /** User facts (and threads) that exist before day 0, seeded for every user after `seed_self_facts`. */
+    /** Her own episodes that happened before day 0 (core memory), embedded with the run's embedder. */
+    seed_core_memory: z.array(z.string().min(1)).default([]),
+    /** User facts (and threads) that exist before day 0, seeded for every user. */
     seed_user_facts: z.array(SeedUserFact).default([]),
     /** Creates every user's relationship row before session 1 and sets these params' value and baseline. */
     relationship_seed: z.partialRecord(z.enum(PARAM_NAMES), z.number()).optional(),
@@ -327,7 +329,7 @@ export const ScriptSchema = z
           ReplyAboutAssertion,
           RelationshipAssertion,
           LifeAssertion,
-          EgoAssertion,
+          CoreAssertion,
           ReachOutAssertion,
         ]),
       )

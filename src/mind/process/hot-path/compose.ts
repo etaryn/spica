@@ -35,7 +35,10 @@ export type Composed = {
   writeGuardLog: () => Promise<void>;
 };
 
-export type ReachOutTrigger = Pick<Candidate, "kind" | "text" | "factId" | "threadId">;
+export type ReachOutTrigger = Pick<
+  Candidate,
+  "kind" | "text" | "factId" | "threadId" | "coreMemoryId"
+>;
 
 type ComposeInput = {
   recent: Turn[];

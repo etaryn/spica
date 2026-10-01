@@ -7,4 +7,6 @@ assertLocalDatabase(url);
 const { db, pool } = createDb(url);
 const n = await adminResetSelf(db);
 await pool.end();
-console.log(`reset self: deleted ${n.facts} facts, ${n.entities} entities, ${n.threads} threads`);
+console.log(
+  `reset self: deleted ${n.facts} facts, ${n.entities} entities, ${n.threads} threads; cleared her core mind`,
+);

@@ -1,10 +1,9 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { loadConfig } from "@/mind/platform/config";
 import { insertFact } from "@/db/repos/user/facts";
-import { ensureIdentity, getIdentityRow, updateIdentity } from "@/db/repos/user/identity";
 import { adminResetSelf, assertLocalDatabase } from "@/db/reset-self";
-import { entity, fact, thread } from "@/db/schema";
+import { core_memory, entity, fact, thread, world_event } from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
+import { makeTestDeps } from "../helpers/deps";
 
 const t0 = new Date("2026-01-05T10:00:00Z");
 beforeEach(resetDb);
@@ -18,7 +17,7 @@ test("refuses a non-local database", () => {
   expect(() => assertLocalDatabase("postgres://u:p@127.0.0.1:5432/spica")).not.toThrow();
 });
 
-test("deletes self facts, entities and threads for every user, keeps user facts, clears preoccupation and life_last_date", async () => {
+test("deletes self facts, entities and threads for every user, keeps user facts, clears her core mind", async () => {
   const db = getTestDb();
   const u = await createTestUser();
   const base = {
@@ -31,7 +30,7 @@ test("deletes self facts, entities and threads for every user, keeps user facts,
     confidence: 1,
     source: "turn" as const,
   };
-  const self = await insertFact(db, u, {
+  await insertFact(db, u, {
     ...base,
     subject: "self",
     content: "Spica has a cat called Pesto.",
@@ -55,15 +54,35 @@ test("deletes self facts, entities and threads for every user, keeps user facts,
     opened_at: t0,
     last_touched: t0,
   });
-  await ensureIdentity(db, u, loadConfig().ego.baseline);
-  await updateIdentity(db, u, {
-    preoccupation: self.id,
-    preoccupation_since: t0,
-    life_last_date: "2026-01-05",
+  const deps = makeTestDeps();
+  await deps.core.state.ensure(deps.config.core.state.baseline);
+  const episode = await deps.core.memory.insert({
+    kind: "episode",
+    content: "She rewatched Solaris.",
+    embedding: vec(),
+    occurred_at: t0,
+    created_at: t0,
+    status: "open",
+    salience: 0.5,
+    valence: 0.6,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  await deps.core.state.update({ preoccupation: episode, last_event_day: "2026-01-05" });
+  await deps.core.world.recordEvent({
+    at: t0,
+    kind: "planned",
+    content: "She rewatched Solaris.",
+    valence: 0.6,
+    stakes: "low",
+    agents: [],
+    life_day: "2026-01-05",
+    created_at: t0,
   });
   expect(await adminResetSelf(db)).toEqual({ facts: 1, entities: 1, threads: 1 });
   expect((await db.select().from(fact)).map((f) => f.content)).toEqual(["The user likes tea."]);
-  const row = await getIdentityRow(db, u);
-  expect(row?.preoccupation).toBeNull();
-  expect(row?.life_last_date).toBeNull();
+  expect(await db.select().from(core_memory)).toEqual([]);
+  expect(await db.select().from(world_event)).toEqual([]);
+  expect(await deps.core.state.get()).toBeNull();
 });

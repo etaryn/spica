@@ -12,7 +12,6 @@ import {
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { insertJudgeLogs } from "@/db/repos/user/judge-log";
 import { insertLifeDay } from "@/db/repos/world/life-day";
-import { insertLifeEventLogs } from "@/db/repos/user/life-event-log";
 import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/user/relationship";
 import * as s from "@/db/schema";
@@ -148,9 +147,8 @@ test("getRelationshipView: faded params with effect, events newest first, user-s
   expect(await getRelationshipView(db, b, now, cfg)).toBeNull();
 });
 
-test("getLifeView shows today's plan, this user's generated facts and event log only", async () => {
+test("getLifeView shows her shared plan for the day", async () => {
   const db = getTestDb();
-  const [a, b] = [await createTestUser("a"), await createTestUser("b")];
   const t0 = new Date("2026-01-05T10:00:00Z");
   await insertLifeDay(db, {
     date: "2026-01-05",
@@ -160,39 +158,8 @@ test("getLifeView shows today's plan, this user's generated facts and event log 
     prompt_version: "scripted",
     generated_at: t0,
   });
-  await insertFact(db, a, {
-    subject: "self",
-    kind: "event",
-    content: "Spica's morning: reading.",
-    payload: { block: "busy" },
-    embedding: vec(),
-    created_at: t0,
-    status: "open",
-    salience: 0.2,
-    valence: 0,
-    confidence: 1,
-    source: "generated",
-  });
-  await insertLifeEventLogs(db, a, [
-    {
-      life_day: "2026-01-05",
-      attempt: 1,
-      candidate: {},
-      decision: "accepted",
-      target_fact_id: null,
-      fact_id: null,
-      model: "m",
-      prompt_version: "v1",
-      created_at: t0,
-    },
-  ]);
-  const va = await getLifeView(db, a, "2026-01-05");
-  expect(va.plan?.date).toBe("2026-01-05");
-  expect(va.facts.map((f) => f.content)).toEqual(["Spica's morning: reading."]);
-  expect(va.log).toHaveLength(1);
-  const vb = await getLifeView(db, b, "2026-01-05");
-  expect(vb.facts).toEqual([]);
-  expect(vb.log).toEqual([]);
+  expect((await getLifeView(db, "2026-01-05")).plan?.date).toBe("2026-01-05");
+  expect((await getLifeView(db, "2026-01-06")).plan).toBeNull();
 });
 
 test("listReachOuts returns status, topic, answered_at and turn, newest first, user-scoped", async () => {

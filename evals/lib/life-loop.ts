@@ -5,7 +5,7 @@ import { coreDepsOf, type Deps } from "@/mind/platform/deps";
 import { coreStateTick } from "@/mind/state/core/tick";
 import { lifeDate } from "@/mind/world/her-clock";
 import { ensurePlans } from "@/mind/world/day-plan";
-import { lifeTick } from "@/mind/world/legacy-life-tick/tick";
+import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { outreachTick } from "@/mind/process/outreach/tick";
 import type { RecordingQueue } from "@/mind/platform/jobs";
 import { HOUR } from "@/mind/platform/time";
@@ -26,10 +26,10 @@ export type LoopOutreach = {
 };
 
 /**
- * Runs the production hourly life jobs (plan, life tick, ego tick) at every whole simulated hour between
- * sessions, never moving the clock backwards. Scripted plans are inserted instead of generated.
+ * Runs the production hourly world jobs (plan, world tick, core state tick) at every whole simulated
+ * hour between sessions, never moving the clock backwards. Scripted plans are inserted instead of generated.
  * With `outreach`, each hour first runs due jobs (reach-out sends, simulated replies' turn timers),
- * then the script's auto-replies to reach-outs, then the life jobs and the outreach tick.
+ * then the script's auto-replies to reach-outs, then the world jobs and the outreach tick.
  */
 export function makeLifeLoop(
   deps: Deps,
@@ -42,7 +42,7 @@ export function makeLifeLoop(
   const day0 = lifeDate(cfg, new Date(BASE));
   const dayIndex = (d: string) =>
     Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${day0}T00:00:00Z`)) / DAY);
-  const inject = (_userId: string, day: string) => {
+  const inject = (day: string) => {
     const hit = life.inject.find((x) => x.day === dayIndex(day));
     return hit ? { content: hit.content, valence: hit.valence } : null;
   };
@@ -107,8 +107,7 @@ export function makeLifeLoop(
     const now = new Date(t);
     if (life.plan === "scripted") await scriptedPlans(now);
     else await ensurePlans(deps, now);
-    const lt = await lifeTick(deps, now, { inject });
-    if (lt.failed > 0) throw new Error(`life tick failed for ${lt.failed} of ${lt.users} user(s)`);
+    await coreWorldTick(coreDepsOf(deps), now, { inject: (day) => inject(day) });
     await coreStateTick(coreDepsOf(deps), now);
     if (outreach) {
       const ot = await outreachTick(deps, now);

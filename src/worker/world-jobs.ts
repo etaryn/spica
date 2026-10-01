@@ -1,14 +1,14 @@
 /**
- * World jobs: her day plan (`life_plan`) and the per-user life tick.
+ * World jobs: her day plan (`life_plan`) and what happens in her day (`core_world_tick`).
  */
 import type { PgBoss } from "pg-boss";
-import type { Deps } from "@/mind/platform/deps";
-import { LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE } from "@/mind/platform/jobs";
+import { coreDepsOf, type Deps } from "@/mind/platform/deps";
+import { CORE_WORLD_TICK_QUEUE, LIFE_PLAN_QUEUE } from "@/mind/platform/jobs";
+import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { ensurePlans } from "@/mind/world/day-plan";
-import { lifeTick } from "@/mind/world/legacy-life-tick/tick";
 import { scrubErrors } from "./jobs";
 
-export const WORLD_QUEUES = [LIFE_PLAN_QUEUE, LIFE_TICK_QUEUE];
+export const WORLD_QUEUES = [LIFE_PLAN_QUEUE, CORE_WORLD_TICK_QUEUE];
 
 export async function registerWorldJobs(boss: PgBoss, deps: Deps): Promise<void> {
   await boss.work(
@@ -20,10 +20,10 @@ export async function registerWorldJobs(boss: PgBoss, deps: Deps): Promise<void>
   await boss.schedule(LIFE_PLAN_QUEUE, deps.config.life.plan_cron);
 
   await boss.work(
-    LIFE_TICK_QUEUE,
-    scrubErrors(LIFE_TICK_QUEUE, deps.log, async () => {
-      await lifeTick(deps, deps.clock.now());
+    CORE_WORLD_TICK_QUEUE,
+    scrubErrors(CORE_WORLD_TICK_QUEUE, deps.log, async () => {
+      await coreWorldTick(coreDepsOf(deps), deps.clock.now());
     }),
   );
-  await boss.schedule(LIFE_TICK_QUEUE, deps.config.life.tick_cron);
+  await boss.schedule(CORE_WORLD_TICK_QUEUE, deps.config.core.world.tick_cron);
 }

@@ -1,7 +1,7 @@
 name: outreach-crisis-quiet
 description: A crisis message sets crisis_quiet_until; a due thread waits until it passes (rule 7), then goes out.
 profile: none
-config: { life: { timezone: UTC, events_per_day_max: 0 } }
+config: { life: { timezone: UTC }, core: { world: { events_per_day_max: 0 } } }
 life:
   plan: scripted
   plans:

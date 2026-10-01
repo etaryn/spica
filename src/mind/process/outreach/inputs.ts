@@ -5,12 +5,7 @@
  */
 import type { Db } from "@/db/client";
 import { getState, type ConvState } from "@/db/repos/user/conversation-state";
-import {
-  getFact,
-  getPreoccupationFact,
-  listOutreachHerDay,
-  listOutreachUserEvents,
-} from "@/db/repos/user/facts";
+import { getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
 import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
@@ -49,7 +44,12 @@ export async function loadCandidateInputs(
     ? await getFact(db, userId, relationship.hurt_cause_fact)
     : null;
 
-  const herDay = await loadHerDay(db, userId, now, settings.her_day_lookback_hours);
+  const herDay = await loadHerDay(
+    deps,
+    now,
+    settings.her_day_lookback_hours,
+    settings.her_day_limit,
+  );
   const cadence = (relationship?.cadence ?? {}) as Partial<Cadence>;
 
   const due = await dueThreads(db, userId, now, settings.due_threads_limit);
@@ -87,29 +87,30 @@ export async function loadCandidateInputs(
   };
 }
 
-/** Her recent day, plus her preoccupation if it isn't already among them. */
+/** Her recent episodes, plus her preoccupation if it isn't already among them. Core memory: never sensitive. */
 async function loadHerDay(
-  db: Db,
-  userId: string,
+  deps: Pick<Deps, "core">,
   now: Date,
   lookbackHours: number,
+  limit: number,
 ): Promise<CandidateInputs["herDay"]> {
-  const herDay = await listOutreachHerDay(
-    db,
-    userId,
-    new Date(now.getTime() - lookbackHours * HOUR),
-    now,
-  );
-
-  const preoccupation = await getPreoccupationFact(db, userId, now);
-  if (preoccupation && !herDay.some((f) => f.id === preoccupation.id)) {
-    herDay.push({
-      id: preoccupation.id,
-      content: preoccupation.content,
-      salience: preoccupation.salience,
-      sensitive: (preoccupation.payload as { sensitive?: boolean } | null)?.sensitive === true,
-    });
-  }
+  const from = new Date(now.getTime() - lookbackHours * HOUR);
+  const episodes = await deps.core.memory.recentEpisodes(from, now, limit);
+  const herDay = episodes.map((e) => ({
+    id: e.id,
+    content: e.content,
+    salience: e.salience,
+    sensitive: false,
+  }));
+  const state = await deps.core.state.get();
+  const pre = state?.preoccupation ? await deps.core.memory.get(state.preoccupation) : null;
+  if (
+    pre &&
+    pre.status !== "superseded" &&
+    pre.status !== "stale" &&
+    !herDay.some((m) => m.id === pre.id)
+  )
+    herDay.push({ id: pre.id, content: pre.content, salience: pre.salience, sensitive: false });
   return herDay;
 }
 

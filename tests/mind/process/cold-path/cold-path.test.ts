@@ -4,7 +4,6 @@ import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
-import { getIdentityRow } from "@/db/repos/user/identity";
 import { getParams } from "@/db/repos/user/relationship";
 import { getTurn, insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
@@ -255,7 +254,7 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
   expect(f!.payload).toEqual({ sensitive: true });
 });
 
-test("an exchange with no user turn (a reach-out) extracts but touches neither relationship nor ego", async () => {
+test("an exchange with no user turn (a reach-out) extracts but touches neither relationship nor her core state", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
   const c = await insertTurn(getTestDb(), u, {
@@ -291,7 +290,7 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
   });
   expect(out.status).toBe("done");
   expect(updateRelationship).not.toHaveBeenCalled();
-  expect(await getIdentityRow(getTestDb(), u)).toBeNull();
+  expect(await deps.core.state.get()).toBeNull();
   expect((await getTurn(getTestDb(), u, c.id))?.extracted).toBe(true);
 });
 
@@ -323,5 +322,4 @@ test("an emotional exchange moves the user's affect and never touches core state
   expect(params.affect_valence.value).toBeGreaterThan(0.5);
   expect(params.afterglow.value).toBeGreaterThan(0);
   expect(await deps.core.state.get()).toEqual(before);
-  expect(await getIdentityRow(getTestDb(), u)).toBeNull();
 });

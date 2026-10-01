@@ -1,7 +1,5 @@
 import tseslint from "typescript-eslint";
 
-const legacy = ["src/mind/state/legacy-ego/**", "src/mind/world/legacy-life-tick/**"];
-
 export default tseslint.config(
   {
     ignores: [
@@ -70,7 +68,6 @@ export default tseslint.config(
       "src/mind/world/**/*.ts",
       "src/db/repos/core/**/*.ts",
     ],
-    ignores: legacy,
     rules: {
       "no-restricted-imports": [
         "error",

@@ -175,7 +175,7 @@
     "turn_judge": "v1",
     "relationship_summary": "v2",
     "life_plan": "v1",
-    "life_event": "v1",
+    "life_event": "v2",
     "life_availability": "v1",
     "core_state_line": "v1",
     "reach_out": "v1"
@@ -264,24 +264,7 @@
     "fallback_plan": [
       { "start": "00:00", "end": "08:00", "kind": "quiet", "label": "offline, winding down" },
       { "start": "23:30", "end": "24:00", "kind": "quiet", "label": "offline, winding down" }
-    ],
-    "tick_cron": "10 * * * *",
-    "tick_local_hour": 0,
-    "lock_timeout_ms": 5000,
-    "events_per_day_max": 1,
-    "event_probability": 0.5,
-    "event_context_facts": 20,
-    "event_max_tokens": 600,
-    "event_max_chars": 300,
-    "injected_event_at": "12:00",
-    "event_salience": 0.4,
-    "event_confidence": 1.0,
-    "regen_attempts": 2,
-    "new_entity_days": 7,
-    "high_stakes_min_days": 14,
-    "high_stakes_checkpoint_days": 3,
-    "preoccupation_min_valence": 0.5,
-    "canon_entities": ["Alcor"]
+    ]
   },
   "core": {
     "state": {
@@ -298,12 +281,25 @@
       "event_gain": 0.3,
       "event_arousal_gain": 0.2,
       "bands": { "energy": [0.35, 0.7], "mood_valence": [-0.2, 0.4], "mood_arousal": [0.25, 0.7] }
+    },
+    "world": {
+      "tick_cron": "10 * * * *",
+      "events_local_hour": 0,
+      "events_per_day_max": 1,
+      "event_probability": 0.5,
+      "event_context_items": 20,
+      "event_context_days": 14,
+      "event_max_tokens": 600,
+      "event_max_chars": 300,
+      "injected_event_at": "12:00",
+      "event_salience": 0.4,
+      "event_confidence": 1.0,
+      "entity_salience": 0.5,
+      "regen_attempts": 2,
+      "new_entity_days": 7,
+      "high_stakes_min_days": 14,
+      "canon_entities": ["Alcor"]
     }
-  },
-  "ego": {
-    "baseline": { "mood_valence": 0.2, "mood_arousal": 0.4, "energy": 0.6 },
-    "event_gain": 0.3,
-    "event_arousal_gain": 0.2
   },
   "availability": {
     "override_closeness": 0.8,
@@ -333,6 +329,7 @@
     "her_day_lookback_hours": 24,
     "check_in_gap_factor": 2,
     "jitter_max_minutes": 40,
+    "her_day_limit": 5,
     "due_threads_limit": 5,
     "pending_max_age_minutes": 120,
     "log_list_limit": 200

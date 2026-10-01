@@ -30,7 +30,7 @@ export type PlannedFact = {
   fact: ExtractedFact;
   embedding: number[];
   decision: Decision;
-  source?: "turn" | "inferred" | "generated";
+  source?: "turn" | "inferred";
 };
 
 export type EncodeInput = {

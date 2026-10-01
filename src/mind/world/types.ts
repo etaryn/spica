@@ -16,9 +16,23 @@ export type NewWorldEvent = {
 };
 export type WorldEventRow = NewWorldEvent & { id: string };
 
+/** One event-generator attempt, for the inspector. */
+export type NewEventAttempt = {
+  life_day: string;
+  attempt: number;
+  candidate: unknown;
+  decision: string;
+  target_memory_id: string | null;
+  world_event_id: string | null;
+  model: string;
+  prompt_version: string;
+  created_at: Date;
+};
+
 export interface World {
   plan(day: string): Promise<LifePlan | null>;
   events(day: string): Promise<WorldEventRow[]>;
   recordEvent(event: NewWorldEvent): Promise<string>;
   lastHighStakesAt(): Promise<Date | null>;
+  logEventAttempts(attempts: NewEventAttempt[]): Promise<void>;
 }

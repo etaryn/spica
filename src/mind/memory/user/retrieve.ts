@@ -1,15 +1,9 @@
 /**
  * Retrieval for the hot path. It ranks the user's memories against the conversation, then forces
- * in what must be there: a reach-out's own topic, threads due a check-in, and her current
- * preoccupation. Read-only, and it never throws: a failure degrades to whatever could still be
+ * in what must be there: a reach-out's own topic and threads due a check-in. Read-only, and it never throws: a failure degrades to whatever could still be
  * found, so a memory problem never costs the user their reply.
  */
-import {
-  candidateFacts,
-  getFact,
-  getPreoccupationFact,
-  type CandidateFact,
-} from "@/db/repos/user/facts";
+import { candidateFacts, getFact, type CandidateFact } from "@/db/repos/user/facts";
 import type { Turn } from "@/db/repos/user/session-log";
 import { dueThreads } from "@/db/repos/user/threads";
 import { rankMemories, type Scored } from "@/mind/memory/shared/ranking";
@@ -31,7 +25,7 @@ export type RetrieveInput = {
   now: Date;
   queryText?: string;
   forceFactIds?: string[];
-  /** Reach-outs: keeps every sensitive memory out, whether ranked, forced, due or on her mind. */
+  /** Reach-outs: keeps every sensitive memory out, whether ranked, forced or due. */
   excludeSensitive?: boolean;
 };
 
@@ -65,7 +59,6 @@ export async function retrieve(
   try {
     await addForcedFacts(deps, userId, input, result, seen);
     await addDueThreads(deps, userId, input, result, seen);
-    await addPreoccupation(deps, userId, input, result, seen);
   } catch (e) {
     deps.log.error("forced retrieval failed", { userId, error: errorName(e) });
   }
@@ -92,14 +85,9 @@ async function rankAgainstConversation(
     );
     if (!vector) throw new Error("embedder returned no vector");
 
-    const candidates = await candidateFacts(
-      db,
-      userId,
-      vector,
-      config.retrieval.candidate_pool,
-      input.now,
-      { excludeSensitive: input.excludeSensitive === true },
-    );
+    const candidates = await candidateFacts(db, userId, vector, config.retrieval.candidate_pool, {
+      excludeSensitive: input.excludeSensitive === true,
+    });
     return rankMemories(candidates, input.now, config.retrieval);
   } catch (e) {
     log.error("retrieval degraded", { userId, error: errorName(e) });
@@ -178,33 +166,4 @@ async function addDueThreads(
       result.recalled.push(forcedRecall(thread.fact_id, thread.salience ?? 0));
     }
   }
-}
-
-/** Marks her preoccupation "on your mind lately", adding it if ranking didn't find it. */
-async function addPreoccupation(
-  deps: RetrieveDeps,
-  userId: string,
-  input: RetrieveInput,
-  result: RetrievalResult,
-  seen: Set<string>,
-): Promise<void> {
-  const preoccupation = await getPreoccupationFact(deps.db, userId, input.now);
-  if (!preoccupation) return;
-  if (input.excludeSensitive === true && isSensitive(preoccupation)) return;
-
-  const alreadyIncluded = result.facts.self.find((f) => f.id === preoccupation.id);
-  if (alreadyIncluded) {
-    alreadyIncluded.onMind = true;
-    return;
-  }
-  if (seen.has(preoccupation.id)) return;
-
-  seen.add(preoccupation.id);
-  result.facts.self.push({
-    id: preoccupation.id,
-    content: preoccupation.content,
-    when: preoccupation.occurred_at ?? preoccupation.created_at,
-    onMind: true,
-  });
-  result.recalled.push(forcedRecall(preoccupation.id, preoccupation.salience));
 }

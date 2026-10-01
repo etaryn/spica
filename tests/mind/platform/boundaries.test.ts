@@ -1,7 +1,6 @@
 /**
  * The one-way flow is enforced by ESLint. These cases prove the rule fires for core and world
- * code (and the shared code both minds use), however the import is written, and that the per-user
- * legacy folders are exempt until they are deleted.
+ * code (and the shared code both minds use), however the import is written.
  */
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
@@ -38,9 +37,9 @@ describe("one-way flow", () => {
     expect(hitsBoundary(errors)).toBe(false);
   });
 
-  it("exempts the legacy per-user folders", async () => {
-    const errors = await errorsFor(importsUserRepo, "src/mind/world/legacy-life-tick/tick.ts");
-    expect(hitsBoundary(errors)).toBe(false);
+  it("stops core process code importing a user repo", async () => {
+    const errors = await errorsFor(importsUserRepo, "src/mind/process/core/world-tick.ts");
+    expect(hitsBoundary(errors)).toBe(true);
   });
 
   it("stops a relative import of user code", async () => {
@@ -52,7 +51,7 @@ describe("one-way flow", () => {
 
   it("stops core and world code using the cross-user admin repos", async () => {
     const code =
-      'import { adminListLifeUsers } from "@/db/repos/admin/life";\nvoid adminListLifeUsers;\n';
+      'import { adminListOutreachUsers } from "@/db/repos/admin/relationship";\nvoid adminListOutreachUsers;\n';
     const errors = await errorsFor(code, "src/mind/world/day-plan.ts");
     expect(hitsBoundary(errors)).toBe(true);
   });

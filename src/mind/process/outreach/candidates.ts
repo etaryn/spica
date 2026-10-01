@@ -6,16 +6,9 @@
  */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
-import {
-  KIND_ORDER,
-  type Candidate,
-  type CandidateInputs,
-  type CandidateKind,
-  type FilterReason,
-} from "./types";
+import { KIND_ORDER, type Candidate, type CandidateInputs, type FilterReason } from "./types";
 
 type RawCandidate = Omit<Candidate, "score" | "filtered"> & { sensitive: boolean };
-type MemoryInput = CandidateInputs["userEvents"][number];
 
 export function buildCandidates(
   inputs: CandidateInputs,
@@ -23,7 +16,7 @@ export function buildCandidates(
   now: Date,
 ): Candidate[] {
   const raw: RawCandidate[] = [];
-  // A memory already behind a due thread doesn't also become a user_event or her_day candidate.
+  // A memory already behind a due thread doesn't also become a user_event candidate.
   const claimedFacts = new Set<string>();
 
   for (const thread of inputs.dueThreads) {
@@ -35,6 +28,7 @@ export function buildCandidates(
       text: thread.detail ? `${thread.title} (latest: ${thread.detail})` : thread.title,
       strength: settings.stakes_strength[thread.stakes],
       factId: thread.fact_id,
+      coreMemoryId: null,
       threadId: thread.id,
       sensitive: thread.sensitive,
     });
@@ -44,21 +38,32 @@ export function buildCandidates(
   const makeUp = makeUpCandidate(inputs.makeUp);
   if (makeUp) raw.push(makeUp);
 
-  const addMemory = (kind: CandidateKind, memory: MemoryInput) => {
-    if (claimedFacts.has(memory.id)) return;
+  for (const memory of inputs.userEvents) {
+    if (claimedFacts.has(memory.id)) continue;
     claimedFacts.add(memory.id);
     raw.push({
-      kind,
+      kind: "user_event",
       topic: `fact:${memory.id}`,
       text: memory.content,
       strength: memory.salience,
       factId: memory.id,
+      coreMemoryId: null,
       threadId: null,
       sensitive: memory.sensitive,
     });
-  };
-  for (const memory of inputs.userEvents) addMemory("user_event", memory);
-  for (const memory of inputs.herDay) addMemory("her_day", memory);
+  }
+  for (const memory of inputs.herDay) {
+    raw.push({
+      kind: "her_day",
+      topic: `core:${memory.id}`,
+      text: memory.content,
+      strength: memory.salience,
+      factId: null,
+      coreMemoryId: memory.id,
+      threadId: null,
+      sensitive: memory.sensitive,
+    });
+  }
 
   const checkIn = checkInCandidate(inputs.checkIn, settings, now);
   if (checkIn) raw.push(checkIn);
@@ -88,6 +93,7 @@ function makeUpCandidate(makeUp: CandidateInputs["makeUp"]): RawCandidate | null
     text: makeUp.causeText ?? "Something hurt between you recently.",
     strength: makeUp.hurt,
     factId: makeUp.causeFactId,
+    coreMemoryId: null,
     threadId: null,
     sensitive: false,
   };
@@ -111,6 +117,7 @@ function checkInCandidate(
     text: "",
     strength: Math.min(1, gapRatio / (2 * settings.check_in_gap_factor)),
     factId: null,
+    coreMemoryId: null,
     threadId: null,
     sensitive: false,
   };

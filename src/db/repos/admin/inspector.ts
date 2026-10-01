@@ -1,6 +1,6 @@
 /**
  * Read-only queries for the inspector, a dev-only tool that looks at one user's memory,
- * relationship, turn-taking, judge log, reach-outs and life.
+ * relationship, turn-taking, judge log, reach-outs, and her shared day plan.
  */
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -9,18 +9,15 @@ import { PARAM_NAMES, type RelationshipConfig } from "@/mind/state/user/relation
 import type { Db } from "@/db/client";
 import {
   conversation_state,
-  ego_tick,
   entity,
   fact,
   factStatus,
   factSubject,
-  identity,
   reach_out_log,
   retrieval_trace,
   thread,
 } from "@/db/schema";
 import { getLifeDay } from "@/db/repos/world/life-day";
-import { listLifeEventLogs } from "@/db/repos/user/life-event-log";
 import {
   getParams,
   getRelationshipRow,
@@ -70,10 +67,6 @@ export const listEntities = (db: Db, userId: string) =>
 export const listThreads = (db: Db, userId: string) =>
   db.select().from(thread).where(eq(thread.user_id, userId)).orderBy(desc(thread.last_touched));
 
-export async function getIdentity(db: Db, userId: string) {
-  return (await db.select().from(identity).where(eq(identity.user_id, userId)))[0] ?? null;
-}
-
 export async function getRelationshipView(
   db: Db,
   userId: string,
@@ -93,14 +86,6 @@ export async function getRelationshipView(
     events: await listRelationshipEvents(db, userId, cfg.event_list_limit),
   };
 }
-
-export const listEgoTicks = (db: Db, userId: string) =>
-  db
-    .select()
-    .from(ego_tick)
-    .where(eq(ego_tick.user_id, userId))
-    .orderBy(desc(ego_tick.created_at))
-    .limit(100);
 
 export const listRetrievalTraces = (db: Db, userId: string) =>
   db
@@ -153,23 +138,7 @@ export async function resolveFactContents(
   return new Map([...facts, ...threads].map((r) => [r.id, r.content]));
 }
 
-/** The Life tab. The plan is global; facts and the event log are this user's. */
-export async function getLifeView(db: Db, userId: string, day: string) {
-  const [plan, facts, log] = await Promise.all([
-    getLifeDay(db, day),
-    db
-      .select({
-        id: fact.id,
-        content: fact.content,
-        status: fact.status,
-        payload: fact.payload,
-        occurred_at: fact.occurred_at,
-      })
-      .from(fact)
-      .where(and(eq(fact.user_id, userId), eq(fact.source, "generated")))
-      .orderBy(desc(fact.created_at))
-      .limit(200),
-    listLifeEventLogs(db, userId, 200),
-  ]);
-  return { plan, facts, log };
+/** The Life tab: her shared plan for the day (the same for every user). */
+export async function getLifeView(db: Db, day: string) {
+  return { plan: await getLifeDay(db, day) };
 }

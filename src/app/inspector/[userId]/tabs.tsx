@@ -187,37 +187,6 @@ export async function EntitiesThreadsTab({
   );
 }
 
-export async function IdentityTab({ db, userId }: { db: Db; userId: string }) {
-  const [identity, ticks] = await Promise.all([
-    r.getIdentity(db, userId),
-    r.listEgoTicks(db, userId),
-  ]);
-  return (
-    <>
-      <h3>Identity</h3>
-      {identity ? json(identity) : <Empty phase={2} />}
-      <h3>Ego history</h3>
-      {!ticks.length ? (
-        <Empty phase={2} />
-      ) : (
-        <table className={styles.table}>
-          <tbody>
-            {ticks.map((t) => (
-              <tr key={t.id}>
-                <td>{iso(t.created_at)}</td>
-                <td>val {t.mood_valence.toFixed(2)}</td>
-                <td>ar {t.mood_arousal.toFixed(2)}</td>
-                <td>en {t.energy.toFixed(2)}</td>
-                <td>{t.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
-  );
-}
-
 export async function RelationshipTab({
   db,
   userId,
@@ -539,19 +508,9 @@ export async function JudgeLogTab({ db, userId }: { db: Db; userId: string }) {
   );
 }
 
-export async function LifeTab({
-  db,
-  userId,
-  now,
-  cfg,
-}: {
-  db: Db;
-  userId: string;
-  now: Date;
-  cfg: LifeConfig;
-}) {
+export async function LifeTab({ db, now, cfg }: { db: Db; now: Date; cfg: LifeConfig }) {
   const day = lifeDate(cfg, now);
-  const v = await r.getLifeView(db, userId, day);
+  const v = await r.getLifeView(db, day);
   return (
     <>
       <h3>
@@ -576,40 +535,6 @@ export async function LifeTab({
         <Empty phase={5} />
       )}
       <p>source: {v.plan?.source ?? "—"}</p>
-      <h3>Generated facts</h3>
-      {!v.facts.length ? (
-        <Empty phase={5} />
-      ) : (
-        <table className={styles.table}>
-          <tbody>
-            {v.facts.map((f) => (
-              <tr key={f.id}>
-                <td>{iso(f.occurred_at)}</td>
-                <td>{f.status}</td>
-                <td>{f.content}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <h3>Event attempts</h3>
-      {!v.log.length ? (
-        <Empty phase={5} />
-      ) : (
-        <table className={styles.table}>
-          <tbody>
-            {v.log.map((l) => (
-              <tr key={l.id}>
-                <td>{iso(l.created_at)}</td>
-                <td>{l.life_day}</td>
-                <td>#{l.attempt}</td>
-                <td>{l.decision}</td>
-                <td>{String((l.candidate as { content?: unknown }).content ?? "")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </>
   );
 }

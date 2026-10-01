@@ -52,7 +52,9 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
 
   const row = await getReachOutLog(db, userId, logId);
   if (!row || row.status !== "scheduled") return "stale";
-  const winner = row.winner as Candidate;
+  const stored = row.winner as Candidate;
+  // Winners logged before her_day moved to core memory carry no coreMemoryId.
+  const winner: Candidate = { ...stored, coreMemoryId: stored.coreMemoryId ?? null };
 
   // A drop applies only while the row is still `scheduled`: a duplicate delivery of a sent job is stale.
   const drop = async (reason: string, recheck?: Recheck): Promise<"dropped" | "stale"> => {

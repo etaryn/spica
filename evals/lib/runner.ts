@@ -35,7 +35,7 @@ import {
   type Line,
   type TimedSession,
 } from "./judged";
-import { checkEgo, checkLife, egoHistory, lifeSnapshot, type LifeSnapshot } from "./life-check";
+import { checkCore, checkLife, coreHistory, lifeSnapshot, type LifeSnapshot } from "./core-check";
 import { makeLifeLoop } from "./life-loop";
 import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
 import { RecordingLLM } from "./recording-llm";
@@ -102,8 +102,8 @@ export type RunTrace = {
   errorChain?: string[];
   /** Per user, per session (index = session − 1): the relationship snapshot right after that session. */
   relationship?: Record<string, (RelSnapshot | null)[]>;
-  /** Per user: the life snapshot at the end of a script with a `life` key. */
-  life?: Record<string, LifeSnapshot>;
+  /** Her world (shared by every user) at the end of a script with a `life` key. */
+  life?: LifeSnapshot;
   /** Per user: the outreach snapshot at the end of a script with an `outreach` key, for review. */
   outreach?: Record<string, OutreachSnapshot>;
 };
@@ -345,16 +345,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     pusher,
   };
   await seedSnapshot(coreDepsOf(deps));
-  const lifeSnaps = async () =>
-    script.life
-      ? Object.fromEntries(
-          await Promise.all(
-            Object.entries(userIds).map(
-              async ([k, id]) => [k, await lifeSnapshot(db, id)] as const,
-            ),
-          ),
-        )
-      : undefined;
+  const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);
 
   const userIds: Record<string, string> = {};
   for (const key of userKeys(script)) {
@@ -426,23 +417,24 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         }
       }
     }
-    if (script.seed_self_facts.length) {
-      const vectors = await deps.embedder.embed(script.seed_self_facts, "document");
-      for (const id of Object.values(userIds)) {
-        for (const [i, content] of script.seed_self_facts.entries()) {
-          await insertFact(db, id, {
-            subject: "self",
-            kind: "event",
-            content,
-            embedding: vectors[i]!,
-            created_at: new Date(first.getTime() - DAY),
-            status: "open",
-            salience: 0.6,
-            valence: 0,
-            confidence: 1,
-            source: "turn",
-          });
-        }
+    if (script.seed_core_memory.length) {
+      // Her own past, once for everyone: episodes in her core memory, a day before day 0.
+      const vectors = await deps.embedder.embed(script.seed_core_memory, "document");
+      const before = new Date(first.getTime() - DAY);
+      for (const [i, content] of script.seed_core_memory.entries()) {
+        await deps.core.memory.insert({
+          kind: "episode",
+          content,
+          embedding: vectors[i]!,
+          occurred_at: before,
+          created_at: before,
+          status: "resolved",
+          salience: 0.6,
+          valence: 0,
+          confidence: 1,
+          source: "world",
+          source_ref: "eval_seed",
+        });
       }
     }
     if (script.seed_user_facts.length) {
@@ -838,21 +830,14 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       } else if (a.type === "life") {
         const missing = a.needs_real.filter((p) => !(opts.realPurposes?.has(p) ?? false));
         if (missing.length) {
-          push({
-            type: "life",
-            user: a.user,
-            status: "skipped",
-            detail: `needs real ${missing.join(", ")}`,
-          });
+          push({ type: "life", status: "skipped", detail: `needs real ${missing.join(", ")}` });
           continue;
         }
-        const r = checkLife(await lifeSnapshot(db, userIds[a.user]!), a);
-        push({ type: "life", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
-      } else if (a.type === "ego") {
-        const r = checkEgo(await egoHistory(db, userIds[a.user]!), a, (spec) =>
-          parseAt(spec, null),
-        );
-        push({ type: "ego", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });
+        const r = checkLife(await lifeSnapshot(db), a);
+        push({ type: "life", status: r.ok ? "pass" : "fail", detail: r.detail });
+      } else if (a.type === "core") {
+        const r = checkCore(await coreHistory(db, config), a, (spec) => parseAt(spec, null));
+        push({ type: "core", status: r.ok ? "pass" : "fail", detail: r.detail });
       } else if (a.type === "reach_out") {
         const r = checkReachOut(await outreachSnap(userIds[a.user]!), a, config);
         push({ type: "reach_out", user: a.user, status: r.ok ? "pass" : "fail", detail: r.detail });

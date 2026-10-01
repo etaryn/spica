@@ -54,14 +54,6 @@ async function seedEverything(userId: string) {
       source: "turn",
     })
     .returning();
-  await db.insert(s.identity).values({
-    user_id: userId,
-    mood_valence: 0,
-    mood_arousal: 0.5,
-    energy: 0.5,
-    preoccupation: f!.id,
-    baseline: {},
-  });
   await db.insert(s.relationship).values({ user_id: userId, cadence: {} });
   const turnId = crypto.randomUUID();
   await db.insert(s.session_log).values({
@@ -95,14 +87,6 @@ async function seedEverything(userId: string) {
     forced: false,
     created_at: T,
   });
-  await db.insert(s.ego_tick).values({
-    user_id: userId,
-    mood_valence: 0,
-    mood_arousal: 0.5,
-    energy: 0.5,
-    reason: "test",
-    created_at: T,
-  });
   await db
     .insert(s.reach_out_log)
     .values({ user_id: userId, candidates: [], gate_results: {}, sent: false, created_at: T });
@@ -127,13 +111,11 @@ const domainTables = [
   s.fact,
   s.entity,
   s.thread,
-  s.identity,
   s.relationship,
   s.relationship_param,
   s.relationship_event,
   s.session_log,
   s.retrieval_trace,
-  s.ego_tick,
   s.reach_out_log,
   s.judge_log,
   s.conversation_state,
@@ -253,13 +235,6 @@ describe("phase 1 schema", () => {
     });
   });
 
-  test("identity values columns are nullable (persona file is the source of truth)", async () => {
-    const u = await createTestUser();
-    await getTestDb()
-      .insert(s.identity)
-      .values({ user_id: u, mood_valence: 0, mood_arousal: 0.5, energy: 0.5, baseline: {} });
-  });
-
   test("session_log.extract_attempts defaults to 0; user.timezone is settable", async () => {
     const u = await createTestUser();
     const [t] = await getTestDb()
@@ -300,6 +275,7 @@ const CORE_TABLES = [
   "core_state",
   "core_snapshot",
   "world_event",
+  "life_event_log",
   "core_loop_trace",
 ];
 

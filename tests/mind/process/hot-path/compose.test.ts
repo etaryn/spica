@@ -5,7 +5,6 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
 import { messageToCheck } from "@/mind/process/guard/guard";
 import { insertFact } from "@/db/repos/user/facts";
-import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
@@ -301,7 +300,13 @@ describe("composeReachOut", () => {
     const out = await composeReachOut(
       deps,
       u,
-      { kind: "thread", text: "interview at Canva", factId: null, threadId: null },
+      {
+        kind: "thread",
+        text: "interview at Canva",
+        factId: null,
+        threadId: null,
+        coreMemoryId: null,
+      },
       [turn],
     );
     const prompt = deps.llm.calls.at(-1)!;
@@ -324,12 +329,13 @@ describe("composeReachOut", () => {
       text: "",
       factId: null,
       threadId: null,
+      coreMemoryId: null,
     });
     expect(r.slot).toContain("On your mind: just saying hi");
     expect(r.slot).not.toContain("{{");
   });
 
-  test("I1: a reach-out prompt never carries sensitive threads, facts or preoccupation; a normal reply still does", async () => {
+  test("I1: a reach-out prompt never carries sensitive threads or facts; a normal reply still does", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     const db = getTestDb();
@@ -375,7 +381,7 @@ describe("composeReachOut", () => {
       kind: "preference",
       content: "The user is vegetarian",
     });
-    const pre = await insertFact(db, u, {
+    await insertFact(db, u, {
       ...base,
       subject: "self",
       kind: "feeling",
@@ -383,13 +389,14 @@ describe("composeReachOut", () => {
       source: "inferred",
       payload: { sensitive: true },
     });
-    await ensureIdentity(db, u, deps.config.ego.baseline);
-    await updateIdentity(db, u, { preoccupation: pre.id });
     const turn = await userTurn(deps, u, "night!");
 
-    await composeReachOut(deps, u, { kind: "check_in", text: "", factId: null, threadId: null }, [
-      turn,
-    ]);
+    await composeReachOut(
+      deps,
+      u,
+      { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
+      [turn],
+    );
     const reach = deps.llm.calls.at(-1)!.system;
     expect(reach).toContain("The user is vegetarian");
     for (const s of ["psychiatrist", "antidepressants", "diagnosis"])

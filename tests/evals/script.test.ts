@@ -173,7 +173,7 @@ test("phase 5 script keys parse", () => {
     },
     assertions: [
       { type: "life", plans: { min: 1 } },
-      { type: "ego", lower_energy: { at: "day 1 19:00", than: "day 0 19:00" } },
+      { type: "core", lower_energy: { at: "day 1 19:00", than: "day 0 19:00" } },
       { type: "turn", session: 1, min_reply_delay_s: 5, notes: { max: 0 } },
     ],
   });

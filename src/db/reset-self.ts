@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Db } from "./client";
-import { entity, fact, identity, thread } from "./schema";
+import { entity, fact, thread } from "./schema";
 
 /** The persona switch wipe only ever runs against a local dev database. */
 export function assertLocalDatabase(url: string): void {
@@ -9,15 +9,15 @@ export function assertLocalDatabase(url: string): void {
     throw new Error(`refusing to reset self facts on non-local database host "${host}"`);
 }
 
-/** Dev only, every user: hard-deletes her self facts, entities and threads (for a persona change). */
+/**
+ * Dev only, for a persona change: hard-deletes every user's self facts, entities and threads, and
+ * clears her whole core mind (memory, people, snapshots, world events, state, traces), so the next
+ * worker start reseeds snapshot v0 from the new persona.
+ */
 export async function adminResetSelf(
   db: Db,
 ): Promise<{ facts: number; entities: number; threads: number }> {
   return db.transaction(async (tx) => {
-    // life_last_date is cleared too, so the next life tick re-copies today's blocks as self facts.
-    await tx
-      .update(identity)
-      .set({ preoccupation: null, preoccupation_since: null, life_last_date: null });
     const facts = await tx.delete(fact).where(eq(fact.subject, "self")).returning({ id: fact.id });
     const entities = await tx
       .delete(entity)
@@ -27,6 +27,9 @@ export async function adminResetSelf(
       .delete(thread)
       .where(eq(thread.subject, "self"))
       .returning({ id: thread.id });
+    await tx.execute(
+      sql`TRUNCATE life_event_log, world_event, core_memory, core_entity, core_snapshot, core_loop_trace, core_state`,
+    );
     return { facts: facts.length, entities: entities.length, threads: threads.length };
   });
 }

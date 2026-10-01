@@ -3,7 +3,6 @@ import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { retrieve } from "@/mind/memory/user/retrieve";
 import * as facts from "@/db/repos/user/facts";
-import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
 import * as threads from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
@@ -143,53 +142,6 @@ test("other users' facts are never retrieved", async () => {
   });
   const r = await retrieve(deps(e), b, { answering: [q], context: [], now });
   expect(r.recalled).toEqual([]);
-});
-
-test("a generated fact dated in the future stays hidden (retrieval and preoccupation) until its time; a turn fact does not", async () => {
-  const u = await createTestUser();
-  const e = new ScriptedEmbedder(D);
-  const q = await turn(u, "what are you up to");
-  e.set("what are you up to", ScriptedEmbedder.axis(D, 7));
-  const later = new Date(now.getTime() + 6 * 3600_000);
-  const base = {
-    kind: "event" as const,
-    created_at: now,
-    status: "open" as const,
-    valence: 0,
-    confidence: 0.9,
-    salience: 0.9,
-    occurred_at: later,
-  };
-  const gen = await facts.insertFact(getTestDb(), u, {
-    ...base,
-    subject: "self",
-    source: "generated",
-    content: "Spica has a pottery class at 15:00.",
-    embedding: ScriptedEmbedder.axis(D, 7),
-  });
-  await facts.insertFact(getTestDb(), u, {
-    ...base,
-    subject: "user",
-    source: "turn",
-    content: "The user has a dentist appointment this afternoon.",
-    embedding: ScriptedEmbedder.near(D, 7, 8, 0.8),
-  });
-  const d = deps(e);
-  await ensureIdentity(getTestDb(), u, d.config.ego.baseline);
-  await updateIdentity(getTestDb(), u, { preoccupation: gen.id });
-
-  const before = await retrieve(d, u, { answering: [q], context: [], now });
-  expect(before.facts.self).toEqual([]);
-  expect(before.recalled.map((r) => r.factId)).not.toContain(gen.id);
-  expect(before.facts.user.map((f) => f.content)).toEqual([
-    "The user has a dentist appointment this afternoon.",
-  ]);
-  expect(await facts.getPreoccupationFact(getTestDb(), u, now)).toBeNull();
-
-  const after = new Date(later.getTime() + 60_000);
-  const r = await retrieve(d, u, { answering: [q], context: [], now: after });
-  expect(r.facts.self).toEqual([expect.objectContaining({ id: gen.id, onMind: true })]);
-  expect((await facts.getPreoccupationFact(getTestDb(), u, after))?.id).toBe(gen.id);
 });
 
 test("queryText replaces the turns as the query, and forceFactIds pulls facts in as forced", async () => {

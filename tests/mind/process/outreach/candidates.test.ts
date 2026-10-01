@@ -50,6 +50,7 @@ test("due thread: high/med only, strength by stakes, topic includes the checkpoi
     strength: 1,
     score: 1,
     factId: "f1",
+    coreMemoryId: null,
     threadId: "t1",
     filtered: null,
   });
@@ -119,34 +120,23 @@ test("winner is the highest score; ties break by kind order, then topic", () => 
   expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("her_day");
 });
 
-test("the same fact in user events and her day is one candidate (first kind wins)", () => {
+test("her day is her own core memory: topic core:<id>, coreMemoryId set, never a fact", () => {
   const i = empty();
   i.herDay = [
-    { id: "p", content: "z", salience: 0.5, sensitive: false },
-    { id: "p", content: "z", salience: 0.5, sensitive: false },
+    { id: "m1", content: "Spica got the telescope images.", salience: 0.8, sensitive: false },
   ];
-  expect(buildCandidates(i, cfg, now)).toHaveLength(1);
-});
-
-test("a fact behind a due thread is not also a user_event candidate", () => {
-  const i = empty();
-  const cp = new Date("2026-01-10T09:00:00Z");
-  i.dueThreads = [
-    {
-      id: "t1",
-      title: "interview",
-      detail: null,
-      stakes: "high",
-      next_checkpoint: cp,
-      fact_id: "f1",
-      sensitive: false,
-    },
-  ];
-  i.userEvents = [
-    { id: "f1", content: "The user had an interview.", salience: 0.7, sensitive: false },
-  ];
-  i.usedTopics = [`thread:t1@${cp.toISOString()}`]; // even once the thread topic is used
+  i.userEvents = [{ id: "m1", content: "The user ran.", salience: 0.6, sensitive: false }];
   const cands = buildCandidates(i, cfg, now);
-  expect(cands.map((c) => c.kind)).toEqual(["thread"]);
-  expect(pickWinner(cands)).toBeNull();
+  expect(cands.find((c) => c.kind === "her_day")).toMatchObject({
+    topic: "core:m1",
+    coreMemoryId: "m1",
+    factId: null,
+    threadId: null,
+  });
+  // A user fact and a core memory never share a topic, even with the same id.
+  expect(cands.find((c) => c.kind === "user_event")).toMatchObject({
+    topic: "fact:m1",
+    factId: "m1",
+    coreMemoryId: null,
+  });
 });

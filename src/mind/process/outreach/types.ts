@@ -17,6 +17,8 @@ export type Candidate = {
   strength: number;
   score: number;
   factId: string | null;
+  /** Her own memory behind a her_day candidate; core memory, so never a fact. */
+  coreMemoryId: string | null;
   threadId: string | null;
   /** Why it can't win; null when it can. */
   filtered: FilterReason | null;

@@ -6,7 +6,7 @@ import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-or
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
 import type { Db } from "@/db/client";
-import { fact, factStatus, identity, retrieval_trace, thread } from "@/db/schema";
+import { fact, factStatus, retrieval_trace, thread } from "@/db/schema";
 import { one, toDate, toDateOrNull, vecLiteral } from "@/db/repos/util";
 
 export type FactRow = typeof fact.$inferSelect;
@@ -27,14 +27,6 @@ export type CandidateFact = {
 };
 
 /**
- * A generated (life-sim) fact whose `occurred_at` is still ahead of `now` hasn't happened yet:
- * the nightly tick stores the day's events in advance, so they stay hidden until their time.
- * Other sources with a future `occurred_at` (a user's plan) are real now and stay visible.
- */
-const notYetHappened = (now: Date) =>
-  sql`(${fact.source} <> 'generated' OR ${fact.occurred_at} IS NULL OR ${fact.occurred_at} <= ${now.toISOString()}::timestamptz)`;
-
-/**
  * Nearest active private facts for this user, with max entity salience. `excludeSensitive`
  * drops `payload.sensitive` facts before the limit (a reach-out never carries them).
  */
@@ -43,7 +35,6 @@ export async function candidateFacts(
   userId: string,
   queryVec: number[],
   limit: number,
-  now: Date,
   opts: { excludeSensitive?: boolean } = {},
 ): Promise<CandidateFact[]> {
   const q = vecLiteral(queryVec);
@@ -57,7 +48,6 @@ export async function candidateFacts(
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
-        AND (f.source <> 'generated' OR f.occurred_at IS NULL OR f.occurred_at <= ${now.toISOString()}::timestamptz)
         ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
@@ -211,34 +201,6 @@ export async function applyRecall(
   });
 }
 
-/** Her current preoccupation, unless it is a generated event that hasn't happened yet at `now`. */
-export async function getPreoccupationFact(
-  db: Db,
-  userId: string,
-  now: Date,
-): Promise<FactRow | null> {
-  const rows = await db
-    .select({ f: fact })
-    .from(identity)
-    .innerJoin(
-      fact,
-      and(
-        eq(fact.id, identity.preoccupation),
-        eq(fact.user_id, identity.user_id),
-        eq(fact.scope, "private"),
-      ),
-    )
-    .where(
-      and(
-        eq(identity.user_id, userId),
-        notInArray(fact.status, [...INACTIVE]),
-        notYetHappened(now),
-      ),
-    )
-    .limit(1);
-  return rows[0]?.f ?? null;
-}
-
 /** The "what I remember" list. */
 export async function listRememberedFacts(db: Db, userId: string) {
   return db
@@ -301,30 +263,6 @@ export async function forgetFact(db: Db, userId: string, factId: string): Promis
   });
 }
 
-/** Her recent self facts for the event generator, excluding copied schedule blocks. */
-export async function listRecentSelfFacts(
-  db: Db,
-  userId: string,
-  limit: number,
-): Promise<{ content: string; when: Date }[]> {
-  if (limit <= 0) return [];
-  const rows = await db
-    .select({ content: fact.content, occurred_at: fact.occurred_at, created_at: fact.created_at })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        eq(fact.scope, "private"),
-        eq(fact.subject, "self"),
-        notInArray(fact.status, [...INACTIVE]),
-        sql`(${fact.payload} IS NULL OR ${fact.payload}->>'block' IS NULL)`,
-      ),
-    )
-    .orderBy(desc(fact.created_at))
-    .limit(limit);
-  return rows.map((r) => ({ content: r.content, when: r.occurred_at ?? r.created_at }));
-}
-
 export type OutreachFact = { id: string; content: string; salience: number; sensitive: boolean };
 const sensitiveCol = sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`;
 const outreachCols = {
@@ -357,29 +295,6 @@ export async function listOutreachUserEvents(
         isNull(fact.thread_id),
         sql`${fact.occurred_at} > ${from.toISOString()}::timestamptz AND ${fact.occurred_at} <= ${to.toISOString()}::timestamptz`,
         sql`(${fact.last_recalled_at} IS NULL OR ${fact.last_recalled_at} < ${fact.occurred_at})`,
-      ),
-    );
-}
-
-/** Outreach `her_day` candidates: her generated personal events (not day blocks) whose time passed in (from, to]. */
-export async function listOutreachHerDay(
-  db: Db,
-  userId: string,
-  from: Date,
-  to: Date,
-): Promise<OutreachFact[]> {
-  return db
-    .select(outreachCols)
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        eq(fact.subject, "self"),
-        eq(fact.source, "generated"),
-        eq(fact.scope, "private"),
-        notInArray(fact.status, [...INACTIVE]),
-        sql`(${fact.payload} IS NULL OR ${fact.payload}->>'block' IS NULL)`,
-        sql`${fact.occurred_at} > ${from.toISOString()}::timestamptz AND ${fact.occurred_at} <= ${to.toISOString()}::timestamptz`,
       ),
     );
 }

@@ -255,27 +255,6 @@ export const fact = pgTable(
   ],
 );
 
-export const identity = pgTable(
-  "identity",
-  {
-    user_id: userRef().primaryKey(),
-    // ego (changes hourly)
-    mood_valence: real("mood_valence").notNull(),
-    mood_arousal: real("mood_arousal").notNull(),
-    energy: real("energy").notNull(),
-    preoccupation: uuid("preoccupation").references(() => fact.id, { onDelete: "set null" }),
-    baseline: jsonb("baseline").notNull(),
-    last_tick: ts("last_tick"),
-    preoccupation_since: ts("preoccupation_since"),
-    life_last_date: date("life_last_date", { mode: "string" }),
-  },
-  (t) => [
-    check("identity_mood_valence_range", sql`${t.mood_valence} BETWEEN -1 AND 1`),
-    check("identity_mood_arousal_range", sql`${t.mood_arousal} BETWEEN 0 AND 1`),
-    check("identity_energy_range", sql`${t.energy} BETWEEN 0 AND 1`),
-  ],
-);
-
 /** One row per user. Params live in relationship_param. */
 export const relationship = pgTable("relationship", {
   user_id: userRef().primaryKey(),
@@ -431,21 +410,6 @@ export const retrieval_trace = pgTable(
   (t) => [index("retrieval_trace_user_turn_idx").on(t.user_id, t.turn_id)],
 );
 
-export const ego_tick = pgTable(
-  "ego_tick",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    user_id: userRef(),
-    mood_valence: real("mood_valence").notNull(),
-    mood_arousal: real("mood_arousal").notNull(),
-    energy: real("energy").notNull(),
-    preoccupation: uuid("preoccupation").references(() => fact.id, { onDelete: "set null" }),
-    reason: text("reason").notNull(),
-    created_at: ts("created_at").notNull(),
-  },
-  (t) => [index("ego_tick_user_created_idx").on(t.user_id, t.created_at)],
-);
-
 /** Her shared day plan: canon for that day, like the persona file. No user data, so no user_id. */
 export const life_day = pgTable("life_day", {
   date: date("date", { mode: "string" }).primaryKey(),
@@ -455,25 +419,6 @@ export const life_day = pgTable("life_day", {
   prompt_version: text("prompt_version").notNull(),
   generated_at: ts("generated_at").notNull(),
 });
-
-/** Every personal-event attempt. Diagnostic only, never read by the chat loop. */
-export const life_event_log = pgTable(
-  "life_event_log",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    user_id: userRef(),
-    life_day: date("life_day", { mode: "string" }).notNull(),
-    attempt: integer("attempt").notNull(),
-    candidate: jsonb("candidate").notNull(),
-    decision: text("decision").notNull(),
-    target_fact_id: uuid("target_fact_id").references(() => fact.id, { onDelete: "set null" }),
-    fact_id: uuid("fact_id").references(() => fact.id, { onDelete: "set null" }),
-    model: text("model"),
-    prompt_version: text("prompt_version"),
-    created_at: ts("created_at").notNull(),
-  },
-  (t) => [index("life_event_log_user_created_idx").on(t.user_id, t.created_at)],
-);
 
 /** One row per outreach evaluation that got past the pre-check. `send_at` is the actual send time once `sent`. */
 export const reach_out_log = pgTable(
@@ -662,4 +607,26 @@ export const core_loop_trace = pgTable(
     created_at: ts("created_at").notNull(),
   },
   (t) => [index("core_loop_trace_loop_created_idx").on(t.loop, t.created_at)],
+);
+
+/** Every core-event attempt. Diagnostic only, never read by the chat loop. */
+export const life_event_log = pgTable(
+  "life_event_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    life_day: date("life_day", { mode: "string" }).notNull(),
+    attempt: integer("attempt").notNull(),
+    candidate: jsonb("candidate").notNull(),
+    decision: text("decision").notNull(),
+    target_memory_id: uuid("target_memory_id").references(() => core_memory.id, {
+      onDelete: "set null",
+    }),
+    world_event_id: uuid("world_event_id").references(() => world_event.id, {
+      onDelete: "set null",
+    }),
+    model: text("model"),
+    prompt_version: text("prompt_version"),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [index("life_event_log_created_idx").on(t.created_at)],
 );

@@ -1,19 +1,17 @@
+/**
+ * Her events, generated once for her whole world, not per user. A candidate is generated from her
+ * plan, her recent episodes and the people she knows, checked by rules (how often someone new
+ * appears, how often something big happens), and reconciled against her core memory; a duplicate
+ * or contradiction is regenerated. Read-only: the world tick applies what's accepted.
+ */
 import { z } from "zod";
-import {
-  latestSelfEntityFirstSeen,
-  listSelfEntityNames,
-  normalizeName,
-} from "@/db/repos/user/entities";
-import { listRecentSelfFacts, nearFacts } from "@/db/repos/user/facts";
-import { lastAcceptedHighStakes } from "@/db/repos/user/life-event-log";
 import type { LifePlan } from "@/db/schema";
-import type { LifeConfig } from "@/mind/platform/config";
-import type { Deps } from "@/mind/platform/deps";
-import { relativeDate } from "@/mind/platform/relative-date";
-import type { ExtractedFact } from "@/mind/memory/user/extract";
-import { reconcileAgainstNeighbours, type Decision } from "@/mind/memory/shared/reconcile";
+import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
+import type { Config } from "@/mind/platform/config";
+import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { relativeDate } from "@/mind/platform/relative-date";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
 
@@ -40,47 +38,41 @@ export type EventAttempt = {
   attempt: number;
   candidate: unknown;
   decision: EventDecision;
-  targetFactId: string | null;
+  targetMemoryId: string | null;
   source: "model" | "injected";
 };
 export type AcceptedEvent = {
   key: string;
   candidate: EventCandidate;
-  fact: ExtractedFact;
   embedding: number[];
-  decision: Decision;
-  newEntity: boolean;
+  at: Date;
 };
-export type LifeContext = {
+export type CoreEventContext = {
   plan: LifePlan | null;
-  selfFacts: { content: string; when: Date }[];
-  selfEntities: string[];
+  episodes: { content: string; when: Date }[];
+  people: string[];
 };
+type WorldConfig = Config["core"]["world"];
 
 const DAY = 86_400_000;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
+const normalizeName = (s: string) => tidy(s).toLowerCase();
 
-/**
- * What the event generator sees for one user's day. This is the future-plans seam:
- * later, her stated plans for `day` (self facts with `occurred_at` on it) join this context.
- */
-export async function lifeContext(
-  deps: Pick<Deps, "db" | "config">,
-  userId: string,
-  _day: string,
-  plan: LifePlan | null,
-): Promise<LifeContext> {
-  const names = await listSelfEntityNames(deps.db, userId);
+async function coreEventContext(deps: CoreDeps, day: string, now: Date): Promise<CoreEventContext> {
+  const cfg = deps.config.core.world;
+  const from = new Date(now.getTime() - cfg.event_context_days * DAY);
+  const episodes = await deps.core.memory.recentEpisodes(from, now, cfg.event_context_items);
+  const known = (await deps.core.memory.entities()).map((e) => e.name);
   return {
-    plan,
-    selfFacts: await listRecentSelfFacts(deps.db, userId, deps.config.life.event_context_facts),
-    selfEntities: [...new Set([...deps.config.life.canon_entities, ...names])],
+    plan: await deps.core.world.plan(day),
+    episodes: episodes.map((e) => ({ content: e.content, when: e.occurred_at ?? e.created_at })),
+    people: [...new Set([...cfg.canon_entities, ...known])],
   };
 }
 
 export function buildEventInput(
-  ctx: LifeContext,
+  ctx: CoreEventContext,
   day: string,
   rejected: { candidate: unknown; reason: string }[],
   now: Date,
@@ -92,11 +84,11 @@ export function buildEventInput(
       : "Her plan today: unknown, keep the event generic.",
   );
   parts.push(
-    ctx.selfFacts.length
-      ? `What she has already said or done with this friend (never contradict):\n${ctx.selfFacts.map((f) => `- ${f.content} (${relativeDate(f.when, now)})`).join("\n")}`
-      : "What she has already said or done with this friend: nothing yet.",
+    ctx.episodes.length
+      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${relativeDate(e.when, now)})`).join("\n")}`
+      : "What has happened in her life lately: nothing yet.",
   );
-  parts.push(`People she knows: ${ctx.selfEntities.join(", ") || "none"}.`);
+  parts.push(`People she knows: ${ctx.people.join(", ") || "none"}.`);
   if (rejected.length)
     parts.push(
       `Rejected attempts (write something different):\n${rejected.map((r) => `- ${JSON.stringify(r.candidate)}: ${r.reason}`).join("\n")}`,
@@ -122,7 +114,7 @@ export function checkRules(
   c: EventCandidate,
   ctx: { known: Set<string>; lastNewEntityAt: Date | null; lastHighStakesAt: Date | null },
   now: Date,
-  cfg: LifeConfig,
+  cfg: WorldConfig,
 ): "rule:new_entity" | "rule:high_stakes" | null {
   const unknown = c.entity_names.filter((n) => !ctx.known.has(normalizeName(n)));
   const within = (d: Date | null, days: number) => !!d && now.getTime() - d.getTime() < days * DAY;
@@ -140,40 +132,38 @@ const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = 
   invalid: "it wasn't a valid event (one sentence, a time HH:MM between 00:00 and 23:59)",
   "rule:new_entity": "it introduces a new person too soon; use people she already knows",
   "rule:high_stakes": "it's high-stakes too soon after the last one; keep it small",
-  duplicate: "it repeats something she already did or said",
-  contradicts: "it contradicts something she already said",
+  duplicate: "it repeats something that already happened to her",
+  contradicts: "it contradicts something that already happened to her",
 };
 
 /**
- * Personal events for one user's day: generate → rules → reconcile (the cold path's `reconcileAgainstNeighbours`),
- * rejecting duplicates and contradictions and regenerating up to `life.regen_attempts` times. Read-only: the
- * caller applies the accepted events. An LLM or embed error propagates (the user's tick is retried next hour).
+ * Her events for one day: generate → rules → reconcile against her core memory, rejecting
+ * duplicates and contradictions and regenerating up to `core.world.regen_attempts` times. The
+ * draws depend on the day alone, so every user shares them. An LLM or embed error propagates
+ * (the tick retries next hour).
  */
-export async function generateEvents(
-  deps: Deps,
-  userId: string,
+export async function generateCoreEvents(
+  deps: CoreDeps,
   day: string,
-  plan: LifePlan | null,
   now: Date,
-  inject?: (userId: string, day: string) => InjectedEvent | null,
+  inject?: (day: string) => InjectedEvent | null,
 ): Promise<{ accepted: AcceptedEvent[]; attempts: EventAttempt[] }> {
-  const { db, config, llm, embedder } = deps;
-  const cfg = config.life;
-  const injected = inject?.(userId, day) ?? null;
+  const { config, llm, embedder } = deps;
+  const cfg = config.core.world;
+  const injected = inject?.(day) ?? null;
   const n = Math.max(cfg.events_per_day_max, injected ? 1 : 0);
   const draws = Array.from(
     { length: n },
-    (_, i) =>
-      (i === 0 && !!injected) || seededUnit(`${userId}:${day}:${i}`) < cfg.event_probability,
+    (_, i) => (i === 0 && !!injected) || seededUnit(`${day}:${i}`) < cfg.event_probability,
   );
   const accepted: AcceptedEvent[] = [];
   const attempts: EventAttempt[] = [];
   if (!draws.some(Boolean)) return { accepted, attempts };
 
-  const ctx = await lifeContext(deps, userId, day, plan);
-  const known = new Set(ctx.selfEntities.map(normalizeName));
-  let lastNewEntityAt = await latestSelfEntityFirstSeen(db, userId);
-  let lastHighStakesAt = await lastAcceptedHighStakes(db, userId);
+  const ctx = await coreEventContext(deps, day, now);
+  const known = new Set(ctx.people.map(normalizeName));
+  let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen();
+  let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
   const system = `${loadPersona(config).coreValues}\n\n${loadPrompt("life/event", config.prompts.life_event)}`;
 
   for (const [i, kept] of draws.entries()) {
@@ -200,8 +190,8 @@ export async function generateEvents(
             maxTokens: cfg.event_max_tokens,
           });
       const source = useInjected ? ("injected" as const) : ("model" as const);
-      const reject = (decision: keyof typeof REASON, targetFactId: string | null = null) => {
-        attempts.push({ key, attempt, candidate: raw, decision, targetFactId, source });
+      const reject = (decision: keyof typeof REASON, targetMemoryId: string | null = null) => {
+        attempts.push({ key, attempt, candidate: raw, decision, targetMemoryId, source });
         rejected.push({ candidate: raw, reason: REASON[decision] });
       };
       const c = checkEvent(raw, cfg.event_max_chars);
@@ -214,47 +204,37 @@ export async function generateEvents(
         reject(rule);
         continue;
       }
-      const fact: ExtractedFact = {
-        subject: "self",
-        kind: "event",
-        content: c.content,
-        occurred_at: lifeInstant(cfg, day, c.at),
-        salience: cfg.event_salience,
-        valence: c.valence,
-        confidence: cfg.event_confidence,
-        entity_names: c.entity_names,
-        thread_title: c.stakes === "high" ? c.content : null,
-      };
       const [embedding] = await embedder.embed([c.content], "document");
       if (!embedding) throw new Error("embedder returned no vector");
-      const neighbors = await nearFacts(
-        db,
-        userId,
-        "self",
+      const neighbors = await deps.core.memory.near(
         embedding,
         config.reconcile.neighbor_k,
         config.reconcile.near_match_similarity,
       );
       const decision = await reconcileAgainstNeighbours(
         deps,
-        { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
+        { label: "episode", content: c.content },
         neighbors,
       );
       if (decision.relation === "duplicate" || decision.relation === "contradicts") {
         reject(decision.relation, decision.targetId);
         continue;
       }
-      const newEntity = c.entity_names.some((name) => !known.has(normalizeName(name)));
       attempts.push({
         key,
         attempt,
         candidate: c,
         decision: decision.relation === "resolves" ? "resolves" : "accepted",
-        targetFactId: decision.targetId,
+        targetMemoryId: decision.targetId,
         source,
       });
-      accepted.push({ key, candidate: c, fact, embedding, decision, newEntity });
-      if (newEntity) {
+      accepted.push({
+        key,
+        candidate: c,
+        embedding,
+        at: lifeInstant(config.life, day, c.at),
+      });
+      if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {
         lastNewEntityAt = now;
         for (const name of c.entity_names) known.add(normalizeName(name));
       }

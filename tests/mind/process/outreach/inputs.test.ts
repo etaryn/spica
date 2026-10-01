@@ -8,7 +8,6 @@ import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertTurn } from "@/db/repos/user/session-log";
-import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
 import { relationship, conversation_state } from "@/db/schema";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
@@ -35,7 +34,7 @@ const fact = (o: Partial<Parameters<typeof insertFact>[2]>) => ({
 
 async function setup(overrides: unknown = {}) {
   const deps = makeTestDeps({
-    life: { timezone: "UTC", events_per_day_max: 0 },
+    life: { timezone: "UTC" },
     ...(overrides as object),
   });
   const u = await createTestUser();
@@ -103,54 +102,37 @@ test("user events: a fact attached to a thread is left to the thread", async () 
   expect(i.userEvents.map((e) => e.id)).toEqual([free.id]);
 });
 
-test("her day: generated non-block self events that have happened, plus the preoccupation", async () => {
+test("her day: her core episodes within the lookback, plus her preoccupation; never sensitive", async () => {
   const { deps, u } = await setup();
-  const ev = await insertFact(
-    deps.db,
-    u,
-    fact({
-      subject: "self",
-      source: "generated",
-      content: "Spica finished Solaris.",
-      occurred_at: ago(2),
-      payload: null,
-    }),
-  );
+  const episode = (content: string, occurred_at: Date, status: "open" | "resolved" = "resolved") =>
+    deps.core.memory.insert({
+      kind: "episode",
+      content,
+      embedding: vec(),
+      occurred_at,
+      created_at: occurred_at,
+      status,
+      salience: 0.6,
+      valence: 0.2,
+      confidence: 1,
+      source: "world",
+      source_ref: null,
+    });
+  const ev = await episode("Spica finished Solaris.", ago(2));
+  await episode("too old", ago(80));
+  await episode("later", new Date(now.getTime() + H));
+  const pre = await episode("Spica keeps thinking about Alcor.", ago(100), "open");
+  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.update({ preoccupation: pre, preoccupation_since: ago(100) });
+  // A user's own self fact is never her day: her day comes only from her core memory.
   await insertFact(
     deps.db,
     u,
-    fact({
-      subject: "self",
-      source: "generated",
-      content: "Spica's morning: film.",
-      occurred_at: ago(2),
-      payload: { block: "busy" },
-    }),
+    fact({ subject: "self", content: "Spica told them about a film.", occurred_at: ago(1) }),
   );
-  await insertFact(
-    deps.db,
-    u,
-    fact({
-      subject: "self",
-      source: "generated",
-      content: "later",
-      occurred_at: new Date(now.getTime() + H),
-    }),
-  );
-  const pre = await insertFact(
-    deps.db,
-    u,
-    fact({
-      subject: "self",
-      source: "turn",
-      content: "Spica keeps thinking about Alcor.",
-      occurred_at: null,
-    }),
-  );
-  await ensureIdentity(deps.db, u, deps.config.ego.baseline);
-  await updateIdentity(deps.db, u, { preoccupation: pre.id });
-  const ids = (await loadCandidateInputs(deps, u, now)).herDay.map((f) => f.id).sort();
-  expect(ids).toEqual([ev.id, pre.id].sort());
+  const herDay = (await loadCandidateInputs(deps, u, now)).herDay;
+  expect(herDay.map((f) => f.id).sort()).toEqual([ev, pre].sort());
+  expect(herDay.every((f) => !f.sensitive)).toBe(true);
 });
 
 test("due threads carry stakes and the latest fact's sensitivity; make-up carries faded hurt and cause", async () => {

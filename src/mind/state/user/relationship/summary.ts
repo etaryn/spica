@@ -48,31 +48,48 @@ export function summaryLines(
   if (state.status === "repairing") add(firstPhrase(phrases, "repairing"));
   if (!inCrisisQuiet && state.end_pending_since) add(firstPhrase(phrases, "end_pending"));
 
-  for (const { name, deviation } of notableDeviations(view.params, inCrisisQuiet, settings)) {
+  for (const { name, deviation, key } of notableDeviations(
+    view.params,
+    inCrisisQuiet,
+    settings,
+    phrases,
+  )) {
     if (name === "hurt" && deviation > 0 && view.cause) {
       add(firstPhrase(phrases, "hurt_cause")?.replace("{cause}", view.cause) ?? null);
       continue;
     }
-    const direction = deviation > 0 ? "above" : "below";
-    const strength = Math.abs(deviation) >= settings.summary_strong_effect ? "strong" : "mild";
-    add(firstPhrase(phrases, `${name} ${direction} ${strength}`));
+    add(firstPhrase(phrases, key));
   }
 
   if (!inCrisisQuiet && makeUpLineDue(state, settings)) add(firstPhrase(phrases, "make_up"));
   return lines;
 }
 
-/** The params furthest from baseline, strongest first, capped at `summary_max_lines`. */
+/**
+ * The params furthest from baseline, strongest first, capped at `summary_max_lines`. A deviation
+ * with no phrase (a faded afterglow sits below its learned baseline) is dropped before the cap so
+ * it can't silently take a slot from one that would show.
+ */
 function notableDeviations(
   params: Params,
   inCrisisQuiet: boolean,
   settings: RelationshipConfig,
-): { name: ParamName; deviation: number }[] {
+  phrases: Phrases,
+): { name: ParamName; deviation: number; key: string }[] {
   const hiddenInCrisis = (name: ParamName) => name === "hurt" || name === "tension";
+  const phraseKey = (name: ParamName, deviation: number) => {
+    const direction = deviation > 0 ? "above" : "below";
+    const strength = Math.abs(deviation) >= settings.summary_strong_effect ? "strong" : "mild";
+    return `${name} ${direction} ${strength}`;
+  };
 
   return PARAM_NAMES.filter((name) => !(inCrisisQuiet && hiddenInCrisis(name)))
-    .map((name) => ({ name, deviation: deviationOf(params[name], settings.variance_epsilon) }))
+    .map((name) => {
+      const deviation = deviationOf(params[name], settings.variance_epsilon);
+      return { name, deviation, key: phraseKey(name, deviation) };
+    })
     .filter((p) => Math.abs(p.deviation) >= settings.summary_min_effect)
+    .filter((p) => firstPhrase(phrases, p.key) !== null)
     .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))
     .slice(0, settings.summary_max_lines);
 }

@@ -5,6 +5,8 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { coreDepsOf } from "@/mind/platform/deps";
+import { loadPersona } from "@/mind/platform/persona";
+import { seedCore } from "@/mind/memory/core/seed";
 import { buildEventInput, checkEvent, checkRules, generateCoreEvents } from "@/mind/world/events";
 import { closeTestDb, resetDb, vec } from "../../helpers/db";
 import { makeTestDeps } from "../../helpers/deps";
@@ -232,4 +234,38 @@ test("the generator sees only core context: her episodes, her people, her plan",
   expect(call.input).toContain("She rewatched Solaris.");
   expect(call.input).toContain("Alcor");
   expect(call.input).not.toContain("with this friend");
+});
+
+test("seeding her canon people doesn't hold back the first new person", async () => {
+  const deps = makeTestDeps(always);
+  await seedCore(coreDepsOf(deps));
+  deps.llm.handlers.life_event = sequence(
+    ev("She met Mira at the planetarium.", { entity_names: ["Mira"] }),
+  );
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  expect(out.attempts.map((a) => a.decision)).toEqual(["accepted"]);
+});
+
+test("the generator writes as who she is lately: core values plus her latest snapshot", async () => {
+  const deps = makeTestDeps(always);
+  await deps.core.memory.insertSnapshot({
+    version: 3,
+    content: "Lately she can't stop thinking about comets.",
+    sections: {},
+    source_ids: [],
+    rendered_at: now,
+    model: "m",
+    prompt_version: "v1",
+  });
+  await generateCoreEvents(coreDepsOf(deps), day, now);
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
+  expect(call.system).toContain(loadPersona(deps.config).coreValues);
+  expect(call.system).toContain("Lately she can't stop thinking about comets.");
+});
+
+test("with no snapshot yet the generator falls back to the seed self", async () => {
+  const deps = makeTestDeps(always);
+  await generateCoreEvents(coreDepsOf(deps), day, now);
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
+  expect(call.system).toContain(loadPersona(deps.config).seedSelf);
 });

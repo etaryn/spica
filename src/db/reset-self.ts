@@ -11,8 +11,8 @@ export function assertLocalDatabase(url: string): void {
 
 /**
  * Dev only, for a persona change: hard-deletes every user's self facts, entities and threads, and
- * clears her whole core mind (memory, people, snapshots, world events, state, traces), so the next
- * worker start reseeds snapshot v0 from the new persona.
+ * clears her whole core mind (memory, people, snapshots, world events, state, traces), so she can
+ * be reseeded from the new persona.
  */
 export async function adminResetSelf(
   db: Db,

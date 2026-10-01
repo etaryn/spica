@@ -127,3 +127,15 @@ test("quiet after crisis also suppresses the ended line; it returns once the qui
     [phrases.ended![0]],
   );
 });
+
+test("a param with no phrase for its deviation never takes a line slot", () => {
+  // A faded afterglow sits below its learned baseline, and there are no "afterglow below" lines.
+  const p = init();
+  p.afterglow.baseline = 0.9;
+  p.afterglow.value = 0;
+  p.afterglow.variance = 0.01;
+  p.closeness.value = p.closeness.baseline + 0.3;
+  p.trust.value = p.trust.baseline - 0.3;
+  const lines = summaryLines({ state: fresh(), params: p, cause: null }, now, cfg, phrases);
+  expect(lines).toHaveLength(2);
+});

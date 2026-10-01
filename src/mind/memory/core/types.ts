@@ -91,7 +91,8 @@ export interface CoreMemory {
   /** Episodes whose time falls in (from, to], oldest first, at most `limit`. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   entities(): Promise<CoreEntity[]>;
-  latestEntityFirstSeen(): Promise<Date | null>;
+  /** When the newest person she met first appeared, ignoring `excludeNames` (her canon people). */
+  latestEntityFirstSeen(excludeNames: string[]): Promise<Date | null>;
   /** Ids for these names, inserting the ones she doesn't know yet (salience from the caller). */
   addEntities(names: string[], salience: number, now: Date): Promise<string[]>;
   latestSnapshot(): Promise<CoreSnapshot | null>;

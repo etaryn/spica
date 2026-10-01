@@ -1,7 +1,7 @@
 /**
  * `core_world_tick`: one generation per her local day for everyone, all-or-nothing, logged and traced.
  */
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { count, eq } from "drizzle-orm";
 import { core_loop_trace, core_memory, life_event_log, world_event } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
@@ -33,7 +33,7 @@ test("generates once per her day, however many users and however many runs", asy
   expect(traces).toHaveLength(1);
 });
 
-test("a failure mid-apply writes nothing and the next run retries", async () => {
+test("a generation failure writes nothing and the next run retries", async () => {
   const deps = makeTestDeps(cfg);
   deps.llm.handlers.life_event = sequence(new Error("model down"));
   await expect(coreWorldTick(coreDepsOf(deps), at)).rejects.toThrow("model down");
@@ -49,6 +49,45 @@ test("a failure mid-apply writes nothing and the next run retries", async () => 
   });
   expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
   expect(await rows(deps, world_event)).toBe(1);
+});
+
+test("a failure inside the apply rolls back every write and leaves the day due", async () => {
+  const deps = makeTestDeps(cfg);
+  const begin = deps.core.transaction.bind(deps.core);
+  vi.spyOn(deps.core, "transaction").mockImplementation((fn) =>
+    begin(async (tx) => {
+      // The trace is the apply's last write, so everything before it must roll back too.
+      vi.spyOn(tx.traces, "insert").mockRejectedValue(new Error("disk full"));
+      return fn(tx);
+    }),
+  );
+  await expect(coreWorldTick(coreDepsOf(deps), at)).rejects.toThrow("disk full");
+  expect(await rows(deps, world_event)).toBe(0);
+  expect((await deps.db.select({ n: count() }).from(core_memory))[0]!.n).toBe(0);
+  expect((await deps.db.select({ n: count() }).from(life_event_log))[0]!.n).toBe(0);
+  expect((await deps.core.state.get())?.last_event_day ?? null).toBeNull();
+
+  vi.mocked(deps.core.transaction).mockRestore();
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
+  expect(await rows(deps, world_event)).toBe(1);
+});
+
+test("a run that finds the day already applied under the lock writes nothing", async () => {
+  const deps = makeTestDeps(cfg);
+  // Another run applies today while this one is still generating.
+  deps.llm.handlers.life_event = async () => {
+    await deps.core.state.update({ last_event_day: "2026-01-05" });
+    return {
+      content: "She found an old film.",
+      at: "15:00",
+      valence: 0.3,
+      stakes: "low",
+      entity_names: [],
+    };
+  };
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("not_due");
+  expect(await rows(deps, world_event)).toBe(0);
+  expect((await deps.db.select({ n: count() }).from(life_event_log))[0]!.n).toBe(0);
 });
 
 test("no plan for today still makes a generic event", async () => {

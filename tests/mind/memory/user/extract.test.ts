@@ -160,6 +160,10 @@ test("extract calls the extract model with the extraction prompt and returns nor
   );
   expect(out.facts[0]!.content).toBe("The user has a job interview at Acme on Friday.");
   expect(llm.structuredCalls).toEqual([
-    { purpose: "extract", input: expect.stringContaining("interview friday") },
+    {
+      purpose: "extract",
+      system: expect.stringContaining("structured memory"),
+      input: expect.stringContaining("interview friday"),
+    },
   ]);
 });

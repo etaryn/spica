@@ -1,11 +1,13 @@
 /**
  * Retrieval for the hot path. It ranks the user's memories against the conversation, then forces
- * in what must be there: a reach-out's own topic and threads due a check-in. Read-only, and it never throws: a failure degrades to whatever could still be
- * found, so a memory problem never costs the user their reply.
+ * in what must be there: a reach-out's own topic and threads due a check-in. Read-only, and it
+ * never throws: a failure degrades to whatever could still be found, so a memory problem never
+ * costs the user their reply.
  */
 import { candidateFacts, getFact, type CandidateFact } from "@/db/repos/user/facts";
 import type { Turn } from "@/db/repos/user/session-log";
 import { dueThreads } from "@/db/repos/user/threads";
+import { embedQuery } from "@/mind/memory/shared/embed-query";
 import { rankMemories, type Scored } from "@/mind/memory/shared/ranking";
 import {
   emptyRetrieval,
@@ -14,7 +16,6 @@ import {
 } from "@/mind/memory/shared/types";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import { withTimeout } from "@/mind/platform/timeout";
 
 type RetrieveDeps = Pick<Deps, "db" | "embedder" | "config" | "log">;
 
@@ -24,6 +25,8 @@ export type RetrieveInput = {
   context: Turn[];
   now: Date;
   queryText?: string;
+  /** The query already embedded by the caller; null when there's nothing to rank against. */
+  queryVector?: Promise<number[] | null>;
   forceFactIds?: string[];
   /** Reach-outs: keeps every sensitive memory out, whether ranked, forced or due. */
   excludeSensitive?: boolean;
@@ -76,14 +79,8 @@ async function rankAgainstConversation(
   try {
     const query =
       input.queryText ?? [...input.context, ...input.answering].map((t) => t.text).join("\n");
-    // A check-in with no turns has nothing to rank against, so skip the embed.
-    if (query.trim() === "") return [];
-
-    const [vector] = await withTimeout(
-      embedder.embed([query], "query"),
-      config.retrieval.embed_timeout_ms,
-    );
-    if (!vector) throw new Error("embedder returned no vector");
+    const vector = await (input.queryVector ?? embedQuery({ embedder, config }, query));
+    if (!vector) return [];
 
     const candidates = await candidateFacts(db, userId, vector, config.retrieval.candidate_pool, {
       excludeSensitive: input.excludeSensitive === true,

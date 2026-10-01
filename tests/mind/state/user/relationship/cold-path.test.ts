@@ -189,3 +189,46 @@ test("savepoint: a relationship failure rolls back only the relationship part", 
   const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
   expect(turns.every((t) => t.extracted)).toBe(true);
 });
+
+test("crisis exchange leaves her feelings toward them (affect, afterglow) untouched", async () => {
+  const warmFact = {
+    subject: "user",
+    kind: "event",
+    content: "The user got the job they wanted.",
+    occurred_at: null,
+    salience: 0.9,
+    valence: 0.9,
+    confidence: 0.9,
+    entity_names: [],
+    thread_title: null,
+  };
+  const feelings = async (u: string) => {
+    const p = await getParams(getTestDb(), u);
+    return { affect: p.affect_valence.value, afterglow: p.afterglow.value };
+  };
+  const extractWarm = (deps: ReturnType<typeof makeTestDeps>) => {
+    deps.llm.handlers.extract = () => ({
+      facts: [warmFact],
+      entities: [],
+      threads: [],
+      relationship: null,
+    });
+  };
+
+  // Precondition: the same warm exchange outside a crisis does move them.
+  const control = makeTestDeps();
+  extractWarm(control);
+  const c = await createTestUser();
+  await ensureRelationship(getTestDb(), c, control.clock.now(), control.config.relationship);
+  const controlBefore = await feelings(c);
+  await runColdPath(control, await exchange(control, c, "i got the job!!"));
+  expect(await feelings(c)).not.toEqual(controlBefore);
+
+  const deps = makeTestDeps();
+  extractWarm(deps);
+  const u = await createTestUser();
+  await ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+  const before = await feelings(u);
+  await runColdPath(deps, await exchange(deps, u, "i got the job but i want to die", true));
+  expect(await feelings(u)).toEqual(before);
+});

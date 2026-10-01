@@ -30,7 +30,7 @@ const FAKE_DAY_EVENT = {
 export class FakeLLMProvider implements LLMProvider {
   replies: string[] = [];
   calls: ReplyRequest[] = [];
-  structuredCalls: { purpose: string; input: string }[] = [];
+  structuredCalls: { purpose: string; system: string; input: string }[] = [];
   failReplies = 0;
   replyDelayMs = 0;
   /** Test seam: runs inside generateReply, to simulate things happening while she writes. */
@@ -69,8 +69,8 @@ export class FakeLLMProvider implements LLMProvider {
     return this.replies.shift() ?? `(fake reply to: ${lastUserMessage?.content ?? ""})`;
   }
 
-  async classifyJson<T>({ purpose, input, schema }: ClassifyRequest<T>): Promise<T> {
-    this.structuredCalls.push({ purpose, input });
+  async classifyJson<T>({ purpose, system, input, schema }: ClassifyRequest<T>): Promise<T> {
+    this.structuredCalls.push({ purpose, system, input });
 
     const handler = this.handlers[purpose] ?? (purpose === "crisis" ? this.classify : undefined);
     if (!handler) throw new Error(`FakeLLMProvider: no handler for purpose "${purpose}"`);

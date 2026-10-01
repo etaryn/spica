@@ -1,9 +1,9 @@
 /**
  * The hot path: composes one reply from both minds: her core values and snapshot, her state and
  * her day, the relationship, her memories of them and of her own life, and the live conversation.
- * It retrieves memory, loads those side by side, assembles the prompt, makes one generation, and runs the guard. Read-only: the caller inserts and sends the
- * reply, enqueues the cold path, then calls `writeGuardLog`. Serves normal replies, the crisis
- * path, and reach-outs.
+ * It retrieves memory, loads those side by side, assembles the prompt, makes one generation, and
+ * runs the guard. Read-only: the caller inserts and sends the reply, enqueues the cold path, then
+ * calls `writeGuardLog`. Serves normal replies, the crisis path, and reach-outs.
  */
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
@@ -12,6 +12,7 @@ import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import { retrieveCore } from "@/mind/memory/core/retrieve";
+import { embedQuery } from "@/mind/memory/shared/embed-query";
 import { retrieve } from "@/mind/memory/user/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName, ReplyFailedError } from "@/mind/platform/errors";
@@ -205,6 +206,13 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         null,
       );
 
+  // Embedded once for both minds' retrieval; a failure leaves both with nothing ranked.
+  const queryText = replyQuery(input, config.retrieval.context_turns);
+  const queryVector = embedQuery(deps, queryText).catch((e) => {
+    log.error("retrieval degraded", { userId, error: errorName(e) });
+    return null;
+  });
+
   const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
   const coreMemories = inCrisis
     ? Promise.resolve({ memories: [] as RetrievedFact[] })
@@ -214,14 +222,15 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         userId,
         () =>
           retrieveCore(deps, {
-            queryText: coreQuery(input, config.retrieval.context_turns),
+            queryText,
+            queryVector,
             now: clock.now(),
             forceIds: input.reachOut?.coreMemoryId ? [input.reachOut.coreMemoryId] : [],
           }),
         { memories: [] as RetrievedFact[] },
       );
 
-  const retrieval = await retrieveFor(deps, userId, input);
+  const retrieval = await retrieveFor(deps, userId, input, queryText, queryVector);
   const latestSnapshot = await snapshot;
   const herMemories = (await coreMemories).memories;
   const factualLine = await relationshipLinePromise;
@@ -285,11 +294,21 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   };
 }
 
-/** What her own memories are matched against: a reach-out's topic, else the turns being answered. */
-function coreQuery(input: ComposeInput, contextTurns: number): string {
-  if (input.reachOut?.text) return input.reachOut.text;
-  const turns = [...input.earlier.slice(-Math.max(0, contextTurns)), ...input.answering];
-  return turns.map((t) => t.text).join("\n");
+/**
+ * What both minds' memories are matched against: a reach-out's topic (or, with none, the latest
+ * turns), else the turns being answered with up to `contextTurns` before them.
+ */
+function replyQuery(input: ComposeInput, contextTurns: number): string {
+  const reachOut = input.reachOut;
+  if (reachOut) {
+    if (reachOut.text) return reachOut.text;
+    return input.recent
+      .slice(-Math.max(1, contextTurns))
+      .map((t) => t.text)
+      .join("\n");
+  }
+  const context = contextTurns > 0 ? input.earlier.slice(-contextTurns) : [];
+  return [...context, ...input.answering].map((t) => t.text).join("\n");
 }
 
 /** How long she's known them, so she doesn't guess. Off when `chat.relationship_line` is false. */
@@ -315,30 +334,23 @@ async function loadRelationshipLine(
   }
 }
 
-/** A reach-out queries by its topic, forces its own memory in, and keeps sensitive memories out. */
-function retrieveFor(deps: Deps, userId: string, input: ComposeInput): Promise<RetrievalResult> {
-  const { config, clock } = deps;
-  const contextTurns =
-    config.retrieval.context_turns > 0 ? input.earlier.slice(-config.retrieval.context_turns) : [];
-
+/** A reach-out forces its own memory in and keeps sensitive memories out. */
+function retrieveFor(
+  deps: Deps,
+  userId: string,
+  input: ComposeInput,
+  queryText: string,
+  queryVector: Promise<number[] | null>,
+): Promise<RetrievalResult> {
   const reachOut = input.reachOut;
-  const reachOutQuery = reachOut
-    ? {
-        queryText:
-          reachOut.text ||
-          input.recent
-            .slice(-Math.max(1, config.retrieval.context_turns))
-            .map((t) => t.text)
-            .join("\n"),
-        forceFactIds: reachOut.factId ? [reachOut.factId] : [],
-        excludeSensitive: true,
-      }
-    : {};
-
   return retrieve(deps, userId, {
     answering: input.answering,
-    context: contextTurns,
-    now: clock.now(),
-    ...reachOutQuery,
+    context: [],
+    now: deps.clock.now(),
+    queryText,
+    queryVector,
+    ...(reachOut
+      ? { forceFactIds: reachOut.factId ? [reachOut.factId] : [], excludeSensitive: true }
+      : {}),
   });
 }

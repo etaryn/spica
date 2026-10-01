@@ -162,9 +162,16 @@ export async function generateCoreEvents(
 
   const ctx = await coreEventContext(deps, day, now);
   const known = new Set(ctx.people.map(normalizeName));
-  let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen();
+  let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen(cfg.canon_entities);
   let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
-  const system = `${loadPersona(config).coreValues}\n\n${loadPrompt("life/event", config.prompts.life_event)}`;
+  // Events are written for who she is lately; before any snapshot exists that's the seed self.
+  const persona = loadPersona(config);
+  const self = (await deps.core.memory.latestSnapshot())?.content ?? persona.seedSelf;
+  const system = [
+    persona.coreValues,
+    self,
+    loadPrompt("life/event", config.prompts.life_event),
+  ].join("\n\n");
 
   for (const [i, kept] of draws.entries()) {
     if (!kept) continue;

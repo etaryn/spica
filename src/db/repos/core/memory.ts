@@ -1,7 +1,7 @@
 /**
  * Her core memory in Postgres. No query here takes or returns a user id.
  */
-import { and, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, lte, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_entity, core_memory, core_snapshot } from "@/db/schema";
 import type {
@@ -113,11 +113,12 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       return db.select().from(core_entity).orderBy(core_entity.first_seen);
     },
 
-    async latestEntityFirstSeen() {
+    async latestEntityFirstSeen(excludeNames) {
       const row = (
         await db
           .select({ at: core_entity.first_seen })
           .from(core_entity)
+          .where(notInArray(sql`lower(${core_entity.name})`, excludeNames.map(normal)))
           .orderBy(desc(core_entity.first_seen))
           .limit(1)
       )[0];

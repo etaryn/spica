@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { coreDepsOf } from "@/mind/platform/deps";
-import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreStateTick } from "@/mind/state/core/tick";
 import { inspectCore } from "@/db/repos/admin/inspector-core";
 import { loadConfig } from "@/mind/platform/config";

@@ -11,7 +11,7 @@ import type { Embedder } from "@/mind/platform/embedder/types";
 import { RecordingEventBus } from "@/mind/platform/events";
 import type { LLMProvider } from "@/mind/platform/llm/types";
 import { silentLogger } from "@/mind/platform/log";
-import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { seedCore } from "@/mind/memory/core/seed";
 import { decayPass } from "@/mind/memory/user/decay";
 import { RecordingQueue } from "@/mind/platform/jobs";
 import type { Signals } from "@/mind/state/user/relationship/signals";
@@ -344,7 +344,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     events: new RecordingEventBus(),
     pusher,
   };
-  await seedSnapshot(coreDepsOf(deps));
+  await seedCore(coreDepsOf(deps));
   const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);
 
   const userIds: Record<string, string> = {};

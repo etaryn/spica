@@ -10,7 +10,7 @@ import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
 import { insertThread } from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
-import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -189,6 +189,27 @@ describe("composeReply", () => {
     const turns = [await userTurn(deps, b, "what's a good cat name")];
     await composeReply(deps, b, { turns, openQuestions: [], flag: null });
     expect(deps.llm.calls.at(-1)!.system).not.toContain("Biscuit");
+  });
+
+  test("one reply embeds its query once, shared by her memories and theirs", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turns = [await userTurn(deps, u, "how was the observatory")];
+    const spy = vi.spyOn(deps.embedder, "embed");
+    await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(spy.mock.calls.filter((c) => c[1] === "query")).toHaveLength(1);
+  });
+
+  test("with no context turns the query is only the turns being answered", async () => {
+    const deps = makeTestDeps({ retrieval: { context_turns: 0 } });
+    const u = await createTestUser();
+    await userTurn(deps, u, "earlier chatter about pasta");
+    deps.clock.advance(60_000);
+    const turns = [await userTurn(deps, u, "anyway, the telescope")];
+    const spy = vi.spyOn(deps.embedder, "embed");
+    await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    const queries = spy.mock.calls.filter((c) => c[1] === "query").map((c) => c[0]);
+    expect(queries).toEqual([["anyway, the telescope"]]);
   });
 
   test("an embedder failure still produces a reply", async () => {

@@ -5,10 +5,10 @@
  * (her day is planned ahead) are never surfaced. Never throws.
  */
 import type { RetrievedFact } from "@/mind/memory/shared/types";
+import { embedQuery } from "@/mind/memory/shared/embed-query";
 import { rankMemories } from "@/mind/memory/shared/ranking";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import { withTimeout } from "@/mind/platform/timeout";
 
 export type CoreRetrieval = { memories: RetrievedFact[] };
 
@@ -22,19 +22,21 @@ function happened(m: Datable, now: Date): boolean {
 
 export async function retrieveCore(
   deps: CoreRetrieveDeps,
-  input: { queryText: string; now: Date; forceIds?: string[] },
+  input: {
+    queryText: string;
+    /** The query already embedded by the caller; null when there's nothing to rank against. */
+    queryVector?: Promise<number[] | null>;
+    now: Date;
+    forceIds?: string[];
+  },
 ): Promise<CoreRetrieval> {
   const { core, embedder, config, log } = deps;
   const memories: RetrievedFact[] = [];
   const seen = new Set<string>();
 
   try {
-    if (input.queryText.trim() !== "") {
-      const [vector] = await withTimeout(
-        embedder.embed([input.queryText], "query"),
-        config.retrieval.embed_timeout_ms,
-      );
-      if (!vector) throw new Error("embedder returned no vector");
+    const vector = await (input.queryVector ?? embedQuery({ embedder, config }, input.queryText));
+    if (vector) {
       const candidates = (
         await core.memory.candidates(vector, config.retrieval.candidate_pool)
       ).filter((m) => happened(m, input.now));

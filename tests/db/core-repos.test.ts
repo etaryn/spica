@@ -51,7 +51,8 @@ test("entities are added once and keep their first_seen", async () => {
   const [again, mira] = await core().memory.addEntities(["alcor", "Mira"], 0.5, later);
   expect(again).toBe(alcor);
   expect(mira).not.toBe(alcor);
-  expect((await core().memory.latestEntityFirstSeen())?.getTime()).toBe(later.getTime());
+  expect((await core().memory.latestEntityFirstSeen([]))?.getTime()).toBe(later.getTime());
+  expect((await core().memory.latestEntityFirstSeen([" MIRA "]))?.getTime()).toBe(now.getTime());
 });
 
 test("snapshots: latest wins, a duplicate version is refused", async () => {

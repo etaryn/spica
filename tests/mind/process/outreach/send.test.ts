@@ -8,7 +8,7 @@ import { getReachOutLog, insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, getRelationshipRow } from "@/db/repos/user/relationship";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { conversation_state, reach_out_log, relationship } from "@/db/schema";
-import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";

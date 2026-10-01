@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import {
-  availabilityDelay,
-  availabilityFor,
-  wantsNote,
-} from "@/mind/process/availability/deferral";
+import { availabilityDelay, deferWhileBusy, wantsNote } from "@/mind/process/availability/deferral";
 import { insertFact } from "@/db/repos/facts";
 import * as rel from "@/db/repos/relationship";
 import { insertTurn } from "@/db/repos/session-log";
@@ -82,9 +78,9 @@ async function busyUser(closeness: number) {
   return { deps, u, f };
 }
 
-test("availabilityFor: delay + note for a mid-closeness user in a busy block", async () => {
+test("deferWhileBusy: delay + note for a mid-closeness user in a busy block", async () => {
   const { deps, u, f } = await busyUser(0.5);
-  const a = await availabilityFor(deps, u, now, "seed");
+  const a = await deferWhileBusy(deps, u, now, "seed");
   expect(a.delayMs).toBeGreaterThan(cfg.note_min_delay_ms);
   expect(a).toMatchObject({ blockFactId: f.id, blockKind: "busy", note: true });
   await insertTurn(deps.db, u, {
@@ -96,16 +92,16 @@ test("availabilityFor: delay + note for a mid-closeness user in a busy block", a
     trigger: "availability",
     extracted: true,
   });
-  expect((await availabilityFor(deps, u, now, "seed")).note).toBe(false);
+  expect((await deferWhileBusy(deps, u, now, "seed")).note).toBe(false);
 });
 
-test("availabilityFor fails open: no block, crisis quiet, or an error", async () => {
+test("deferWhileBusy fails open: no block, crisis quiet, or an error", async () => {
   const { deps, u } = await busyUser(0.2);
-  expect((await availabilityFor(deps, u, new Date("2026-01-05T14:00:00Z"), "s")).delayMs).toBe(0);
+  expect((await deferWhileBusy(deps, u, new Date("2026-01-05T14:00:00Z"), "s")).delayMs).toBe(0);
   await deps.db
     .update(relationship)
     .set({ crisis_quiet_until: new Date(now.getTime() + 60 * MIN) })
     .where(eq(relationship.user_id, u));
-  expect((await availabilityFor(deps, u, now, "s")).delayMs).toBe(0);
-  expect((await availabilityFor({ ...deps, db: null as never }, u, now, "s")).delayMs).toBe(0);
+  expect((await deferWhileBusy(deps, u, now, "s")).delayMs).toBe(0);
+  expect((await deferWhileBusy({ ...deps, db: null as never }, u, now, "s")).delayMs).toBe(0);
 });

@@ -1,25 +1,31 @@
+/**
+ * A user's message arrives (POST /api/chat). It is stored, then the crisis check and the turn
+ * judge run side by side, and the message joins the buffer with a timer, plus a backchannel or a
+ * busy note when one fits. The reply comes later from the `turn_timer` job. The exception is a
+ * crisis, which is answered right here, in the request.
+ */
 import { randomUUID } from "node:crypto";
-import { getState } from "@/db/repos/conversation-state";
+import { getState, type ConvState } from "@/db/repos/conversation-state";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
 import { setTimezone } from "@/db/repos/users";
 import type { OpenQuestion, SafetyFlag } from "@/db/schema";
-import { composeReply } from "@/mind/process/hot-path/compose";
-import { splitParts } from "@/mind/process/hot-path/split-parts";
-import { receiveTurn, type UserMessageInput } from "@/mind/process/receive/receive-turn";
 import type { CrisisCard } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { ConflictError, errorName, isUniqueViolation } from "@/mind/platform/errors";
-import { deliverPart } from "@/mind/process/deliver";
 import { emit } from "@/mind/platform/events";
-import { markReachOutAnswered } from "@/mind/process/outreach/answered";
 import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/mind/platform/jobs";
-import { checkCrisis, crisisCardFor } from "@/mind/process/crisis/classifier";
-import { isValidTimeZone } from "@/mind/platform/timezone";
-import { withTimeout } from "@/mind/platform/timeout";
-import { availabilityFor, NO_DELAY } from "@/mind/process/availability/deferral";
-import { judgeTurn, logTurnDecision, type TurnVerdict } from "./judge";
 import { seededUnit } from "@/mind/platform/seeded-random";
+import { withTimeout } from "@/mind/platform/timeout";
+import { isValidTimeZone } from "@/mind/platform/timezone";
+import { deferWhileBusy, NO_DELAY, type Availability } from "@/mind/process/availability/deferral";
+import { checkCrisis, crisisCardFor } from "@/mind/process/crisis/classifier";
+import { deliverPart } from "@/mind/process/deliver";
+import { composeReply } from "@/mind/process/hot-path/compose";
+import { splitParts } from "@/mind/process/hot-path/split-parts";
+import { markReachOutAnswered } from "@/mind/process/outreach/answered";
+import { receiveTurn, type UserMessageInput } from "@/mind/process/receive/receive-turn";
+import { judgeTurn, logTurnDecision, type TurnVerdict } from "./judge";
 import { waitWindowMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
@@ -36,30 +42,29 @@ export type ReceiveResult =
 
 const ACCEPTED: ReceiveResult = { status: "accepted" };
 
-/** Bounded, best-effort enqueue: a lost timer is recovered by `turn_sweep`. */
+type Appended = ReturnType<typeof T.append>["result"];
+
+/** Bounded and best effort: a lost timer is recovered by `turn_sweep`. */
 async function enqueueSafely(
   deps: Deps,
   userId: string,
-  fn: () => Promise<void>,
+  enqueue: () => Promise<void>,
   what: string,
 ): Promise<void> {
   try {
-    await withTimeout(fn(), deps.config.queue.enqueue_timeout_ms);
+    await withTimeout(enqueue(), deps.config.queue.enqueue_timeout_ms);
   } catch (e) {
     deps.log.error(`${what} enqueue failed`, { userId, error: errorName(e) });
   }
 }
 
-/**
- * POST /api/chat: receive → crisis check ∥ turn judge → buffer + timer (+ backchannel).
- * Replies are sent later by the `turn_timer` job, except on the crisis path, which replies here.
- */
 export async function receiveMessage(
   deps: Deps,
   userId: string,
   input: UserMessageInput,
 ): Promise<ReceiveResult> {
   const { db, clock, config, log } = deps;
+
   const { turn, existed } = await receiveTurn(deps, userId, input);
   if (turn.role !== "user") throw new ConflictError("message id refers to a companion turn");
 
@@ -69,113 +74,78 @@ export async function receiveMessage(
     );
   }
 
-  // Any NEW user message, crisis included, answers her latest reach-out. Own short transaction on
-  // relationship + reach_out_log only; never holds the conversation_state lock. Run after the crisis decision so a
-  // lock wait here never delays a crisis reply (rule 7: crisis bypasses waits); a crisis runs it once replied.
-  // Retries (`existed`) return before either call site, and never re-mark.
+  // Any new message, crisis included, answers her latest reach-out. It's a short transaction of
+  // its own that never holds the conversation_state lock, and it runs after the crisis decision
+  // so a lock wait never delays a crisis reply. Retries never re-mark.
   const markAnswered = () =>
     existed ? Promise.resolve() : markReachOutAnswered(deps, userId, turn.created_at);
 
-  // Retries: no second judge call.
   let rebuffer = false;
   if (existed) {
-    const s = await getState(db, userId);
-    if (s && (s.buffer_turn_ids.includes(turn.id) || s.inflight_turn_ids.includes(turn.id)))
-      return ACCEPTED;
-    const answered = await sessionLog.answeringReply(db, userId, turn);
-    if (answered) {
-      // Rule 7 outranks "answered → 202": a retried crisis message must still surface the card.
-      if (!answered.safety_flag?.flagged) return ACCEPTED;
-      return {
-        status: "replied",
-        turnId: answered.id,
-        text: answered.text,
-        parts: splitParts(answered.text, config.chat.max_parts),
-        crisisCard: crisisCardFor(answered.safety_flag, config),
-      };
-    }
-    rebuffer = true; // its reply failed: put it back in the buffer
+    const retry = await handleRetry(deps, userId, turn);
+    if (retry !== "rebuffer") return retry;
+    rebuffer = true;
   }
 
-  const window = await sessionLog.turnsUpTo(
+  const contextWindow = await sessionLog.turnsUpTo(
     db,
     userId,
     turn,
     Math.max(config.chat.recent_turns, config.turn.judge_context_turns + 1),
   );
-  const earlier = window.slice(0, -1);
-  const crisis = checkCrisis(deps, turn.text, earlier);
+  const crisisCheck = checkCrisis(deps, turn.text, contextWindow.slice(0, -1));
 
   const state = await getState(db, userId);
   const openBefore = state?.open_questions ?? [];
-  let judgedBufferIds: string[] = [turn.id]; // fix 6: the buffer the judge actually saw, not a fresh getState after the fact
-  const judging: Promise<TurnVerdict | null> = rebuffer
-    ? Promise.resolve(null)
-    : (async () => {
-        const bufferIds = [...(state?.buffer_turn_ids ?? []), turn.id];
-        judgedBufferIds = bufferIds;
-        const buffered = await sessionLog.getTurnsByIds(db, userId, bufferIds);
-        const firstBuffered = buffered[0] ?? turn;
-        const context = (
-          await sessionLog.turnsUpTo(db, userId, firstBuffered, config.turn.judge_context_turns + 1)
-        ).slice(0, -1);
-        return judgeTurn(deps, {
-          context: context.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
-          buffer: buffered.map((t) => ({ text: t.text, at: t.created_at })),
-          openQuestions: openBefore.map((q) => q.text),
-        });
-      })().catch((e: unknown) => {
-        // Settled so a failure here (a DB read; judgeTurn itself never throws) can't reject past the crisis check.
-        // A null verdict is treated as complete, like the cue fallback.
-        log.error("turn judge input failed", { userId, turnId: turn.id, error: errorName(e) });
-        return null;
-      });
+  const judging = rebuffer
+    ? { bufferIds: [turn.id], verdict: Promise.resolve(null) }
+    : startJudging(deps, userId, turn, state, openBefore);
 
-  // Rule 7: a flagged message doesn't wait for the judge's verdict, which it would discard anyway.
-  const flag = await crisis;
+  // A flagged message doesn't wait for the judge, whose verdict it would discard anyway.
+  const flag = await crisisCheck;
   if (flag?.flagged) {
     try {
       return await sendCrisisReply(deps, userId, turn, flag);
     } finally {
-      // After the reply is sent (or failed). Bounded so the POST carrying the card never waits on a lock; a timed-out
+      // Bounded, so the response carrying the crisis card never waits on a lock. A timed-out
       // update still commits in the background (markReachOutAnswered never throws).
       await withTimeout(markAnswered(), config.hot_path.db_timeout_ms).catch((e) =>
         log.error("reach-out answered update slow", { userId, error: errorName(e) }),
       );
     }
   }
+
   await markAnswered();
-  const verdict = await judging;
+  const verdict = await judging.verdict;
 
   const complete = verdict?.complete ?? true;
   const windowMs = waitWindowMs(config.turn, complete, turn.text);
-  // Availability: decided once, on the first message of a buffer. The unlocked `state` read is
-  // fine: `T.append` applies `defer` only if the buffer is still empty under the lock.
+
+  // Availability is decided once, on a buffer's first message. The unlocked `state` read is fine:
+  // `T.append` applies the deferral only if the buffer is still empty under the lock.
   const freshBuffer = !state || state.buffer_turn_ids.length === 0;
-  const avail = freshBuffer ? await availabilityFor(deps, userId, clock.now(), turn.id) : NO_DELAY;
-  const openQuestions: OpenQuestion[] = verdict
-    ? verdict.open_questions.slice(0, config.turn.max_open_questions).map((text) => ({
-        turn_id: openBefore.find((q) => q.text === text)?.turn_id ?? turn.id,
-        text,
-      }))
-    : openBefore;
+  const availability = freshBuffer
+    ? await deferWhileBusy(deps, userId, clock.now(), turn.id)
+    : NO_DELAY;
+
+  const openQuestions = carryOpenQuestions(
+    verdict,
+    openBefore,
+    turn.id,
+    config.turn.max_open_questions,
+  );
   const now = clock.now();
   const defer =
-    avail.delayMs > 0
-      ? { until: new Date(now.getTime() + avail.delayMs), factId: avail.blockFactId }
+    availability.delayMs > 0
+      ? { until: new Date(now.getTime() + availability.delayMs), factId: availability.blockFactId }
       : null;
-  // Rebuffer race (fix 3c): re-check membership and isAnswered inside the lock, so a turn that raced into the
-  // buffer, in flight or answered between the outside check above and here is never re-buffered.
-  const appended = await mutateState(db, userId, now, async (s, tx) => {
-    if (
-      rebuffer &&
-      (s.buffer_turn_ids.includes(turn.id) ||
-        s.inflight_turn_ids.includes(turn.id) ||
-        (await sessionLog.isAnswered(tx, userId, turn)))
-    ) {
-      return T.skip(s, now);
-    }
-    return T.append(s, {
+
+  const appended = await mutateState(db, userId, now, async (locked, tx) => {
+    // Re-checked under the lock: a retried turn that raced into the buffer, into flight, or got
+    // answered since the check above is never re-buffered.
+    if (rebuffer && (await alreadyHandled(locked, tx, userId, turn))) return T.skip(locked, now);
+
+    return T.append(locked, {
       turnId: turn.id,
       now,
       windowMs,
@@ -184,87 +154,202 @@ export async function receiveMessage(
       defer,
     });
   });
+  if (appended.skipped) return ACCEPTED;
 
-  if (!appended.skipped) {
-    await enqueueSafely(
-      deps,
-      userId,
-      () =>
-        deps.queue.enqueue(
-          TURN_TIMER_QUEUE,
-          { userId, version: appended.version },
-          { startAfter: appended.waitUntil },
-        ),
-      "turn_timer",
-    );
+  await enqueueSafely(
+    deps,
+    userId,
+    () =>
+      deps.queue.enqueue(
+        TURN_TIMER_QUEUE,
+        { userId, version: appended.version },
+        { startAfter: appended.waitUntil },
+      ),
+    "turn_timer",
+  );
+  await maybeEnqueueBackchannel(deps, userId, turn, verdict, appended, now);
+  await maybeEnqueueBusyNote(deps, userId, turn, availability, appended, now);
 
-    const deferred = !!appended.deferredUntil && appended.deferredUntil > now; // she isn't reading while busy
-    if (
-      verdict &&
-      !verdict.complete &&
-      verdict.backchannel &&
-      !appended.backchannelSent &&
-      !deferred
-    ) {
-      const style = config.turn.backchannel_style;
-      const want =
-        style === "judge" ||
-        (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
-      const rateOk =
-        !appended.lastBackchannelAt ||
-        now.getTime() - appended.lastBackchannelAt.getTime() >=
-          config.turn.backchannel_min_interval_ms;
-      if (want && rateOk) {
-        await enqueueSafely(
-          deps,
-          userId,
-          () =>
-            deps.queue.enqueue(
-              TURN_BACKCHANNEL_QUEUE,
-              { userId, version: appended.version, text: verdict.backchannel!, turnId: turn.id },
-              { startAfter: new Date(now.getTime() + config.turn.backchannel_read_delay_ms) },
-            ),
-          "turn_backchannel",
-        );
-      }
-    }
-
-    if (appended.deferredNow && avail.note && avail.blockKind && avail.blockStart) {
-      await enqueueSafely(
-        deps,
-        userId,
-        () =>
-          deps.queue.enqueue(
-            TURN_BACKCHANNEL_QUEUE,
-            {
-              userId,
-              version: appended.version,
-              text: "",
-              turnId: turn.id,
-              trigger: "availability",
-              blockKind: avail.blockKind!,
-              blockStart: avail.blockStart!.toISOString(),
-            },
-            { startAfter: new Date(now.getTime() + config.availability.note_read_delay_ms) },
-          ),
-        "availability note",
-      );
-    }
-
-    if (verdict)
-      await logTurnDecision(deps, userId, {
-        turnId: turn.id,
-        bufferTurnIds: judgedBufferIds,
-        verdict,
-        waitMs: windowMs,
-      });
+  if (verdict) {
+    await logTurnDecision(deps, userId, {
+      turnId: turn.id,
+      bufferTurnIds: judging.bufferIds,
+      verdict,
+      waitMs: windowMs,
+    });
   }
   return ACCEPTED;
 }
 
 /**
- * Crisis path (rule 7): no waiting, pacing, backchannel or availability. Snapshots in-flight + buffered
- * turns, bumps the epoch so a paced reply in flight is abandoned, replies in the request and returns the card.
+ * A retried message: already buffered or in flight means nothing to do. Already answered also
+ * means nothing to do, except that a crisis reply must still surface its card. Otherwise its
+ * reply failed, so it goes back in the buffer.
+ */
+async function handleRetry(
+  deps: Deps,
+  userId: string,
+  turn: Turn,
+): Promise<ReceiveResult | "rebuffer"> {
+  const { db, config } = deps;
+
+  const state = await getState(db, userId);
+  if (
+    state &&
+    (state.buffer_turn_ids.includes(turn.id) || state.inflight_turn_ids.includes(turn.id))
+  ) {
+    return ACCEPTED;
+  }
+
+  const answer = await sessionLog.answeringReply(db, userId, turn);
+  if (!answer) return "rebuffer";
+  if (!answer.safety_flag?.flagged) return ACCEPTED;
+
+  return {
+    status: "replied",
+    turnId: answer.id,
+    text: answer.text,
+    parts: splitParts(answer.text, config.chat.max_parts),
+    crisisCard: crisisCardFor(answer.safety_flag, config),
+  };
+}
+
+/**
+ * Starts the turn judge over the buffer as it stands plus this message, and remembers exactly
+ * which buffer it saw for the log. A failure reading its input settles as a null verdict (treated
+ * as complete, like the cue fallback), so it can never reject past the crisis check.
+ */
+function startJudging(
+  deps: Deps,
+  userId: string,
+  turn: Turn,
+  state: ConvState | null,
+  openBefore: OpenQuestion[],
+): { bufferIds: string[]; verdict: Promise<TurnVerdict | null> } {
+  const { db, config, log } = deps;
+  const bufferIds = [...(state?.buffer_turn_ids ?? []), turn.id];
+
+  const verdict = (async () => {
+    const buffered = await sessionLog.getTurnsByIds(db, userId, bufferIds);
+    const firstBuffered = buffered[0] ?? turn;
+    const context = (
+      await sessionLog.turnsUpTo(db, userId, firstBuffered, config.turn.judge_context_turns + 1)
+    ).slice(0, -1);
+
+    return judgeTurn(deps, {
+      context: context.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      buffer: buffered.map((t) => ({ text: t.text, at: t.created_at })),
+      openQuestions: openBefore.map((q) => q.text),
+    });
+  })().catch((e: unknown) => {
+    log.error("turn judge input failed", { userId, turnId: turn.id, error: errorName(e) });
+    return null;
+  });
+
+  return { bufferIds, verdict };
+}
+
+/** Keeps each open question's original turn when it was already open; new ones point here. */
+function carryOpenQuestions(
+  verdict: TurnVerdict | null,
+  openBefore: OpenQuestion[],
+  turnId: string,
+  max: number,
+): OpenQuestion[] {
+  if (!verdict) return openBefore;
+
+  return verdict.open_questions.slice(0, max).map((text) => ({
+    turn_id: openBefore.find((q) => q.text === text)?.turn_id ?? turnId,
+    text,
+  }));
+}
+
+async function alreadyHandled(
+  state: ConvState,
+  tx: Deps["db"],
+  userId: string,
+  turn: Turn,
+): Promise<boolean> {
+  if (state.buffer_turn_ids.includes(turn.id)) return true;
+  if (state.inflight_turn_ids.includes(turn.id)) return true;
+  return sessionLog.isAnswered(tx, userId, turn);
+}
+
+/** Only mid-thought, once per buffer, rate-limited, and never while she's busy and not reading. */
+async function maybeEnqueueBackchannel(
+  deps: Deps,
+  userId: string,
+  turn: Turn,
+  verdict: TurnVerdict | null,
+  appended: Appended,
+  now: Date,
+): Promise<void> {
+  const { config } = deps;
+
+  const deferred = !!appended.deferredUntil && appended.deferredUntil > now;
+  if (!verdict || verdict.complete || !verdict.backchannel) return;
+  if (appended.backchannelSent || deferred) return;
+
+  const style = config.turn.backchannel_style;
+  const wanted =
+    style === "judge" ||
+    (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
+  const rateOk =
+    !appended.lastBackchannelAt ||
+    now.getTime() - appended.lastBackchannelAt.getTime() >= config.turn.backchannel_min_interval_ms;
+  if (!wanted || !rateOk) return;
+
+  const text = verdict.backchannel;
+  await enqueueSafely(
+    deps,
+    userId,
+    () =>
+      deps.queue.enqueue(
+        TURN_BACKCHANNEL_QUEUE,
+        { userId, version: appended.version, text, turnId: turn.id },
+        { startAfter: new Date(now.getTime() + config.turn.backchannel_read_delay_ms) },
+      ),
+    "turn_backchannel",
+  );
+}
+
+/** The short "busy, later?" note, when this message just started a deferral that wants one. */
+async function maybeEnqueueBusyNote(
+  deps: Deps,
+  userId: string,
+  turn: Turn,
+  availability: Availability,
+  appended: Appended,
+  now: Date,
+): Promise<void> {
+  const { blockKind, blockStart } = availability;
+  if (!appended.deferredNow || !availability.note || !blockKind || !blockStart) return;
+
+  await enqueueSafely(
+    deps,
+    userId,
+    () =>
+      deps.queue.enqueue(
+        TURN_BACKCHANNEL_QUEUE,
+        {
+          userId,
+          version: appended.version,
+          text: "",
+          turnId: turn.id,
+          trigger: "availability",
+          blockKind,
+          blockStart: blockStart.toISOString(),
+        },
+        { startAfter: new Date(now.getTime() + deps.config.availability.note_read_delay_ms) },
+      ),
+    "availability note",
+  );
+}
+
+/**
+ * The crisis path: no waiting, pacing, backchannel or availability. It takes the in-flight and
+ * buffered turns, bumps the epoch so any paced reply in progress is abandoned, replies inside
+ * the request, and returns the resources card.
  */
 export async function sendCrisisReply(
   deps: Deps,
@@ -274,15 +359,20 @@ export async function sendCrisisReply(
 ): Promise<ReceiveResult> {
   const { db, clock, config, log } = deps;
   const now = clock.now();
-  const snap = await mutateState(db, userId, now, (s) => T.crisis(s, { turnId: userTurn.id, now }));
-  const turns = await sessionLog.getTurnsByIds(db, userId, snap.turnIds);
+
+  const snapshot = await mutateState(db, userId, now, (state) =>
+    T.crisis(state, { turnId: userTurn.id, now }),
+  );
+  const turns = await sessionLog.getTurnsByIds(db, userId, snapshot.turnIds);
   const answering = turns.length ? turns : [userTurn];
-  const replyTo = answering.at(-1)!.id; // fix 5: the snapshot's last turn, not necessarily the POSTed one
+  // The snapshot's last turn, which isn't necessarily the one just posted.
+  const replyTo = answering.at(-1)!.id;
+
   const composed = await composeReply(deps, userId, { turns: answering, openQuestions: [], flag });
 
-  let companion: Turn;
+  let reply: Turn;
   try {
-    companion = await sessionLog.insertTurn(db, userId, {
+    reply = await sessionLog.insertTurn(db, userId, {
       id: randomUUID(),
       session_id: userTurn.session_id,
       role: "companion",
@@ -293,23 +383,24 @@ export async function sendCrisisReply(
     });
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;
-    // A concurrent retry already inserted the reply: return its result verbatim, with none of this candidate's
-    // side effects (it was never sent) — no emit, no cold-path enqueue, no guard log.
+    // A concurrent retry already replied. Return its reply as is, with none of this candidate's
+    // side effects (it was never sent): no emit, no cold path, no guard log.
     const winner = await sessionLog.getReplyTo(db, userId, replyTo);
     if (!winner) throw e;
-    const winnerParts = splitParts(winner.text, config.chat.max_parts);
     return {
       status: "replied",
       turnId: winner.id,
       text: winner.text,
-      parts: winnerParts,
+      parts: splitParts(winner.text, config.chat.max_parts),
       crisisCard: crisisCardFor(winner.safety_flag, config),
     };
   }
+
   const parts = composed.parts;
-  for (let i = 0; i < parts.length; i++)
-    await deliverPart(deps, userId, { turnId: companion.id, part: i, parts, generic: true });
-  // A paced reply this abandoned may still show typing until its next epoch check; rule 7: no lingering dots.
+  for (let part = 0; part < parts.length; part++) {
+    await deliverPart(deps, userId, { turnId: reply.id, part, parts, generic: true });
+  }
+  // An abandoned paced reply may still show typing until its next epoch check; clear the dots now.
   await emit(deps, userId, { type: "typing", on: false });
 
   await enqueueSafely(
@@ -318,19 +409,20 @@ export async function sendCrisisReply(
     () =>
       deps.queue.enqueue(COLD_PATH_QUEUE, {
         userId,
-        turnIds: [...answering.map((t) => t.id), companion.id],
-        replyTurnId: companion.id,
+        turnIds: [...answering.map((t) => t.id), reply.id],
+        replyTurnId: reply.id,
         recalled: composed.recalled,
       }),
     "cold_path",
   );
   await composed.writeGuardLog();
-  log.info("crisis reply sent", { userId, turnId: companion.id });
+
+  log.info("crisis reply sent", { userId, turnId: reply.id });
   return {
     status: "replied",
-    turnId: companion.id,
-    text: companion.text,
+    turnId: reply.id,
+    text: reply.text,
     parts,
-    crisisCard: crisisCardFor(companion.safety_flag, config),
+    crisisCard: crisisCardFor(reply.safety_flag, config),
   };
 }

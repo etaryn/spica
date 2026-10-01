@@ -24,3 +24,5 @@ design doc's layout section.
 | `applyRelationship` | `updateRelationship` | `src/mind/state/user/relationship/update.ts` |
 | `relationshipTick` | `relationshipDailyTick` | `src/mind/state/user/relationship/daily-tick.ts` |
 | `toRelState` | `toRelationshipState` | `src/db/repos/relationship.ts` |
+| `availabilityFor` | `deferWhileBusy` | `src/mind/process/availability/deferral.ts` |
+| (closure `fail`) | `retryOrGiveUp` (internal) | `src/mind/process/turn-taking/commit-and-reply.ts` |

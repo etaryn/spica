@@ -1,13 +1,19 @@
-import * as rel from "@/db/repos/relationship";
+/**
+ * Availability: when a message lands while she's busy or in a quiet block, the reply waits. How
+ * long depends on how busy she is and how close she is to this user. A close enough friend gets
+ * answered as usual; a mid-closeness one gets a short "busy, later?" note first. It fails open:
+ * any error means no delay, and a crisis is never deferred.
+ */
+import * as relationshipRepo from "@/db/repos/relationship";
 import * as sessionLog from "@/db/repos/session-log";
 import type { AvailabilityConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import { blockAt, listLifeBlocks, type BlockFact } from "@/mind/world/legacy-life-tick/blocks";
-import { lifeDate } from "@/mind/world/her-clock";
-import { fadeParams } from "@/mind/state/user/relationship/params";
-import { withTimeout } from "@/mind/platform/timeout";
 import { seededUnit } from "@/mind/platform/seeded-random";
+import { withTimeout } from "@/mind/platform/timeout";
+import { fadeParams } from "@/mind/state/user/relationship/params";
+import { lifeDate } from "@/mind/world/her-clock";
+import { blockAt, listLifeBlocks, type BlockFact } from "@/mind/world/legacy-life-tick/blocks";
 
 export type Availability = {
   delayMs: number;
@@ -16,6 +22,7 @@ export type Availability = {
   blockStart: Date | null;
   note: boolean;
 };
+
 export const NO_DELAY: Availability = {
   delayMs: 0,
   blockFactId: null,
@@ -25,67 +32,73 @@ export const NO_DELAY: Availability = {
 };
 
 /**
- * how long a message waits because she's busy. Closeness is the value, not the effect;
- * at or above `override_closeness` she answers as usual. Capped at the block's end.
+ * busy × (1 − closeness / override) × max delay, jittered by `unit` (0–1), and capped at the
+ * block's end. Closeness is the param's value, not its deviation. At or above
+ * `override_closeness` there's no delay.
  */
 export function availabilityDelay(
   block: Pick<BlockFact, "busy" | "block" | "end">,
   closeness: number,
   now: Date,
-  u: number,
-  cfg: AvailabilityConfig,
+  unit: number,
+  settings: AvailabilityConfig,
 ): number {
-  if (closeness >= cfg.override_closeness) return 0;
-  const max = block.block === "quiet" ? cfg.quiet_max_delay_ms : cfg.max_delay_ms;
-  const raw =
-    block.busy *
-    (1 - closeness / cfg.override_closeness) *
-    max *
-    (1 - cfg.jitter + 2 * cfg.jitter * u);
-  return Math.max(0, Math.round(Math.min(raw, block.end.getTime() - now.getTime())));
+  if (closeness >= settings.override_closeness) return 0;
+
+  const maxDelay = block.block === "quiet" ? settings.quiet_max_delay_ms : settings.max_delay_ms;
+  const distance = 1 - closeness / settings.override_closeness;
+  const jitter = 1 - settings.jitter + 2 * settings.jitter * unit;
+  const delay = block.busy * distance * maxDelay * jitter;
+
+  const untilBlockEnds = block.end.getTime() - now.getTime();
+  return Math.max(0, Math.round(Math.min(delay, untilBlockEnds)));
 }
 
-/** a mid-closeness friend gets a short note first; a low-closeness one just waits. */
+/** A mid-closeness friend gets a short note first; a low-closeness one just waits. */
 export function wantsNote(
   delayMs: number,
   closeness: number,
   alreadyNoted: boolean,
-  cfg: AvailabilityConfig,
+  settings: AvailabilityConfig,
 ): boolean {
-  return !alreadyNoted && delayMs >= cfg.note_min_delay_ms && closeness >= cfg.note_min_closeness;
+  if (alreadyNoted) return false;
+  return delayMs >= settings.note_min_delay_ms && closeness >= settings.note_min_closeness;
 }
 
-async function compute(
+async function decideAvailability(
   deps: Pick<Deps, "db" | "config">,
   userId: string,
   now: Date,
   seed: string,
 ): Promise<Availability> {
   const { db, config } = deps;
+
   const block = blockAt(await listLifeBlocks(db, userId, lifeDate(config.life, now)), now);
   if (!block) return NO_DELAY;
-  const row = await rel.getRelationshipRow(db, userId);
-  if (!row) return NO_DELAY;
-  if (row.crisis_quiet_until && row.crisis_quiet_until > now) return NO_DELAY; // rule 7
-  const closeness = fadeParams(await rel.getParams(db, userId), now, config.relationship).closeness
-    .value;
+
+  const relationship = await relationshipRepo.getRelationshipRow(db, userId);
+  if (!relationship) return NO_DELAY;
+  // Nothing waits while a crisis is still recent.
+  if (relationship.crisis_quiet_until && relationship.crisis_quiet_until > now) return NO_DELAY;
+
+  const params = fadeParams(await relationshipRepo.getParams(db, userId), now, config.relationship);
+  const closeness = params.closeness.value;
+
   const delayMs = availabilityDelay(block, closeness, now, seededUnit(seed), config.availability);
   if (delayMs === 0) return NO_DELAY;
-  const noted = await sessionLog.hasTriggerSince(db, userId, "availability", block.start);
+
+  const alreadyNoted = await sessionLog.hasTriggerSince(db, userId, "availability", block.start);
   return {
     delayMs,
     blockFactId: block.id,
     blockKind: block.block,
     blockStart: block.start,
-    note: wantsNote(delayMs, closeness, noted, config.availability),
+    note: wantsNote(delayMs, closeness, alreadyNoted, config.availability),
   };
 }
 
-/**
- * Called once per buffer, for the first message of a non-crisis buffer. Fails open: any error or
- * timeout means no delay, so a DB hiccup never silences her. The crisis path never calls it.
- */
-export async function availabilityFor(
+/** Called once, for the first message of a buffer. The crisis path never calls it. */
+export async function deferWhileBusy(
   deps: Pick<Deps, "db" | "config" | "log">,
   userId: string,
   now: Date,
@@ -93,7 +106,7 @@ export async function availabilityFor(
 ): Promise<Availability> {
   try {
     return await withTimeout(
-      Promise.resolve().then(() => compute(deps, userId, now, seed)),
+      Promise.resolve().then(() => decideAvailability(deps, userId, now, seed)),
       deps.config.hot_path.db_timeout_ms,
     );
   } catch (e) {

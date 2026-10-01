@@ -1,55 +1,64 @@
+/**
+ * Commit and reply: the `turn_timer` job commits the buffer and composes one reply to all of it,
+ * then sends it at a human pace: a read delay, typing, then each bubble. The reply is generated
+ * during the read delay, so model latency is hidden inside time she'd spend reading anyway. A
+ * crisis meanwhile (an epoch bump) abandons the reply, both before it is inserted and between
+ * bubbles. Also runs the `turn_backchannel` job.
+ */
 import { randomUUID } from "node:crypto";
 import { getState } from "@/db/repos/conversation-state";
 import * as sessionLog from "@/db/repos/session-log";
 import type { Turn } from "@/db/repos/session-log";
-import { composeReply, type Composed } from "@/mind/process/hot-path/compose";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import { deliverPart } from "@/mind/process/deliver";
 import { emit } from "@/mind/platform/events";
-import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import {
   COLD_PATH_QUEUE,
   TURN_TIMER_QUEUE,
   type BackchannelJob,
   type TurnTimerJob,
 } from "@/mind/platform/jobs";
-import { runAvailabilityNote } from "@/mind/process/availability/busy-note";
-import { withTimeout } from "@/mind/platform/timeout";
 import { seededUnit } from "@/mind/platform/seeded-random";
+import { withTimeout } from "@/mind/platform/timeout";
+import { runAvailabilityNote } from "@/mind/process/availability/busy-note";
+import { deliverPart } from "@/mind/process/deliver";
+import { guardOutgoing } from "@/mind/process/guard/outgoing";
+import { composeReply, type Composed } from "@/mind/process/hot-path/compose";
 import { readDelayMs, sleepUntil, typingMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 
-const plus = (d: Date, ms: number) => new Date(d.getTime() + ms);
+type TimerOutcome = "stale" | "busy" | "sent" | "abandoned" | "retry" | "failed";
+type Committed = Extract<T.CommitResult, { kind: "commit" }>;
+type Settled<V> = { ok: true; value: V } | { ok: false; error: unknown };
 
-async function enqueueSafely(deps: Deps, userId: string, fn: () => Promise<void>, what: string) {
+function plus(at: Date, ms: number): Date {
+  return new Date(at.getTime() + ms);
+}
+
+async function enqueueSafely(
+  deps: Deps,
+  userId: string,
+  enqueue: () => Promise<void>,
+  what: string,
+): Promise<void> {
   try {
-    await withTimeout(fn(), deps.config.queue.enqueue_timeout_ms);
+    await withTimeout(enqueue(), deps.config.queue.enqueue_timeout_ms);
   } catch (e) {
     deps.log.error(`${what} enqueue failed`, { userId, error: errorName(e) });
   }
 }
 
-/**
- * turn_timer: commit the buffer, compose one reply to all of it, and send it on a
- * target timeline (read delay → typing → bubbles). Generation runs during the read delay, so model and guard
- * latency is absorbed as typing time. A crisis reply meanwhile (epoch bump) abandons this one: before the
- * insert via `finish`'s epoch/turn check, or between bubbles via an explicit re-read, so every later bubble
- * stops, not just the first (rule 7: crisis suspends all friction).
- */
-export async function runTurnTimer(
-  deps: Deps,
-  job: TurnTimerJob,
-): Promise<"stale" | "busy" | "sent" | "abandoned" | "retry" | "failed"> {
-  const { db, clock, config, log } = deps;
+export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<TimerOutcome> {
+  const { db, clock, config } = deps;
   const { userId } = job;
   const commitAt = clock.now();
-  const c = await mutateState(db, userId, commitAt, (s) =>
-    T.commit(s, { version: job.version, now: commitAt }),
+
+  const committed = await mutateState(db, userId, commitAt, (state) =>
+    T.commit(state, { version: job.version, now: commitAt }),
   );
-  if (c.kind === "stale") return "stale";
-  if (c.kind === "busy") {
+  if (committed.kind === "stale") return "stale";
+  if (committed.kind === "busy") {
     await enqueueSafely(
       deps,
       userId,
@@ -62,207 +71,244 @@ export async function runTurnTimer(
     return "busy";
   }
 
+  // Test seam: lets a test fail the read of the committed turns.
   const getTurns =
     (deps as { getTurnsByIds?: typeof sessionLog.getTurnsByIds }).getTurnsByIds ??
     sessionLog.getTurnsByIds;
 
-  /**
-   * A post-commit infrastructure error (before the reply row exists) must not strand the committed turns in
-   * limbo: put them back in the buffer and queue a retry, same as a generation failure. Past
-   * `retry_limit`, give up instead — no reply row exists yet, so `reply_failed` is still correct there.
-   */
-  const fail = async (e: unknown): Promise<"retry" | "abandoned" | "failed"> => {
-    log.error("turn timer failed after commit", { userId, error: errorName(e) });
-    const attempt = job.attempt ?? 0;
-    const now = clock.now();
-    if (attempt < config.turn.retry_limit) {
-      const r = await mutateState(db, userId, now, (s) =>
-        T.restore(s, {
-          epoch: c.epoch,
-          turnIds: c.turnIds,
-          now,
-          retryAt: plus(now, config.turn.retry_delay_ms),
-        }),
-      );
-      if (r.kind === "abandoned") return "abandoned";
-      await enqueueSafely(
-        deps,
-        userId,
-        () =>
-          deps.queue.enqueue(
-            TURN_TIMER_QUEUE,
-            { userId, version: r.version, attempt: attempt + 1 },
-            { startAfter: plus(now, config.turn.retry_delay_ms) },
-          ),
-        "turn_timer",
-      );
-      return "retry";
-    }
-    const cleared = await mutateState(db, userId, now, (s) => T.giveUp(s, { epoch: c.epoch, now }));
-    if (!cleared) return "abandoned";
-    await emit(deps, userId, { type: "reply_failed", turnIds: c.turnIds });
-    return "failed";
-  };
-
   let turns: Turn[];
   try {
-    turns = await getTurns(db, userId, c.turnIds);
+    turns = await getTurns(db, userId, committed.turnIds);
   } catch (e) {
-    return fail(e);
+    return retryOrGiveUp(deps, job, committed, e);
   }
+
   const last = turns.at(-1);
   if (!last) {
-    await mutateState(db, userId, clock.now(), (s) =>
-      T.giveUp(s, { epoch: c.epoch, now: clock.now() }),
+    await mutateState(db, userId, clock.now(), (state) =>
+      T.giveUp(state, { epoch: committed.epoch, now: clock.now() }),
     );
     return "abandoned";
   }
 
-  const bufferChars = turns.reduce((n, t) => n + t.text.length, 0);
+  const bufferChars = turns.reduce((total, t) => total + t.text.length, 0);
   const typingAt = plus(commitAt, readDelayMs(config.turn, bufferChars, seededUnit(last.id)));
 
-  // Generate during the read delay; settle so a rejection never goes unhandled while we sleep.
-  const composing: Promise<{ ok: true; value: Composed } | { ok: false; error: unknown }> =
-    composeReply(deps, userId, {
-      turns,
-      openQuestions: c.openQuestions,
-      flag: null,
-      deferredFact: c.deferredFact,
-    }).then(
-      (value) => ({ ok: true as const, value }),
-      (error: unknown) => ({ ok: false as const, error }),
-    );
+  // Compose during the read delay. Settled, so a rejection is never unhandled while we sleep.
+  const composing: Promise<Settled<Composed>> = composeReply(deps, userId, {
+    turns,
+    openQuestions: committed.openQuestions,
+    flag: null,
+    deferredFact: committed.deferredFact,
+  }).then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
 
   await sleepUntil(clock, typingAt);
   await emit(deps, userId, { type: "typing", on: true });
 
-  // Everything past this point has emitted typing:on, so typing:off must be emitted on every exit — including
-  // an unexpected infrastructure error, which still rethrows (for pg-boss to retry) after the finally runs.
-  // stopTyping is idempotent so the normal "sent" path (which emits it right after the last bubble, to keep
-  // it out of the outgoing-message ordering) doesn't also double-emit it from the finally below.
+  return sendWhileTyping(deps, job, committed, last, typingAt, composing);
+}
+
+/**
+ * Everything after typing:on. Typing:off goes out on every exit, including an unexpected error
+ * (which still rethrows for pg-boss to retry). Once the reply row exists and is marked sending,
+ * the marker is released on every exit too.
+ */
+async function sendWhileTyping(
+  deps: Deps,
+  job: TurnTimerJob,
+  committed: Committed,
+  last: Turn,
+  typingAt: Date,
+  composing: Promise<Settled<Composed>>,
+): Promise<TimerOutcome> {
+  const { db, clock, config, log } = deps;
+  const { userId } = job;
+
   let typingOn = true;
-  let sending = false; // set once the reply row is in and finish marked it sending; cleared by release below
+  let sending = false;
   const stopTyping = async () => {
     if (!typingOn) return;
     typingOn = false;
     await emit(deps, userId, { type: "typing", on: false });
   };
+
   try {
     const composed = await composing;
-
     if (!composed.ok) {
       log.error("turn reply failed", { userId, turnId: last.id, error: errorName(composed.error) });
-      return await fail(composed.error);
+      return await retryOrGiveUp(deps, job, committed, composed.error);
     }
 
-    const { parts } = composed.value;
+    const reply = composed.value;
+    const { parts } = reply;
     let sendAt = plus(typingAt, typingMs(config.turn, parts[0]?.length ?? 0));
 
-    // finish + the insert share one transaction: `insertReplyIfAbsent` never throws on a `reply_to` collision
-    // (ON CONFLICT DO NOTHING), so a concurrent duplicate can't abort this transaction out from under the
-    // `finish` patch that clears inflight. `companion` stays `undefined` unless the transaction commits, so a
-    // thrown error here (nothing persisted, transactional) is still safe to restore and retry; an
-    // error after that point (companion assigned) rethrows as before.
-    let companion: Turn | null | undefined;
+    // `finish` and the insert share one transaction. The insert never throws on a duplicate
+    // (ON CONFLICT DO NOTHING), so a concurrent duplicate can't abort the transaction from under
+    // `finish`. `inserted` stays undefined unless the transaction commits, so an error before then
+    // persisted nothing and is safe to retry.
+    let inserted: Turn | null | undefined;
     try {
       await sleepUntil(clock, sendAt);
       const insertAt = clock.now();
-      companion = await mutateState<Turn | null>(db, userId, insertAt, async (s, tx) => {
-        const step = T.finish(s, { epoch: c.epoch, turnIds: c.turnIds, now: insertAt });
+      inserted = await mutateState<Turn | null>(db, userId, insertAt, async (state, tx) => {
+        const step = T.finish(state, {
+          epoch: committed.epoch,
+          turnIds: committed.turnIds,
+          now: insertAt,
+        });
         if (!step.result) return { patch: null, result: null };
+
         const row = await sessionLog.insertReplyIfAbsent(tx, userId, {
           id: randomUUID(),
           session_id: last.session_id,
           role: "companion",
-          text: composed.value.text,
+          text: reply.text,
           created_at: insertAt,
           reply_to: last.id,
         });
         return { patch: step.patch, result: row };
       });
     } catch (e) {
-      if (companion === undefined) return await fail(e);
+      if (inserted === undefined) return await retryOrGiveUp(deps, job, committed, e);
       throw e;
     }
-    sending = companion !== null;
-    if (!companion) {
-      // Either a crisis covered these turns first (finish's epoch/turn check) or a concurrent duplicate job
-      // already inserted the reply — either way, nothing more to send, but the guard check still ran.
-      await composed.value.writeGuardLog();
+
+    sending = inserted !== null;
+    if (!inserted) {
+      // A crisis covered these turns first, or a duplicate job already replied. Nothing to send,
+      // but the guard check still ran and is logged.
+      await reply.writeGuardLog();
       return "abandoned";
     }
 
-    await deliverPart(deps, userId, { turnId: companion.id, part: 0, parts });
-    for (let i = 1; i < parts.length; i++) {
-      sendAt = plus(
-        new Date(Math.max(sendAt.getTime(), clock.now().getTime())),
-        config.turn.part_gap_ms + typingMs(config.turn, parts[i]!.length),
-      );
+    await deliverPart(deps, userId, { turnId: inserted.id, part: 0, parts });
+
+    for (let part = 1; part < parts.length; part++) {
+      const from = new Date(Math.max(sendAt.getTime(), clock.now().getTime()));
+      sendAt = plus(from, config.turn.part_gap_ms + typingMs(config.turn, parts[part]!.length));
       await sleepUntil(clock, sendAt);
-      // Re-read right after the pacing sleep, immediately before this bubble's emit: the part-gap + typing
-      // wait (seconds) is the likeliest window for a crisis to land, so checking before the sleep (as the
-      // round 1 fix did) would still let this bubble out. The already-inserted reply and any earlier bubbles
-      // stay — only what hasn't gone out yet is abandoned.
-      const cur = await getState(db, userId);
-      if (!cur || cur.reply_epoch !== c.epoch) {
-        await composed.value.writeGuardLog();
+
+      // Checked after the pacing sleep, right before the bubble: those seconds are when a crisis
+      // is likeliest to land. Bubbles already sent stay; only the rest are abandoned.
+      const current = await getState(db, userId);
+      if (!current || current.reply_epoch !== committed.epoch) {
+        await reply.writeGuardLog();
         return "abandoned";
       }
-      await deliverPart(deps, userId, { turnId: companion.id, part: i, parts });
+      await deliverPart(deps, userId, { turnId: inserted.id, part, parts });
     }
-    await stopTyping(); // emit typing:off right after the last bubble, before the cold-path enqueue and guard log
 
+    // Right after the last bubble, before the cold path and the guard log.
+    await stopTyping();
+
+    const replyId = inserted.id;
     await enqueueSafely(
       deps,
       userId,
       () =>
         deps.queue.enqueue(COLD_PATH_QUEUE, {
           userId,
-          turnIds: [...c.turnIds, companion.id],
-          replyTurnId: companion.id,
-          recalled: composed.value.recalled,
+          turnIds: [...committed.turnIds, replyId],
+          replyTurnId: replyId,
+          recalled: reply.recalled,
         }),
       "cold_path",
     );
-    await composed.value.writeGuardLog(); // judge_log after the send
+    await reply.writeGuardLog();
     return "sent";
   } finally {
     try {
       await stopTyping();
     } finally {
-      if (sending) {
-        // Release the sending marker on every exit, errors included; if this fails, turn_sweep clears it after
-        // turn.job_expire_seconds (the reply row already exists, so nothing is re-buffered).
-        try {
-          const at = clock.now();
-          await mutateState(db, userId, at, (s) => T.release(s, { epoch: c.epoch, now: at }));
-        } catch (e) {
-          log.error("turn release failed", { userId, error: errorName(e) });
-        }
-      }
+      if (sending) await releaseSending(deps, userId, committed.epoch);
     }
   }
 }
 
-/** turn_backchannel: once per buffer, rate-limited, keyword-guarded, never a memory. */
+/** If this fails, turn_sweep clears the marker later; the reply row exists, so nothing is re-buffered. */
+async function releaseSending(deps: Deps, userId: string, epoch: number): Promise<void> {
+  try {
+    const at = deps.clock.now();
+    await mutateState(deps.db, userId, at, (state) => T.release(state, { epoch, now: at }));
+  } catch (e) {
+    deps.log.error("turn release failed", { userId, error: errorName(e) });
+  }
+}
+
+/**
+ * A failure after commit and before the reply row exists must not strand the committed turns.
+ * They go back in the buffer with a retry queued. Past `retry_limit` it gives up instead, and
+ * since no reply row exists yet, `reply_failed` is the right thing to tell the client.
+ */
+async function retryOrGiveUp(
+  deps: Deps,
+  job: TurnTimerJob,
+  committed: Committed,
+  error: unknown,
+): Promise<"retry" | "abandoned" | "failed"> {
+  const { db, clock, config, log } = deps;
+  const { userId } = job;
+  log.error("turn timer failed after commit", { userId, error: errorName(error) });
+
+  const attempt = job.attempt ?? 0;
+  const now = clock.now();
+
+  if (attempt < config.turn.retry_limit) {
+    const retryAt = plus(now, config.turn.retry_delay_ms);
+    const restored = await mutateState(db, userId, now, (state) =>
+      T.restore(state, { epoch: committed.epoch, turnIds: committed.turnIds, now, retryAt }),
+    );
+    if (restored.kind === "abandoned") return "abandoned";
+
+    await enqueueSafely(
+      deps,
+      userId,
+      () =>
+        deps.queue.enqueue(
+          TURN_TIMER_QUEUE,
+          { userId, version: restored.version, attempt: attempt + 1 },
+          { startAfter: retryAt },
+        ),
+      "turn_timer",
+    );
+    return "retry";
+  }
+
+  const cleared = await mutateState(db, userId, now, (state) =>
+    T.giveUp(state, { epoch: committed.epoch, now }),
+  );
+  if (!cleared) return "abandoned";
+
+  await emit(deps, userId, { type: "reply_failed", turnIds: committed.turnIds });
+  return "failed";
+}
+
+/** `turn_backchannel`: once per buffer, rate-limited, keyword-guarded, and never a memory. */
 export async function runBackchannel(
   deps: Deps,
   job: BackchannelJob,
 ): Promise<"sent" | "skipped" | "dropped"> {
   if (job.trigger === "availability") return runAvailabilityNote(deps, job);
+
   const { db, clock, config } = deps;
   const now = clock.now();
-  const ok = await mutateState(db, job.userId, now, (s) =>
-    T.backchannel(s, {
+
+  const allowed = await mutateState(db, job.userId, now, (state) =>
+    T.backchannel(state, {
       version: job.version,
       now,
       minIntervalMs: config.turn.backchannel_min_interval_ms,
     }),
   );
-  if (!ok) return "skipped";
+  if (!allowed) return "skipped";
 
+  // Without the turn there's nothing to attach it to or read recent context from.
   const anchor = await sessionLog.getTurn(db, job.userId, job.turnId);
-  if (!anchor) return "skipped"; // no turn to attach it to or read recent context from
+  if (!anchor) return "skipped";
 
   const recent = await sessionLog.turnsUpTo(db, job.userId, anchor, config.chat.recent_turns);
   const guarded = await guardOutgoing(deps, {
@@ -281,24 +327,35 @@ export async function runBackchannel(
     return "dropped";
   }
 
-  // Re-check the buffer version under the row lock at insert time: the guard check above ran unlocked, so a
-  // newer message may have started a fresh buffer while it was in flight, making this backchannel stale.
+  // The guard ran unlocked, so a newer message may have started a fresh buffer meanwhile, making
+  // this backchannel stale. Re-check the version under the lock at insert time.
   const insertAt = clock.now();
-  const bc = await mutateState<Turn | null>(db, job.userId, insertAt, async (s, tx) => {
-    if (s.buffer_version !== job.version) return { patch: null, result: null };
-    const row = await sessionLog.insertTurn(tx, job.userId, {
-      id: randomUUID(),
-      session_id: anchor.session_id,
-      role: "companion",
-      text: guarded.text,
-      created_at: insertAt,
-      trigger: "backchannel",
-      extracted: true,
-    });
-    return { patch: null, result: row };
-  });
+  const backchannel = await mutateState<Turn | null>(
+    db,
+    job.userId,
+    insertAt,
+    async (state, tx) => {
+      if (state.buffer_version !== job.version) return { patch: null, result: null };
+
+      const row = await sessionLog.insertTurn(tx, job.userId, {
+        id: randomUUID(),
+        session_id: anchor.session_id,
+        role: "companion",
+        text: guarded.text,
+        created_at: insertAt,
+        trigger: "backchannel",
+        extracted: true,
+      });
+      return { patch: null, result: row };
+    },
+  );
   await guarded.writeLog();
-  if (!bc) return "skipped";
-  await deliverPart(deps, job.userId, { turnId: bc.id, part: 0, parts: [bc.text] });
+  if (!backchannel) return "skipped";
+
+  await deliverPart(deps, job.userId, {
+    turnId: backchannel.id,
+    part: 0,
+    parts: [backchannel.text],
+  });
   return "sent";
 }

@@ -1,22 +1,35 @@
+/**
+ * Pacing: how long she waits for more messages, how long she takes to read, and how long she
+ * types, so replies arrive at a human pace instead of instantly.
+ */
 import type { Clock } from "@/mind/platform/clock";
 import type { TurnConfig } from "@/mind/platform/config";
 
+/** ±15% jitter around the base read delay. */
+const JITTER_FLOOR = 0.85;
+const JITTER_SPAN = 0.3;
+
 /** How long to wait for more messages after this one, before any stretch. */
-export function waitWindowMs(t: TurnConfig, complete: boolean, lastText: string): number {
-  if (complete) return t.settle_ms;
-  return t.wait_ms + (lastText.trim().length < t.short_message_chars ? t.short_wait_bonus_ms : 0);
+export function waitWindowMs(settings: TurnConfig, complete: boolean, lastText: string): number {
+  if (complete) return settings.settle_ms;
+
+  const isShort = lastText.trim().length < settings.short_message_chars;
+  return settings.wait_ms + (isShort ? settings.short_wait_bonus_ms : 0);
 }
 
-/** Read delay, interpolated by how much there is to read, with ±15% jitter, clamped to [min, max]. */
-export function readDelayMs(t: TurnConfig, bufferChars: number, unit: number): number {
-  const frac = Math.min(1, bufferChars / t.read_delay_chars_for_max);
-  const base = t.read_delay_min_ms + (t.read_delay_max_ms - t.read_delay_min_ms) * frac;
-  const jittered = base * (0.85 + 0.3 * unit);
-  return Math.round(Math.min(t.read_delay_max_ms, Math.max(t.read_delay_min_ms, jittered)));
+/** Longer the more there is to read, jittered by `unit` (0–1), clamped to [min, max]. */
+export function readDelayMs(settings: TurnConfig, bufferChars: number, unit: number): number {
+  const { read_delay_min_ms: min, read_delay_max_ms: max } = settings;
+
+  const fraction = Math.min(1, bufferChars / settings.read_delay_chars_for_max);
+  const base = min + (max - min) * fraction;
+  const jittered = base * (JITTER_FLOOR + JITTER_SPAN * unit);
+
+  return Math.round(Math.min(max, Math.max(min, jittered)));
 }
 
-export function typingMs(t: TurnConfig, chars: number): number {
-  return Math.round(Math.min(t.typing_max_ms, chars * t.typing_ms_per_char));
+export function typingMs(settings: TurnConfig, chars: number): number {
+  return Math.round(Math.min(settings.typing_max_ms, chars * settings.typing_ms_per_char));
 }
 
 export async function sleepUntil(clock: Clock, at: Date): Promise<void> {

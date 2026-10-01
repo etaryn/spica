@@ -1,84 +1,99 @@
+/**
+ * Turn-taking as pure transitions of one user's conversation_state: append a message to the
+ * buffer, commit the buffer for a reply, finish and release the send, restore after a failure,
+ * clear everything for a crisis, and recover after a crash. Each returns the patch to write
+ * (null for no write) and a result; `mutateState` applies it under the row lock.
+ */
 import type { ConvState, StatePatch } from "@/db/repos/conversation-state";
 import type { OpenQuestion } from "@/db/schema";
 
-/**
- * Pure conversation_state transitions. Each returns the patch to write (null = no write) and a
- * result; `mutateState` applies them inside one short transaction holding the row lock.
- */
 export type Step<R> = { patch: StatePatch | null; result: R };
 
-const uniq = (ids: string[]) => [...new Set(ids)];
-
-/** Order-independent set equality, for checking an inflight snapshot still matches what a caller expects. */
-function sameIds(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const sa = [...a].sort();
-  const sb = [...b].sort();
-  return sa.every((v, i) => v === sb[i]);
+function unique(ids: string[]): string[] {
+  return [...new Set(ids)];
 }
 
-/** No state change: the turn is already accounted for elsewhere (in flight, or answered under the lock). */
-export function skip(s: ConvState, now: Date) {
+/** Order-independent equality, to check an inflight snapshot still matches what a caller expects. */
+function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, i) => id === sortedB[i]);
+}
+
+/** No change: the turn is already accounted for (in flight, or answered under the lock). */
+export function skip(state: ConvState, now: Date) {
   return {
     patch: null,
     result: {
-      version: s.buffer_version,
-      waitUntil: s.wait_until ?? now,
-      backchannelSent: s.backchannel_sent,
-      lastBackchannelAt: s.last_backchannel_at,
+      version: state.buffer_version,
+      waitUntil: state.wait_until ?? now,
+      backchannelSent: state.backchannel_sent,
+      lastBackchannelAt: state.last_backchannel_at,
       skipped: true,
-      deferredUntil: s.deferred_until,
+      deferredUntil: state.deferred_until,
       deferredNow: false,
     },
   } satisfies Step<unknown>;
 }
 
+/**
+ * Adds a message to the buffer and pushes the timer out by the wait window, capped at
+ * `maxWaitMs` from the buffer's start. A deferral (she's busy) overrides that cap, so messages
+ * sent while she's busy pile into one buffer.
+ */
 export function append(
-  s: ConvState,
-  a: {
+  state: ConvState,
+  input: {
     turnId: string;
     now: Date;
     windowMs: number;
     maxWaitMs: number;
     openQuestions: OpenQuestion[];
-    /** Availability: only applied to the first turn of a buffer. */
+    /** Availability: only applied to the first message of a buffer. */
     defer?: { until: Date; factId: string | null } | null;
   },
 ) {
-  // A race with a reply already in flight for this turn (a forward-looking guard): never re-buffer
-  // a turn that's mid-reply, or it could be answered twice once the turn_timer job (Task 8) exists.
-  if (s.inflight_turn_ids.includes(a.turnId)) return skip(s, a.now);
-  const fresh = s.buffer_turn_ids.length === 0;
-  const started = fresh ? a.now : (s.buffer_started_at ?? a.now);
-  const capped = Math.min(a.now.getTime() + a.windowMs, started.getTime() + a.maxWaitMs);
-  // A deferral overrides the max-wait cap: messages sent while she's busy pile into one buffer.
-  const deferredUntil = fresh ? (a.defer?.until ?? null) : s.deferred_until;
+  // Never re-buffer a message that's mid-reply, or it could be answered twice.
+  if (state.inflight_turn_ids.includes(input.turnId)) return skip(state, input.now);
+
+  const fresh = state.buffer_turn_ids.length === 0;
+  const startedAt = fresh ? input.now : (state.buffer_started_at ?? input.now);
+  const capped = Math.min(
+    input.now.getTime() + input.windowMs,
+    startedAt.getTime() + input.maxWaitMs,
+  );
+
+  const deferredUntil = fresh ? (input.defer?.until ?? null) : state.deferred_until;
   const waitUntil = new Date(deferredUntil ? Math.max(capped, deferredUntil.getTime()) : capped);
-  const version = s.buffer_version + 1;
+  const version = state.buffer_version + 1;
+
+  const freshBufferFields = fresh
+    ? {
+        backchannel_sent: false,
+        deferred_until: input.defer?.until ?? null,
+        deferred_fact: input.defer?.factId ?? null,
+      }
+    : {};
+
   return {
     patch: {
-      buffer_turn_ids: uniq([...s.buffer_turn_ids, a.turnId]),
-      buffer_started_at: started,
-      open_questions: a.openQuestions,
+      buffer_turn_ids: unique([...state.buffer_turn_ids, input.turnId]),
+      buffer_started_at: startedAt,
+      open_questions: input.openQuestions,
       buffer_version: version,
       wait_until: waitUntil,
-      updated_at: a.now,
-      ...(fresh
-        ? {
-            backchannel_sent: false,
-            deferred_until: a.defer?.until ?? null,
-            deferred_fact: a.defer?.factId ?? null,
-          }
-        : {}),
+      updated_at: input.now,
+      ...freshBufferFields,
     },
     result: {
       version,
       waitUntil,
-      backchannelSent: fresh ? false : s.backchannel_sent,
-      lastBackchannelAt: s.last_backchannel_at,
+      backchannelSent: fresh ? false : state.backchannel_sent,
+      lastBackchannelAt: state.last_backchannel_at,
       skipped: false,
       deferredUntil,
-      deferredNow: fresh && !!a.defer,
+      deferredNow: fresh && !!input.defer,
     },
   } satisfies Step<unknown>;
 }
@@ -94,100 +109,121 @@ export type CommitResult =
       deferredFact: string | null;
     };
 
-export function commit(s: ConvState, a: { version: number; now: Date }): Step<CommitResult> {
-  if (s.buffer_version !== a.version || s.buffer_turn_ids.length === 0)
+/** Moves the buffer in flight for one reply, if the timer's version is still current. */
+export function commit(
+  state: ConvState,
+  input: { version: number; now: Date },
+): Step<CommitResult> {
+  if (state.buffer_version !== input.version || state.buffer_turn_ids.length === 0) {
     return { patch: null, result: { kind: "stale" } };
-  // A reply still sending its later bubbles counts as busy too, or a follow-up would interleave with them.
-  if (s.inflight_turn_ids.length > 0 || s.sending_since)
+  }
+  // A reply still sending its later bubbles counts as busy, or a follow-up would interleave.
+  if (state.inflight_turn_ids.length > 0 || state.sending_since) {
     return { patch: null, result: { kind: "busy" } };
+  }
+
   return {
     patch: {
-      inflight_turn_ids: s.buffer_turn_ids,
-      inflight_since: a.now,
+      inflight_turn_ids: state.buffer_turn_ids,
+      inflight_since: input.now,
       buffer_turn_ids: [],
       buffer_started_at: null,
       wait_until: null,
       backchannel_sent: false,
       deferred_until: null,
       deferred_fact: null,
-      buffer_version: s.buffer_version + 1,
-      updated_at: a.now,
+      buffer_version: state.buffer_version + 1,
+      updated_at: input.now,
     },
     result: {
       kind: "commit",
-      turnIds: s.buffer_turn_ids,
-      epoch: s.reply_epoch,
-      openQuestions: s.open_questions.map((q) => q.text),
-      deferredFact: s.deferred_fact,
+      turnIds: state.buffer_turn_ids,
+      epoch: state.reply_epoch,
+      openQuestions: state.open_questions.map((q) => q.text),
+      deferredFact: state.deferred_fact,
     },
   };
 }
 
 /**
- * Just before the paced reply is inserted: false when a crisis reply went out meanwhile,
- * or when the inflight snapshot no longer matches the turns this call is responsible for (someone else's
- * commit already occupies the slot) — either way, inflight is left untouched rather than cleared out from
- * under whoever does own it. On success the turns leave inflight (the reply row now answers them) and the
- * reply is marked sending until `release`, so no follow-up commits while its later bubbles go out.
+ * Just before the paced reply is inserted. False when a crisis reply went out meanwhile, or when
+ * the inflight snapshot no longer matches these turns (someone else's commit holds the slot); in
+ * both cases inflight is left alone rather than cleared from under its owner. On success the turns
+ * leave inflight (the reply now answers them) and the reply is marked sending until `release`,
+ * so nothing new commits while its later bubbles go out.
  */
 export function finish(
-  s: ConvState,
-  a: { epoch: number; turnIds: string[]; now: Date },
+  state: ConvState,
+  input: { epoch: number; turnIds: string[]; now: Date },
 ): Step<boolean> {
-  if (s.reply_epoch !== a.epoch) return { patch: null, result: false };
-  if (!sameIds(s.inflight_turn_ids, a.turnIds)) return { patch: null, result: false };
+  if (state.reply_epoch !== input.epoch) return { patch: null, result: false };
+  if (!sameIds(state.inflight_turn_ids, input.turnIds)) return { patch: null, result: false };
+
   return {
-    patch: { inflight_turn_ids: [], inflight_since: null, sending_since: a.now, updated_at: a.now },
+    patch: {
+      inflight_turn_ids: [],
+      inflight_since: null,
+      sending_since: input.now,
+      updated_at: input.now,
+    },
     result: true,
   };
 }
 
 /**
- * After the last bubble (or on any exit once the reply was inserted): clears the sending marker. A crisis
- * meanwhile already cleared it and may have let a newer reply set its own, so only the same epoch releases.
+ * After the last bubble, or on any exit once the reply was inserted, clears the sending marker.
+ * A crisis may have cleared it already and let a newer reply set its own, so only the same epoch
+ * releases.
  */
-export function release(s: ConvState, a: { epoch: number; now: Date }): Step<boolean> {
-  if (s.reply_epoch !== a.epoch || !s.sending_since) return { patch: null, result: false };
-  return { patch: { sending_since: null, updated_at: a.now }, result: true };
+export function release(state: ConvState, input: { epoch: number; now: Date }): Step<boolean> {
+  if (state.reply_epoch !== input.epoch || !state.sending_since) {
+    return { patch: null, result: false };
+  }
+  return { patch: { sending_since: null, updated_at: input.now }, result: true };
 }
 
+/**
+ * Puts the turns back in the buffer to retry at `retryAt`. That can answer a still-deferred
+ * buffer before `deferred_until`: it fails open on purpose.
+ */
 export function restore(
-  s: ConvState,
-  a: { epoch: number; turnIds: string[]; now: Date; retryAt: Date },
+  state: ConvState,
+  input: { epoch: number; turnIds: string[]; now: Date; retryAt: Date },
 ): Step<{ kind: "abandoned" } | { kind: "restored"; version: number }> {
-  if (s.reply_epoch !== a.epoch) return { patch: null, result: { kind: "abandoned" } };
-  const version = s.buffer_version + 1;
-  // Setting wait_until to retryAt can answer a still-deferred buffer before deferred_until: fails open by design.
+  if (state.reply_epoch !== input.epoch) return { patch: null, result: { kind: "abandoned" } };
+
+  const version = state.buffer_version + 1;
   return {
     patch: {
-      buffer_turn_ids: uniq([...a.turnIds, ...s.buffer_turn_ids]),
+      buffer_turn_ids: unique([...input.turnIds, ...state.buffer_turn_ids]),
       inflight_turn_ids: [],
       inflight_since: null,
-      buffer_started_at: s.buffer_started_at ?? a.now,
+      buffer_started_at: state.buffer_started_at ?? input.now,
       buffer_version: version,
-      wait_until: a.retryAt,
-      updated_at: a.now,
+      wait_until: input.retryAt,
+      updated_at: input.now,
     },
     result: { kind: "restored", version },
   };
 }
 
 /**
- * After `turn.retry_limit` failures: the turns stay unanswered and unbuffered; a client retry re-buffers them.
- * Returns false (no patch) when a crisis bumped the epoch meanwhile — the crisis reply already covers these
- * turns, so the caller must not also report `reply_failed` for them.
+ * After `turn.retry_limit` failures the turns stay unanswered and unbuffered; a client retry
+ * re-buffers them. False when a crisis bumped the epoch meanwhile: the crisis reply covers these
+ * turns, so the caller must not also report `reply_failed`.
  */
-export function giveUp(s: ConvState, a: { epoch: number; now: Date }): Step<boolean> {
-  if (s.reply_epoch !== a.epoch) return { patch: null, result: false };
+export function giveUp(state: ConvState, input: { epoch: number; now: Date }): Step<boolean> {
+  if (state.reply_epoch !== input.epoch) return { patch: null, result: false };
   return {
-    patch: { inflight_turn_ids: [], inflight_since: null, updated_at: a.now },
+    patch: { inflight_turn_ids: [], inflight_since: null, updated_at: input.now },
     result: true,
   };
 }
 
+/** A crisis clears everything and bumps the epoch, which abandons any paced reply in progress. */
 export function crisis(
-  s: ConvState,
-  a: { turnId: string; now: Date },
+  state: ConvState,
+  input: { turnId: string; now: Date },
 ): Step<{ turnIds: string[] }> {
   return {
     patch: {
@@ -201,76 +237,91 @@ export function crisis(
       open_questions: [],
       deferred_until: null,
       deferred_fact: null,
-      buffer_version: s.buffer_version + 1,
-      reply_epoch: s.reply_epoch + 1,
-      updated_at: a.now,
+      buffer_version: state.buffer_version + 1,
+      reply_epoch: state.reply_epoch + 1,
+      updated_at: input.now,
     },
-    result: { turnIds: uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids, a.turnId]) },
+    result: {
+      turnIds: unique([...state.inflight_turn_ids, ...state.buffer_turn_ids, input.turnId]),
+    },
   };
 }
 
+/** At most one backchannel per buffer, rate-limited across buffers. */
 export function backchannel(
-  s: ConvState,
-  a: { version: number; now: Date; minIntervalMs: number },
+  state: ConvState,
+  input: { version: number; now: Date; minIntervalMs: number },
 ): Step<boolean> {
-  const rateOk =
-    !s.last_backchannel_at || a.now.getTime() - s.last_backchannel_at.getTime() >= a.minIntervalMs;
-  const ok =
-    s.buffer_version === a.version && s.buffer_turn_ids.length > 0 && !s.backchannel_sent && rateOk;
-  return ok
-    ? {
-        patch: { backchannel_sent: true, last_backchannel_at: a.now, updated_at: a.now },
-        result: true,
-      }
-    : { patch: null, result: false };
+  const lastAt = state.last_backchannel_at;
+  const rateOk = !lastAt || input.now.getTime() - lastAt.getTime() >= input.minIntervalMs;
+  const allowed =
+    state.buffer_version === input.version &&
+    state.buffer_turn_ids.length > 0 &&
+    !state.backchannel_sent &&
+    rateOk;
+
+  if (!allowed) return { patch: null, result: false };
+  return {
+    patch: { backchannel_sent: true, last_backchannel_at: input.now, updated_at: input.now },
+    result: true,
+  };
 }
 
+/**
+ * After a crash. A stuck inflight reply goes back in the buffer. A crashed sender's reply row
+ * already exists, so only its marker is cleared, never re-buffered. Any buffer that waited
+ * behind it is requeued now. Setting wait_until to now can answer a still-deferred buffer
+ * early: it fails open on purpose.
+ */
 export function recover(
-  s: ConvState,
-  a: { now: Date; graceMs: number; inflightMaxAgeMs: number },
+  state: ConvState,
+  input: { now: Date; graceMs: number; inflightMaxAgeMs: number },
 ): Step<{ version: number | null }> {
-  const t = a.now.getTime();
-  const stuck =
-    s.inflight_turn_ids.length > 0 &&
-    !!s.inflight_since &&
-    t - s.inflight_since.getTime() > a.inflightMaxAgeMs;
-  // A crashed sender: its reply row exists, so only the marker is cleared (never re-buffered). Any buffer
-  // that waited behind it is requeued now.
-  const sendingStuck = !!s.sending_since && t - s.sending_since.getTime() > a.inflightMaxAgeMs;
-  const overdue =
-    s.buffer_turn_ids.length > 0 && (!s.wait_until || t - s.wait_until.getTime() > a.graceMs);
-  if (!stuck && !overdue && !(sendingStuck && s.buffer_turn_ids.length > 0)) {
+  const now = input.now.getTime();
+  const hasBuffer = state.buffer_turn_ids.length > 0;
+
+  const inflightStuck =
+    state.inflight_turn_ids.length > 0 &&
+    !!state.inflight_since &&
+    now - state.inflight_since.getTime() > input.inflightMaxAgeMs;
+  const sendingStuck =
+    !!state.sending_since && now - state.sending_since.getTime() > input.inflightMaxAgeMs;
+  const bufferOverdue =
+    hasBuffer && (!state.wait_until || now - state.wait_until.getTime() > input.graceMs);
+
+  const needsRequeue = inflightStuck || bufferOverdue || (sendingStuck && hasBuffer);
+  if (!needsRequeue) {
     return sendingStuck
-      ? { patch: { sending_since: null, updated_at: a.now }, result: { version: null } }
+      ? { patch: { sending_since: null, updated_at: input.now }, result: { version: null } }
       : { patch: null, result: { version: null } };
   }
-  const version = s.buffer_version + 1;
-  // Setting wait_until to now can answer a still-deferred buffer before deferred_until: fails open by design.
+
+  const version = state.buffer_version + 1;
   return {
     patch: {
-      buffer_turn_ids: stuck
-        ? uniq([...s.inflight_turn_ids, ...s.buffer_turn_ids])
-        : s.buffer_turn_ids,
-      ...(stuck ? { inflight_turn_ids: [], inflight_since: null } : {}),
+      buffer_turn_ids: inflightStuck
+        ? unique([...state.inflight_turn_ids, ...state.buffer_turn_ids])
+        : state.buffer_turn_ids,
+      ...(inflightStuck ? { inflight_turn_ids: [], inflight_since: null } : {}),
       ...(sendingStuck ? { sending_since: null } : {}),
-      buffer_started_at: s.buffer_started_at ?? a.now,
+      buffer_started_at: state.buffer_started_at ?? input.now,
       buffer_version: version,
-      wait_until: a.now,
-      updated_at: a.now,
+      wait_until: input.now,
+      updated_at: input.now,
     },
     result: { version },
   };
 }
 
 /**
- * The availability note: allowed only while this buffer's deferral is still pending.
- * Not version-checked (later messages join the same deferred buffer) and sets nothing: once-per-block is read
- * from session_log.
+ * The availability note is allowed only while this buffer's deferral is still pending. Not
+ * version-checked (later messages join the same deferred buffer), and it sets nothing: "once per
+ * block" is read from session_log.
  */
-export function availabilityNote(s: ConvState, a: { now: Date }): Step<boolean> {
-  const ok =
-    !!s.deferred_until &&
-    s.deferred_until.getTime() > a.now.getTime() &&
-    s.buffer_turn_ids.length > 0;
-  return { patch: null, result: ok };
+export function availabilityNote(state: ConvState, input: { now: Date }): Step<boolean> {
+  const allowed =
+    !!state.deferred_until &&
+    state.deferred_until.getTime() > input.now.getTime() &&
+    state.buffer_turn_ids.length > 0;
+  return { patch: null, result: allowed };
 }

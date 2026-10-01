@@ -1,3 +1,8 @@
+/**
+ * The turn judge: one cheap model call asks "has the user finished what they're saying?" It
+ * returns whether the buffer looks complete, which questions are still open, and optionally a
+ * tiny backchannel ("wait what"). It never fails: an outage falls back to the keyword cue check.
+ */
 import { z } from "zod";
 import { insertJudgeLogs } from "@/db/repos/judge-log";
 import type { Deps } from "@/mind/platform/deps";
@@ -11,6 +16,7 @@ export type JudgeInput = {
   buffer: { text: string; at: Date }[];
   openQuestions: string[];
 };
+
 export type TurnVerdict = {
   complete: boolean;
   open_questions: string[];
@@ -22,7 +28,7 @@ export type TurnVerdict = {
   promptVersion: string;
 };
 
-/** `reasoning` first, as with the guard: the model states what the user is doing before it labels. */
+/** `reasoning` comes first, so the model says what the user is doing before it labels it. */
 export const TurnVerdictSchema = z.object({
   reasoning: z.string(),
   complete: z.boolean(),
@@ -33,27 +39,35 @@ export const TurnVerdictSchema = z.object({
 export const BUFFER_MARKER = "NEW MESSAGES (not yet replied to), oldest first:\n";
 const OPEN_MARKER = "OPEN QUESTIONS (asked, not yet answered by Spica):\n";
 
+const SECONDS_SHOWN_AS_SECONDS = 90;
+const SECONDS_SHOWN_AS_MINUTES = 5400;
+
 function ago(at: Date, now: Date): string {
-  const s = Math.max(0, Math.round((now.getTime() - at.getTime()) / 1000));
-  if (s < 90) return `${s}s ago`;
-  if (s < 5400) return `${Math.round(s / 60)} min ago`;
-  return `${Math.round(s / 3600)} h ago`;
+  const seconds = Math.max(0, Math.round((now.getTime() - at.getTime()) / 1000));
+  if (seconds < SECONDS_SHOWN_AS_SECONDS) return `${seconds}s ago`;
+  if (seconds < SECONDS_SHOWN_AS_MINUTES) return `${Math.round(seconds / 60)} min ago`;
+  return `${Math.round(seconds / 3600)} h ago`;
 }
 
 export function renderJudgeInput(input: JudgeInput, now: Date): string {
   const context = input.context
     .map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text} (${ago(t.at, now)})`)
     .join("\n");
+
   const open = input.openQuestions.length
     ? input.openQuestions.map((q) => `- ${q}`).join("\n")
     : "- (none)";
+
   const buffer = input.buffer
-    .map((m, i) => {
-      const gap =
-        i === 0 ? 0 : Math.round((m.at.getTime() - input.buffer[i - 1]!.at.getTime()) / 1000);
-      return `- (+${gap}s) ${m.text}`;
+    .map((message, i) => {
+      const previous = input.buffer[i - 1];
+      const gapSeconds = previous
+        ? Math.round((message.at.getTime() - previous.at.getTime()) / 1000)
+        : 0;
+      return `- (+${gapSeconds}s) ${message.text}`;
     })
     .join("\n");
+
   return [
     `EARLIER CONVERSATION (already replied to):\n${context || "(nothing yet)"}`,
     `${OPEN_MARKER}${open}`,
@@ -61,24 +75,25 @@ export function renderJudgeInput(input: JudgeInput, now: Date): string {
   ].join("\n\n");
 }
 
-/** Parses a rendered input back into buffer texts and open questions (fake judge only). */
+/** Reads a rendered input back into buffer texts and open questions (the fake judge only). */
 function parseRendered(input: string): { buffer: string[]; open: string[] } {
   const section = (marker: string) => {
-    const i = input.indexOf(marker);
-    if (i === -1) return [];
-    const body = input.slice(i + marker.length).split("\n\n")[0] ?? "";
+    const start = input.indexOf(marker);
+    if (start === -1) return [];
+    const body = input.slice(start + marker.length).split("\n\n")[0] ?? "";
     return body
       .split("\n")
-      .filter((l) => l.startsWith("- "))
-      .map((l) => l.slice(2));
+      .filter((line) => line.startsWith("- "))
+      .map((line) => line.slice(2));
   };
+
   return {
-    buffer: section(BUFFER_MARKER).map((l) => l.replace(/^\(\+\d+s\) /, "")),
+    buffer: section(BUFFER_MARKER).map((line) => line.replace(/^\(\+\d+s\) /, "")),
     open: section(OPEN_MARKER).filter((q) => q !== "(none)"),
   };
 }
 
-/** `FakeLLMProvider` handler for purpose "turn_judge": the cue check over the rendered buffer. */
+/** The fake model's "turn_judge" handler: the cue check over the rendered buffer. */
 export function fakeTurnJudge(cues: string[]) {
   return (input: string) => {
     const { buffer, open } = parseRendered(input);
@@ -86,17 +101,17 @@ export function fakeTurnJudge(cues: string[]) {
   };
 }
 
-/** The cheap `context_complete?` judge. Never rejects: an outage falls back to the cue check. */
 export async function judgeTurn(
   deps: Pick<Deps, "llm" | "config" | "clock">,
   input: JudgeInput,
 ): Promise<TurnVerdict> {
   const { llm, config, clock } = deps;
   const promptVersion = `turn-judge@${config.prompts.turn_judge}`;
-  const start = clock.now().getTime();
-  const elapsed = () => clock.now().getTime() - start;
+  const startedAt = clock.now().getTime();
+  const elapsed = () => clock.now().getTime() - startedAt;
+
   try {
-    const r = await withTimeout(
+    const verdict = await withTimeout(
       llm.classifyJson({
         purpose: "turn_judge",
         model: "turn_judge",
@@ -108,28 +123,26 @@ export async function judgeTurn(
       }),
       config.turn.judge_timeout_ms,
     );
-    const bc = r.backchannel?.trim() ?? "";
-    const backchannel =
-      !r.complete && bc && bc.split(/\s+/).length <= config.turn.backchannel_max_words ? bc : null;
+
     return {
-      complete: r.complete,
-      open_questions: r.open_questions.slice(0, config.turn.max_open_questions),
-      backchannel,
-      reasoning: r.reasoning,
+      complete: verdict.complete,
+      open_questions: verdict.open_questions.slice(0, config.turn.max_open_questions),
+      backchannel: usableBackchannel(verdict, config.turn.backchannel_max_words),
+      reasoning: verdict.reasoning,
       source: "model",
       latencyMs: elapsed(),
       error: null,
       promptVersion,
     };
   } catch (e) {
-    const v = cueVerdict(
+    const fallback = cueVerdict(
       input.buffer.map((m) => m.text),
       input.openQuestions,
       config.turn.incomplete_cues,
     );
     return {
-      ...v,
-      open_questions: v.open_questions.slice(0, config.turn.max_open_questions),
+      ...fallback,
+      open_questions: fallback.open_questions.slice(0, config.turn.max_open_questions),
       reasoning: null,
       source: "keyword_fallback",
       latencyMs: elapsed(),
@@ -139,53 +152,62 @@ export async function judgeTurn(
   }
 }
 
-/** One judge_log row per decision. Ids and question text only; bounded; never rejects. */
+/** A backchannel only makes sense mid-thought, and only if it's tiny. */
+function usableBackchannel(
+  verdict: { complete: boolean; backchannel: string | null },
+  maxWords: number,
+): string | null {
+  const text = verdict.backchannel?.trim() ?? "";
+  if (verdict.complete || !text) return null;
+  return text.split(/\s+/).length <= maxWords ? text : null;
+}
+
+/** One judge_log row per decision: ids and question text only. Bounded in time; never rejects. */
 export async function logTurnDecision(
   deps: Pick<Deps, "db" | "config" | "clock" | "log">,
   userId: string,
-  a: { turnId: string; bufferTurnIds: string[]; verdict: TurnVerdict; waitMs: number },
+  decision: { turnId: string; bufferTurnIds: string[]; verdict: TurnVerdict; waitMs: number },
 ): Promise<void> {
-  const v = a.verdict;
+  const { verdict } = decision;
   const output =
-    v.source === "model"
+    verdict.source === "model"
       ? {
-          reasoning: v.reasoning,
-          complete: v.complete,
-          open_questions: v.open_questions,
-          backchannel: v.backchannel,
-          wait_ms: a.waitMs,
+          reasoning: verdict.reasoning,
+          complete: verdict.complete,
+          open_questions: verdict.open_questions,
+          backchannel: verdict.backchannel,
+          wait_ms: decision.waitMs,
         }
       : {
-          error: v.error,
-          complete: v.complete,
-          open_questions: v.open_questions,
-          wait_ms: a.waitMs,
+          error: verdict.error,
+          complete: verdict.complete,
+          open_questions: verdict.open_questions,
+          wait_ms: decision.waitMs,
         };
+
+  const row = {
+    kind: "turn" as const,
+    turn_id: decision.turnId,
+    attempt: 1,
+    input: { buffer_turn_ids: decision.bufferTurnIds, open_questions: verdict.open_questions },
+    output,
+    outcome: null,
+    source: verdict.source,
+    latency_ms: verdict.latencyMs,
+    model: deps.config.models.turn_judge,
+    prompt_version: verdict.promptVersion,
+    created_at: deps.clock.now(),
+  };
+
   try {
     await withTimeout(
-      Promise.resolve().then(() =>
-        insertJudgeLogs(deps.db, userId, [
-          {
-            kind: "turn",
-            turn_id: a.turnId,
-            attempt: 1,
-            input: { buffer_turn_ids: a.bufferTurnIds, open_questions: v.open_questions },
-            output,
-            outcome: null,
-            source: v.source,
-            latency_ms: v.latencyMs,
-            model: deps.config.models.turn_judge,
-            prompt_version: v.promptVersion,
-            created_at: deps.clock.now(),
-          },
-        ]),
-      ),
+      Promise.resolve().then(() => insertJudgeLogs(deps.db, userId, [row])),
       deps.config.guard.log_timeout_ms,
     );
   } catch (e) {
     deps.log.error("judge_log write failed", {
       userId,
-      turnId: a.turnId,
+      turnId: decision.turnId,
       kind: "turn",
       error: errorName(e),
     });

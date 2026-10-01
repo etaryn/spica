@@ -1,11 +1,18 @@
-/** A new session starts when the gap since the user's previous turn exceeds the idle gap. */
+/**
+ * Sessions: a user's messages belong to the same session until they go quiet for longer than
+ * the idle gap.
+ */
+
+const MINUTE = 60_000;
+
 export function resolveSessionId(
-  prev: { session_id: string; created_at: Date } | null,
+  previous: { session_id: string; created_at: Date } | null,
   now: Date,
   idleGapMinutes: number,
   newId: () => string,
 ): string {
-  if (prev && now.getTime() - prev.created_at.getTime() <= idleGapMinutes * 60_000)
-    return prev.session_id;
-  return newId();
+  if (!previous) return newId();
+
+  const gapMs = now.getTime() - previous.created_at.getTime();
+  return gapMs <= idleGapMinutes * MINUTE ? previous.session_id : newId();
 }

@@ -1,7 +1,6 @@
 # v3 restructure: design
 
-Date: 2026-10-01. Status: approved in conversation, pending review of this
-document.
+Date: 2026-10-01. Status: implemented on branch v3-restructure.
 
 ## Purpose
 

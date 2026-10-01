@@ -231,11 +231,21 @@ only); backchannel style global `judge`; shared day plan; reach-out caps
 - **No explicit engagement features.**
 
 ## Working conventions
-- Layout: `src/core` is framework-free (no Next imports, no `Date.now()`,
-  no `process.env`; use injected `Deps`); `src/db` schema + `userId`-first
-  repos; `src/app` Next.js; `src/worker` pg-boss; `prompts/`; `evals/`.
+- Layout: `src/mind` is framework-free (no Next imports, no `Date.now()`,
+  no `process.env`; use injected `Deps`), organised by engine: `memory/`,
+  `state/`, `world/`, `process/`, plus `platform/` (LLM, embedder, clock,
+  config, jobs). Each engine splits into `core/` and `user/`; ESLint stops
+  core and world code importing user code. `src/db` schema + repos in
+  `user/` (`userId`-first), `world/`, `admin/` (cross-user); `src/runtime`
+  Node implementations; `src/server` Next server helpers; `src/app`
+  Next.js; `src/worker` pg-boss, one file per engine; `prompts/`; `evals/`.
+  The per-user ego and life tick sit in `state/legacy-ego/` and
+  `world/legacy-life-tick/` until the mind split replaces them.
+- Style: Prettier at 100 columns; every file starts with a short plain-English
+  header in v3 terms; names follow v3's vocabulary (renames log:
+  `docs/2026-10-01-v3-restructure-renames.md`).
 - Timestamps come from the injected `Clock`; never `DEFAULT now()`.
-- Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+- Commands: `pnpm typecheck`, `pnpm lint` (ESLint + Prettier), `pnpm format`, `pnpm test`,
   `pnpm eval --llm=fake --compare`; `pnpm db:up`, `pnpm db:migrate` (dev
   DB only; tests migrate their own), `pnpm worker`, `pnpm db:reset-self`
   (dev only; refuses a non-local DB).

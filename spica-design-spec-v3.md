@@ -295,10 +295,10 @@ are **the same in kind and differ in cadence and scope.**
 | Models | Behind `LLMProvider`: replies `claude-sonnet-5`; extraction, classifiers, judges, the guard, life and core loops `claude-haiku-4-5`. IDs in config (`models.*`) |
 | Embeddings | Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder` |
 | Auth | Better Auth, email and password, 18+ enforced server-side |
-| Layout | `src/core` framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`); `src/db` schema and `userId`-first repos; `src/app` Next.js; `src/worker` pg-boss; `prompts/`; `evals/` |
+| Layout | `src/mind`: framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`), organised by engine (`memory`, `state`, `world`, `process`) plus `platform` (LLM, embedder, clock, config, jobs, events, push), each engine split into `core/` and `user/`; an ESLint rule stops core and world code importing user code (V2). `src/db`: schema and repos split into `user/` (`userId`-first), `world/` and `admin/` (cross-user, workers and the inspector). `src/runtime`: the Node implementations (pg-boss, Postgres event bus, Web Push). `src/server`: Next server helpers (auth, session, inspector access). `src/app` Next.js; `src/worker` pg-boss, one registration file per engine; `prompts/`; `evals/` |
 | Time | Every timestamp comes from the injected `Clock`; never `DEFAULT now()` |
 
-Commands: `pnpm typecheck`, `pnpm lint`, `pnpm test`,
+Commands: `pnpm typecheck`, `pnpm lint` (ESLint and Prettier), `pnpm format`, `pnpm test`,
 `pnpm eval --llm=fake --compare`, `pnpm db:up`, `pnpm db:migrate`,
 `pnpm worker`, `pnpm db:reset-self` (dev only).
 
@@ -615,7 +615,7 @@ at most `user_mind.max_triggers_per_day` per user. Each writes a
 
 ### 10.1 Turn-taking (Built)
 
-She does not answer one message at a time. Code: `src/core/turn/`.
+She does not answer one message at a time. Code: `src/mind/process/turn-taking/`.
 
 - **Receive** (`POST /api/chat`, idempotent on `clientMessageId`): store the
   turn; the crisis check and the turn judge run in parallel.
@@ -650,7 +650,7 @@ pushes a generic notification body.
 
 ### 10.3 Hot path: reply composition (Changes in v3)
 
-`composeFrom` (`src/core/chat/compose-reply.ts`) serves replies, the crisis
+`composeFrom` (`src/mind/process/hot-path/compose.ts`) serves replies, the crisis
 path and reach-outs. It is read-only; one generation, plus one guard check
 when the guard is on.
 
@@ -743,7 +743,7 @@ user's normal), `variance`, and
 for a user becomes normal and stops standing out; deviations from this
 user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
 `tension`, `msgs_per_day`, extensible. Every change writes a
-`relationship_event`. Code: `src/core/relationship/`.
+`relationship_event`. Code: `src/mind/state/user/relationship/`.
 
 - **Signals** from extraction move values (with a dead zone, diminishing
   returns on positives, sensitisation for repeated hurt within a window, and
@@ -841,7 +841,7 @@ account deletion removes everything.
 ## 13. Proactive outreach (Built; Changes in v3)
 
 An hourly `outreach_tick` builds candidates in code and a send gate decides.
-Code: `src/core/outreach/`.
+Code: `src/mind/process/outreach/`.
 
 - **Candidates** (`score = weight × strength`, threshold `outreach.threshold`
   0.2): `thread` (due, stakes high or med), `make_up` (due), `user_event`

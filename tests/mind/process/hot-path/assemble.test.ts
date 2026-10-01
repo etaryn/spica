@@ -8,6 +8,8 @@ import { resolveSessionId } from "@/mind/process/receive/session";
 const now = new Date("2026-01-12T12:00:00Z");
 const base = {
   valuesDoc: "VALUES",
+  snapshot: null,
+  coreMemories: [],
   feelingLine: null,
   relationshipSummary: null,
   retrieval: emptyRetrieval(),
@@ -89,7 +91,7 @@ describe("assemblePrompt", () => {
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(p.system).toContain("(yesterday)");
-    expect(p.system).not.toContain("About you");
+    expect(p.system).not.toContain("### About you");
   });
 });
 
@@ -180,6 +182,8 @@ describe("time-gap markers in the message window", () => {
 test("open questions fill their own slot after due threads, only when present", () => {
   const base = {
     valuesDoc: "V",
+    snapshot: null,
+    coreMemories: [],
     feelingLine: null,
     relationshipSummary: null,
     retrieval: emptyRetrieval(),
@@ -207,16 +211,18 @@ test("relationshipLine: first conversation, same day, then days and first-contac
   ).toBe("You first talked 2 weeks ago, and have talked on 3 different days.");
 });
 
-test("slot 4 'Your day' sits after 'You and them'; the preoccupation is labelled", () => {
+test("'Your day' sits before 'You and them'; the preoccupation is labelled", () => {
   const r = emptyRetrieval();
-  r.facts.self.push({
+  const onMind = {
     id: "p",
     content: "Spica got the telescope images.",
     when: new Date("2026-01-05T09:00:00Z"),
     onMind: true,
-  });
+  };
   const { system } = assemblePrompt({
     valuesDoc: "V",
+    snapshot: null,
+    coreMemories: [onMind],
     feelingLine: "You're in a good mood.",
     relationshipSummary: "R",
     yourDay: "Right now you're free.",
@@ -225,8 +231,9 @@ test("slot 4 'Your day' sits after 'You and them'; the preoccupation is labelled
     now: new Date("2026-01-05T10:00:00Z"),
   });
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## You and them"));
-  expect(system.indexOf("## You and them")).toBeLessThan(system.indexOf("## Your day"));
-  expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## What you remember"));
+  expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## Your day"));
+  expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## You and them"));
+  expect(system.indexOf("## You and them")).toBeLessThan(system.indexOf("## What you remember"));
   expect(system).toContain("Spica got the telescope images. (today) (on your mind lately)");
 });
 
@@ -256,4 +263,41 @@ describe("reach-out slot 7b", () => {
       { role: "user", content: "[cue]" },
     ]);
   });
+});
+
+test("sections come in the two-mind order", () => {
+  const { system } = assemblePrompt({
+    valuesDoc: "VALUES",
+    snapshot: "SNAPSHOT",
+    feelingLine: "FEELING",
+    yourDay: "DAY",
+    relationshipSummary: "US",
+    retrieval: {
+      facts: {
+        user: [{ id: "u", content: "USERFACT", when: now }],
+        self: [{ id: "s", content: "TOLDTHEM", when: now }],
+        shared: [],
+      },
+      dueThreads: [],
+      recalled: [],
+    },
+    coreMemories: [{ id: "c", content: "HERLIFE", when: now, onMind: true }],
+    recentTurns: [],
+    now,
+  });
+  const order = [
+    "VALUES",
+    "SNAPSHOT",
+    "FEELING",
+    "DAY",
+    "US",
+    "USERFACT",
+    "TOLDTHEM",
+    "HERLIFE",
+  ].map((s) => system.indexOf(s));
+  expect(order).toEqual([...order].sort((a, b) => a - b));
+  expect(system).toContain("## Who you are lately\nSNAPSHOT");
+  expect(system).toContain("### What you've told them");
+  expect(system).toContain("### From your own life");
+  expect(system).toContain("HERLIFE (today) (on your mind lately)");
 });

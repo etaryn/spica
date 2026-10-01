@@ -10,6 +10,8 @@ import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
 import { insertThread } from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
+import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -288,6 +290,77 @@ describe("composeReply", () => {
       flag,
     });
     expect(deps.llm.calls[1]!.system).not.toContain("## How you're feeling");
+  });
+  test("a reply reads the latest snapshot and reports its version", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await seedSnapshot(coreDepsOf(deps));
+    const turns = [await userTurn(deps, u, "hi")];
+    const composed = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(composed.snapshotVersion).toBe(0);
+    expect(deps.llm.calls.at(-1)!.system).toContain("## Who you are lately");
+  });
+
+  test("with no snapshot the reply still goes out, with no version", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turns = [await userTurn(deps, u, "hi")];
+    const composed = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(composed.snapshotVersion).toBeNull();
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## Who you are lately");
+  });
+
+  test("her own memories reach the reply, and reading them writes nothing back", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await deps.core.memory.insert({
+      kind: "episode",
+      content: "Spica watched the old film Vertigo.",
+      embedding: vec(0.01),
+      occurred_at: new Date("2026-01-04T20:00:00Z"),
+      created_at: new Date("2026-01-04T00:10:00Z"),
+      status: "resolved",
+      salience: 0.5,
+      valence: 0.1,
+      confidence: 1,
+      source: "world",
+      source_ref: null,
+    });
+    const turns = [await userTurn(deps, u, "seen any good films?")];
+    const composed = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).toContain("### From your own life");
+    expect(deps.llm.calls.at(-1)!.system).toContain("Vertigo");
+    expect(composed.recalled).toEqual([]);
+  });
+
+  test("a crisis reply gets the snapshot but no state or core memory", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await seedSnapshot(coreDepsOf(deps));
+    await deps.core.state.ensure(deps.config.core.state.baseline);
+    await deps.core.memory.insert({
+      kind: "episode",
+      content: "Spica watched the old film Vertigo.",
+      embedding: vec(0.01),
+      occurred_at: new Date("2026-01-04T20:00:00Z"),
+      created_at: new Date("2026-01-04T00:10:00Z"),
+      status: "resolved",
+      salience: 0.5,
+      valence: 0.1,
+      confidence: 1,
+      source: "world",
+      source_ref: null,
+    });
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    await composeReply(deps, u, {
+      turns: [await userTurn(deps, u, "i don't want to be here anymore")],
+      openQuestions: [],
+      flag,
+    });
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("## Who you are lately");
+    expect(system).not.toContain("## How you're feeling");
+    expect(system).not.toContain("### From your own life");
   });
 });
 

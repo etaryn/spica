@@ -8,6 +8,8 @@ import { getReachOutLog, insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, getRelationshipRow } from "@/db/repos/user/relationship";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { conversation_state, reach_out_log, relationship } from "@/db/schema";
+import { seedSnapshot } from "@/mind/memory/core/snapshot";
+import { coreDepsOf } from "@/mind/platform/deps";
 import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -74,6 +76,15 @@ test("sends: a reach_out turn, log sent with turn and time, counter +1, bubbles 
     replyTurnId: out[0]!.id,
   });
   expect((await getState(deps.db, u))?.sending_since).toBeNull(); // released
+});
+
+test("the stored reach-out records which snapshot version it was written from", async () => {
+  const { deps, u, logId } = await setup();
+  await seedSnapshot(coreDepsOf(deps));
+  deps.llm.replies.push("hey!!");
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("sent");
+  const out = (await listTurns(deps.db, u)).filter((t) => t.trigger === "reach_out");
+  expect(out[0]!.snapshot_version).toBe(0);
 });
 
 test("stale: a row that isn't scheduled any more is ignored", async () => {

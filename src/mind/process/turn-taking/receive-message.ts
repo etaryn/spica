@@ -372,6 +372,7 @@ export async function sendCrisisReply(
       session_id: userTurn.session_id,
       role: "companion",
       text: composed.text,
+      snapshot_version: composed.snapshotVersion,
       created_at: clock.now(),
       reply_to: replyTo,
       safety_flag: flag,

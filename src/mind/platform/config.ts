@@ -140,6 +140,7 @@ const turn = z
 const retrieval = z.object({
   candidate_pool: positiveInt,
   top_n: positiveInt,
+  core_top_n: positiveInt,
   recency_half_life_days: z.number().positive(),
   recall_bump: unit,
   recall_cap: unit,

@@ -1,7 +1,7 @@
 /**
- * The hot path: composes one reply from both minds and the live conversation. It retrieves
- * memory, loads her feeling, the relationship summary and her day side by side, assembles the
- * prompt, makes one generation, and runs the guard. Read-only: the caller inserts and sends the
+ * The hot path: composes one reply from both minds: her core values and snapshot, her state and
+ * her day, the relationship, her memories of them and of her own life, and the live conversation.
+ * It retrieves memory, loads those side by side, assembles the prompt, makes one generation, and runs the guard. Read-only: the caller inserts and sends the
  * reply, enqueues the cold path, then calls `writeGuardLog`. Serves normal replies, the crisis
  * path, and reach-outs.
  */
@@ -10,7 +10,8 @@ import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
-import type { RecalledFact, RetrievalResult } from "@/mind/memory/shared/types";
+import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
+import { retrieveCore } from "@/mind/memory/core/retrieve";
 import { retrieve } from "@/mind/memory/user/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName, ReplyFailedError } from "@/mind/platform/errors";
@@ -31,7 +32,10 @@ import { loadYourDayLine } from "./your-day-line";
 export type Composed = {
   text: string;
   parts: string[];
+  /** Recalled user memories only: the cold path never reinforces her own. */
   recalled: RecalledFact[];
+  /** The self snapshot this reply was written from; null when none exists yet. */
+  snapshotVersion: number | null;
   writeGuardLog: () => Promise<void>;
 };
 
@@ -57,6 +61,7 @@ type ComposeInput = {
 /** What the reply's prompt contained, for the guard's honesty check. */
 function guardFacts(
   retrieval: RetrievalResult,
+  coreMemories: RetrievedFact[],
 ): { id: string; subject: string; content: string }[] {
   const facts = (["user", "self", "shared"] as const).flatMap((subject) =>
     retrieval.facts[subject].map((f) => ({ id: f.id, subject, content: f.content })),
@@ -66,7 +71,8 @@ function guardFacts(
     subject: "thread",
     content: t.detail ? `${t.title} (latest: ${t.detail})` : t.title,
   }));
-  return [...facts, ...threads];
+  const core = coreMemories.map((m) => ({ id: m.id, subject: "core", content: m.content }));
+  return [...facts, ...threads, ...core];
 }
 
 /** A reply to a committed buffer. Used by the turn timer and the crisis path. */
@@ -199,7 +205,25 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         null,
       );
 
+  const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
+  const coreMemories = inCrisis
+    ? Promise.resolve({ memories: [] as RetrievedFact[] })
+    : bounded(
+        deps,
+        "core memory",
+        userId,
+        () =>
+          retrieveCore(deps, {
+            queryText: coreQuery(input, config.retrieval.context_turns),
+            now: clock.now(),
+            forceIds: input.reachOut?.coreMemoryId ? [input.reachOut.coreMemoryId] : [],
+          }),
+        { memories: [] as RetrievedFact[] },
+      );
+
   const retrieval = await retrieveFor(deps, userId, input);
+  const latestSnapshot = await snapshot;
+  const herMemories = (await coreMemories).memories;
   const factualLine = await relationshipLinePromise;
   const gap = gapLine(
     earlier.at(-1)?.created_at ?? null,
@@ -213,6 +237,8 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
 
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
+    snapshot: latestSnapshot?.content ?? null,
+    coreMemories: herMemories,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
     yourDay: await yourDay,
@@ -245,7 +271,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     input: {
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
-      recalledFacts: guardFacts(retrieval),
+      recalledFacts: guardFacts(retrieval, herMemories),
       onboardingFacts: await onboarding,
     },
   });
@@ -254,8 +280,16 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     text: guarded.text,
     parts: splitParts(guarded.text, config.chat.max_parts),
     recalled: retrieval.recalled,
+    snapshotVersion: latestSnapshot?.version ?? null,
     writeGuardLog: guarded.writeLog,
   };
+}
+
+/** What her own memories are matched against: a reach-out's topic, else the turns being answered. */
+function coreQuery(input: ComposeInput, contextTurns: number): string {
+  if (input.reachOut?.text) return input.reachOut.text;
+  const turns = [...input.earlier.slice(-Math.max(0, contextTurns)), ...input.answering];
+  return turns.map((t) => t.text).join("\n");
 }
 
 /** How long she's known them, so she doesn't guess. Off when `chat.relationship_line` is false. */

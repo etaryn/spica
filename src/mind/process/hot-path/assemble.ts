@@ -1,8 +1,10 @@
 /**
+/**
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
- * empty: core values, how she's feeling, you and them, her day, what she remembers, things to
- * ask about, unanswered questions, and why she's writing (for a reach-out). The live
- * conversation follows as the messages.
+ * empty: core values, who she is lately, how she is feeling, her day, you and them, what she
+ * remembers (about them, between you, what she has told them, from her own life), things to ask
+ * about, unanswered questions, and why she is writing (for a reach-out). The live conversation
+ * follows as the messages.
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import type { ChatMessage } from "@/mind/platform/llm/types";
@@ -11,11 +13,15 @@ import { HOUR } from "@/mind/platform/time";
 
 export interface AssembleInput {
   valuesDoc: string;
+  /** The latest self snapshot; null before one exists. */
+  snapshot: string | null;
   feelingLine: string | null;
   relationshipSummary: string | null;
   /** Her day: what she's doing now and next. */
   yourDay?: string | null;
   retrieval: RetrievalResult;
+  /** Her own memories that fit the conversation. */
+  coreMemories: RetrievedFact[];
   recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
   now: Date;
   /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
@@ -29,10 +35,11 @@ export interface AssembleInput {
 export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
   const sections = [
     input.valuesDoc,
+    section("Who you are lately", input.snapshot),
     section("How you're feeling", input.feelingLine),
-    section("You and them", input.relationshipSummary),
     section("Your day", input.yourDay ?? null),
-    section("What you remember", memorySection(input.retrieval, input.now)),
+    section("You and them", input.relationshipSummary),
+    section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),
     // A reach-out always gets its heading, even when the slot text is empty.
@@ -49,11 +56,16 @@ function section(heading: string, body: string | null): string | null {
   return body ? `## ${heading}\n${body}` : null;
 }
 
-function memorySection(retrieval: RetrievalResult, now: Date): string | null {
+function memorySection(
+  retrieval: RetrievalResult,
+  coreMemories: RetrievedFact[],
+  now: Date,
+): string | null {
   const lists = [
     factList("About them", retrieval.facts.user, now),
-    factList("About you", retrieval.facts.self, now),
     factList("Between you", retrieval.facts.shared, now),
+    factList("What you've told them", retrieval.facts.self, now),
+    factList("From your own life", coreMemories, now),
   ].filter((s): s is string => s !== null);
 
   return lists.length ? lists.join("\n\n") : null;

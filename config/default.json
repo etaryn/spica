@@ -39,6 +39,7 @@
   "retrieval": {
     "candidate_pool": 200,
     "top_n": 12,
+    "core_top_n": 4,
     "recency_half_life_days": 30,
     "recall_bump": 0.03,
     "recall_cap": 0.95,
@@ -159,7 +160,7 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v8",
+    "reply": "v9",
     "crisis_classifier": "v2",
     "persona": "v3",
     "extract": "v4",

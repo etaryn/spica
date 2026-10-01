@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import type { Turn } from "@/db/repos/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import { checkTurn } from "../../evals/lib/turn-check";
 
 const t0 = Date.UTC(2026, 0, 5, 9);

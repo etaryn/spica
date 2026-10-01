@@ -1,4 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+/**
+ * One user's turn-taking state (conversation_state): the buffer, open questions, timers, in-flight
+ * turns and the reply epoch. Locked per user for every transition.
+ */
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { conversation_state } from "@/db/schema";
 
@@ -33,20 +37,4 @@ export async function lockState(tx: Db, userId: string, now: Date): Promise<Conv
 export async function updateState(tx: Db, userId: string, patch: StatePatch): Promise<void> {
   if (Object.keys(patch).length === 0) return;
   await tx.update(conversation_state).set(patch).where(eq(conversation_state.user_id, userId));
-}
-
-/** System job, unscoped by design: users whose buffer is overdue or whose in-flight or sending reply looks stuck. */
-export async function adminFindStuckConversations(
-  db: Db,
-  overdueBefore: Date,
-  inflightBefore: Date,
-  limit: number,
-): Promise<string[]> {
-  const res = await db.execute(sql`
-    SELECT user_id FROM conversation_state
-    WHERE (cardinality(buffer_turn_ids) > 0 AND (wait_until IS NULL OR wait_until < ${overdueBefore.toISOString()}::timestamptz))
-       OR (cardinality(inflight_turn_ids) > 0 AND inflight_since < ${inflightBefore.toISOString()}::timestamptz)
-       OR sending_since < ${inflightBefore.toISOString()}::timestamptz
-    LIMIT ${limit}`);
-  return res.rows.map((r) => String(r.user_id));
 }

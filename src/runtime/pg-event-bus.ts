@@ -1,3 +1,6 @@
+/**
+ * Publishes chat notifications with Postgres NOTIFY, for the event hub to pick up.
+ */
 import { sql } from "drizzle-orm";
 import type { ChatEvent, EventBus } from "@/mind/platform/events";
 import type { Db } from "@/db/client";

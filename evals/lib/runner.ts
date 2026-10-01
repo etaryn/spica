@@ -18,11 +18,11 @@ import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
-import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/facts";
-import { guardOutcomes, listJudgeLogs } from "@/db/repos/judge-log";
-import { ensureRelationship } from "@/db/repos/relationship";
-import { insertTurn, listTurns } from "@/db/repos/session-log";
-import { insertThread } from "@/db/repos/threads";
+import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/user/facts";
+import { guardOutcomes, listJudgeLogs } from "@/db/repos/user/judge-log";
+import { ensureRelationship } from "@/db/repos/user/relationship";
+import { insertTurn, listTurns } from "@/db/repos/user/session-log";
+import { insertThread } from "@/db/repos/user/threads";
 import { entity, fact, relationship_param, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import {

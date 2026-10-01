@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { decayedSalience, decayPass } from "@/mind/memory/user/decay";
-import * as facts from "@/db/repos/facts";
-import * as threads from "@/db/repos/threads";
+import * as facts from "@/db/repos/user/facts";
+import * as threads from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

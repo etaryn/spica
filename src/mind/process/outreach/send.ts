@@ -7,13 +7,18 @@
  * recheck stays the authority. Bubbles are paced like a reply.
  */
 import { randomUUID } from "node:crypto";
-import { getState } from "@/db/repos/conversation-state";
-import { dropScheduled, getReachOutLog, updateReachOutLog, usedTopics } from "@/db/repos/reach-out";
-import { incrementUnanswered } from "@/db/repos/relationship";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
+import { getState } from "@/db/repos/user/conversation-state";
+import {
+  dropScheduled,
+  getReachOutLog,
+  updateReachOutLog,
+  usedTopics,
+} from "@/db/repos/user/reach-out";
+import { incrementUnanswered } from "@/db/repos/user/relationship";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import type { Db } from "@/db/client";
-import type { ConvState } from "@/db/repos/conversation-state";
+import type { ConvState } from "@/db/repos/user/conversation-state";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { emit } from "@/mind/platform/events";

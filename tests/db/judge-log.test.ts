@@ -4,7 +4,7 @@ import {
   insertJudgeLogs,
   listJudgeLogs,
   type NewJudgeLog,
-} from "@/db/repos/judge-log";
+} from "@/db/repos/user/judge-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 
 beforeEach(resetDb);

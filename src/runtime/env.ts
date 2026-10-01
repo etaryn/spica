@@ -1,3 +1,7 @@
+/**
+ * Reads and validates the environment variables, the only place outside the app that reads
+ * `process.env`.
+ */
 import { z } from "zod";
 import { parseConfigOverrides } from "@/mind/platform/config";
 

@@ -4,8 +4,8 @@
  * relationship signals from how the user treated her.
  */
 import { z } from "zod";
-import type { EntityMention } from "@/db/repos/entities";
-import type { Turn } from "@/db/repos/session-log";
+import type { EntityMention } from "@/db/repos/user/entities";
+import type { Turn } from "@/db/repos/user/session-log";
 import { entityType, factKind } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";

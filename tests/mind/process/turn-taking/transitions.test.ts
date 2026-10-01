@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { ConvState } from "@/db/repos/conversation-state";
+import type { ConvState } from "@/db/repos/user/conversation-state";
 import * as T from "@/mind/process/turn-taking/transitions";
 
 const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));

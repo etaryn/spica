@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { adminGetUser } from "@/db/repos/users";
+import { adminGetUser } from "@/db/repos/admin/users";
 import { getDeps } from "@/server/deps";
 import { parseUserIdParam } from "@/server/inspector-access";
 import { assertInspectorAccess } from "@/server/inspector-guard";

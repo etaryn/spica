@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { ensurePlans, fallbackPlan, validatePlan } from "@/mind/world/day-plan";
-import { getLifeDay } from "@/db/repos/life-day";
+import { getLifeDay } from "@/db/repos/world/life-day";
 import { closeTestDb, getTestDb, resetDb } from "../../helpers/db";
 import { makeTestDeps } from "../../helpers/deps";
 

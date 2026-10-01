@@ -1,3 +1,6 @@
+/**
+ * Every personal-event attempt from the per-user life tick, accepted or rejected. Diagnostic only.
+ */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { life_event_log } from "@/db/schema";

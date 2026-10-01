@@ -5,7 +5,7 @@
 import {
   adminBumpExtractAttempts,
   adminFindUnextractedExchanges,
-} from "@/db/repos/cold-path-admin";
+} from "@/db/repos/admin/cold-path";
 import type { Deps } from "@/mind/platform/deps";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
 

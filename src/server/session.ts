@@ -1,3 +1,6 @@
+/**
+ * The signed-in user for a server component or route, or a redirect to sign in.
+ */
 import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";

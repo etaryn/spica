@@ -2,7 +2,7 @@
  * The "Your day" section of her reply prompt: what she's doing right now, what's next, and,
  * when the reply was deferred, that they wrote while she was busy.
  */
-import { getFact } from "@/db/repos/facts";
+import { getFact } from "@/db/repos/user/facts";
 import type { Deps } from "@/mind/platform/deps";
 import { lifeDate } from "@/mind/world/her-clock";
 import { blockAt, listLifeBlocks, type BlockFact } from "@/mind/world/legacy-life-tick/blocks";

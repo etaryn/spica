@@ -1,11 +1,11 @@
+import { adminListLifeUsers } from "@/db/repos/admin/life";
 import {
-  adminListLifeUsers,
   ensureIdentity,
   getIdentityRow,
   insertEgoTick,
   lockIdentity,
   updateIdentity,
-} from "@/db/repos/identity";
+} from "@/db/repos/user/identity";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";

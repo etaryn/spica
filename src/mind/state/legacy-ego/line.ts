@@ -1,4 +1,4 @@
-import { getIdentityRow } from "@/db/repos/identity";
+import { getIdentityRow } from "@/db/repos/user/identity";
 import type { EgoConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Deps } from "@/mind/platform/deps";
-import { deletePushSubscription, upsertPushSubscription } from "@/db/repos/push";
+import { deletePushSubscription, upsertPushSubscription } from "@/db/repos/user/push";
 
 const Sub = z.object({
   endpoint: z.url().max(2048),

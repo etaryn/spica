@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listRememberedFacts } from "@/db/repos/facts";
+import { listRememberedFacts } from "@/db/repos/user/facts";
 import { getDeps } from "@/server/deps";
 import { requireUser } from "@/server/session";
 import { ForgetButton } from "./forget-button";

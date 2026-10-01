@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { yourDayLines, loadYourDayLine } from "@/mind/process/hot-path/your-day-line";
-import { insertFact } from "@/db/repos/facts";
+import { insertFact } from "@/db/repos/user/facts";
 import { fact } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";

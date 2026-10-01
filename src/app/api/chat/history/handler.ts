@@ -3,7 +3,7 @@ import { splitParts } from "@/mind/process/hot-path/split-parts";
 import type { Config, CrisisCard } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
-import { recentTurns, turnsAfter, type Turn } from "@/db/repos/session-log";
+import { recentTurns, turnsAfter, type Turn } from "@/db/repos/user/session-log";
 
 export type HistoryMessage = {
   id: string;

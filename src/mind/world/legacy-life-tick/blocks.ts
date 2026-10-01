@@ -1,5 +1,5 @@
 import type { Db } from "@/db/client";
-import { listGeneratedBlockRows, type NewFact } from "@/db/repos/facts";
+import { listGeneratedBlockRows, type NewFact } from "@/db/repos/user/facts";
 import type { LifeBlock, LifePlan } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { lifeInstant, minutesOf } from "@/mind/world/her-clock";

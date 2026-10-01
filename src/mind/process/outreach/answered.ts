@@ -3,8 +3,8 @@
  * effort: a failure leaves the count up, so she stays quieter (the safe side), and it never fails
  * the user's message.
  */
-import { markLatestAnswered } from "@/db/repos/reach-out";
-import { resetUnanswered } from "@/db/repos/relationship";
+import { markLatestAnswered } from "@/db/repos/user/reach-out";
+import { resetUnanswered } from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 

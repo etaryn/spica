@@ -4,12 +4,12 @@ import { eq } from "drizzle-orm";
 import { lifeTickUser } from "@/mind/world/legacy-life-tick/tick";
 import { outreachTick, outreachTickUser } from "@/mind/process/outreach/tick";
 import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
-import { insertFact } from "@/db/repos/facts";
-import { insertLifeDay } from "@/db/repos/life-day";
-import { ensureRelationship } from "@/db/repos/relationship";
+import { insertFact } from "@/db/repos/user/facts";
+import { insertLifeDay } from "@/db/repos/world/life-day";
+import { ensureRelationship } from "@/db/repos/user/relationship";
 import { reach_out_log, relationship } from "@/db/schema";
-import { insertThread } from "@/db/repos/threads";
-import { insertTurn } from "@/db/repos/session-log";
+import { insertThread } from "@/db/repos/user/threads";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

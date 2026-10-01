@@ -3,9 +3,9 @@ import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import type { Logger } from "@/mind/platform/log";
 import { relationshipDailyTick, tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { localMidnight } from "@/mind/platform/timezone";
-import * as rel from "@/db/repos/relationship";
-import { insertTurn } from "@/db/repos/session-log";
-import { setTimezone } from "@/db/repos/users";
+import * as rel from "@/db/repos/user/relationship";
+import { insertTurn } from "@/db/repos/user/session-log";
+import { setTimezone } from "@/db/repos/user/users";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../../helpers/db";
 import { makeTestDeps } from "../../../../helpers/deps";
 

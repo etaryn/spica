@@ -1,3 +1,6 @@
+/**
+ * Guards every inspector page: anyone not allowed gets a 404.
+ */
 import "server-only";
 import { notFound } from "next/navigation";
 import { canAccessInspector, readInspectorEnv } from "./inspector-access";

@@ -1,3 +1,6 @@
+/**
+ * The app's Better Auth instance.
+ */
 import "server-only";
 import { nextCookies } from "better-auth/next-js";
 import { createAuth } from "./auth-factory";

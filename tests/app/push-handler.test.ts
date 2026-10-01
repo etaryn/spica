@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { createPushHandler } from "@/app/api/push/subscribe/handler";
-import { listPushSubscriptions } from "@/db/repos/push";
+import { listPushSubscriptions } from "@/db/repos/user/push";
 import { closeTestDb, createTestUser, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 

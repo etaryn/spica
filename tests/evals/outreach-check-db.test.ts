@@ -5,7 +5,7 @@ import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider, keywordClassifier } from "@/mind/platform/llm/fake";
 import { messageToJudge } from "@/mind/process/crisis/classifier";
 import { HOUR } from "@/mind/platform/time";
-import { insertTurn } from "@/db/repos/session-log";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { relationship_event, session_log } from "@/db/schema";
 import { gateViolations, outreachSnapshot } from "../../evals/lib/outreach-check";
 import { runScript } from "../../evals/lib/runner";

@@ -5,10 +5,10 @@
 import type { Db } from "@/db/client";
 import type { Clock } from "./clock";
 import type { Config } from "./config";
-import type { Embedder } from "./embedder/types";
+import type { Embedder } from "@/mind/platform/embedder/types";
 import type { EventBus } from "./events";
 import type { JobQueue } from "./jobs";
-import type { LLMProvider } from "./llm/types";
+import type { LLMProvider } from "@/mind/platform/llm/types";
 import type { Logger } from "./log";
 import type { Pusher } from "./push";
 

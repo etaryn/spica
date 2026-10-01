@@ -4,12 +4,12 @@ import { composeReachOut, composeReply, renderReachOut } from "@/mind/process/ho
 import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
 import { messageToCheck } from "@/mind/process/guard/guard";
-import { insertFact } from "@/db/repos/facts";
-import { ensureIdentity, updateIdentity } from "@/db/repos/identity";
-import { listJudgeLogs } from "@/db/repos/judge-log";
-import * as rel from "@/db/repos/relationship";
-import { insertTurn, type Turn } from "@/db/repos/session-log";
-import { insertThread } from "@/db/repos/threads";
+import { insertFact } from "@/db/repos/user/facts";
+import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
+import { listJudgeLogs } from "@/db/repos/user/judge-log";
+import * as rel from "@/db/repos/user/relationship";
+import { insertTurn, type Turn } from "@/db/repos/user/session-log";
+import { insertThread } from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

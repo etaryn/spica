@@ -7,7 +7,7 @@ import {
   type RelationshipState,
 } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
-import * as rel from "@/db/repos/relationship";
+import * as rel from "@/db/repos/user/relationship";
 import type { RelationshipAssertion } from "./script";
 
 export type RelSnapshot = {

@@ -1,3 +1,6 @@
+/**
+ * Small helpers shared by the repos.
+ */
 import pg from "pg";
 
 /** Returns the single row of an INSERT ... RETURNING, or throws. */

@@ -2,7 +2,7 @@
  * Memory ranking: scores each candidate memory by similarity × weight × entity weight × recency
  * and keeps the best few. Pure maths with no data access, so both minds can share it.
  */
-import type { CandidateFact } from "@/db/repos/facts";
+import type { CandidateFact } from "@/db/repos/user/facts";
 
 const DAY_MS = 86_400_000;
 

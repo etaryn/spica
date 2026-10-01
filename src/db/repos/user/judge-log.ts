@@ -1,3 +1,6 @@
+/**
+ * The judge log: one row per guard check or turn-judge decision, ids and short text only.
+ */
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { guardOutcome, judge_log } from "@/db/schema";

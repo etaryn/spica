@@ -1,3 +1,7 @@
+/**
+ * Read-only queries for the inspector, a dev-only tool that looks at one user's memory,
+ * relationship, turn-taking, judge log, reach-outs and life.
+ */
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { deviationOf, fadeParams } from "@/mind/state/user/relationship/params";
@@ -15,9 +19,13 @@ import {
   retrieval_trace,
   thread,
 } from "@/db/schema";
-import { getLifeDay } from "./life-day";
-import { listLifeEventLogs } from "./life-event-log";
-import { getParams, getRelationshipRow, listRelationshipEvents } from "./relationship";
+import { getLifeDay } from "@/db/repos/world/life-day";
+import { listLifeEventLogs } from "@/db/repos/user/life-event-log";
+import {
+  getParams,
+  getRelationshipRow,
+  listRelationshipEvents,
+} from "@/db/repos/user/relationship";
 
 export type FactFilters = {
   subject: (typeof factSubject.enumValues)[number] | undefined;

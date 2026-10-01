@@ -4,7 +4,7 @@
  * clear everything for a crisis, and recover after a crash. Each returns the patch to write
  * (null for no write) and a result; `mutateState` applies it under the row lock.
  */
-import type { ConvState, StatePatch } from "@/db/repos/conversation-state";
+import type { ConvState, StatePatch } from "@/db/repos/user/conversation-state";
 import type { OpenQuestion } from "@/db/schema";
 
 export type Step<R> = { patch: StatePatch | null; result: R };

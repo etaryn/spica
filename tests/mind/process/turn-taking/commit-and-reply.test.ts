@@ -7,8 +7,8 @@ import * as guardOutgoingModule from "@/mind/process/guard/outgoing";
 import { TURN_TIMER_QUEUE, type TurnTimerJob } from "@/mind/platform/jobs";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { runBackchannel, runTurnTimer } from "@/mind/process/turn-taking/commit-and-reply";
-import { getState } from "@/db/repos/conversation-state";
-import { getTurnsByIds, insertTurn, listTurns } from "@/db/repos/session-log";
+import { getState } from "@/db/repos/user/conversation-state";
+import { getTurnsByIds, insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

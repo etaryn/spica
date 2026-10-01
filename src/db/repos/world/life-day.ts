@@ -1,3 +1,6 @@
+/**
+ * Her day plans (life_day): one shared plan per her local date. No user data.
+ */
 import { desc, eq, lt } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { life_day } from "@/db/schema";

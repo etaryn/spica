@@ -1,15 +1,15 @@
+import { adminListLifeUsers } from "@/db/repos/admin/life";
 import { sql } from "drizzle-orm";
-import * as factsRepo from "@/db/repos/facts";
+import * as factsRepo from "@/db/repos/user/facts";
 import {
-  adminListLifeUsers,
   ensureIdentity,
   getIdentityRow,
   lockIdentity,
   updateIdentity,
   type IdentityRow,
-} from "@/db/repos/identity";
-import { getLifeDay } from "@/db/repos/life-day";
-import { insertLifeEventLogs } from "@/db/repos/life-event-log";
+} from "@/db/repos/user/identity";
+import { getLifeDay } from "@/db/repos/world/life-day";
+import { insertLifeEventLogs } from "@/db/repos/user/life-event-log";
 import type { Deps } from "@/mind/platform/deps";
 import { nudgeEgoForEvent } from "@/mind/state/legacy-ego/nudge";
 import { errorName } from "@/mind/platform/errors";

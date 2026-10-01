@@ -2,7 +2,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { createHistoryHandler } from "@/app/api/chat/history/handler";
 import { createEventsHandler } from "@/app/api/events/handler";
 import type { ChatEvent } from "@/mind/platform/events";
-import { insertTurn } from "@/db/repos/session-log";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 

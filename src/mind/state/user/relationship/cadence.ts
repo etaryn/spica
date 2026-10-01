@@ -2,7 +2,7 @@
  * Cadence: how often and when this user usually talks to her. It decides when silence counts as
  * absence, and when a check-in would feel natural.
  */
-import type { Cadence } from "@/db/repos/relationship";
+import type { Cadence } from "@/db/repos/user/relationship";
 import { HOUR } from "@/mind/platform/time";
 import type { RelationshipConfig } from "./types";
 

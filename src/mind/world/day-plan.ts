@@ -9,7 +9,7 @@ import {
   insertLifeDay,
   listLifeDaysBefore,
   type LifeDayRow,
-} from "@/db/repos/life-day";
+} from "@/db/repos/world/life-day";
 import type { LifeBlock, LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";

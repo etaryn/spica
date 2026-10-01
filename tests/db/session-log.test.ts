@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import * as log from "@/db/repos/session-log";
-import { deleteUser } from "@/db/repos/users";
+import * as log from "@/db/repos/user/session-log";
+import { deleteUser } from "@/db/repos/user/users";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 
 beforeEach(resetDb);

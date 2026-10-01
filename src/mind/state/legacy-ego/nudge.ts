@@ -5,7 +5,7 @@ import {
   lockIdentity,
   updateIdentity,
   type IdentityRow,
-} from "@/db/repos/identity";
+} from "@/db/repos/user/identity";
 import type { Config } from "@/mind/platform/config";
 import { applyEvent, applyExchange, exchangeTone, stateOf } from "./ego";
 

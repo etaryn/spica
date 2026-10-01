@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { runBackchannel } from "@/mind/process/turn-taking/commit-and-reply";
 import { mutateState } from "@/mind/process/turn-taking/state";
-import { insertTurn, listTurns } from "@/db/repos/session-log";
+import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

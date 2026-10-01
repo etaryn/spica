@@ -1,7 +1,11 @@
+/**
+ * One user's entities: the people, places and things in their memory and hers, with aliases and
+ * salience.
+ */
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { entity, entityType } from "@/db/schema";
-import { one } from "./util";
+import { one } from "@/db/repos/util";
 
 export type EntityRow = typeof entity.$inferSelect;
 export type EntityMention = {

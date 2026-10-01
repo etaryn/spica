@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { latestSelfEntityFirstSeen, listSelfEntityNames, normalizeName } from "@/db/repos/entities";
-import { listRecentSelfFacts, nearFacts } from "@/db/repos/facts";
-import { lastAcceptedHighStakes } from "@/db/repos/life-event-log";
+import {
+  latestSelfEntityFirstSeen,
+  listSelfEntityNames,
+  normalizeName,
+} from "@/db/repos/user/entities";
+import { listRecentSelfFacts, nearFacts } from "@/db/repos/user/facts";
+import { lastAcceptedHighStakes } from "@/db/repos/user/life-event-log";
 import type { LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";

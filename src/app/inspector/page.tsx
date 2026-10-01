@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { adminListUsers } from "@/db/repos/users";
+import { adminListUsers } from "@/db/repos/admin/users";
 import { getDeps } from "@/server/deps";
 import { assertInspectorAccess } from "@/server/inspector-guard";
 import styles from "./inspector.module.css";

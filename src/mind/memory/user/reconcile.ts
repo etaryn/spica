@@ -4,7 +4,7 @@
  * only asked when a near match exists.
  */
 import { z } from "zod";
-import type { Neighbor } from "@/db/repos/facts";
+import type { Neighbor } from "@/db/repos/user/facts";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { ExtractedFact } from "./extract";

@@ -4,7 +4,7 @@
  * then a fallback line. With the guard off (the test phase, so her full range can be observed),
  * the first candidate goes out unchecked and one judge_log row records that nothing was checked.
  */
-import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos/judge-log";
+import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos/user/judge-log";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { withTimeout } from "@/mind/platform/timeout";

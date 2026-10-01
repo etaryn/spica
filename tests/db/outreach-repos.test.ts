@@ -1,12 +1,12 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import * as ro from "@/db/repos/reach-out";
-import * as push from "@/db/repos/push";
+import * as ro from "@/db/repos/user/reach-out";
+import * as push from "@/db/repos/user/push";
 import {
   ensureRelationship,
   getRelationshipRow,
   incrementUnanswered,
   resetUnanswered,
-} from "@/db/repos/relationship";
+} from "@/db/repos/user/relationship";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 

@@ -4,7 +4,7 @@
  * tiny backchannel ("wait what"). It never fails: an outage falls back to the keyword cue check.
  */
 import { z } from "zod";
-import { insertJudgeLogs } from "@/db/repos/judge-log";
+import { insertJudgeLogs } from "@/db/repos/user/judge-log";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { loadPrompt } from "@/mind/platform/prompts";

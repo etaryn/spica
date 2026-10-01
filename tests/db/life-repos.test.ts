@@ -1,15 +1,16 @@
+import { adminListLifeUsers } from "@/db/repos/admin/life";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { truncateAll } from "@/db/admin";
-import { insertFact } from "@/db/repos/facts";
-import * as idn from "@/db/repos/identity";
-import { getLifeDay, insertLifeDay, listLifeDaysBefore } from "@/db/repos/life-day";
+import { insertFact } from "@/db/repos/user/facts";
+import * as idn from "@/db/repos/user/identity";
+import { getLifeDay, insertLifeDay, listLifeDaysBefore } from "@/db/repos/world/life-day";
 import {
   insertLifeEventLogs,
   lastAcceptedHighStakes,
   listLifeEventLogs,
-} from "@/db/repos/life-event-log";
-import { ensureRelationship } from "@/db/repos/relationship";
-import { getState, lockState, updateState } from "@/db/repos/conversation-state";
+} from "@/db/repos/user/life-event-log";
+import { ensureRelationship } from "@/db/repos/user/relationship";
+import { getState, lockState, updateState } from "@/db/repos/user/conversation-state";
 import { fact } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { loadConfig } from "@/mind/platform/config";
@@ -40,7 +41,7 @@ test("adminListLifeUsers lists active and repairing relationships only", async (
   const db = getTestDb();
   const [a, b] = [await createTestUser(), await createTestUser()];
   await ensureRelationship(db, a, t0, cfg.relationship);
-  expect(await idn.adminListLifeUsers(db)).toEqual([a]);
+  expect(await adminListLifeUsers(db)).toEqual([a]);
   void b;
 });
 

@@ -2,7 +2,7 @@
  * Daily memory decay: each memory's weight fades a little every day, slowly for important ones
  * and quickly for trivia, until it goes `stale`. Nothing is ever deleted.
  */
-import { adminDecayFacts } from "@/db/repos/decay-admin";
+import { adminDecayFacts } from "@/db/repos/admin/decay";
 import type { Deps } from "@/mind/platform/deps";
 
 /** One day of decay. The loss shrinks as salience grows, so important memories fade slowly. */

@@ -1,7 +1,11 @@
+/**
+ * One user's reach-out log: every outreach evaluation, what was scheduled or dropped, and which
+ * topics are used.
+ */
 import { and, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { reach_out_log } from "@/db/schema";
-import { one } from "./util";
+import { one } from "@/db/repos/util";
 
 export type ReachOutRow = typeof reach_out_log.$inferSelect;
 export type ReachOutStatus = ReachOutRow["status"];

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { forgetFact, insertFact } from "@/db/repos/facts";
+import { forgetFact, insertFact } from "@/db/repos/user/facts";
 import {
   getLifeView,
   getRelationshipView,
@@ -8,13 +8,13 @@ import {
   listReachOuts,
   parseFactFilters,
   resolveFactContents,
-} from "@/db/repos/inspector";
-import { listJudgeLogs } from "@/db/repos/judge-log";
-import { insertJudgeLogs } from "@/db/repos/judge-log";
-import { insertLifeDay } from "@/db/repos/life-day";
-import { insertLifeEventLogs } from "@/db/repos/life-event-log";
-import { insertReachOutLog } from "@/db/repos/reach-out";
-import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/relationship";
+} from "@/db/repos/admin/inspector";
+import { listJudgeLogs } from "@/db/repos/user/judge-log";
+import { insertJudgeLogs } from "@/db/repos/user/judge-log";
+import { insertLifeDay } from "@/db/repos/world/life-day";
+import { insertLifeEventLogs } from "@/db/repos/user/life-event-log";
+import { insertReachOutLog } from "@/db/repos/user/reach-out";
+import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/user/relationship";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 

@@ -3,7 +3,8 @@
  * a crash. It never double-sends, because every timer is version-checked and recovering bumps the
  * version. One user's failure never stops the rest of the batch.
  */
-import { adminFindStuckConversations } from "@/db/repos/conversation-state";
+
+import { adminFindStuckConversations } from "@/db/repos/admin/turn-taking";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { TURN_TIMER_QUEUE } from "@/mind/platform/jobs";

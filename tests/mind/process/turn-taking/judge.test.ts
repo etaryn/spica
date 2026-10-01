@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { cueVerdict } from "@/mind/process/turn-taking/cues";
 import { judgeTurn, logTurnDecision, renderJudgeInput } from "@/mind/process/turn-taking/judge";
-import { listJudgeLogs } from "@/db/repos/judge-log";
-import { insertTurn } from "@/db/repos/session-log";
+import { listJudgeLogs } from "@/db/repos/user/judge-log";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

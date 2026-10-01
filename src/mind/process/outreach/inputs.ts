@@ -4,17 +4,17 @@
  * and the send gate's inputs. Read-only.
  */
 import type { Db } from "@/db/client";
-import { getState, type ConvState } from "@/db/repos/conversation-state";
+import { getState, type ConvState } from "@/db/repos/user/conversation-state";
 import {
   getFact,
   getPreoccupationFact,
   listOutreachHerDay,
   listOutreachUserEvents,
-} from "@/db/repos/facts";
-import { sentReachOutTimes, usedTopics } from "@/db/repos/reach-out";
-import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/relationship";
-import { latestFlaggedTurnAt } from "@/db/repos/session-log";
-import { dueThreads } from "@/db/repos/threads";
+} from "@/db/repos/user/facts";
+import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
+import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
+import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
+import { dueThreads } from "@/db/repos/user/threads";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
 import { faded } from "@/mind/state/user/relationship/params";

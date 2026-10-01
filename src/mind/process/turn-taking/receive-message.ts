@@ -5,10 +5,10 @@
  * crisis, which is answered right here, in the request.
  */
 import { randomUUID } from "node:crypto";
-import { getState, type ConvState } from "@/db/repos/conversation-state";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
-import { setTimezone } from "@/db/repos/users";
+import { getState, type ConvState } from "@/db/repos/user/conversation-state";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
+import { setTimezone } from "@/db/repos/user/users";
 import type { OpenQuestion, SafetyFlag } from "@/db/schema";
 import type { CrisisCard } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";

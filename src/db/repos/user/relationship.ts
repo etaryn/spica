@@ -1,3 +1,7 @@
+/**
+ * One user's relationship: the status row, the homeostatic params, the event trace, and the
+ * message counts the params and cadence are built from.
+ */
 import { and, desc, eq, gt, gte, lt, lte, sql } from "drizzle-orm";
 import {
   PARAM_NAMES,
@@ -221,11 +225,6 @@ export async function listRelationshipEvents(
     .where(eq(relationship_event.user_id, userId))
     .orderBy(desc(relationship_event.created_at))
     .limit(limit);
-}
-
-/** System job, unscoped by design: every user with a relationship row (the daily tick). */
-export async function adminListRelationshipUsers(db: Db): Promise<string[]> {
-  return (await db.select({ id: relationship.user_id }).from(relationship)).map((r) => r.id);
 }
 
 /** One more reach-out the user hasn't answered yet. Returns the new count. */

@@ -3,8 +3,8 @@
  * retried POST returns the turn already stored instead of storing it twice.
  */
 import { randomUUID } from "node:crypto";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import type { Deps } from "@/mind/platform/deps";
 import { ConflictError, InputError, isUniqueViolation } from "@/mind/platform/errors";
 import { resolveSessionId } from "./session";

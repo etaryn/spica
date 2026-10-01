@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { availabilityDelay, deferWhileBusy, wantsNote } from "@/mind/process/availability/deferral";
-import { insertFact } from "@/db/repos/facts";
-import * as rel from "@/db/repos/relationship";
-import { insertTurn } from "@/db/repos/session-log";
+import { insertFact } from "@/db/repos/user/facts";
+import * as rel from "@/db/repos/user/relationship";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { relationship, relationship_param } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";

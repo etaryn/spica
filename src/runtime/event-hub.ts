@@ -1,3 +1,7 @@
+/**
+ * One LISTEN connection per process, fanning chat notifications out to in-memory subscribers
+ * (the SSE streams), with reconnects.
+ */
 import { Client } from "pg";
 import { isChatEvent, type ChatEvent } from "@/mind/platform/events";
 import { errorName } from "@/mind/platform/errors";

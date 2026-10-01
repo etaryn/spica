@@ -6,9 +6,9 @@
  * bubbles. Also runs the `turn_backchannel` job.
  */
 import { randomUUID } from "node:crypto";
-import { getState } from "@/db/repos/conversation-state";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
+import { getState } from "@/db/repos/user/conversation-state";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { emit } from "@/mind/platform/events";

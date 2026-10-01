@@ -3,7 +3,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import type { ChatEvent } from "@/mind/platform/events";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
-import { getTurn } from "@/db/repos/session-log";
+import { getTurn } from "@/db/repos/user/session-log";
 
 type Send = (event: string, data: unknown) => void;
 

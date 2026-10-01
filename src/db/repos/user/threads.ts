@@ -1,9 +1,12 @@
+/**
+ * One user's threads: ongoing storylines with checkpoints and stakes, and which ones are due.
+ */
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { thread, threadStakes } from "@/db/schema";
 import { normalizeName } from "./entities";
-import { one, toDate } from "./util";
+import { one, toDate } from "@/db/repos/util";
 
 export type ThreadRow = typeof thread.$inferSelect;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");

@@ -1,3 +1,6 @@
+/**
+ * One event hub per server process for the SSE route, kept across dev hot reloads.
+ */
 import "server-only";
 import { consoleLogger } from "@/mind/platform/log";
 import { EventHub } from "@/runtime/event-hub";

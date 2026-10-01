@@ -1,9 +1,13 @@
+/**
+ * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
+ * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
+ */
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Db } from "@/db/client";
 import { fact, factStatus, identity, retrieval_trace, thread } from "@/db/schema";
-import { one, toDate, toDateOrNull } from "./util";
+import { one, toDate, toDateOrNull } from "@/db/repos/util";
 
 export type FactRow = typeof fact.$inferSelect;
 export type NewFact = Omit<typeof fact.$inferInsert, "user_id">;

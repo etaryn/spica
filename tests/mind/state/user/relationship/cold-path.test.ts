@@ -8,8 +8,8 @@ import {
   getParams,
   getRelationshipRow,
   listRelationshipEvents,
-} from "@/db/repos/relationship";
-import { insertTurn } from "@/db/repos/session-log";
+} from "@/db/repos/user/relationship";
+import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../../helpers/db";
 import { makeTestDeps } from "../../../../helpers/deps";

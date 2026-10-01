@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { blockAt, blockContent, listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
 import { lifeTick, lifeTickUser } from "@/mind/world/legacy-life-tick/tick";
-import * as factsRepo from "@/db/repos/facts";
-import { getIdentityRow } from "@/db/repos/identity";
-import { insertLifeDay } from "@/db/repos/life-day";
-import { ensureRelationship } from "@/db/repos/relationship";
-import { setTimezone } from "@/db/repos/users";
+import * as factsRepo from "@/db/repos/user/facts";
+import { getIdentityRow } from "@/db/repos/user/identity";
+import { insertLifeDay } from "@/db/repos/world/life-day";
+import { ensureRelationship } from "@/db/repos/user/relationship";
+import { setTimezone } from "@/db/repos/user/users";
 import { fact } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";

@@ -4,9 +4,10 @@
  * records the candidates, the winner and the gate, and a winner through an open gate is
  * scheduled as a `reach_out_send` job, jittered up to `jitter_max_minutes` later.
  */
-import { adminListLifeUsers } from "@/db/repos/identity";
-import { hasPendingScheduled, insertReachOutLog } from "@/db/repos/reach-out";
-import { getRelationshipRow } from "@/db/repos/relationship";
+
+import { adminListLifeUsers } from "@/db/repos/admin/life";
+import { hasPendingScheduled, insertReachOutLog } from "@/db/repos/user/reach-out";
+import { getRelationshipRow } from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";

@@ -4,8 +4,8 @@
  * answered as usual; a mid-closeness one gets a short "busy, later?" note first. It fails open:
  * any error means no delay, and a crisis is never deferred.
  */
-import * as relationshipRepo from "@/db/repos/relationship";
-import * as sessionLog from "@/db/repos/session-log";
+import * as relationshipRepo from "@/db/repos/user/relationship";
+import * as sessionLog from "@/db/repos/user/session-log";
 import type { AvailabilityConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";

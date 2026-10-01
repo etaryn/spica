@@ -1,7 +1,11 @@
+/**
+ * One user's transcript (session_log): every turn, hers and theirs, and the queries the
+ * conversation loop reads it with.
+ */
 import { and, asc, desc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { session_log } from "@/db/schema";
-import { one, toDateOrNull } from "./util";
+import { one, toDateOrNull } from "@/db/repos/util";
 
 export type Turn = typeof session_log.$inferSelect;
 export type NewTurn = Omit<typeof session_log.$inferInsert, "user_id">;

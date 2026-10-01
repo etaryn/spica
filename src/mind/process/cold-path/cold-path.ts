@@ -7,10 +7,10 @@
  */
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { nearFacts } from "@/db/repos/facts";
-import { getTurnsByIds, turnsUpTo, type Turn } from "@/db/repos/session-log";
-import { listOpenThreads } from "@/db/repos/threads";
-import { getTimezone } from "@/db/repos/users";
+import { nearFacts } from "@/db/repos/user/facts";
+import { getTurnsByIds, turnsUpTo, type Turn } from "@/db/repos/user/session-log";
+import { listOpenThreads } from "@/db/repos/user/threads";
+import { getTimezone } from "@/db/repos/user/users";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
 import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
 import { reconcileAgainstNeighbours } from "@/mind/memory/user/reconcile";

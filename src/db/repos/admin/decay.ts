@@ -1,3 +1,7 @@
+/**
+ * The daily decay pass over every user's memories: weights fade and memories go `stale`. One
+ * cross-user statement, run by the `decay_pass` job.
+ */
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 

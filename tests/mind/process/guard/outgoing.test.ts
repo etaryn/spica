@@ -5,8 +5,8 @@ import { messageToCheck } from "@/mind/process/guard/guard";
 import { guardOutgoing, type OutgoingArgs } from "@/mind/process/guard/outgoing";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { Db } from "@/db/client";
-import { listJudgeLogs } from "@/db/repos/judge-log";
-import { insertTurn } from "@/db/repos/session-log";
+import { listJudgeLogs } from "@/db/repos/user/judge-log";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

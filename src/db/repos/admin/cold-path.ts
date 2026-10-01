@@ -1,3 +1,7 @@
+/**
+ * Cross-user queries for the cold-path sweep: exchanges whose cold path never finished, and
+ * their attempt counts.
+ */
 import { inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { session_log } from "@/db/schema";

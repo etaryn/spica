@@ -1,3 +1,6 @@
+/**
+ * One runtime per server process for the Next app, kept across dev hot reloads.
+ */
 import "server-only";
 import { PgBossQueue } from "@/runtime/pg-boss-jobs";
 import { buildRuntime } from "@/runtime/deps";

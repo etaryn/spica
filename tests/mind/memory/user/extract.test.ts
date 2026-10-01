@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { buildExtractionInput, extract, normalizeExtraction } from "@/mind/memory/user/extract";
-import type { Turn } from "@/db/repos/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 
 const turn = (role: "user" | "companion", text: string, at: string): Turn => ({
   id: randomUUID(),

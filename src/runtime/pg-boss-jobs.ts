@@ -1,3 +1,6 @@
+/**
+ * The real job queue: pg-boss, in the same Postgres database as everything else.
+ */
 import type { PgBoss } from "pg-boss";
 import {
   COLD_PATH_QUEUE,

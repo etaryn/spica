@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { toHistoryMessage } from "@/app/api/chat/history/handler";
-import { recentTurns } from "@/db/repos/session-log";
+import { recentTurns } from "@/db/repos/user/session-log";
 import { getDeps, getVapidPublicKey } from "@/server/deps";
 import { requireUser } from "@/server/session";
 import { ChatClient, type UiMessage } from "./chat-client";

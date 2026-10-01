@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { egoTick, egoTickUser } from "@/mind/state/legacy-ego/tick";
-import { insertFact } from "@/db/repos/facts";
-import { getIdentityRow, updateIdentity, ensureIdentity } from "@/db/repos/identity";
-import { ensureRelationship } from "@/db/repos/relationship";
+import { insertFact } from "@/db/repos/user/facts";
+import { getIdentityRow, updateIdentity, ensureIdentity } from "@/db/repos/user/identity";
+import { ensureRelationship } from "@/db/repos/user/relationship";
 import { ego_tick } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";

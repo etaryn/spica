@@ -4,8 +4,8 @@ import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
-import { getIdentityRow } from "@/db/repos/identity";
-import { getTurn, insertTurn } from "@/db/repos/session-log";
+import { getIdentityRow } from "@/db/repos/user/identity";
+import { getTurn, insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import {
   closeTestDb,

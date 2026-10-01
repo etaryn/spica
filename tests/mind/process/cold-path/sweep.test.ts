@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { sweepUnfinishedColdPaths } from "@/mind/process/cold-path/sweep";
-import { insertTurn } from "@/db/repos/session-log";
+import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";

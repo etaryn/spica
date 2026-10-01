@@ -3,7 +3,7 @@
  * holds their conversation_state row lock, so concurrent messages and timers never race.
  */
 import type { Db } from "@/db/client";
-import { lockState, updateState, type ConvState } from "@/db/repos/conversation-state";
+import { lockState, updateState, type ConvState } from "@/db/repos/user/conversation-state";
 import type { Step } from "./transitions";
 
 export async function mutateState<R>(

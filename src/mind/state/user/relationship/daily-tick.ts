@@ -4,8 +4,9 @@
  * hourly, and each user ticks once per local date, on the first run at or after
  * `tick_local_hour` in their own zone (DST included).
  */
-import * as relationshipRepo from "@/db/repos/relationship";
-import { getTimezone } from "@/db/repos/users";
+import { adminListRelationshipUsers } from "@/db/repos/admin/relationship";
+import * as relationshipRepo from "@/db/repos/user/relationship";
+import { getTimezone } from "@/db/repos/user/users";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import {
@@ -89,7 +90,7 @@ export async function relationshipDailyTick(
   deps: Pick<Deps, "db" | "config" | "log">,
   now: Date,
 ): Promise<{ users: number; failed: number }> {
-  const users = await relationshipRepo.adminListRelationshipUsers(deps.db);
+  const users = await adminListRelationshipUsers(deps.db);
   let failed = 0;
 
   for (const userId of users) {

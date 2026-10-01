@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { deleteUser } from "@/db/repos/users";
+import { deleteUser } from "@/db/repos/user/users";
 import { auth } from "@/server/auth";
 import { getDeps } from "@/server/deps";
 import { requireUser } from "@/server/session";

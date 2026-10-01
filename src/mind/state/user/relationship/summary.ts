@@ -3,8 +3,8 @@
  * deviations from this user's baseline into a few phrases (never numbers): status first, then
  * the strongest deviations, then the make-up line. The phrases live in a prompt file.
  */
-import { getFact } from "@/db/repos/facts";
-import * as relationshipRepo from "@/db/repos/relationship";
+import { getFact } from "@/db/repos/user/facts";
+import * as relationshipRepo from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { deviationOf, fadeParams } from "./params";

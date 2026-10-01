@@ -1,4 +1,4 @@
-import type { Turn } from "@/db/repos/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import type { TurnAssertion } from "./script";
 
 /** Deterministic turn-taking check over one session's session_log rows. */

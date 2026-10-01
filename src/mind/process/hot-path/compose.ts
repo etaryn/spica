@@ -5,10 +5,10 @@
  * reply, enqueues the cold path, then calls `writeGuardLog`. Serves normal replies, the crisis
  * path, and reach-outs.
  */
-import { listOnboardingFacts } from "@/db/repos/facts";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
-import { getTimezone } from "@/db/repos/users";
+import { listOnboardingFacts } from "@/db/repos/user/facts";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
+import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult } from "@/mind/memory/shared/types";
 import { retrieve } from "@/mind/memory/user/retrieve";

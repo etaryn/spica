@@ -3,9 +3,9 @@ import type { LifeConfig } from "@/mind/platform/config";
 import { lifeDate } from "@/mind/world/her-clock";
 import type { RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
-import * as r from "@/db/repos/inspector";
-import { listJudgeLogs } from "@/db/repos/judge-log";
-import { listTurns } from "@/db/repos/session-log";
+import * as r from "@/db/repos/admin/inspector";
+import { listJudgeLogs } from "@/db/repos/user/judge-log";
+import { listTurns } from "@/db/repos/user/session-log";
 import styles from "../inspector.module.css";
 
 const Empty = ({ phase }: { phase: number }) => (

@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { insertFact } from "@/db/repos/facts";
-import { ensureIdentity, getIdentityRow, updateIdentity } from "@/db/repos/identity";
+import { insertFact } from "@/db/repos/user/facts";
+import { ensureIdentity, getIdentityRow, updateIdentity } from "@/db/repos/user/identity";
 import { adminResetSelf, assertLocalDatabase } from "@/db/reset-self";
 import { entity, fact, thread } from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";

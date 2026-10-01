@@ -1,3 +1,6 @@
+/**
+ * Who may open the inspector: only when it's enabled, and only for allowlisted admins.
+ */
 import { z } from "zod";
 
 export type InspectorEnv = { enabled: boolean; admins: string[] };

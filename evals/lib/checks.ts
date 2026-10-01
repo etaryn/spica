@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { listTurns } from "@/db/repos/session-log";
+import { listTurns } from "@/db/repos/user/session-log";
 import { entity, fact, thread } from "@/db/schema";
 import type { CrisisCard } from "@/mind/platform/config";
 import { turnText, type Script } from "./script";

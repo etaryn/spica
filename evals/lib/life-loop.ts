@@ -11,7 +11,7 @@ import type { RecordingQueue } from "@/mind/platform/jobs";
 import { HOUR } from "@/mind/platform/time";
 import { nextLocalDate } from "@/mind/platform/timezone";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
-import { insertLifeDay } from "@/db/repos/life-day";
+import { insertLifeDay } from "@/db/repos/world/life-day";
 import { session_log } from "@/db/schema";
 import { runDueJobs } from "./scheduler";
 import { BASE, type LifeScript, type OutreachScript } from "./script";

@@ -4,9 +4,9 @@
  * preoccupation. Read-only, and it never throws: a failure degrades to whatever could still be
  * found, so a memory problem never costs the user their reply.
  */
-import { candidateFacts, getFact, getPreoccupationFact } from "@/db/repos/facts";
-import type { Turn } from "@/db/repos/session-log";
-import { dueThreads } from "@/db/repos/threads";
+import { candidateFacts, getFact, getPreoccupationFact } from "@/db/repos/user/facts";
+import type { Turn } from "@/db/repos/user/session-log";
+import { dueThreads } from "@/db/repos/user/threads";
 import { rankMemories, type Scored } from "@/mind/memory/shared/ranking";
 import {
   emptyRetrieval,

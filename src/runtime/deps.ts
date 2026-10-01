@@ -1,3 +1,7 @@
+/**
+ * Builds the real runtime for the app and the worker: config, database, Claude, Voyage, pg-boss,
+ * the Postgres event bus and Web Push, wired into the mind's `Deps`.
+ */
 import Anthropic from "@anthropic-ai/sdk";
 import { PgBoss } from "pg-boss";
 import { systemClock } from "@/mind/platform/clock";

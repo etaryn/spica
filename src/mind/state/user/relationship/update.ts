@@ -4,9 +4,9 @@
  * inside the cold path's transaction (in its own savepoint).
  */
 import type { Db } from "@/db/client";
-import * as relationshipRepo from "@/db/repos/relationship";
-import type { Turn } from "@/db/repos/session-log";
-import { getTimezone } from "@/db/repos/users";
+import * as relationshipRepo from "@/db/repos/user/relationship";
+import type { Turn } from "@/db/repos/user/session-log";
+import { getTimezone } from "@/db/repos/user/users";
 import type { Deps } from "@/mind/platform/deps";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { buildCadence } from "./cadence";

@@ -1,3 +1,7 @@
+/**
+ * Worker plumbing shared by every job: error scrubbing (ids and error names only), and the queue
+ * policies for jobs that must never retry.
+ */
 import type { PgBoss } from "pg-boss";
 import type { Logger } from "@/mind/platform/log";
 import {

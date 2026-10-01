@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { WebPushPusher } from "@/runtime/web-push";
-import { listPushSubscriptions, upsertPushSubscription } from "@/db/repos/push";
+import { listPushSubscriptions, upsertPushSubscription } from "@/db/repos/user/push";
 import { silentLogger } from "@/mind/platform/log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 

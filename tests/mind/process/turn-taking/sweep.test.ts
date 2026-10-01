@@ -6,7 +6,7 @@ import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { runTurnTimer } from "@/mind/process/turn-taking/commit-and-reply";
 import { sweepTurns } from "@/mind/process/turn-taking/sweep";
 import { mutateState } from "@/mind/process/turn-taking/state";
-import { listTurns } from "@/db/repos/session-log";
+import { listTurns } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

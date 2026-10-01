@@ -5,16 +5,22 @@
  * to belong to this user.
  */
 import type { Db } from "@/db/client";
-import { normalizeName, upsertEntityMention } from "@/db/repos/entities";
-import { applyRecall, bumpDuplicate, getFact, insertFact, setFactStatus } from "@/db/repos/facts";
-import { markExtracted } from "@/db/repos/session-log";
+import { normalizeName, upsertEntityMention } from "@/db/repos/user/entities";
+import {
+  applyRecall,
+  bumpDuplicate,
+  getFact,
+  insertFact,
+  setFactStatus,
+} from "@/db/repos/user/facts";
+import { markExtracted } from "@/db/repos/user/session-log";
 import {
   findOpenThreadByTitle,
   getOwnedThread,
   insertThread,
   resolveThread,
   touchThread,
-} from "@/db/repos/threads";
+} from "@/db/repos/user/threads";
 import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Config } from "@/mind/platform/config";
 import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract";

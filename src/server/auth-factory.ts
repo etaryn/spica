@@ -1,3 +1,7 @@
+/**
+ * Builds Better Auth: email and password, the server-side 18+ gate at sign-up, and the extra
+ * user fields.
+ */
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";

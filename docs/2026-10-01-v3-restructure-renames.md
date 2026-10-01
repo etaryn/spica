@@ -31,3 +31,8 @@ design doc's layout section.
 | `lifeStateLines` | `yourDayLines` | `src/mind/process/hot-path/your-day-line.ts` |
 | `loadLifeState` | `loadYourDayLine` | `src/mind/process/hot-path/your-day-line.ts` |
 | `AssembleInput.egoLine`, `.lifeState` | `.feelingLine`, `.yourDay` | `src/mind/process/hot-path/assemble.ts` |
+| `adminFindStuckConversations` (repos/conversation-state) | same name (repos/admin/turn-taking) | `src/db/repos/admin/turn-taking.ts` |
+| `adminListLifeUsers` (repos/identity) | same name (repos/admin/life) | `src/db/repos/admin/life.ts` |
+| `adminListRelationshipUsers` (repos/relationship) | same name (repos/admin/relationship) | `src/db/repos/admin/relationship.ts` |
+| `adminListUsers`, `adminGetUser` (repos/users) | same names (repos/admin/users) | `src/db/repos/admin/users.ts` |
+| (worker inline registration) | `registerMemoryJobs`, `registerProcessJobs`, `registerStateJobs`, `registerWorldJobs` | `src/worker/*-jobs.ts` |

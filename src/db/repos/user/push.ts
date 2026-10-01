@@ -1,3 +1,6 @@
+/**
+ * One user's Web Push subscriptions, one row per browser.
+ */
 import { and, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { push_subscription } from "@/db/schema";

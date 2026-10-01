@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { forgetFact } from "@/db/repos/facts";
+import { forgetFact } from "@/db/repos/user/facts";
 import { getDeps } from "@/server/deps";
 import { requireUser } from "@/server/session";
 

@@ -4,10 +4,10 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { encodeExtraction, type EncodeInput } from "@/mind/memory/user/encode";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
-import * as facts from "@/db/repos/facts";
-import { findEntityByName } from "@/db/repos/entities";
-import { insertTurn } from "@/db/repos/session-log";
-import * as threads from "@/db/repos/threads";
+import * as facts from "@/db/repos/user/facts";
+import { findEntityByName } from "@/db/repos/user/entities";
+import { insertTurn } from "@/db/repos/user/session-log";
+import * as threads from "@/db/repos/user/threads";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
 

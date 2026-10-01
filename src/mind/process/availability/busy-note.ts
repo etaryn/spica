@@ -4,8 +4,8 @@
  * call, and it is never extracted into memory.
  */
 import { randomUUID } from "node:crypto";
-import * as sessionLog from "@/db/repos/session-log";
-import type { Turn } from "@/db/repos/session-log";
+import * as sessionLog from "@/db/repos/user/session-log";
+import type { Turn } from "@/db/repos/user/session-log";
 import type { Deps } from "@/mind/platform/deps";
 import type { BackchannelJob } from "@/mind/platform/jobs";
 import { loadPrompt } from "@/mind/platform/prompts";

@@ -1,6 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+/**
+ * The per-user ego row (mood, energy, preoccupation) and its tick log. Retired when her mood moves
+ * to the core mind.
+ */
+import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { ego_tick, identity, relationship } from "@/db/schema";
+import { ego_tick, identity } from "@/db/schema";
 
 export type IdentityRow = typeof identity.$inferSelect;
 export type EgoBaseline = { mood_valence: number; mood_arousal: number; energy: number };
@@ -53,13 +57,4 @@ export async function insertEgoTick(
   },
 ): Promise<void> {
   await tx.insert(ego_tick).values({ user_id: userId, ...row });
-}
-
-/** System jobs (life_tick, ego_tick), unscoped by design: users whose friendship hasn't been ended. */
-export async function adminListLifeUsers(db: Db): Promise<string[]> {
-  const rows = await db
-    .select({ id: relationship.user_id })
-    .from(relationship)
-    .where(inArray(relationship.status, ["active", "repairing"]));
-  return rows.map((r) => r.id);
 }

@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { retrieve } from "@/mind/memory/user/retrieve";
-import * as facts from "@/db/repos/facts";
-import { ensureIdentity, updateIdentity } from "@/db/repos/identity";
-import { insertTurn, type Turn } from "@/db/repos/session-log";
-import * as threads from "@/db/repos/threads";
+import * as facts from "@/db/repos/user/facts";
+import { ensureIdentity, updateIdentity } from "@/db/repos/user/identity";
+import { insertTurn, type Turn } from "@/db/repos/user/session-log";
+import * as threads from "@/db/repos/user/threads";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 

@@ -4,8 +4,8 @@ import {
   emptyRetrieval,
   gapLine,
   relationshipLine,
-  relativeDate,
 } from "@/mind/process/hot-path/assemble";
+import { relativeDate } from "@/mind/platform/relative-date";
 import { splitParts } from "@/mind/process/hot-path/split-parts";
 import { resolveSessionId } from "@/mind/process/receive/session";
 

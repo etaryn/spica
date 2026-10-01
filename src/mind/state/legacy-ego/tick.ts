@@ -12,7 +12,7 @@ import { listLifeBlocks } from "@/mind/world/legacy-life-tick/blocks";
 import { lifeDate, lifeHour, lifeTimezone } from "@/mind/world/her-clock";
 import { HOUR } from "@/mind/platform/time";
 import { localMidnight } from "@/mind/platform/timezone";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import {
   dayLoad,
   driftStep,

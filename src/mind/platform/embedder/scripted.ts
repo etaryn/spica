@@ -1,6 +1,14 @@
+/**
+ * Test embedder with hand-picked vectors: exact vectors for registered texts, and near-orthogonal
+ * hashed axes for everything else, so tests can control which memories count as similar.
+ */
 import type { Embedder } from "./types";
 
-/** Test embedder: exact vectors for registered texts, near-orthogonal hashed axes for everything else. */
+/** Axes below this index are left free for tests to place registered vectors on. */
+const FIRST_HASHED_AXIS = 100;
+const FNV_OFFSET = 2166136261;
+const FNV_PRIME = 16777619;
+
 export class ScriptedEmbedder implements Embedder {
   private readonly vectors = new Map<string, number[]>();
   calls = 0;
@@ -8,18 +16,19 @@ export class ScriptedEmbedder implements Embedder {
 
   constructor(readonly dimensions: number) {}
 
+  /** A unit vector along axis `i`. */
   static axis(dim: number, i: number): number[] {
-    const v = new Array<number>(dim).fill(0);
-    v[i % dim] = 1;
-    return v;
+    const vector = new Array<number>(dim).fill(0);
+    vector[i % dim] = 1;
+    return vector;
   }
 
-  /** Unit vector with cosine `sim` to axis(i), built from axes i and j. */
+  /** A unit vector with cosine similarity `sim` to axis(i), built from axes i and j. */
   static near(dim: number, i: number, j: number, sim: number): number[] {
-    const v = new Array<number>(dim).fill(0);
-    v[i % dim] = sim;
-    v[j % dim] = Math.sqrt(1 - sim * sim);
-    return v;
+    const vector = new Array<number>(dim).fill(0);
+    vector[i % dim] = sim;
+    vector[j % dim] = Math.sqrt(1 - sim * sim);
+    return vector;
   }
 
   set(text: string, vector: number[]): this {
@@ -29,20 +38,23 @@ export class ScriptedEmbedder implements Embedder {
 
   async embed(texts: string[], _inputType: "query" | "document"): Promise<number[][]> {
     this.calls += 1;
+
     if (this.failNext) {
       this.failNext = false;
       throw new Error("scripted embedder failure");
     }
-    return texts.map(
-      (t) =>
-        this.vectors.get(t) ??
-        ScriptedEmbedder.axis(this.dimensions, 100 + (hash(t) % (this.dimensions - 100))),
-    );
+
+    return texts.map((text) => this.vectors.get(text) ?? this.hashedAxis(text));
+  }
+
+  private hashedAxis(text: string): number[] {
+    const axis = FIRST_HASHED_AXIS + (hash(text) % (this.dimensions - FIRST_HASHED_AXIS));
+    return ScriptedEmbedder.axis(this.dimensions, axis);
   }
 }
 
-function hash(s: string): number {
-  let h = 2166136261;
-  for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+function hash(text: string): number {
+  let h = FNV_OFFSET;
+  for (const char of text) h = Math.imul(h ^ char.charCodeAt(0), FNV_PRIME);
   return h >>> 0;
 }

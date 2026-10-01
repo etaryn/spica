@@ -7,7 +7,7 @@ import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { BackchannelJob } from "@/mind/platform/jobs";
 import { parseSummaryPhrases, type Phrases } from "@/mind/state/user/relationship/summary";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
 

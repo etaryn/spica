@@ -5,7 +5,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
 import { withTimeout } from "@/mind/platform/timeout";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import { buildCandidates, pickWinner } from "./candidates";
 import { evaluateGate } from "./gate";
 import * as inputs from "./inputs";

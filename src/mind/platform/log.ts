@@ -1,7 +1,13 @@
-/** Never put message text in meta: it is sensitive personal data. Ids and error names only. */
+/**
+ * Structured logging. Log ids and error names only, never message text: what users write is
+ * sensitive personal data.
+ */
+
+type Meta = Record<string, unknown>;
+
 export interface Logger {
-  info(msg: string, meta?: Record<string, unknown>): void;
-  error(msg: string, meta?: Record<string, unknown>): void;
+  info(msg: string, meta?: Meta): void;
+  error(msg: string, meta?: Meta): void;
 }
 
 export const consoleLogger: Logger = {
@@ -9,4 +15,7 @@ export const consoleLogger: Logger = {
   error: (msg, meta) => console.error(JSON.stringify({ level: "error", msg, ...meta })),
 };
 
-export const silentLogger: Logger = { info: () => {}, error: () => {} };
+export const silentLogger: Logger = {
+  info: () => {},
+  error: () => {},
+};

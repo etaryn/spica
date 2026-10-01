@@ -4,7 +4,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { parseSummaryPhrases, type Phrases } from "@/mind/state/user/relationship/summary";
 import { HOUR } from "@/mind/platform/time";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import { stateOf, type EgoState } from "./ego";
 
 const DIMS = ["energy", "mood_valence", "mood_arousal"] as const;

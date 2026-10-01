@@ -19,7 +19,8 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import { withTimeout } from "@/mind/platform/timeout";
 import { availabilityFor, NO_DELAY } from "@/mind/process/availability/deferral";
 import { judgeTurn, logTurnDecision, type TurnVerdict } from "./judge";
-import { seededUnit, waitWindowMs } from "./pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
+import { waitWindowMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 

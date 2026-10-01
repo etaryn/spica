@@ -1,29 +1,37 @@
+/**
+ * The real embedder: Voyage embeddings, used by memory retrieval, reconcile and the day's event
+ * checks.
+ */
 import type { Embedder } from "./types";
+
+const VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
 
 type VoyageResponse = { data: { index: number; embedding: number[] }[] };
 
-/** Voyage embeddings for retrieval, reconcile and life-event checks. */
+type VoyageOptions = {
+  apiKey: string | undefined;
+  model: string;
+  dimensions: number;
+  fetchImpl?: typeof fetch;
+};
+
 export class VoyageEmbedder implements Embedder {
   readonly dimensions: number;
   private readonly apiKey: string | undefined;
   private readonly model: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(opts: {
-    apiKey: string | undefined;
-    model: string;
-    dimensions: number;
-    fetchImpl?: typeof fetch;
-  }) {
-    this.apiKey = opts.apiKey;
-    this.model = opts.model;
-    this.dimensions = opts.dimensions;
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+  constructor(options: VoyageOptions) {
+    this.apiKey = options.apiKey;
+    this.model = options.model;
+    this.dimensions = options.dimensions;
+    this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async embed(texts: string[], inputType: "query" | "document"): Promise<number[][]> {
     if (!this.apiKey) throw new Error("VOYAGE_API_KEY is not set");
-    const res = await this.fetchImpl("https://api.voyageai.com/v1/embeddings", {
+
+    const response = await this.fetchImpl(VOYAGE_URL, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
@@ -33,8 +41,10 @@ export class VoyageEmbedder implements Embedder {
         output_dimension: this.dimensions,
       }),
     });
-    if (!res.ok) throw new Error(`Voyage embeddings failed with HTTP ${res.status}`);
-    const body = (await res.json()) as VoyageResponse;
-    return [...body.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    if (!response.ok) throw new Error(`Voyage embeddings failed with HTTP ${response.status}`);
+
+    const body = (await response.json()) as VoyageResponse;
+    const inInputOrder = [...body.data].sort((a, b) => a.index - b.index);
+    return inInputOrder.map((item) => item.embedding);
   }
 }

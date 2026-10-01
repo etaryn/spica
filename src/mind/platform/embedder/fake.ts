@@ -1,17 +1,27 @@
+/**
+ * Deterministic, hash-based vectors for tests and evals. The same text always gets the same
+ * vector; the vectors carry no meaning.
+ */
 import type { Embedder } from "./types";
 
-/** Deterministic hash-based vectors for tests/evals. Not semantically meaningful. */
+const FNV_OFFSET = 2166136261;
+const FNV_PRIME = 16777619;
+const SPREAD = 2654435761;
+
 export class FakeEmbedder implements Embedder {
   constructor(readonly dimensions: number) {}
 
   async embed(texts: string[], _inputType?: "query" | "document"): Promise<number[][]> {
-    return texts.map((t) => {
-      let h = 2166136261;
-      for (const ch of t) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-      return Array.from(
-        { length: this.dimensions },
-        (_, i) => (((h ^ (i * 2654435761)) >>> 0) % 1000) / 1000 + 0.001,
-      );
-    });
+    return texts.map((text) => this.vectorFor(text));
+  }
+
+  private vectorFor(text: string): number[] {
+    let hash = FNV_OFFSET;
+    for (const char of text) hash = Math.imul(hash ^ char.charCodeAt(0), FNV_PRIME);
+
+    return Array.from(
+      { length: this.dimensions },
+      (_, i) => (((hash ^ (i * SPREAD)) >>> 0) % 1000) / 1000 + 0.001,
+    );
   }
 }

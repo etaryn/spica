@@ -1,6 +1,9 @@
+/**
+ * The language-model interface the mind talks to. Provider-neutral on purpose, so the provider
+ * can change without touching the mind.
+ */
 import type { z } from "zod";
 
-/** Provider-neutral on purpose: the provider may change. */
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export interface ReplyRequest {
@@ -22,7 +25,7 @@ export interface ClassifyRequest<T> {
   maxTokens: number;
 }
 
-/** Token counts for one model call; `purpose` is "reply" for `generateReply`, else the request's purpose. */
+/** Token counts for one model call. `purpose` is "reply" for a reply, else the request's purpose. */
 export interface LlmUsage {
   purpose: string;
   model: string;
@@ -32,12 +35,12 @@ export interface LlmUsage {
   cache_creation_input_tokens: number;
 }
 
-/** Optional callback a provider reports every completed call's usage to (evals tally spend with it). */
+/** Receives every completed call's usage; the evals tally spend with it. */
 export type UsageSink = (usage: LlmUsage) => void;
 
 export interface LLMProvider {
-  /** Reply model. Throws on failure, refusal or empty output. */
-  generateReply(req: ReplyRequest): Promise<string>;
-  /** Cheap model with strict JSON output validated against `schema`. */
-  classifyJson<T>(req: ClassifyRequest<T>): Promise<T>;
+  /** The reply model. Throws on failure, refusal or empty output. */
+  generateReply(request: ReplyRequest): Promise<string>;
+  /** A cheap model with strict JSON output, validated against `schema`. */
+  classifyJson<T>(request: ClassifyRequest<T>): Promise<T>;
 }

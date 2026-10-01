@@ -1,28 +1,42 @@
-/** Server-side age gate. `dob` is YYYY-MM-DD; age is computed on UTC calendar dates. */
-export function checkAge(
-  dob: string,
-  now: Date,
-  minAge: number,
-): { ok: true } | { ok: false; reason: string } {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dob);
-  if (!m) return { ok: false, reason: "Enter your date of birth as YYYY-MM-DD." };
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const parsed = new Date(Date.UTC(y, mo - 1, d));
-  if (
-    parsed.getUTCFullYear() !== y ||
-    parsed.getUTCMonth() !== mo - 1 ||
-    parsed.getUTCDate() !== d
-  ) {
-    return { ok: false, reason: "That date of birth isn't a real date." };
-  }
-  if (parsed.getTime() > now.getTime())
-    return { ok: false, reason: "Date of birth is in the future." };
+/**
+ * The 18+ gate, checked on the server at sign-up. Age is counted on UTC calendar dates; someone
+ * born on 29 February has their birthday on 1 March in non-leap years.
+ */
 
-  // Birthday reached when (month, day) of now >= (month, day) of dob; Feb 29 → Mar 1 in non-leap years.
-  let age = now.getUTCFullYear() - y;
+export type AgeCheck = { ok: true } | { ok: false; reason: string };
+
+const DATE_OF_BIRTH = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+export function checkAge(dob: string, now: Date, minAge: number): AgeCheck {
+  const match = DATE_OF_BIRTH.exec(dob);
+  if (!match) return { ok: false, reason: "Enter your date of birth as YYYY-MM-DD." };
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const birth = new Date(Date.UTC(year, month - 1, day));
+  const isRealDate =
+    birth.getUTCFullYear() === year &&
+    birth.getUTCMonth() === month - 1 &&
+    birth.getUTCDate() === day;
+  if (!isRealDate) return { ok: false, reason: "That date of birth isn't a real date." };
+
+  if (birth.getTime() > now.getTime()) {
+    return { ok: false, reason: "Date of birth is in the future." };
+  }
+
+  if (ageOn(now, year, month, day) < minAge) {
+    return { ok: false, reason: `You must be at least ${minAge} to use Spica.` };
+  }
+  return { ok: true };
+}
+
+function ageOn(now: Date, year: number, month: number, day: number): number {
   const nowMonth = now.getUTCMonth() + 1;
   const nowDay = now.getUTCDate();
-  if (nowMonth < mo || (nowMonth === mo && nowDay < d)) age -= 1;
-  if (age < minAge) return { ok: false, reason: `You must be at least ${minAge} to use Spica.` };
-  return { ok: true };
+  const hadBirthdayThisYear = nowMonth > month || (nowMonth === month && nowDay >= day);
+
+  const age = now.getUTCFullYear() - year;
+  return hadBirthdayThisYear ? age : age - 1;
 }

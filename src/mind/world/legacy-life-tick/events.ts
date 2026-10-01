@@ -5,11 +5,11 @@ import { lastAcceptedHighStakes } from "@/db/repos/life-event-log";
 import type { LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
-import { relativeDate } from "@/mind/process/hot-path/assemble";
+import { relativeDate } from "@/mind/platform/relative-date";
 import type { ExtractedFact } from "@/mind/memory/user/extract";
 import { decide, type Decision } from "@/mind/memory/user/reconcile";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
 
 /** Sent to the model. No numeric bounds (unsupported); `checkEvent` validates and clamps. */

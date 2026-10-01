@@ -1,13 +1,8 @@
 import { expect, test } from "vitest";
 import { SimClock } from "@/mind/platform/clock";
 import { loadConfig } from "@/mind/platform/config";
-import {
-  readDelayMs,
-  seededUnit,
-  sleepUntil,
-  typingMs,
-  waitWindowMs,
-} from "@/mind/process/turn-taking/pacing";
+import { readDelayMs, sleepUntil, typingMs, waitWindowMs } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 
 const t = loadConfig().turn;
 

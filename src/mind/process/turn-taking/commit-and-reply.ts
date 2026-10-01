@@ -16,7 +16,8 @@ import {
 } from "@/mind/platform/jobs";
 import { runAvailabilityNote } from "@/mind/process/availability/busy-note";
 import { withTimeout } from "@/mind/platform/timeout";
-import { readDelayMs, seededUnit, sleepUntil, typingMs } from "./pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
+import { readDelayMs, sleepUntil, typingMs } from "./pacing";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 

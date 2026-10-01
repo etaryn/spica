@@ -1,3 +1,4 @@
+import { relativeDate } from "@/mind/platform/relative-date";
 import type { ChatMessage } from "@/mind/platform/llm/types";
 import type { RecalledFact } from "@/mind/memory/shared/types";
 import { HOUR } from "@/mind/platform/time";
@@ -32,19 +33,6 @@ export interface AssembleInput {
   openQuestions?: string[];
   /** Slot 7b: why she's writing first, and the trailing user-role cue the model answers. */
   reachOut?: { slot: string; cue: string } | null;
-}
-
-const DAY = 86_400_000;
-
-export function relativeDate(d: Date, now: Date): string {
-  const startOf = (x: Date) => Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate());
-  const days = Math.round((startOf(now) - startOf(d)) / DAY);
-  if (days < 0) return `in ${-days} day${days === -1 ? "" : "s"}`;
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 14) return `${days} days ago`;
-  if (days < 60) return `${Math.round(days / 7)} weeks ago`;
-  return `${Math.round(days / 30)} months ago`;
 }
 
 function factList(title: string, facts: RetrievedFact[], now: Date): string | null {

@@ -7,7 +7,7 @@ import { blockAt, listLifeBlocks, type BlockFact } from "@/mind/world/legacy-lif
 import { lifeDate } from "@/mind/world/her-clock";
 import { fadeParams } from "@/mind/state/user/relationship/params";
 import { withTimeout } from "@/mind/platform/timeout";
-import { seededUnit } from "@/mind/process/turn-taking/pacing";
+import { seededUnit } from "@/mind/platform/seeded-random";
 
 export type Availability = {
   delayMs: number;

@@ -1,3 +1,7 @@
+/**
+ * Background jobs: the queue names, what each job carries, and the queue interface. The names are
+ * stored in the database by pg-boss, so they never change.
+ */
 import type { RecalledFact } from "@/mind/memory/shared/types";
 
 export const COLD_PATH_QUEUE = "cold_path";
@@ -13,21 +17,26 @@ export const EGO_TICK_QUEUE = "ego_tick";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 
-/** Send the reach-out scheduled in `reach_out_log` row `logId`. */
+/** Sends the reach-out scheduled in `reach_out_log` row `logId`. */
 export type ReachOutSendJob = { userId: string; logId: string };
 
-/** `recalled` carries the hot path's retrieval for the cold path's write-back (the hot path is read-only). */
+/**
+ * One exchange for the cold path. `recalled` carries the hot path's retrieval so the cold path can
+ * write back recall reinforcement; the hot path itself is read-only.
+ */
 export type ColdPathJob = {
   userId: string;
   turnIds: string[];
   replyTurnId?: string;
   recalled?: RecalledFact[];
 };
-/** `version` must still equal `conversation_state.buffer_version` when the job runs, or it is stale. */
+
+/** Stale unless `version` still equals `conversation_state.buffer_version` when it runs. */
 export type TurnTimerJob = { userId: string; version: number; attempt?: number };
+
 /**
- * `turnId`: the user turn whose judge verdict proposed the backchannel (judge_log / guard seed). The
- * same queue carries the availability note (`trigger: "availability"`), whose text is picked when it runs.
+ * A backchannel, or the availability note (`trigger: "availability"`, whose text is picked when it
+ * runs). `turnId` is the user turn whose judge verdict proposed it.
  */
 export type BackchannelJob = {
   userId: string;
@@ -52,10 +61,10 @@ export type QueuedJob = {
 }[JobName];
 
 export interface JobQueue {
-  enqueue<N extends JobName>(name: N, data: JobMap[N], opts?: EnqueueOptions): Promise<void>;
+  enqueue<N extends JobName>(name: N, data: JobMap[N], options?: EnqueueOptions): Promise<void>;
 }
 
-/** In-process queue for tests and the eval harness (drained by the caller). */
+/** An in-process queue for tests and the eval harness; the caller drains it. */
 export class RecordingQueue implements JobQueue {
   jobs: QueuedJob[] = [];
   failNext = false;
@@ -63,23 +72,21 @@ export class RecordingQueue implements JobQueue {
   async enqueue<N extends JobName>(
     name: N,
     data: JobMap[N],
-    opts: EnqueueOptions = {},
+    options: EnqueueOptions = {},
   ): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
       throw new Error("queue unavailable");
     }
-    this.jobs.push({
-      name,
-      data,
-      ...(opts.startAfter ? { startAfter: opts.startAfter } : {}),
-    } as QueuedJob);
+
+    const job = { name, data, ...(options.startAfter ? { startAfter: options.startAfter } : {}) };
+    this.jobs.push(job as QueuedJob);
   }
 
   /** Removes and returns the jobs matching `filter` (all jobs when omitted), in enqueue order. */
-  drain(filter: (j: QueuedJob) => boolean = () => true): QueuedJob[] {
-    const out = this.jobs.filter(filter);
-    this.jobs = this.jobs.filter((j) => !filter(j));
-    return out;
+  drain(filter: (job: QueuedJob) => boolean = () => true): QueuedJob[] {
+    const drained = this.jobs.filter(filter);
+    this.jobs = this.jobs.filter((job) => !filter(job));
+    return drained;
   }
 }

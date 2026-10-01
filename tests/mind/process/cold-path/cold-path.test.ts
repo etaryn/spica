@@ -5,6 +5,7 @@ import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { getIdentityRow } from "@/db/repos/user/identity";
+import { getParams } from "@/db/repos/user/relationship";
 import { getTurn, insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import {
@@ -292,4 +293,35 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
   expect(updateRelationship).not.toHaveBeenCalled();
   expect(await getIdentityRow(getTestDb(), u)).toBeNull();
   expect((await getTurn(getTestDb(), u, c.id))?.extracted).toBe(true);
+});
+
+test("an emotional exchange moves the user's affect and never touches core state", async () => {
+  const deps = depsWith();
+  deps.llm.handlers.extract = () => ({
+    facts: [
+      {
+        subject: "user",
+        kind: "event",
+        content: "The user got a promotion.",
+        occurred_at: null,
+        salience: 0.5,
+        valence: 0.9,
+        confidence: 1,
+        entity_names: [],
+        thread_title: null,
+      },
+    ],
+    entities: [],
+    threads: [],
+    relationship: null,
+  });
+  const u = await createTestUser();
+  const { job } = await exchange(u, "i got promoted!", "that's great", 0);
+  const before = await deps.core.state.get();
+  await runColdPath(deps, job);
+  const params = await getParams(getTestDb(), u);
+  expect(params.affect_valence.value).toBeGreaterThan(0.5);
+  expect(params.afterglow.value).toBeGreaterThan(0);
+  expect(await deps.core.state.get()).toEqual(before);
+  expect(await getIdentityRow(getTestDb(), u)).toBeNull();
 });

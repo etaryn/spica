@@ -1,6 +1,7 @@
 /**
  * The shapes of one user's relationship state: the homeostatic params (closeness, trust, warmth,
- * hurt, tension, messages per day), the status row, and the events that record every change.
+ * hurt, tension, messages per day, and her own feelings toward them: affect and
+ * afterglow), the status row, and the events that record every change.
  */
 import type { Config } from "@/mind/platform/config";
 
@@ -11,6 +12,8 @@ export const PARAM_NAMES = [
   "hurt",
   "tension",
   "msgs_per_day",
+  "affect_valence",
+  "afterglow",
 ] as const;
 export type ParamName = (typeof PARAM_NAMES)[number];
 

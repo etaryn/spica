@@ -173,7 +173,7 @@
     "guard_corrective": "v1",
     "guard_fallback": "v1",
     "turn_judge": "v1",
-    "relationship_summary": "v1",
+    "relationship_summary": "v2",
     "life_plan": "v1",
     "life_event": "v1",
     "life_availability": "v1",
@@ -195,7 +195,9 @@
       "warmth": 0.5,
       "hurt": 0,
       "tension": 0,
-      "msgs_per_day": 5
+      "msgs_per_day": 5,
+      "affect_valence": 0.5,
+      "afterglow": 0
     },
     "initial_variance": {
       "closeness": 0.01,
@@ -203,8 +205,11 @@
       "warmth": 0.02,
       "hurt": 0.01,
       "tension": 0.01,
-      "msgs_per_day": 25
+      "msgs_per_day": 25,
+      "affect_valence": 0.01,
+      "afterglow": 0.01
     },
+    "affect": { "exchange_gain": 0.1, "afterglow_gain": 0.3, "afterglow_half_life_hours": 12 },
     "gains": {
       "warmth": 0.15,
       "trust": 0.1,
@@ -291,7 +296,6 @@
     "preoccupation_hours": 36,
     "event_gain": 0.3,
     "event_arousal_gain": 0.2,
-    "exchange_gain": 0.1,
     "bands": { "energy": [0.35, 0.7], "mood_valence": [-0.2, 0.4], "mood_arousal": [0.25, 0.7] }
   },
   "availability": {

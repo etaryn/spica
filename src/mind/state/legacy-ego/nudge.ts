@@ -1,13 +1,7 @@
 import type { Db } from "@/db/client";
-import {
-  ensureIdentity,
-  insertEgoTick,
-  lockIdentity,
-  updateIdentity,
-  type IdentityRow,
-} from "@/db/repos/user/identity";
+import { insertEgoTick, updateIdentity, type IdentityRow } from "@/db/repos/user/identity";
 import type { Config } from "@/mind/platform/config";
-import { applyEvent, applyExchange, exchangeTone, stateOf } from "./ego";
+import { applyEvent, stateOf } from "./ego";
 
 /** A generated event nudges her mood; a strong one becomes her preoccupation. */
 export async function nudgeEgoForEvent(
@@ -29,26 +23,4 @@ export async function nudgeEgoForEvent(
     created_at: a.now,
   });
   return { ...a.row, ...patch };
-}
-
-/** Cold path: nudge her mood toward the exchange's tone. No LLM call; skipped on crisis. */
-export async function nudgeEgoForExchange(
-  tx: Db,
-  config: Config,
-  a: { userId: string; facts: { valence: number; salience: number }[]; crisis: boolean; now: Date },
-): Promise<boolean> {
-  if (a.crisis) return false;
-  const tone = exchangeTone(a.facts);
-  if (tone === null) return false;
-  await ensureIdentity(tx, a.userId, config.ego.baseline);
-  const row = await lockIdentity(tx, a.userId);
-  const next = applyExchange(stateOf(row), tone, config.ego);
-  await updateIdentity(tx, a.userId, next);
-  await insertEgoTick(tx, a.userId, {
-    ...next,
-    preoccupation: row.preoccupation,
-    reason: "exchange",
-    created_at: a.now,
-  });
-  return true;
 }

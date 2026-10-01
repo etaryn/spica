@@ -54,6 +54,8 @@ test("faded halves per half-life; fadeParams touches only hurt and tension", () 
     hurt: p(0.8, 0, 0.01),
     tension: p(0.8, 0, 0.01),
     msgs_per_day: p(5, 5, 25),
+    affect_valence: p(0.5, 0.5, 0.01),
+    afterglow: p(0, 0, 0.01),
   };
   const f = fadeParams(params, later, cfg);
   expect(f.hurt.value).toBeCloseTo(0.4);

@@ -2,14 +2,18 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { parseSummaryPhrases, summaryLines } from "@/mind/state/user/relationship/summary";
-import type { Params, RelationshipState } from "@/mind/state/user/relationship/types";
+import {
+  PARAM_NAMES,
+  type Params,
+  type RelationshipState,
+} from "@/mind/state/user/relationship/types";
 
 const cfg = loadConfig().relationship;
-const phrases = parseSummaryPhrases(loadPrompt("relationship/summary", "v1"));
+const phrases = parseSummaryPhrases(loadPrompt("relationship/summary", "v2"));
 const now = new Date("2026-01-05T10:00:00Z");
 const init = (): Params =>
   Object.fromEntries(
-    (["closeness", "trust", "warmth", "hurt", "tension", "msgs_per_day"] as const).map((n) => [
+    PARAM_NAMES.map((n) => [
       n,
       {
         value: cfg.initial[n],
@@ -33,8 +37,9 @@ const fresh = (): RelationshipState => ({
 });
 
 test("phrases file has every key the summary can ask for", () => {
-  for (const p of ["closeness", "trust", "warmth", "hurt", "tension", "msgs_per_day"]) {
-    for (const dir of ["above", "below"])
+  // Afterglow only ever sits above its baseline, so it has no "below" lines.
+  for (const p of PARAM_NAMES) {
+    for (const dir of p === "afterglow" ? ["above"] : ["above", "below"])
       for (const band of ["strong", "mild"])
         expect(phrases[`${p} ${dir} ${band}`]?.length, `${p} ${dir} ${band}`).toBeGreaterThan(0);
   }

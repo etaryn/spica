@@ -9,6 +9,7 @@ import type { Turn } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
 import type { Deps } from "@/mind/platform/deps";
 import { isValidTimeZone } from "@/mind/platform/timezone";
+import { applyAffect } from "./affect";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
@@ -22,6 +23,7 @@ export type RelationshipUpdate = {
   signals: Signals | null;
   crisis: boolean;
   hurtFactId: string | null;
+  tone: number | null;
 };
 
 export async function updateRelationship(
@@ -64,6 +66,12 @@ export async function updateRelationship(
     settings,
   );
 
+  // Her feelings toward them follow the exchange's tone; a crisis exchange carries none.
+  const affect =
+    update.tone !== null && !update.crisis
+      ? applyAffect(transition.params, update.tone, now, settings)
+      : { params: transition.params, events: [] };
+
   const cadence = await currentCadence(tx, userId, now, msgs24h, deps);
   const lastContact =
     lastUserTurn && (!row.last_contact || lastUserTurn.created_at > row.last_contact)
@@ -72,14 +80,19 @@ export async function updateRelationship(
 
   await relationshipRepo.saveRelationship(tx, userId, {
     state: transition.state,
-    params: transition.params,
+    params: affect.params,
     cadence,
     last_contact: lastContact,
   });
-  await relationshipRepo.insertRelationshipEvents(tx, userId, transition.events, {
-    turnId: lastUserTurn?.id ?? null,
-    now,
-  });
+  await relationshipRepo.insertRelationshipEvents(
+    tx,
+    userId,
+    [...transition.events, ...affect.events],
+    {
+      turnId: lastUserTurn?.id ?? null,
+      now,
+    },
+  );
 }
 
 async function currentCadence(

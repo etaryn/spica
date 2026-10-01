@@ -65,22 +65,6 @@ export function applyEvent(s: EgoState, valence: number, cfg: EgoConfig): EgoSta
   });
 }
 
-/** The exchange's tone: salience-weighted mean valence of its facts with non-zero valence. */
-export function exchangeTone(facts: { valence: number; salience: number }[]): number | null {
-  const xs = facts.filter((f) => f.valence !== 0);
-  if (xs.length === 0) return null;
-  const w = xs.reduce((n, f) => n + f.salience, 0);
-  if (w <= 0) return xs.reduce((n, f) => n + f.valence, 0) / xs.length;
-  return xs.reduce((n, f) => n + f.valence * f.salience, 0) / w;
-}
-
-export function applyExchange(s: EgoState, tone: number, cfg: EgoConfig): EgoState {
-  return clampState({
-    ...s,
-    mood_valence: s.mood_valence + cfg.exchange_gain * (tone - s.mood_valence),
-  });
-}
-
 export function preoccupationExpired(since: Date | null, now: Date, cfg: EgoConfig): boolean {
   return !!since && now.getTime() - since.getTime() >= cfg.preoccupation_hours * HOUR;
 }

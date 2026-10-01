@@ -11,14 +11,18 @@ import {
   relationshipAfterDailyTick,
   makeUpLineDue,
 } from "@/mind/state/user/relationship/transitions";
-import type { Params, RelationshipState } from "@/mind/state/user/relationship/types";
+import {
+  PARAM_NAMES,
+  type Params,
+  type RelationshipState,
+} from "@/mind/state/user/relationship/types";
 
 const cfg = loadConfig().relationship;
 const t0 = new Date("2026-01-05T10:00:00Z");
 const h = (n: number) => new Date(t0.getTime() + n * 3_600_000);
 const init = (): Params =>
   Object.fromEntries(
-    (["closeness", "trust", "warmth", "hurt", "tension", "msgs_per_day"] as const).map((n) => [
+    PARAM_NAMES.map((n) => [
       n,
       {
         value: cfg.initial[n],

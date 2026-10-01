@@ -190,6 +190,8 @@ const perParam = <T extends z.ZodTypeAny>(value: T) =>
     hurt: value,
     tension: value,
     msgs_per_day: value,
+    affect_valence: value,
+    afterglow: value,
   });
 
 const relationship = z
@@ -201,6 +203,11 @@ const relationship = z
     variance_epsilon: z.number().positive(),
     initial: perParam(nonNegative),
     initial_variance: perParam(nonNegative),
+    affect: z.object({
+      exchange_gain: unit,
+      afterglow_gain: unit,
+      afterglow_half_life_hours: z.number().positive(),
+    }),
     gains: z.object({
       warmth: unit,
       trust: unit,
@@ -312,7 +319,6 @@ const ego = z.object({
   preoccupation_hours: z.number().positive(),
   event_gain: unit,
   event_arousal_gain: unit,
-  exchange_gain: unit,
   bands: z.object({ energy: band, mood_valence: band, mood_arousal: band }),
 });
 

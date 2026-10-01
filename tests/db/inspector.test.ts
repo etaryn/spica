@@ -141,6 +141,8 @@ test("getRelationshipView: faded params with effect, events newest first, user-s
     "hurt",
     "tension",
     "msgs_per_day",
+    "affect_valence",
+    "afterglow",
   ]);
   expect(v?.events).toHaveLength(1);
   expect(await getRelationshipView(db, b, now, cfg)).toBeNull();

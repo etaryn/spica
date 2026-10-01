@@ -1,6 +1,6 @@
 /**
  * The maths of a homeostatic param: how far it sits from this user's baseline, how the baseline
- * learns from daily samples, how a nudge moves it, and how hurt and tension fade on their own.
+ * learns from daily samples, how a nudge moves it, and how hurt, tension and afterglow fade on their own.
  */
 import { HOUR } from "@/mind/platform/time";
 import type { HomeostaticParam, Params, RelationshipConfig } from "./types";
@@ -39,9 +39,9 @@ export function faded(value: number, from: Date, to: Date, halfLifeHours: number
   return value * 0.5 ** (hours / halfLifeHours);
 }
 
-/** Hurt and tension fade on their own; every other param holds its value. */
+/** Hurt, tension and afterglow fade on their own; every other param holds its value. */
 export function fadeParams(params: Params, now: Date, settings: RelationshipConfig): Params {
-  const fade = (name: "hurt" | "tension", halfLifeHours: number) => {
+  const fade = (name: "hurt" | "tension" | "afterglow", halfLifeHours: number) => {
     const param = params[name];
     return {
       ...param,
@@ -54,6 +54,7 @@ export function fadeParams(params: Params, now: Date, settings: RelationshipConf
     ...params,
     hurt: fade("hurt", settings.hurt_half_life_hours),
     tension: fade("tension", settings.tension_half_life_hours),
+    afterglow: fade("afterglow", settings.affect.afterglow_half_life_hours),
   };
 }
 

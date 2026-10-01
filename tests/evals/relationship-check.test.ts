@@ -21,8 +21,19 @@ const snap = (): RelSnapshot => ({
     hurt: p(0.3),
     tension: p(0),
     msgs_per_day: p(40, 5),
+    affect_valence: p(0.5),
+    afterglow: p(0),
   },
-  effects: { closeness: 0, trust: 0, warmth: 0, hurt: 0.9, tension: 0, msgs_per_day: 1 },
+  effects: {
+    closeness: 0,
+    trust: 0,
+    warmth: 0,
+    hurt: 0.9,
+    tension: 0,
+    msgs_per_day: 1,
+    affect_valence: 0,
+    afterglow: 0,
+  },
   events: [{ cause: "signal", param: "hurt", detail: { sensitised: true } }],
 });
 function p(value: number, baseline = value) {

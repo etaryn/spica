@@ -1,5 +1,6 @@
 import { adminListRelationshipUsers } from "@/db/repos/admin/relationship";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import * as rel from "@/db/repos/user/relationship";
@@ -136,4 +137,15 @@ test("adminListRelationshipUsers lists every user with a row", async () => {
   const u = await createTestUser();
   await rel.ensureRelationship(db, u, now, cfg);
   expect(await adminListRelationshipUsers(db)).toEqual([u]);
+});
+
+test("a relationship made before the affect params gets them on ensure", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  await rel.ensureRelationship(db, u, now, cfg);
+  await db.execute(
+    sql`DELETE FROM relationship_param WHERE name IN ('affect_valence', 'afterglow')`,
+  );
+  await rel.ensureRelationship(db, u, now, cfg);
+  expect((await rel.getParams(db, u)).afterglow.value).toBe(0);
 });

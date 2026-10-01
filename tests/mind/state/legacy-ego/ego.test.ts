@@ -2,11 +2,9 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import {
   applyEvent,
-  applyExchange,
   dayLoad,
   driftStep,
   energyTarget,
-  exchangeTone,
   preoccupationExpired,
   rhythm,
 } from "@/mind/state/legacy-ego/ego";
@@ -49,22 +47,10 @@ test("driftStep moves toward the target and clamps", () => {
   ).toEqual({ mood_valence: 1, mood_arousal: 1, energy: 1 });
 });
 
-test("event and exchange nudges", () => {
+test("event nudges", () => {
   const s = { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 };
   expect(applyEvent(s, 0.8, cfg).mood_valence).toBeCloseTo(0.8 * cfg.event_gain);
   expect(applyEvent(s, -0.8, cfg).mood_arousal).toBeCloseTo(0.4 + 0.8 * cfg.event_arousal_gain);
-  expect(applyExchange(s, -1, cfg).mood_valence).toBeCloseTo(-cfg.exchange_gain);
-});
-
-test("exchangeTone is the salience-weighted mean of non-zero valences", () => {
-  expect(exchangeTone([{ valence: 0, salience: 1 }])).toBeNull();
-  expect(
-    exchangeTone([
-      { valence: 1, salience: 0.75 },
-      { valence: -1, salience: 0.25 },
-      { valence: 0, salience: 1 },
-    ]),
-  ).toBeCloseTo(0.5);
 });
 
 test("preoccupation expires after preoccupation_hours", () => {

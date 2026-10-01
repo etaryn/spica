@@ -1,7 +1,7 @@
 /**
  * The cold path: after she has replied, it turns the exchange into memory and relationship state.
  * The steps are extract, embed, reconcile against near memories, encode, then update the
- * relationship and her mood. It all runs in one transaction holding a per-user advisory lock, so a
+ * relationship, including her feelings toward them. It all runs in one transaction holding a per-user advisory lock, so a
  * crash writes nothing and two exchanges from one user never reconcile at once. It throws on
  * failure so pg-boss retries, and it never delays a reply.
  */
@@ -17,7 +17,7 @@ import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
-import { nudgeEgoForExchange } from "@/mind/state/legacy-ego/nudge";
+import { exchangeTone } from "@/mind/state/user/relationship/affect";
 import { hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
 import { updateRelationship } from "@/mind/state/user/relationship/update";
 
@@ -77,8 +77,8 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
         signals,
         crisis,
         hurtFactId,
+        tone: exchangeTone(candidates.map((c) => c.fact)),
       });
-      await nudgeMoodSafely(deps, tx, job.userId, candidates, crisis);
     }
 
     return { status: "done", applied };
@@ -182,27 +182,5 @@ async function updateRelationshipSafely(
     });
   } catch (e) {
     deps.log.error("relationship update failed", { userId: update.userId, error: errorName(e) });
-  }
-}
-
-/** In its own savepoint, so a mood failure never loses the memory or relationship writes. */
-async function nudgeMoodSafely(
-  deps: Deps,
-  tx: Db,
-  userId: string,
-  candidates: CandidateFact[],
-  crisis: boolean,
-): Promise<void> {
-  try {
-    await tx.transaction(async (savepoint) => {
-      await nudgeEgoForExchange(savepoint, deps.config, {
-        userId,
-        facts: candidates.map((c) => c.fact),
-        crisis,
-        now: deps.clock.now(),
-      });
-    });
-  } catch (e) {
-    deps.log.error("ego nudge failed", { userId, error: errorName(e) });
   }
 }

@@ -4,17 +4,15 @@
  */
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { RecalledFact } from "@/mind/memory/shared/types";
+import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
 import type { Db } from "@/db/client";
 import { fact, factStatus, identity, retrieval_trace, thread } from "@/db/schema";
-import { one, toDate, toDateOrNull } from "@/db/repos/util";
+import { one, toDate, toDateOrNull, vecLiteral } from "@/db/repos/util";
 
 export type FactRow = typeof fact.$inferSelect;
 export type NewFact = Omit<typeof fact.$inferInsert, "user_id">;
 type Subject = "user" | "self" | "shared";
 const INACTIVE = ["superseded", "stale"] as const;
-
-export const vecLiteral = (v: number[]) => `[${v.join(",")}]`;
 
 export type CandidateFact = {
   id: string;
@@ -77,7 +75,7 @@ export async function candidateFacts(
   });
 }
 
-export type Neighbor = { id: string; content: string; status: string; sim: number };
+export type { Neighbor };
 
 /** Active facts of the same subject at or above `minSim` (reconcile candidates, approach A). */
 export async function nearFacts(

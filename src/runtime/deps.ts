@@ -2,6 +2,7 @@
  * Builds the real runtime for the app and the worker: config, database, Claude, Voyage, pg-boss,
  * the Postgres event bus and Web Push, wired into the mind's `Deps`.
  */
+import { createCoreLayer } from "@/db/repos/core";
 import Anthropic from "@anthropic-ai/sdk";
 import { PgBoss } from "pg-boss";
 import { systemClock } from "@/mind/platform/clock";
@@ -51,6 +52,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
   boss.on("error", (e) => consoleLogger.error("pg-boss error", { error: errorName(e) }));
   const deps: Deps = {
     db,
+    core: createCoreLayer(db),
     clock: systemClock,
     llm: new AnthropicProvider(new Anthropic(), config.models),
     embedder,

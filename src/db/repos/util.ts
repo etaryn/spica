@@ -25,3 +25,6 @@ export function toDate(v: unknown): Date {
 export function toDateOrNull(v: unknown): Date | null {
   return v == null ? null : toDate(v);
 }
+
+/** A pgvector literal for a raw query. */
+export const vecLiteral = (v: number[]) => `[${v.join(",")}]`;

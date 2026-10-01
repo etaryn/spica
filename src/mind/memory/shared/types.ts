@@ -29,3 +29,6 @@ export interface RetrievalResult {
 export function emptyRetrieval(): RetrievalResult {
   return { facts: { user: [], self: [], shared: [] }, dueThreads: [], recalled: [] };
 }
+
+/** A stored memory close to a new one, for reconcile. Either mind. */
+export type Neighbor = { id: string; content: string; status: string; sim: number };

@@ -68,4 +68,23 @@ describe("one-way flow", () => {
     const errors = await errorsFor(importsUserRepo, "src/mind/memory/shared/ranking.ts");
     expect(hitsBoundary(errors)).toBe(true);
   });
+
+  it("stops the core repos importing a user repo", async () => {
+    const errors = await errorsFor(importsUserRepo, "src/db/repos/core/memory.ts");
+    expect(hitsBoundary(errors)).toBe(true);
+  });
+
+  it("lets core loops in process/core be imported by world code", async () => {
+    const code =
+      'import { appraiseEvent } from "@/mind/process/core/appraise";\nvoid appraiseEvent;\n';
+    const errors = await errorsFor(code, "src/mind/world/events.ts");
+    expect(hitsBoundary(errors)).toBe(false);
+  });
+
+  it("stops core loops importing user process code", async () => {
+    const code =
+      'import { composeReply } from "@/mind/process/hot-path/compose";\nvoid composeReply;\n';
+    const errors = await errorsFor(code, "src/mind/process/core/world-tick.ts");
+    expect(hitsBoundary(errors)).toBe(true);
+  });
 });

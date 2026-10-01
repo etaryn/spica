@@ -7,12 +7,14 @@ import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { silentLogger } from "@/mind/platform/log";
 import { RecordingPusher } from "@/mind/platform/push";
 import { RecordingQueue } from "@/mind/platform/jobs";
+import { createCoreLayer } from "@/db/repos/core";
 import { getTestDb } from "./db";
 
 export function makeTestDeps(configOverrides: unknown = {}) {
   const config = loadConfig(configOverrides);
   return {
     db: getTestDb(),
+    core: createCoreLayer(getTestDb()),
     clock: new SimClock(new Date("2026-01-05T09:00:00Z")),
     llm: new FakeLLMProvider(),
     embedder: new FakeEmbedder(config.embedding.dimensions),

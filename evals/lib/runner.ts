@@ -1,3 +1,4 @@
+import { createCoreLayer } from "@/db/repos/core";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, notInArray } from "drizzle-orm";
@@ -332,6 +333,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const pusher = new RecordingPusher();
   const deps: Deps = {
     db,
+    core: createCoreLayer(db),
     clock,
     config,
     queue,

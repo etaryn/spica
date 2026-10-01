@@ -151,6 +151,23 @@ export const relationshipCause = pgEnum("relationship_cause", [
   "scar",
   "baseline",
 ]);
+export const coreMemoryKind = pgEnum("core_memory_kind", [
+  "episode",
+  "opinion",
+  "interest",
+  "goal",
+  "intention",
+  "thought",
+  "reflection",
+  "idea",
+  "hypothetical",
+  "insight",
+  "narrative",
+  "agent_note",
+]);
+export const coreMemorySource = pgEnum("core_memory_source", ["world", "loop"]);
+export const worldEventKind = pgEnum("world_event_kind", ["planned", "surprise", "resolution"]);
+export const eventStakes = pgEnum("event_stakes", ["low", "high"]);
 
 const userRef = () =>
   uuid("user_id")
@@ -299,6 +316,8 @@ export const session_log = pgTable(
       onDelete: "cascade",
     }),
     extract_attempts: integer("extract_attempts").notNull().default(0),
+    // The self snapshot a reply read, so behaviour traces back to the core loop that wrote it.
+    snapshot_version: integer("snapshot_version"),
   },
   (t) => [
     index("session_log_user_created_idx").on(t.user_id, t.created_at),
@@ -513,4 +532,133 @@ export const judge_log = pgTable(
     created_at: ts("created_at").notNull(),
   },
   (t) => [index("judge_log_user_created_idx").on(t.user_id, t.created_at)],
+);
+
+// ---------- Core mind: one Spica, shared by every user. Nothing below has a user_id. ----------
+
+export type CoreMoodJson = { mood_valence: number; mood_arousal: number; energy: number };
+
+/** Alcor and the other people in her own life. */
+export const core_entity = pgTable(
+  "core_entity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    aliases: text("aliases").array().notNull().default(emptyTextArray),
+    salience: real("salience").notNull(),
+    first_seen: ts("first_seen").notNull(),
+  },
+  (t) => [check("core_entity_salience_range", sql`${t.salience} BETWEEN 0 AND 1`)],
+);
+
+/** Her own memories: episodes of her life now, opinions, thoughts and narrative later. */
+export const core_memory = pgTable(
+  "core_memory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: coreMemoryKind("kind").notNull(),
+    content: text("content").notNull(),
+    payload: jsonb("payload"),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    entity_refs: uuid("entity_refs").array().notNull().default(emptyUuidArray),
+    occurred_at: ts("occurred_at"),
+    created_at: ts("created_at").notNull(),
+    last_recalled_at: ts("last_recalled_at"),
+    recall_count: integer("recall_count").notNull().default(0),
+    status: factStatus("status").notNull(),
+    superseded_by: uuid("superseded_by").references((): AnyPgColumn => core_memory.id, {
+      onDelete: "set null",
+    }),
+    salience: real("salience").notNull(),
+    valence: real("valence").notNull(),
+    confidence: real("confidence").notNull(),
+    source: coreMemorySource("source").notNull(),
+    source_ref: text("source_ref"),
+  },
+  (t) => [
+    index("core_memory_embedding_hnsw").using("hnsw", t.embedding.op("vector_cosine_ops")),
+    index("core_memory_kind_created_idx").on(t.kind, t.created_at),
+    check("core_memory_salience_range", sql`${t.salience} BETWEEN 0 AND 1`),
+    check("core_memory_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
+    check("core_memory_confidence_range", sql`${t.confidence} BETWEEN 0 AND 1`),
+  ],
+);
+
+/** Her current state: one row, the same for every user. */
+export const core_state = pgTable(
+  "core_state",
+  {
+    id: integer("id").primaryKey(),
+    emotion: jsonb("emotion").notNull(),
+    mood_valence: real("mood_valence").notNull(),
+    mood_arousal: real("mood_arousal").notNull(),
+    energy: real("energy").notNull(),
+    needs: jsonb("needs").notNull(),
+    preoccupation: uuid("preoccupation").references(() => core_memory.id, {
+      onDelete: "set null",
+    }),
+    preoccupation_since: ts("preoccupation_since"),
+    baseline: jsonb("baseline").$type<CoreMoodJson>().notNull(),
+    last_tick: ts("last_tick"),
+    // Her local date of the last finished event generation, so a retried world tick never doubles a day.
+    last_event_day: date("last_event_day", { mode: "string" }),
+  },
+  (t) => [
+    check("core_state_single_row", sql`${t.id} = 1`),
+    check("core_state_mood_valence_range", sql`${t.mood_valence} BETWEEN -1 AND 1`),
+    check("core_state_mood_arousal_range", sql`${t.mood_arousal} BETWEEN 0 AND 1`),
+    check("core_state_energy_range", sql`${t.energy} BETWEEN 0 AND 1`),
+  ],
+);
+
+/** "Who I am right now", versioned. Version 0 is the persona file's seed self. */
+export const core_snapshot = pgTable("core_snapshot", {
+  version: integer("version").primaryKey(),
+  content: text("content").notNull(),
+  sections: jsonb("sections").$type<Record<string, string>>().notNull(),
+  source_ids: uuid("source_ids").array().notNull().default(emptyUuidArray),
+  rendered_at: ts("rendered_at").notNull(),
+  model: text("model").notNull(),
+  prompt_version: text("prompt_version").notNull(),
+});
+
+/** What actually happened in her world, known to her or not. */
+export const world_event = pgTable(
+  "world_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    at: ts("at").notNull(),
+    kind: worldEventKind("kind").notNull(),
+    content: text("content").notNull(),
+    valence: real("valence").notNull(),
+    stakes: eventStakes("stakes").notNull(),
+    agents: uuid("agents").array().notNull().default(emptyUuidArray),
+    life_day: date("life_day", { mode: "string" }).notNull(),
+    plan_ref: text("plan_ref"),
+    goal_ref: uuid("goal_ref"),
+    outcome: text("outcome"),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("world_event_life_day_idx").on(t.life_day),
+    check("world_event_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
+  ],
+);
+
+/** One row per core loop run. Diagnostic only, never read by the chat loop. */
+export const core_loop_trace = pgTable(
+  "core_loop_trace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    loop: text("loop").notNull(),
+    inputs: jsonb("inputs").notNull(),
+    outputs: jsonb("outputs").notNull(),
+    model: text("model"),
+    prompt_version: text("prompt_version"),
+    tokens_in: integer("tokens_in"),
+    tokens_out: integer("tokens_out"),
+    cost: real("cost"),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [index("core_loop_trace_loop_created_idx").on(t.loop, t.created_at)],
 );

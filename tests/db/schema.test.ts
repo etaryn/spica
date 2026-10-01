@@ -293,3 +293,42 @@ describe("assertDisposableDatabase", () => {
     );
   });
 });
+
+const CORE_TABLES = [
+  "core_memory",
+  "core_entity",
+  "core_state",
+  "core_snapshot",
+  "world_event",
+  "core_loop_trace",
+];
+
+test("core tables exist and none has a user_id column", async () => {
+  const db = getTestDb();
+  const tables = await db.execute(sql`
+    SELECT table_name FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name IN (${sql.join(
+      CORE_TABLES.map((n) => sql`${n}`),
+      sql`, `,
+    )})`);
+  expect(tables.rows.map((r) => r.table_name).sort()).toEqual([...CORE_TABLES].sort());
+
+  const userCols = await db.execute(sql`
+    SELECT table_name FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'user_id' AND table_name IN (${sql.join(
+      CORE_TABLES.map((n) => sql`${n}`),
+      sql`, `,
+    )})`);
+  expect(userCols.rows).toEqual([]);
+});
+
+test("core_state holds exactly one row", async () => {
+  const db = getTestDb();
+  await resetDb();
+  const insert = (id: number) =>
+    db.execute(sql`
+      INSERT INTO core_state (id, emotion, mood_valence, mood_arousal, energy, needs, baseline)
+      VALUES (${id}, '{}'::jsonb, 0, 0.4, 0.6, '{}'::jsonb, '{}'::jsonb)`);
+  await insert(1);
+  await expect(insert(2)).rejects.toThrow();
+});

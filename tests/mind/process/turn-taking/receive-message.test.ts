@@ -60,7 +60,7 @@ describe("receiveMessage", () => {
     );
   });
 
-  test("backchannel: the judge's reaction is scheduled once per buffer, never on a complete verdict, never when silent", async () => {
+  test("backchannel: the judge's reaction is scheduled once per buffer, never on a complete verdict", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     deps.llm.handlers.turn_judge = () => ({
@@ -77,12 +77,6 @@ describe("receiveMessage", () => {
       data: { userId: u, text: "huh" },
       startAfter: new Date(deps.clock.now().getTime() + 1500),
     });
-
-    const silent = makeTestDeps({ turn: { backchannel_style: "silent" } });
-    silent.llm.handlers.turn_judge = deps.llm.handlers.turn_judge;
-    const v = await createTestUser("v");
-    await receiveMessage(silent, v, msg("my boss called me in"));
-    expect(silent.queue.jobs.filter((j) => j.name === TURN_BACKCHANNEL_QUEUE)).toEqual([]);
   });
 
   test("crisis: reply is sent immediately in the response with the card, the buffer is snapshotted, timers go stale", async () => {

@@ -56,12 +56,6 @@ async function seedEverything(userId: string) {
     .returning();
   await db.insert(s.identity).values({
     user_id: userId,
-    traits: {},
-    stances: {},
-    boundaries: [],
-    humor_style: "dry",
-    verbal_tics: [],
-    speech_rules: [],
     mood_valence: 0,
     mood_arousal: 0.5,
     energy: 0.5,

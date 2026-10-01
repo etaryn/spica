@@ -15,7 +15,6 @@ import type { Deps } from "@/mind/platform/deps";
 import { ConflictError, errorName, isUniqueViolation } from "@/mind/platform/errors";
 import { emit } from "@/mind/platform/events";
 import { COLD_PATH_QUEUE, TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/mind/platform/jobs";
-import { seededUnit } from "@/mind/platform/seeded-random";
 import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { deferWhileBusy, NO_DELAY, type Availability } from "@/mind/process/availability/deferral";
@@ -290,14 +289,10 @@ async function maybeEnqueueBackchannel(
   if (!verdict || verdict.complete || !verdict.backchannel) return;
   if (appended.backchannelSent || deferred) return;
 
-  const style = config.turn.backchannel_style;
-  const wanted =
-    style === "judge" ||
-    (style === "signals" && seededUnit(turn.id) < config.turn.signals_probability);
   const rateOk =
     !appended.lastBackchannelAt ||
     now.getTime() - appended.lastBackchannelAt.getTime() >= config.turn.backchannel_min_interval_ms;
-  if (!wanted || !rateOk) return;
+  if (!rateOk) return;
 
   const text = verdict.backchannel;
   await enqueueSafely(

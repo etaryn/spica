@@ -99,8 +99,9 @@ const events = z.object({
   heartbeat_ms: positiveInt,
 });
 
+// Strict, so an override of a removed key fails loudly instead of being ignored.
 const turn = z
-  .object({
+  .strictObject({
     settle_ms: countFromZero,
     wait_ms: countFromZero,
     short_message_chars: countFromZero,
@@ -112,11 +113,9 @@ const turn = z
     typing_ms_per_char: nonNegative,
     typing_max_ms: countFromZero,
     part_gap_ms: countFromZero,
-    backchannel_style: z.enum(["judge", "signals", "silent"]),
     backchannel_min_interval_ms: countFromZero,
     backchannel_max_words: positiveInt,
     backchannel_read_delay_ms: countFromZero,
-    signals_probability: unit,
     max_open_questions: countFromZero,
     incomplete_cues: z.array(text),
     judge_timeout_ms: positiveInt,

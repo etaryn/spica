@@ -302,7 +302,7 @@ export const ScriptSchema = z
       .regex(/^[a-z0-9-]+$/)
       .default("basic"),
     turn_gap_seconds: z.number().int().positive().default(30),
-    /** Deep-merged over the run config for this script only (e.g. `{ turn: { backchannel_style: silent } }`). */
+    /** Deep-merged over the run config for this script only (e.g. `{ turn: { settle_ms: 1000 } }`). */
     config: z.record(z.string(), z.unknown()).optional(),
     /** Fake mode's `relationship` block source for turns carrying `signals`: scripted by default. */
     signal_source: z.enum(["scripted", "model"]).default("scripted"),

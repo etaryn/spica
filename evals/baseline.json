@@ -354,11 +354,6 @@
     "runs": 3,
     "passedRuns": 3
   },
-  "silent-style": {
-    "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
-  },
   "thread-checkpoint": {
     "status": "pass",
     "runs": 3,

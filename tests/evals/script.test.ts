@@ -124,7 +124,7 @@ test("every eval script parses; the guard-era honesty scripts carry a guard asse
 test("turns may be timed objects; scripts may override config; turn and reply_about entries parse", () => {
   const s = ScriptSchema.parse({
     name: "x",
-    config: { turn: { backchannel_style: "silent" } },
+    config: { turn: { settle_ms: 1000 } },
     sessions: [{ at: "day 0 09:00", turns: ["hi", { text: "and then", after_s: 2 }] }],
     assertions: [
       { type: "turn", session: 1, replies: 1, reply_covers: [[1, 2]] },

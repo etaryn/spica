@@ -242,13 +242,6 @@ export const identity = pgTable(
   "identity",
   {
     user_id: userRef().primaryKey(),
-    // values (rarely changes)
-    traits: jsonb("traits"),
-    stances: jsonb("stances"),
-    boundaries: text("boundaries").array(),
-    humor_style: text("humor_style"),
-    verbal_tics: text("verbal_tics").array(),
-    speech_rules: text("speech_rules").array(),
     // ego (changes hourly)
     mood_valence: real("mood_valence").notNull(),
     mood_arousal: real("mood_arousal").notNull(),

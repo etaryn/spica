@@ -21,11 +21,12 @@ afterAll(closeTestDb);
 const TOKEN = "CANARY-7f3a91";
 const config = loadConfig({ life: { timezone: "UTC" } });
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
-const CORE_PURPOSES = new Set(["life_plan", "life_event"]);
+const CORE_PURPOSES = new Set(["life_plan", "life_event", "core_appraise"]);
 const CORE_TABLES = [
   "core_memory",
   "core_entity",
   "core_state",
+  "core_goal",
   "core_snapshot",
   "world_event",
   "life_event_log",

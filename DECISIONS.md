@@ -55,3 +55,11 @@ code itself.
 | 2026-10-02 | `world_event.agent_names` (migration `0017_agent_names`) keeps an event's people by name; a surprise's people join `core_entity` when it lands | A surprise must leave no trace before it happens, new people included; a planned event's people are known and join at generation. |
 | 2026-10-02 | The inspector's life tab shows each world event as `landed <time>` or `pending` | Events are recorded ahead of their time, so "recorded today" isn't "happened". |
 | 2026-10-02 | Exchange tone (affect, afterglow) reads only user and shared facts | Ethan: one moment must not count twice, separate hurts may stack. Her reaction and inferred hurt duplicated the user's act, and her own news isn't about them. |
+| 2026-10-02 | The core budget check is a plain read of today's summed trace `calls`, with no lock held across the run | Core jobs run at different minutes of the hour and a rare one-call overshoot costs cents; a lock across a model call would serialise every core job. |
+| 2026-10-02 | Core model calls are metered by wrapping the LLM in the runner (`ClassifyRequest.onUsage`); a call counts when attempted | Loops see the budget only through `canCall()`, and the count includes retries and reconcile calls, which cost the same. |
+| 2026-10-02 | Event generation over budget marks the day done with no event | Otherwise every hourly run would try again and spend past the budget. |
+| 2026-10-02 | `life_plan` and `life_event` keep the `life` model role; new core loops use `core` | Both are Haiku today; separate roles let the world generators and her thinking be tuned apart. |
+| 2026-10-02 | Appraisal's input prints the event's surface valence, and the fake appraisal echoes the event's words and valence | Fake mode keeps the generator's words and the mood maths, so earlier evals and tests hold. |
+| 2026-10-02 | Two placeholder seed goals ship in persona v5 | Ethan writes the real ones. |
+| 2026-10-02 | Migration `0018` nulls the old placeholder emotion (`label = neutral`) and backfills trace `calls` as 1 where a model was recorded | A placeholder would read as a feeling in the line; earlier rows made one call when they named a model. |
+| 2026-10-02 | `AGENTS.md` points coding agents at `CLAUDE.md` | Phase 8 is implemented with Codex as well as Claude; one source of project instructions avoids drift. |

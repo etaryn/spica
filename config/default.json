@@ -163,7 +163,7 @@
   "prompts": {
     "reply": "v10",
     "crisis_classifier": "v2",
-    "persona": "v4",
+    "persona": "v5",
     "extract": "v4",
     "reconcile": "v1",
     "judge_recall": "v3",
@@ -285,6 +285,7 @@
       "optional": ["core_anticipate", "core_ruminate", "core_wander"]
     },
     "prices": { "claude-haiku-4-5": { "input": 1, "output": 5 } },
+    "goals": { "max_active": 3, "step": { "small": 0.05, "medium": 0.1, "large": 0.2 } },
     "state": {
       "baseline": { "mood_valence": 0.2, "mood_arousal": 0.4, "energy": 0.6 },
       "tick_cron": "45 * * * *",

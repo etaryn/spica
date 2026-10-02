@@ -2,10 +2,10 @@
  * Seeding her core mind: snapshot v0 from the seed self, and the canon people she has always known.
  */
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { seedCore, seedSnapshot } from "@/mind/memory/core/seed";
+import { seedCore, seedGoals, seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
-import { loadPersona } from "@/mind/platform/persona";
-import { closeTestDb, resetDb } from "../../../helpers/db";
+import { loadPersona, parseSeedGoals } from "@/mind/platform/persona";
+import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -16,7 +16,7 @@ test("seeds version 0 from the seed self, once", async () => {
   expect(await seedSnapshot(deps)).toBe(true);
   expect(await seedSnapshot(deps)).toBe(false);
   const snap = await deps.core.memory.latestSnapshot();
-  expect(snap).toMatchObject({ version: 0, model: "seed", prompt_version: "v4" });
+  expect(snap).toMatchObject({ version: 0, model: "seed", prompt_version: "v5" });
   expect(snap!.content).toBe(loadPersona(deps.config).seedSelf);
 });
 
@@ -53,4 +53,32 @@ test("canon people never count as someone new", async () => {
   expect(await deps.core.memory.latestEntityFirstSeen(deps.config.core.world.canon_entities)).toBe(
     null,
   );
+});
+
+test("seedCore seeds her goals once, active, from the persona", async () => {
+  const deps = coreDepsOf(makeTestDeps());
+  await seedCore(deps);
+  await seedCore(deps);
+  const goals = await deps.core.goals.active();
+  expect(goals.map((g) => g.title)).toEqual(
+    parseSeedGoals(loadPersona(deps.config).seedSelf).map((g) => g.title),
+  );
+  expect(goals.every((g) => g.source === "seed" && g.progress === 0)).toBe(true);
+});
+
+test("seeding never adds goals when she already has some", async () => {
+  const deps = coreDepsOf(makeTestDeps());
+  await deps.core.goals.insert({
+    title: "Her own",
+    why: "reflect made it",
+    status: "dropped",
+    progress: 0,
+    source: "reflect",
+    source_ref: null,
+    started_at: deps.clock.now(),
+    target_at: null,
+    embedding: vec(),
+  });
+  await seedGoals(deps);
+  expect(await deps.core.goals.count()).toBe(1);
 });

@@ -4,6 +4,30 @@
  */
 export type CoreMood = { mood_valence: number; mood_arousal: number; energy: number };
 
+export type CoreGoalStatus = "active" | "done" | "dropped";
+export type CoreGoal = {
+  id: string;
+  title: string;
+  why: string;
+  status: CoreGoalStatus;
+  progress: number;
+  source: "seed" | "reflect";
+  source_ref: string | null;
+  started_at: Date;
+  target_at: Date | null;
+  updated_at: Date;
+};
+export type NewCoreGoal = Omit<CoreGoal, "id" | "updated_at"> & { embedding: number[] };
+
+export interface CoreGoals {
+  active(): Promise<CoreGoal[]>;
+  get(id: string): Promise<CoreGoal | null>;
+  count(): Promise<number>;
+  insert(goal: NewCoreGoal): Promise<string>;
+  setProgress(id: string, progress: number, now: Date): Promise<void>;
+  setStatus(id: string, status: CoreGoalStatus, now: Date): Promise<void>;
+}
+
 export type CoreStateRow = CoreMood & {
   emotion: unknown;
   needs: unknown;

@@ -350,6 +350,10 @@ const core = z
     loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),
     // US dollars per million tokens, by model id.
     prices: z.record(z.string(), z.object({ input: nonNegative, output: nonNegative })),
+    goals: z.object({
+      max_active: positiveInt,
+      step: z.object({ small: unit, medium: unit, large: unit }),
+    }),
     state: coreState,
     world: coreWorld,
   })

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { loadPersona, parsePersona } from "@/mind/platform/persona";
+import { loadPersona, parsePersona, parseSeedGoals } from "@/mind/platform/persona";
 
 const doc = `# Core values\nYou are Spica.\n\n## Hard boundaries\n- never threaten\n\n# Seed self\n## Lately\n- films\n\n# Public voice (reference)\nposts`;
 
@@ -28,4 +28,26 @@ test("the configured persona file parses", () => {
   const p = loadPersona(loadConfig());
   expect(p.coreValues).toContain("You are Spica.");
   expect(p.seedSelf.length).toBeGreaterThan(0);
+});
+
+test("seed goals are the bullets under the Goals heading", () => {
+  const seed = [
+    "### Lately",
+    "- not a goal: no",
+    "### Goals",
+    "- Learn stars: she likes them",
+    "- Read books: started",
+    "not a bullet",
+    "### Habits of speech",
+    "- also not: a goal",
+  ].join("\n");
+  expect(parseSeedGoals(seed)).toEqual([
+    { title: "Learn stars", why: "she likes them" },
+    { title: "Read books", why: "started" },
+  ]);
+  expect(parseSeedGoals("### Lately\n- x: y")).toEqual([]);
+});
+
+test("the shipped persona has seed goals", () => {
+  expect(parseSeedGoals(loadPersona(loadConfig()).seedSelf).length).toBeGreaterThan(0);
 });

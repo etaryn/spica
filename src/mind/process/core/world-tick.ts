@@ -135,6 +135,9 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
       tokens_in: null,
       tokens_out: null,
       cost: null,
+      calls: 0,
+      status: "done",
+      error: null,
       created_at: now,
     });
     return true;
@@ -195,6 +198,9 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       tokens_in: null,
       tokens_out: null,
       cost: null,
+      calls: 0,
+      status: "done",
+      error: null,
       created_at: now,
     });
     return landed.length;

@@ -55,6 +55,7 @@ export class AnthropicProvider implements LLMProvider {
     timeoutMs,
     maxTokens,
     model = "cheap",
+    onUsage,
   }: ClassifyRequest<T>): Promise<T> {
     const modelId = this.modelIdFor(model);
     // Only the judge takes effort and thinking settings; a null effort sends none (Haiku rejects it).
@@ -73,7 +74,7 @@ export class AnthropicProvider implements LLMProvider {
       },
       { timeout: timeoutMs, maxRetries: 0 },
     );
-    this.report(purpose, modelId, response.usage);
+    this.report(purpose, modelId, response.usage, onUsage);
 
     if (response.parsed_output == null) throw new Error("classifier returned no parsed output");
     return schema.parse(response.parsed_output);
@@ -87,18 +88,22 @@ export class AnthropicProvider implements LLMProvider {
       guard: this.models.guard,
       turn_judge: this.models.turn_judge,
       life: this.models.life,
+      core: this.models.core,
     };
     return ids[model];
   }
 
-  private report(purpose: string, model: string, usage: Anthropic.Usage): void {
-    this.onUsage?.({
+  private report(purpose: string, model: string, usage: Anthropic.Usage, extra?: UsageSink): void {
+    if (!this.onUsage && !extra) return;
+    const u = {
       purpose,
       model,
       input_tokens: usage.input_tokens,
       output_tokens: usage.output_tokens,
       cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
       cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
-    });
+    };
+    this.onUsage?.(u);
+    extra?.(u);
   }
 }

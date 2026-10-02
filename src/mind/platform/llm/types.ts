@@ -12,7 +12,11 @@ export interface ReplyRequest {
 }
 
 /** Which configured model a structured call uses (config `models.<role>`). */
-export type StructuredModel = "cheap" | "extract" | "judge" | "guard" | "turn_judge" | "life";
+export type StructuredModel =
+  "cheap" | "extract" | "judge" | "guard" | "turn_judge" | "life" | "core";
+
+/** Receives every completed call's usage; the evals tally spend with it. */
+export type UsageSink = (usage: LlmUsage) => void;
 
 export interface ClassifyRequest<T> {
   /** What the call is for ("crisis", "extract", "reconcile", "judge_recall", …); fakes route on it. */
@@ -23,6 +27,8 @@ export interface ClassifyRequest<T> {
   schema: z.ZodType<T>;
   timeoutMs: number;
   maxTokens: number;
+  /** Receives this call's usage once it completes; the core runner meters with it. */
+  onUsage?: UsageSink;
 }
 
 /** Token counts for one model call. `purpose` is "reply" for a reply, else the request's purpose. */
@@ -34,9 +40,6 @@ export interface LlmUsage {
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
 }
-
-/** Receives every completed call's usage; the evals tally spend with it. */
-export type UsageSink = (usage: LlmUsage) => void;
 
 export interface LLMProvider {
   /** The reply model. Throws on failure, refusal or empty output. */

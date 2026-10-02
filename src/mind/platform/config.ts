@@ -33,6 +33,7 @@ const models = z.object({
   extract: text,
   judge: text,
   life: text,
+  core: text,
   guard: text,
   turn_judge: text,
   reply_max_tokens: positiveInt,
@@ -325,7 +326,37 @@ const coreWorld = z.object({
   canon_entities: z.array(text),
 });
 
-const core = z.object({ state: coreState, world: coreWorld });
+/** Every core loop that may call a model, so the budget can name it. */
+export const CORE_LOOPS = [
+  "life_plan",
+  "life_event",
+  "core_resolve",
+  "core_appraise",
+  "core_reflect",
+  "core_render_snapshot",
+  "core_drift_watch",
+  "core_consolidate",
+  "core_anticipate",
+  "core_ruminate",
+  "core_wander",
+] as const;
+export type CoreLoopName = (typeof CORE_LOOPS)[number];
+const coreLoop = z.enum(CORE_LOOPS);
+
+const core = z
+  .object({
+    daily_call_budget: countFromZero,
+    budget_reserve: countFromZero,
+    loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),
+    // US dollars per million tokens, by model id.
+    prices: z.record(z.string(), z.object({ input: nonNegative, output: nonNegative })),
+    state: coreState,
+    world: coreWorld,
+  })
+  .refine(
+    (c) => c.budget_reserve <= c.daily_call_budget,
+    "core.budget_reserve must be <= daily_call_budget",
+  );
 
 const availability = z.object({
   override_closeness: z.number().gt(0).max(1),

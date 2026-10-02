@@ -6,6 +6,7 @@
     "extract_max_tokens": 2048,
     "judge": "claude-haiku-4-5",
     "life": "claude-haiku-4-5",
+    "core": "claude-haiku-4-5",
     "judge_max_tokens": 2048,
     "judge_effort": null,
     "judge_thinking": "disabled",
@@ -268,6 +269,22 @@
     ]
   },
   "core": {
+    "daily_call_budget": 24,
+    "budget_reserve": 8,
+    "loop_priority": {
+      "essential": [
+        "life_plan",
+        "life_event",
+        "core_resolve",
+        "core_appraise",
+        "core_reflect",
+        "core_render_snapshot",
+        "core_drift_watch",
+        "core_consolidate"
+      ],
+      "optional": ["core_anticipate", "core_ruminate", "core_wander"]
+    },
+    "prices": { "claude-haiku-4-5": { "input": 1, "output": 5 } },
     "state": {
       "baseline": { "mood_valence": 0.2, "mood_arousal": 0.4, "energy": 0.6 },
       "tick_cron": "45 * * * *",

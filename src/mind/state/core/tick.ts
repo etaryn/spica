@@ -53,6 +53,9 @@ export async function coreStateTick(deps: CoreDeps, now: Date): Promise<"not_due
       tokens_in: null,
       tokens_out: null,
       cost: null,
+      calls: 0,
+      status: "done",
+      error: null,
       created_at: now,
     });
     return "done" as const;

@@ -71,12 +71,27 @@ export class FakeLLMProvider implements LLMProvider {
     return this.replies.shift() ?? `(fake reply to: ${lastUserMessage?.content ?? ""})`;
   }
 
-  async classifyJson<T>({ purpose, system, input, schema }: ClassifyRequest<T>): Promise<T> {
+  async classifyJson<T>({
+    purpose,
+    system,
+    input,
+    schema,
+    onUsage,
+  }: ClassifyRequest<T>): Promise<T> {
     this.structuredCalls.push({ purpose, system, input });
 
     const handler = this.handlers[purpose] ?? (purpose === "crisis" ? this.classify : undefined);
     if (!handler) throw new Error(`FakeLLMProvider: no handler for purpose "${purpose}"`);
 
-    return schema.parse(await handler(input));
+    const out = schema.parse(await handler(input));
+    onUsage?.({
+      purpose,
+      model: "fake",
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    });
+    return out;
   }
 }

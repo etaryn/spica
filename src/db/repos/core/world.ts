@@ -22,6 +22,10 @@ function toRow(r: typeof world_event.$inferSelect): WorldEventRow {
     created_at: r.created_at,
     appraised_at: r.appraised_at,
     goal_ref: r.goal_ref,
+    plan_ref: r.plan_ref,
+    outcome: r.outcome,
+    fallthrough: r.fallthrough,
+    resolves_memory_id: r.resolves_memory_id,
   };
 }
 
@@ -53,6 +57,15 @@ export function worldRepo(db: Db): World {
 
     async recordEvent(event) {
       return one(await db.insert(world_event).values(event).returning({ id: world_event.id })).id;
+    },
+
+    async getEvent(id) {
+      const [row] = await db.select().from(world_event).where(eq(world_event.id, id));
+      return row ? toRow(row) : null;
+    },
+
+    async setOutcome(id, outcome) {
+      await db.update(world_event).set({ outcome }).where(eq(world_event.id, id));
     },
 
     async dueUnappraised(now) {

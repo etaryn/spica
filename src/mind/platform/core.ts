@@ -31,6 +31,12 @@ export interface CoreTraces {
   insert(trace: NewCoreLoopTrace): Promise<void>;
   /** Model calls traced at or after `from`: what today's budget has spent. */
   callsSince(from: Date): Promise<number>;
+  /** Successful applied runs in [from, to); use all history separately for cross-day gaps. */
+  appliedSummary(
+    loop: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ count: number; latest: Date | null }>;
 }
 
 export interface CoreScope {

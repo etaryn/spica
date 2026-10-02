@@ -24,12 +24,21 @@ export type NewWorldEvent = {
   agent_names?: string[];
   life_day: string;
   created_at: Date;
+  plan_ref?: string | null;
+  goal_ref?: string | null;
+  outcome?: "happened" | "fell_through" | null;
+  fallthrough?: boolean | null;
+  resolves_memory_id?: string | null;
 };
 export type WorldEventRow = NewWorldEvent & {
   id: string;
   agent_names: string[];
   appraised_at: Date | null;
   goal_ref: string | null;
+  plan_ref: string | null;
+  outcome: "happened" | "fell_through" | null;
+  fallthrough: boolean | null;
+  resolves_memory_id: string | null;
 };
 
 /** One event-generator attempt, for the inspector. */
@@ -53,6 +62,8 @@ export interface World {
   insertPlan(row: NewLifeDay): Promise<boolean>;
   events(day: string): Promise<WorldEventRow[]>;
   recordEvent(event: NewWorldEvent): Promise<string>;
+  getEvent(id: string): Promise<WorldEventRow | null>;
+  setOutcome(id: string, outcome: "happened" | "fell_through"): Promise<void>;
   /** Events whose time has come (at <= now) that haven't landed with her yet, oldest first. */
   dueUnappraised(now: Date): Promise<WorldEventRow[]>;
   markAppraised(id: string, at: Date): Promise<void>;

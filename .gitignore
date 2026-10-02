@@ -7,3 +7,4 @@ evals/results/
 next-env.d.ts
 *.tsbuildinfo
 .superpowers/
+.worktrees/

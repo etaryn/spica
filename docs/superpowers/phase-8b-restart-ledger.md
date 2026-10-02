@@ -8,8 +8,9 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 ## Task status
 
 - Task 1: complete — baseline checks passed; independent review approved.
-- Task 2: ready for implementation dispatch.
-- Tasks 3–10: not started.
+- Task 2: complete — 27c2f72, spec and quality approved by Sartre (gpt-6-sol/high).
+- Task 3: starting atomic runner completion and thought storage.
+- Tasks 4–10: not started.
 
 ## Setup evidence
 
@@ -41,3 +42,13 @@ Operational evidence is in controller tool results: database absence check, expl
 serial tests/evals and successful exits. Missing .env is expected: both database URLs were set
 in the process, and setup/evals use those before their fallback URLs. Restart test DB has 19
 baseline migrations. No default database was targeted by those commands.
+
+## Task 2 evidence and review
+
+- RED: nine expected failures, thirteen existing passes. GREEN: focused 22/22; full 750/750,
+  103 files; typecheck and lint passed. Migration 0019 adds only the two planned world fields.
+- Reviewer Sartre found no Critical/Important issues and verified snapshot ancestry from 0018.
+- Minor deferred: candidate selection transfers full rows/embeddings before JSON validation;
+  future projection optimization may reduce transfer, without changing required prelimit filtering.
+- User requested weaker subagent models as appropriate. Use sol for ordinary multi-file tasks,
+  luna for mechanical fixes, astra for concurrency-heavy review and final branch review.

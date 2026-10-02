@@ -270,6 +270,13 @@
     ]
   },
   "core": {
+    "loops": {
+      "max_chars": 300,
+      "max_tokens": 512,
+      "salience": { "low": 0.25, "medium": 0.4 },
+      "thought_confidence": 0.6,
+      "dedupe_similarity": 0.92
+    },
     "appraise": {
       "max_tokens": 800,
       "episode_max_chars": 400,

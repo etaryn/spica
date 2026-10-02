@@ -360,6 +360,13 @@ const coreLoop = z.enum(CORE_LOOPS);
 const core = z
   .object({
     appraise: coreAppraise,
+    loops: z.object({
+      max_chars: positiveInt,
+      max_tokens: positiveInt,
+      salience: z.object({ low: unit, medium: unit }),
+      thought_confidence: unit,
+      dedupe_similarity: unit,
+    }),
     daily_call_budget: countFromZero,
     budget_reserve: countFromZero,
     loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),

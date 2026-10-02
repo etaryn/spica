@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { Config, CoreLoopName } from "@/mind/platform/config";
 import type { LoopStatus, NewCoreLoopTrace } from "@/mind/platform/core";
+import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import type { LLMProvider, LlmUsage } from "@/mind/platform/llm/types";
@@ -21,6 +22,8 @@ export type LoopContext = {
   traceId: string;
   /** Whether one more model call fits today's budget for this loop's tier. */
   canCall(): boolean;
+  /** Apply writes and record successful completion in the same core transaction. */
+  commit<T>(apply: (tx: CoreScope) => Promise<LoopResult<T>>): Promise<LoopResult<T>>;
 };
 
 export type LoopResult<T> = {
@@ -112,18 +115,44 @@ export async function runCoreLoop<T>(
   }
 
   let result: LoopResult<T>;
+  let commitStarted = false;
+  let committed = false;
+  const commit: LoopContext["commit"] = async (apply) => {
+    if (commitStarted) throw new Error("core loop already committed");
+    commitStarted = true;
+    const applied = await core.transaction(async (tx) => {
+      const value = await apply(tx);
+      await tx.traces.insert({
+        id: traceId,
+        loop: name,
+        inputs: value.inputs,
+        outputs: value.outputs,
+        prompt_version: value.promptVersion ?? null,
+        status: value.status ?? "done",
+        error: null,
+        created_at: now,
+        calls: meter.calls(),
+        ...spend(meter.usage, config),
+      });
+      return value;
+    });
+    committed = true;
+    return applied;
+  };
   try {
-    result = await fn({ deps: { ...deps, llm: meter.llm }, traceId, canCall });
+    result = await fn({ deps: { ...deps, llm: meter.llm }, traceId, canCall, commit });
   } catch (error) {
-    await trace({ status: "failed", error: errorName(error) });
+    if (!committed) await trace({ status: "failed", error: errorName(error) });
     throw error;
   }
   const status = result.status ?? "done";
-  await trace({
-    status,
-    inputs: result.inputs,
-    outputs: result.outputs,
-    prompt_version: result.promptVersion ?? null,
-  });
+  if (!committed) {
+    await trace({
+      status,
+      inputs: result.inputs,
+      outputs: result.outputs,
+      prompt_version: result.promptVersion ?? null,
+    });
+  }
   return { status, outputs: result.outputs };
 }

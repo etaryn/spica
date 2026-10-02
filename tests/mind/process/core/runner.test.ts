@@ -2,13 +2,13 @@
  * The core loop runner: one trace per run with the calls actually made, a daily budget that resets
  * at her midnight, a reserve the optional loops can't touch, and failures traced then rethrown.
  */
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { asc } from "drizzle-orm";
-import { core_loop_trace } from "@/db/schema";
+import { core_loop_trace, core_memory } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { budgetDayStart, runCoreLoop, type LoopContext } from "@/mind/process/core/runner";
-import { closeTestDb, resetDb } from "../../../helpers/db";
+import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -37,6 +37,20 @@ const probe = (ctx: LoopContext) =>
 async function traces(all: ReturnType<typeof makeTestDeps>) {
   return all.db.select().from(core_loop_trace).orderBy(asc(core_loop_trace.created_at));
 }
+
+const thought = {
+  kind: "thought" as const,
+  content: "A trace and a thought land together.",
+  embedding: vec(),
+  occurred_at: now,
+  created_at: now,
+  status: "recurring" as const,
+  salience: 0.25,
+  valence: 0,
+  confidence: 0.6,
+  source: "loop" as const,
+  source_ref: "core_wander:test",
+};
 
 test("a run writes one trace with the calls it made", async () => {
   const { all, deps } = setup();
@@ -145,4 +159,80 @@ test("core loops can't call the reply model", async () => {
       return { inputs: {}, outputs: {} };
     }),
   ).rejects.toThrow("reply model");
+});
+
+test("commit and metered success trace succeed together exactly once", async () => {
+  const { all, deps } = setup();
+  const out = await runCoreLoop(deps, "core_wander", now, async (ctx) => {
+    await probe(ctx);
+    return ctx.commit(async (tx) => {
+      const id = await tx.memory.insert(thought);
+      return { inputs: { seed: "memory" }, outputs: { id }, promptVersion: "v1" };
+    });
+  });
+  const memories = await all.db.select().from(core_memory);
+  expect(memories).toHaveLength(1);
+  expect(out).toEqual({ status: "done", outputs: { id: memories[0]!.id } });
+  expect(await traces(all)).toMatchObject([
+    { status: "done", calls: 1, outputs: { id: memories[0]!.id }, prompt_version: "v1" },
+  ]);
+});
+
+test("trace insert failure rolls back the callback's writes and records one failure", async () => {
+  const { all, deps } = setup();
+  const transaction = deps.core.transaction.bind(deps.core);
+  vi.spyOn(deps.core, "transaction").mockImplementation((fn) =>
+    transaction((tx) =>
+      fn({
+        ...tx,
+        traces: {
+          ...tx.traces,
+          insert: async () => {
+            throw new Error("trace refused");
+          },
+        },
+      }),
+    ),
+  );
+  await expect(
+    runCoreLoop(deps, "core_wander", now, (ctx) =>
+      ctx.commit(async (tx) => {
+        await tx.memory.insert(thought);
+        return { inputs: {}, outputs: { applied: true } };
+      }),
+    ),
+  ).rejects.toThrow("trace refused");
+  expect(await all.db.select().from(core_memory)).toHaveLength(0);
+  expect(await traces(all)).toMatchObject([{ status: "failed", error: "Error" }]);
+});
+
+test("callback failure rolls back its writes, rethrows, and traces once", async () => {
+  const { all, deps } = setup();
+  class ApplyError extends Error {}
+  await expect(
+    runCoreLoop(deps, "core_wander", now, (ctx) =>
+      ctx.commit(async (tx) => {
+        await tx.memory.insert(thought);
+        throw new ApplyError("private detail");
+      }),
+    ),
+  ).rejects.toThrow("private detail");
+  expect(await all.db.select().from(core_memory)).toHaveLength(0);
+  expect(await traces(all)).toMatchObject([{ status: "failed", error: "ApplyError" }]);
+});
+
+test("a second commit is rejected before its callback runs", async () => {
+  const { all, deps } = setup();
+  let called = false;
+  await expect(
+    runCoreLoop(deps, "core_wander", now, async (ctx) => {
+      await ctx.commit(async () => ({ inputs: {}, outputs: { first: true } }));
+      return ctx.commit(async () => {
+        called = true;
+        return { inputs: {}, outputs: { first: false } };
+      });
+    }),
+  ).rejects.toThrow("already committed");
+  expect(called).toBe(false);
+  expect(await traces(all)).toMatchObject([{ status: "done", outputs: { first: true } }]);
 });

@@ -2,7 +2,9 @@
  * Her events, generated once for her whole world, not per user. A candidate is generated from her
  * plan, her recent episodes and the people she knows, checked by rules (how often someone new
  * appears, how often something big happens), and reconciled against her core memory; a duplicate
- * or contradiction is regenerated. Read-only: the world tick applies what's accepted.
+ * or contradiction is regenerated. A planned event comes with her thought about it now (the plan
+ * is on her mind before it happens); a spontaneous one has none, since nobody sees a surprise
+ * coming. Read-only: the world tick applies what's accepted.
  */
 import { z } from "zod";
 import type { LifePlan } from "@/db/schema";
@@ -22,9 +24,17 @@ export const EventSchema = z.object({
   valence: z.number(),
   stakes: z.enum(["low", "high"]),
   entity_names: z.array(z.string()),
+  kind: z.enum(["planned", "spontaneous"]),
+  thought: z.string().nullable(),
 });
 export type EventCandidate = z.infer<typeof EventSchema>;
-export type InjectedEvent = { content: string; valence: number };
+/** An eval's scripted event: spontaneous with no thought unless it says otherwise. */
+export type InjectedEvent = {
+  content: string;
+  valence: number;
+  kind?: EventCandidate["kind"];
+  thought?: string | null;
+};
 export type EventDecision =
   | "accepted"
   | "resolves"
@@ -45,6 +55,8 @@ export type AcceptedEvent = {
   key: string;
   candidate: EventCandidate;
   embedding: number[];
+  /** The thought's embedding for a planned event; null for a spontaneous one. */
+  thoughtEmbedding: number[] | null;
   at: Date;
 };
 export type CoreEventContext = {
@@ -99,6 +111,8 @@ export function buildEventInput(
 export function checkEvent(raw: EventCandidate, maxChars: number): EventCandidate | null {
   const content = tidy(raw.content);
   if (!content || content.length > maxChars || !HHMM.test(raw.at)) return null;
+  const thought = raw.kind === "planned" ? tidy(raw.thought ?? "") : null;
+  if (thought !== null && (!thought || thought.length > maxChars)) return null;
   const valence = Number.isFinite(raw.valence) ? Math.min(1, Math.max(-1, raw.valence)) : 0;
   return {
     content,
@@ -106,6 +120,8 @@ export function checkEvent(raw: EventCandidate, maxChars: number): EventCandidat
     valence,
     stakes: raw.stakes,
     entity_names: raw.entity_names.map(tidy).filter(Boolean),
+    kind: raw.kind,
+    thought,
   };
 }
 
@@ -129,7 +145,8 @@ export function checkRules(
 }
 
 const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = {
-  invalid: "it wasn't a valid event (one sentence, a time HH:MM between 00:00 and 23:59)",
+  invalid:
+    "it wasn't a valid event (one sentence, a time HH:MM between 00:00 and 23:59, and a thought if it's planned)",
   "rule:new_entity": "it introduces a new person too soon; use people she already knows",
   "rule:high_stakes": "it's high-stakes too soon after the last one; keep it small",
   duplicate: "it repeats something that already happened to her",
@@ -186,6 +203,8 @@ export async function generateCoreEvents(
             valence: injected!.valence,
             stakes: "low",
             entity_names: [],
+            kind: injected!.kind ?? "spontaneous",
+            thought: injected!.thought ?? null,
           }
         : await llm.classifyJson({
             purpose: "life_event",
@@ -235,10 +254,16 @@ export async function generateCoreEvents(
         targetMemoryId: decision.targetId,
         source,
       });
+      let thoughtEmbedding: number[] | null = null;
+      if (c.thought !== null) {
+        [thoughtEmbedding = null] = await embedder.embed([c.thought], "document");
+        if (!thoughtEmbedding) throw new Error("embedder returned no vector");
+      }
       accepted.push({
         key,
         candidate: c,
         embedding,
+        thoughtEmbedding,
         at: lifeInstant(config.life, day, c.at),
       });
       if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {

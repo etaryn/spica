@@ -46,6 +46,8 @@ test("a generation failure writes nothing and the next run retries", async () =>
     valence: 0.3,
     stakes: "low",
     entity_names: [],
+    kind: "spontaneous",
+    thought: null,
   });
   expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
   expect(await rows(deps, world_event)).toBe(1);
@@ -83,6 +85,8 @@ test("a run that finds the day already applied under the lock writes nothing", a
       valence: 0.3,
       stakes: "low",
       entity_names: [],
+      kind: "spontaneous",
+      thought: null,
     };
   };
   expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("not_due");
@@ -111,6 +115,8 @@ test("new people in an event join her entities", async () => {
     valence: 0.4,
     stakes: "low",
     entity_names: ["Mira"],
+    kind: "spontaneous",
+    thought: null,
   });
   await coreWorldTick(coreDepsOf(deps), at);
   expect((await deps.core.memory.entities()).map((e) => e.name)).toContain("Mira");

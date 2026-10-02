@@ -24,57 +24,61 @@ const ev = (content: string, extra: object = {}) => ({
   valence: 0.3,
   stakes: "low",
   entity_names: [],
+  kind: "spontaneous",
+  thought: null,
+  ...extra,
+});
+const raw = (extra: object = {}) => ({
+  content: "Spica read.",
+  at: "10:00",
+  valence: 0,
+  stakes: "low" as const,
+  entity_names: [],
+  kind: "spontaneous" as const,
+  thought: null,
   ...extra,
 });
 const always = { core: { world: { event_probability: 1, events_per_day_max: 1 } } };
 
 test("checkEvent rejects bad times and empty content, clamps valence", () => {
-  expect(
-    checkEvent({ content: " ", at: "10:00", valence: 0, stakes: "low", entity_names: [] }, 300),
-  ).toBeNull();
-  expect(
-    checkEvent(
-      { content: "Spica read.", at: "24:00", valence: 0, stakes: "low", entity_names: [] },
-      300,
-    ),
-  ).toBeNull();
-  expect(
-    checkEvent(
-      { content: "Spica read.", at: "10:00", valence: 3, stakes: "low", entity_names: [" Alcor "] },
-      300,
-    ),
-  ).toEqual({
+  expect(checkEvent(raw({ content: " " }), 300)).toBeNull();
+  expect(checkEvent(raw({ at: "24:00" }), 300)).toBeNull();
+  expect(checkEvent(raw({ valence: 3, entity_names: [" Alcor "] }), 300)).toEqual({
     content: "Spica read.",
     at: "10:00",
     valence: 1,
     stakes: "low",
     entity_names: ["Alcor"],
+    kind: "spontaneous",
+    thought: null,
+  });
+});
+
+test("checkEvent: a planned event needs a thought; a spontaneous one drops any thought", () => {
+  expect(checkEvent(raw({ kind: "planned", thought: null }), 300)).toBeNull();
+  expect(checkEvent(raw({ kind: "planned", thought: "  " }), 300)).toBeNull();
+  expect(checkEvent(raw({ kind: "planned", thought: "x".repeat(301) }), 300)).toBeNull();
+  expect(
+    checkEvent(raw({ kind: "planned", thought: " Spica is  thinking of Solaris. " }), 300),
+  ).toMatchObject({ kind: "planned", thought: "Spica is thinking of Solaris." });
+  expect(checkEvent(raw({ thought: "Spica saw it coming." }), 300)).toMatchObject({
+    kind: "spontaneous",
+    thought: null,
   });
 });
 
 test("checkEvent enforces the configured content cap; config defaults", () => {
   expect(cfg.event_max_chars).toBe(300);
   expect(cfg.injected_event_at).toBe("12:00");
-  const c = {
-    content: "Spica read a long book.",
-    at: "10:00",
-    valence: 0,
-    stakes: "low" as const,
-    entity_names: [],
-  };
+  const c = raw({ content: "Spica read a long book." });
   expect(checkEvent(c, 10)).toBeNull();
   expect(checkEvent(c, cfg.event_max_chars)).not.toBeNull();
 });
 
 test("checkRules: one new entity a week, one high-stakes event per window, canon is known", () => {
   const known = new Set(["alcor"]);
-  const c = (names: string[], stakes: "low" | "high" = "low") => ({
-    content: "x",
-    at: "10:00",
-    valence: 0,
-    stakes,
-    entity_names: names,
-  });
+  const c = (names: string[], stakes: "low" | "high" = "low") =>
+    raw({ content: "x", stakes, entity_names: names });
   const none = { known, lastNewEntityAt: null, lastHighStakesAt: null };
   expect(checkRules(c(["Alcor"]), { ...none, lastNewEntityAt: now }, now, cfg)).toBeNull();
   expect(checkRules(c(["Mira"]), none, now, cfg)).toBeNull();
@@ -216,14 +220,58 @@ test("draws are seeded by day only: the same day gives the same draws", async ()
   expect(ra.attempts.length).toBe(rb.attempts.length);
 });
 
-test("an injected event is the first attempt", async () => {
+test("an injected event is the first attempt, spontaneous unless it says otherwise", async () => {
   const deps = makeTestDeps({ core: { world: { event_probability: 0 } } });
   const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => ({
     content: "Spica got the telescope images.",
     valence: 0.8,
   }));
-  expect(out.accepted[0]!.candidate.content).toBe("Spica got the telescope images.");
+  expect(out.accepted[0]!.candidate).toMatchObject({
+    content: "Spica got the telescope images.",
+    kind: "spontaneous",
+    thought: null,
+  });
+  expect(out.accepted[0]!.thoughtEmbedding).toBeNull();
   expect(out.attempts[0]!.source).toBe("injected");
+
+  const planned = await generateCoreEvents(coreDepsOf(deps), day, now, () => ({
+    content: "Spica got the telescope images.",
+    valence: 0.8,
+    kind: "planned",
+    thought: "Spica is counting the hours until the telescope images arrive.",
+  }));
+  expect(planned.accepted[0]!.candidate).toMatchObject({
+    kind: "planned",
+    thought: "Spica is counting the hours until the telescope images arrive.",
+  });
+});
+
+test("a planned event carries its thought's embedding; a planned one without a thought is retried", async () => {
+  const deps = makeTestDeps(always);
+  const embed = vi.spyOn(deps.embedder, "embed");
+  deps.llm.handlers.life_event = sequence(
+    ev("Spica rewatched Solaris.", { kind: "planned", thought: null }),
+    ev("Spica rewatched Solaris.", {
+      kind: "planned",
+      thought: "Spica is thinking of rewatching Solaris tonight.",
+    }),
+  );
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  expect(out.attempts.map((a) => a.decision)).toEqual(["invalid", "accepted"]);
+  const [accepted] = out.accepted;
+  expect(accepted!.thoughtEmbedding).toHaveLength(accepted!.embedding.length);
+  expect(embed.mock.calls.flatMap((c) => c[0])).toContain(
+    "Spica is thinking of rewatching Solaris tonight.",
+  );
+});
+
+test("the generator's prompt is life/event v3, which explains both kinds", async () => {
+  const deps = makeTestDeps(always);
+  expect(deps.config.prompts.life_event).toBe("v3");
+  await generateCoreEvents(coreDepsOf(deps), day, now);
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
+  expect(call.system).toContain("planned");
+  expect(call.system).toContain("spontaneous");
 });
 
 test("the generator sees only core context: her episodes, her people, her plan", async () => {

@@ -25,6 +25,8 @@ const FAKE_DAY_EVENT = {
   valence: 0.3,
   stakes: "low",
   entity_names: [],
+  kind: "spontaneous",
+  thought: null,
 };
 
 export class FakeLLMProvider implements LLMProvider {

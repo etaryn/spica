@@ -108,7 +108,7 @@ export function makeLifeLoop(
     if (t > clock.now().getTime()) clock.set(new Date(t));
     const now = new Date(t);
     if (life.plan === "scripted") await scriptedPlans(now);
-    else await ensurePlans(deps, now);
+    else await ensurePlans(coreDepsOf(deps), now);
     await coreWorldTick(coreDepsOf(deps), now, { inject: (day) => inject(day) });
     await coreStateTick(coreDepsOf(deps), now);
     if (outreach) {

@@ -4,9 +4,9 @@
 import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { life_event_log, world_event } from "@/db/schema";
-import type { World, WorldEventRow } from "@/mind/world/types";
+import type { NewLifeDay, World, WorldEventRow } from "@/mind/world/types";
 import { one } from "../util";
-import { getLifeDay } from "../world/life-day";
+import { getLifeDay, insertLifeDay, listLifeDaysBefore } from "../world/life-day";
 
 function toRow(r: typeof world_event.$inferSelect): WorldEventRow {
   return {
@@ -28,6 +28,17 @@ export function worldRepo(db: Db): World {
   return {
     async plan(day) {
       return (await getLifeDay(db, day))?.plan ?? null;
+    },
+
+    async plansBefore(day, limit) {
+      return (await listLifeDaysBefore(db, day, limit)).map((r) => ({
+        date: r.date,
+        plan: r.plan,
+      }));
+    },
+
+    async insertPlan(row: NewLifeDay) {
+      return insertLifeDay(db, row);
     },
 
     async events(day) {

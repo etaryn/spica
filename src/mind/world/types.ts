@@ -4,6 +4,15 @@
  */
 import type { LifePlan } from "@/db/schema";
 
+export type NewLifeDay = {
+  date: string;
+  plan: LifePlan;
+  source: "model" | "fallback" | "scripted";
+  model: string;
+  prompt_version: string;
+  generated_at: Date;
+};
+
 export type NewWorldEvent = {
   at: Date;
   kind: "planned" | "surprise" | "resolution";
@@ -37,6 +46,10 @@ export type NewEventAttempt = {
 
 export interface World {
   plan(day: string): Promise<LifePlan | null>;
+  /** The `limit` plans before `day`, oldest first (the plan generator's continuity context). */
+  plansBefore(day: string, limit: number): Promise<{ date: string; plan: LifePlan }[]>;
+  /** False when that day already has a plan (a concurrent generator's row wins). */
+  insertPlan(row: NewLifeDay): Promise<boolean>;
   events(day: string): Promise<WorldEventRow[]>;
   recordEvent(event: NewWorldEvent): Promise<string>;
   /** Events whose time has come (at <= now) that haven't landed with her yet, oldest first. */

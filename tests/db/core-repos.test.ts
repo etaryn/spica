@@ -5,6 +5,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { createCoreLayer } from "@/db/repos/core";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";
+import { makeTestDeps } from "../helpers/deps";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -175,4 +176,26 @@ test("due unappraised world events: at or before now, oldest first, until marked
   expect((await w.dueUnappraised(now)).map((e) => e.id)).toEqual([later]);
   const stored = (await w.events("2026-01-05")).find((e) => e.id === earlier)!;
   expect(stored.appraised_at?.getTime()).toBe(now.getTime());
+});
+
+test("the world stores plans and reads the ones before a day, oldest first", async () => {
+  const deps = makeTestDeps();
+  const plan = { blocks: [] };
+  const row = (date: string) => ({
+    date,
+    plan,
+    source: "model" as const,
+    model: "m",
+    prompt_version: "v1",
+    generated_at: new Date("2026-01-01T00:00:00Z"),
+  });
+  expect(await deps.core.world.insertPlan(row("2026-01-04"))).toBe(true);
+  expect(await deps.core.world.insertPlan(row("2026-01-04"))).toBe(false);
+  await deps.core.world.insertPlan(row("2026-01-02"));
+  await deps.core.world.insertPlan(row("2026-01-03"));
+  expect((await deps.core.world.plansBefore("2026-01-04", 2)).map((p) => p.date)).toEqual([
+    "2026-01-02",
+    "2026-01-03",
+  ]);
+  expect(await deps.core.world.plansBefore("2026-01-04", 0)).toEqual([]);
 });

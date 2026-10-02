@@ -14,7 +14,7 @@ export async function registerWorldJobs(boss: PgBoss, deps: Deps): Promise<void>
   await boss.work(
     LIFE_PLAN_QUEUE,
     scrubErrors(LIFE_PLAN_QUEUE, deps.log, async () => {
-      await ensurePlans(deps, deps.clock.now());
+      await ensurePlans(coreDepsOf(deps), deps.clock.now());
     }),
   );
   await boss.schedule(LIFE_PLAN_QUEUE, deps.config.life.plan_cron);

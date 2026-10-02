@@ -4,19 +4,14 @@
  * validates it with one retry, and a fallback plan means she always has a day.
  */
 import { z } from "zod";
-import {
-  getLifeDay,
-  insertLifeDay,
-  listLifeDaysBefore,
-  type LifeDayRow,
-} from "@/db/repos/world/life-day";
 import type { LifeBlock, LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
-import type { Deps } from "@/mind/platform/deps";
+import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { nextLocalDate } from "@/mind/platform/timezone";
+import { runCoreLoop } from "@/mind/process/core/runner";
 import { lifeDate, minutesOf, weekday } from "./her-clock";
 
 /** The output format sent to the model. No numeric bounds (unsupported); `validatePlan` enforces them. */
@@ -132,7 +127,7 @@ function describePlan(plan: LifePlan): string {
   return plan.blocks.map((b) => `${b.start}-${b.end} ${b.kind} (${b.label})`).join("; ");
 }
 
-export function buildPlanInput(date: string, previous: LifeDayRow[]): string {
+export function buildPlanInput(date: string, previous: { date: string; plan: LifePlan }[]): string {
   const history = previous.length
     ? `Her previous days (oldest first):\n${previous.map((d) => `- ${d.date}: ${describePlan(d.plan)}`).join("\n")}`
     : "Her previous days: none yet.";
@@ -140,19 +135,22 @@ export function buildPlanInput(date: string, previous: LifeDayRow[]): string {
   return `Plan this day: ${date} (${weekday(date)}).\n\n${history}`;
 }
 
+type Generated = { plan: LifePlan; source: "model" | "fallback" };
+
 async function generatePlan(
-  deps: Pick<Deps, "db" | "llm" | "config" | "log">,
+  deps: CoreDeps,
   date: string,
-): Promise<{ plan: LifePlan; source: "model" | "fallback" }> {
+  canCall: () => boolean,
+): Promise<Generated> {
   const { config, llm, log } = deps;
-  const previous = await listLifeDaysBefore(deps.db, date, config.life.plan_context_days);
+  const previous = await deps.core.world.plansBefore(date, config.life.plan_context_days);
   const persona = loadPersona(config).coreValues;
   const instructions = loadPrompt("life/plan", config.prompts.life_plan);
   const system = `${persona}\n\n${instructions}`;
 
   let input = buildPlanInput(date, previous);
 
-  for (let attempt = 1; attempt <= GENERATION_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= GENERATION_ATTEMPTS && canCall(); attempt++) {
     try {
       const raw = await llm.classifyJson({
         purpose: "life_plan",
@@ -176,31 +174,40 @@ async function generatePlan(
   return { plan: fallbackPlan(config.life), source: "fallback" };
 }
 
-/** The `life_plan` job: makes sure her today and tomorrow have a plan. Safe to run repeatedly. */
-export async function ensurePlans(
-  deps: Pick<Deps, "db" | "llm" | "config" | "clock" | "log">,
-  now: Date,
-): Promise<{ created: string[] }> {
-  const { db, config, clock, log } = deps;
+/**
+ * The `life_plan` job: makes sure her today and tomorrow have a plan. Safe to run repeatedly. Each
+ * missing day is one budgeted run; over budget, or after two failed attempts, she gets the
+ * fallback plan, so she always has a day.
+ */
+export async function ensurePlans(deps: CoreDeps, now: Date): Promise<{ created: string[] }> {
+  const { config, clock, log } = deps;
   const today = lifeDate(config.life, now);
   const created: string[] = [];
 
   for (const date of [today, nextLocalDate(today)]) {
-    if (await getLifeDay(db, date)) continue;
+    if (await deps.core.world.plan(date)) continue;
 
-    const { plan, source } = await generatePlan(deps, date);
-    const fromModel = source === "model";
-    const inserted = await insertLifeDay(db, {
-      date,
-      plan,
-      source,
-      model: fromModel ? config.models.life : "none",
-      prompt_version: fromModel ? config.prompts.life_plan : "fallback",
-      generated_at: clock.now(),
+    const run = await runCoreLoop(deps, "life_plan", now, async (ctx) => {
+      const { plan, source } = await generatePlan(ctx.deps, date, ctx.canCall);
+      const fromModel = source === "model";
+      const inserted = await ctx.deps.core.world.insertPlan({
+        date,
+        plan,
+        source,
+        model: fromModel ? config.models.life : "none",
+        prompt_version: fromModel ? config.prompts.life_plan : "fallback",
+        generated_at: clock.now(),
+      });
+      return {
+        status: fromModel ? "done" : "fallback",
+        inputs: { date },
+        outputs: { source, inserted },
+        promptVersion: config.prompts.life_plan,
+      };
     });
 
-    if (inserted) created.push(date);
-    log.info("life plan", { date, source, inserted });
+    if (run.outputs?.inserted) created.push(date);
+    log.info("life plan", { date, source: run.outputs?.source, inserted: run.outputs?.inserted });
   }
 
   return { created };

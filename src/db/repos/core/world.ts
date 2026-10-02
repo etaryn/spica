@@ -17,6 +17,7 @@ function toRow(r: typeof world_event.$inferSelect): WorldEventRow {
     valence: r.valence,
     stakes: r.stakes,
     agents: r.agents,
+    agent_names: r.agent_names,
     life_day: r.life_day,
     created_at: r.created_at,
     appraised_at: r.appraised_at,
@@ -53,6 +54,10 @@ export function worldRepo(db: Db): World {
 
     async markAppraised(id, at) {
       await db.update(world_event).set({ appraised_at: at }).where(eq(world_event.id, id));
+    },
+
+    async setAgents(id, agents) {
+      await db.update(world_event).set({ agents }).where(eq(world_event.id, id));
     },
 
     async lastHighStakesAt() {

@@ -11,10 +11,16 @@ export type NewWorldEvent = {
   valence: number;
   stakes: "low" | "high";
   agents: string[];
+  /** The people in it by name, kept so a surprise's people can join her entities when it lands. */
+  agent_names?: string[];
   life_day: string;
   created_at: Date;
 };
-export type WorldEventRow = NewWorldEvent & { id: string; appraised_at: Date | null };
+export type WorldEventRow = NewWorldEvent & {
+  id: string;
+  agent_names: string[];
+  appraised_at: Date | null;
+};
 
 /** One event-generator attempt, for the inspector. */
 export type NewEventAttempt = {
@@ -36,6 +42,7 @@ export interface World {
   /** Events whose time has come (at <= now) that haven't landed with her yet, oldest first. */
   dueUnappraised(now: Date): Promise<WorldEventRow[]>;
   markAppraised(id: string, at: Date): Promise<void>;
+  setAgents(id: string, agents: string[]): Promise<void>;
   lastHighStakesAt(): Promise<Date | null>;
   logEventAttempts(attempts: NewEventAttempt[]): Promise<void>;
 }

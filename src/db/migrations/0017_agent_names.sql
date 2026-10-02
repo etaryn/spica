@@ -1,0 +1,1 @@
+ALTER TABLE "world_event" ADD COLUMN "agent_names" text[] DEFAULT '{}'::text[] NOT NULL;

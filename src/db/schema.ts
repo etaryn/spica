@@ -586,6 +586,8 @@ export const world_event = pgTable(
     valence: real("valence").notNull(),
     stakes: eventStakes("stakes").notNull(),
     agents: uuid("agents").array().notNull().default(emptyUuidArray),
+    /** The people in it by name; a surprise's people become her entities only when it lands. */
+    agent_names: text("agent_names").array().notNull().default(emptyTextArray),
     life_day: date("life_day", { mode: "string" }).notNull(),
     plan_ref: text("plan_ref"),
     goal_ref: uuid("goal_ref"),

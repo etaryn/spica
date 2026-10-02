@@ -8,6 +8,7 @@ import * as r from "@/db/repos/admin/inspector";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { listTurns } from "@/db/repos/user/session-log";
 import styles from "../inspector.module.css";
+import { eventStatus } from "./event-status";
 
 const Empty = ({ phase }: { phase: number }) => (
   <p className={styles.empty}>Nothing yet. Filled from Phase {phase}.</p>
@@ -547,7 +548,7 @@ export async function LifeTab({
         <Empty phase={5} />
       )}
       <p>source: {v.plan?.source ?? "—"}</p>
-      <h3>What happened today</h3>
+      <h3>Her events today</h3>
       {events.length > 0 ? (
         <table className={styles.table}>
           <tbody>
@@ -555,6 +556,7 @@ export async function LifeTab({
               <tr key={e.id}>
                 <td>{iso(e.at)}</td>
                 <td>{e.kind}</td>
+                <td>{eventStatus(e)}</td>
                 <td>{e.stakes}</td>
                 <td>{e.content}</td>
               </tr>

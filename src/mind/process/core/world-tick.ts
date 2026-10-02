@@ -2,18 +2,20 @@
  * `core_world_tick`, every hour: what happens in her life, in two steps.
  *
  * Once per her local day, events are generated once for everyone and recorded in her world. A
- * planned one is on her mind from then on: its thought becomes an open intention (and a strong one
- * takes over her mind), but her mood waits for the outcome. A spontaneous one leaves nothing in
- * her memory or state until it happens.
+ * planned one is on her mind from then on: its people join her entities, its thought becomes an
+ * open intention (and a strong one takes over her mind), but her mood waits for the outcome. A
+ * spontaneous one leaves nothing in her memory, her people or her state until it happens.
  *
- * Every run, each event whose time has come lands with her once: appraisal writes the episode,
- * moves her mood and resolves the plan it fulfils.
+ * Every run, first, each event whose time has come lands with her once: appraisal writes the
+ * episode, brings a surprise's people into her life, moves her mood and resolves the plan it
+ * fulfils. An event generated after its own time lands on the next run.
  *
  * Model and embedder calls run outside the transactions; each apply holds a global lock and
  * re-checks what it's about to do, so a retry never doubles a day or an event and a failure writes
  * nothing.
  */
 import type { CoreDeps } from "@/mind/platform/deps";
+import { errorName } from "@/mind/platform/errors";
 import { lifeDate, lifeHour } from "@/mind/world/her-clock";
 import { generateCoreEvents, type InjectedEvent } from "@/mind/world/events";
 import { appraiseEvent, eventRef } from "./appraise";
@@ -29,16 +31,23 @@ export async function coreWorldTick(
   now: Date,
   opts: WorldTickOptions = {},
 ): Promise<WorldTickResult> {
-  // A failed generation mustn't hold back events whose time has already come.
+  // Landing first means what happened overnight is in her recent life when today is generated.
+  // Each step runs even if the other fails, so one broken step can't stall the other.
+  let appraised = 0;
+  let appraisalFailure: { error: unknown } | null = null;
+  try {
+    appraised = await appraiseDue(deps, now);
+  } catch (error) {
+    appraisalFailure = { error };
+  }
   let generated = false;
-  let failure: { error: unknown } | null = null;
   try {
     generated = await generateIfDue(deps, now, opts);
   } catch (error) {
-    failure = { error };
+    if (!appraisalFailure) throw error;
+    deps.log.error("core world tick generation failed", { error: errorName(error) });
   }
-  const appraised = await appraiseDue(deps, now);
-  if (failure) throw failure.error;
+  if (appraisalFailure) throw appraisalFailure.error;
   return { generated, appraised };
 }
 
@@ -61,11 +70,11 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
     let preoccupation: string | null = null;
     for (const e of accepted) {
       const c = e.candidate;
-      const agents = await tx.memory.addEntities(
-        c.entity_names,
-        config.core.world.entity_salience,
-        now,
-      );
+      // A plan's people are known now; a surprise's people don't exist for her until it happens.
+      const agents =
+        c.kind === "planned"
+          ? await tx.memory.addEntities(c.entity_names, config.core.world.entity_salience, now)
+          : [];
       const worldEventId = await tx.world.recordEvent({
         at: e.at,
         kind: c.kind === "planned" ? "planned" : "surprise",
@@ -73,6 +82,7 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
         valence: c.valence,
         stakes: c.stakes,
         agents,
+        agent_names: c.entity_names,
         life_day: day,
         created_at: now,
       });
@@ -153,6 +163,10 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       const embedding = embeddings.get(event.id);
       // Became due after the embed (a concurrent generation); the next run takes it.
       if (!embedding) continue;
+      const agents = event.agent_names.length
+        ? await tx.memory.addEntities(event.agent_names, config.core.world.entity_salience, now)
+        : event.agents;
+      await tx.world.setAgents(event.id, agents);
       const out = await appraiseEvent(
         tx,
         deps,
@@ -163,7 +177,7 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
           stakes: event.stakes,
           at: event.at,
           embedding,
-          agents: event.agents,
+          agents,
         },
         now,
       );

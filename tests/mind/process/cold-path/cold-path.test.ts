@@ -323,3 +323,49 @@ test("an emotional exchange moves the user's affect and never touches core state
   expect(params.afterglow.value).toBeGreaterThan(0);
   expect(await deps.core.state.get()).toEqual(before);
 });
+
+const emotionalFact = (subject: "user" | "self" | "shared", content: string, valence: number) => ({
+  subject,
+  kind: "event" as const,
+  content,
+  occurred_at: null,
+  salience: 0.5,
+  valence,
+  confidence: 1,
+  entity_names: [],
+  thread_title: null,
+});
+
+test("her own emotional news doesn't colour how she feels about them", async () => {
+  const deps = depsWith();
+  deps.llm.handlers.extract = () => ({
+    facts: [emotionalFact("self", "Spica's telescope images finally arrived.", 0.9)],
+    entities: [],
+    threads: [],
+    relationship: null,
+  });
+  const u = await createTestUser();
+  const { job } = await exchange(u, "how's your day?", "my telescope images came!!", 0);
+  await runColdPath(deps, job);
+  const params = await getParams(getTestDb(), u);
+  expect(params.affect_valence.value).toBe(0.5);
+  expect(params.afterglow.value).toBe(0);
+});
+
+test("her own reaction to what they did isn't counted on top of it", async () => {
+  const run = async (facts: ReturnType<typeof emotionalFact>[]) => {
+    const deps = depsWith();
+    deps.llm.handlers.extract = () => ({ facts, entities: [], threads: [], relationship: null });
+    const u = await createTestUser();
+    const { job } = await exchange(u, "whatever", "ok", 0);
+    await runColdPath(deps, job);
+    return (await getParams(getTestDb(), u)).affect_valence.value;
+  };
+  const one = await run([emotionalFact("user", "The user mocked her taste in films.", -0.8)]);
+  const withHerReaction = await run([
+    emotionalFact("user", "The user mocked her taste in films.", -0.8),
+    emotionalFact("self", "Spica laughed it off.", 0.4),
+  ]);
+  expect(withHerReaction).toBe(one);
+  expect(one).toBeLessThan(0.5);
+});

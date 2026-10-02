@@ -77,7 +77,9 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
         signals,
         crisis,
         hurtFactId,
-        tone: exchangeTone(candidates.map((c) => c.fact)),
+        // How she feels about them follows what they did. Her own facts are left out: her
+        // news isn't about them, and her inferred hurt already moves the hurt param.
+        tone: exchangeTone(candidates.filter((c) => c.fact.subject !== "self").map((c) => c.fact)),
       });
     }
 

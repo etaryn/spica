@@ -54,3 +54,4 @@ code itself.
 | 2026-10-02 | Resolved intentions stay reconcile neighbours of new events | Reconcile checks history, and a plan she already carried out is history worth not repeating. |
 | 2026-10-02 | `world_event.agent_names` (migration `0017_agent_names`) keeps an event's people by name; a surprise's people join `core_entity` when it lands | A surprise must leave no trace before it happens, new people included; a planned event's people are known and join at generation. |
 | 2026-10-02 | The inspector's life tab shows each world event as `landed <time>` or `pending` | Events are recorded ahead of their time, so "recorded today" isn't "happened". |
+| 2026-10-02 | Exchange tone (affect, afterglow) reads only user and shared facts | Ethan: one moment must not count twice, separate hurts may stack. Her reaction and inferred hurt duplicated the user's act, and her own news isn't about them. |

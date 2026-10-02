@@ -794,7 +794,9 @@ Asynchronous, after sending; never blocks a reply.
    facts, entities, threads, recall write-back, the relationship params (in a
    savepoint), and **(Changes in v3)** the exchange's emotional tone nudges
    the user's `affect_valence` and `afterglow`, not core mood (V4). **Built:**
-the tone is the salience-weighted mean valence of the exchange's facts;
+the tone is the salience-weighted mean valence of the exchange's facts about
+the user and shared moments (her own facts, including the inferred hurt
+`feeling` fact, are left out, so one moment never counts twice);
 `affect_valence` moves toward it by `relationship.affect.exchange_gain`, and a
 positive tone adds to `afterglow` by `afterglow_gain × tone` (afterglow
 fades with half-life `afterglow_half_life_hours`). A reach-out exchange
@@ -1308,10 +1310,12 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B16.** The hourly relationship tick reads each user twice; at scale, add
   a SQL `last_tick` pre-filter (needs `user.timezone` validated at write).
   *Later.*
-- **B17.** Exchange tone averages every extracted fact with non-zero valence,
-  including her own and the hurt `feeling` fact, so one hurt counts twice.
-  The nudge now moves user affect; what tone should read is a question for
-  Ethan. *Tuning, with Ethan.*
+- **B17.** ~~Exchange tone averages her own facts too.~~ Done (Ethan,
+  2026-10-02): tone reads only facts about the user and shared moments. Her
+  reaction to a moment and her inferred hurt no longer count it a second
+  time, and her own news no longer colours her feelings toward the user.
+  Separate hurts each stay their own facts; how strongly several hurts add
+  up is the `hurt` param's job, since tone is an average.
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts

@@ -1,6 +1,6 @@
 # Phase 8b: World and hourly thinking — restart design
 
-Date: 2026-10-03. Status: **Draft for Ethan's written-spec approval.**
+Date: 2026-10-03. Status: **Approved by Ethan's “continue” on 2026-10-03 after written-spec review was requested.**
 
 ## 1. Intent and authority
 

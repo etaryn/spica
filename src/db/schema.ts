@@ -168,6 +168,14 @@ export const coreMemoryKind = pgEnum("core_memory_kind", [
 export const coreMemorySource = pgEnum("core_memory_source", ["world", "loop"]);
 export const worldEventKind = pgEnum("world_event_kind", ["planned", "surprise", "resolution"]);
 export const eventStakes = pgEnum("event_stakes", ["low", "high"]);
+export const coreLoopStatus = pgEnum("core_loop_status", [
+  "done",
+  "fallback",
+  "skipped_budget",
+  "failed",
+]);
+export const coreGoalStatus = pgEnum("core_goal_status", ["active", "done", "dropped"]);
+export const coreGoalSource = pgEnum("core_goal_source", ["seed", "reflect"]);
 
 const userRef = () =>
   uuid("user_id")
@@ -541,7 +549,7 @@ export const core_state = pgTable(
   "core_state",
   {
     id: integer("id").primaryKey(),
-    emotion: jsonb("emotion").notNull(),
+    emotion: jsonb("emotion"),
     mood_valence: real("mood_valence").notNull(),
     mood_arousal: real("mood_arousal").notNull(),
     energy: real("energy").notNull(),
@@ -575,6 +583,28 @@ export const core_snapshot = pgTable("core_snapshot", {
   prompt_version: text("prompt_version").notNull(),
 });
 
+/** Her goals: arcs lasting weeks. Progress moves only in code, from appraised events. */
+export const core_goal = pgTable(
+  "core_goal",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    why: text("why").notNull(),
+    status: coreGoalStatus("status").notNull(),
+    progress: real("progress").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    source: coreGoalSource("source").notNull(),
+    source_ref: text("source_ref"),
+    started_at: ts("started_at").notNull(),
+    target_at: ts("target_at"),
+    updated_at: ts("updated_at").notNull(),
+  },
+  (t) => [
+    index("core_goal_status_idx").on(t.status),
+    check("core_goal_progress_range", sql`${t.progress} BETWEEN 0 AND 1`),
+  ],
+);
+
 /** What actually happened in her world, known to her or not. */
 export const world_event = pgTable(
   "world_event",
@@ -590,7 +620,7 @@ export const world_event = pgTable(
     agent_names: text("agent_names").array().notNull().default(emptyTextArray),
     life_day: date("life_day", { mode: "string" }).notNull(),
     plan_ref: text("plan_ref"),
-    goal_ref: uuid("goal_ref"),
+    goal_ref: uuid("goal_ref").references(() => core_goal.id, { onDelete: "set null" }),
     outcome: text("outcome"),
     created_at: ts("created_at").notNull(),
     /** When it landed with her; null until its time comes and the world tick appraises it. */
@@ -615,6 +645,9 @@ export const core_loop_trace = pgTable(
     tokens_in: integer("tokens_in"),
     tokens_out: integer("tokens_out"),
     cost: real("cost"),
+    calls: integer("calls").notNull().default(0),
+    status: coreLoopStatus("status").notNull().default("done"),
+    error: text("error"),
     created_at: ts("created_at").notNull(),
   },
   (t) => [index("core_loop_trace_loop_created_idx").on(t.loop, t.created_at)],

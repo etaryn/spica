@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { assertDisposableDatabase } from "@/db/admin";
 import * as s from "@/db/schema";
+import { core_goal, core_loop_trace, core_state } from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 const T = new Date("2026-01-05T09:00:00Z");
@@ -273,6 +274,7 @@ const CORE_TABLES = [
   "core_memory",
   "core_entity",
   "core_state",
+  "core_goal",
   "core_snapshot",
   "world_event",
   "life_event_log",
@@ -307,4 +309,64 @@ test("core_state holds exactly one row", async () => {
       VALUES (${id}, '{}'::jsonb, 0, 0.4, 0.6, '{}'::jsonb, '{}'::jsonb)`);
   await insert(1);
   await expect(insert(2)).rejects.toThrow();
+});
+
+test("core_goal stores a goal with progress in [0, 1]", async () => {
+  const db = getTestDb();
+  const now = new Date("2026-01-05T00:00:00Z");
+  const [row] = await db
+    .insert(core_goal)
+    .values({
+      title: "Learn the winter constellations",
+      why: "She keeps pointing at Orion and getting it wrong.",
+      status: "active",
+      progress: 0.2,
+      embedding: vec(),
+      source: "seed",
+      source_ref: null,
+      started_at: now,
+      target_at: null,
+      updated_at: now,
+    })
+    .returning();
+  expect(row).toMatchObject({ status: "active", progress: 0.2, source: "seed" });
+  await expect(
+    db.update(core_goal).set({ progress: 1.5 }).where(eq(core_goal.id, row!.id)),
+  ).rejects.toThrow();
+});
+
+test("core_loop_trace records calls, status and error", async () => {
+  const db = getTestDb();
+  const [row] = await db
+    .insert(core_loop_trace)
+    .values({
+      loop: "core_appraise",
+      inputs: {},
+      outputs: {},
+      model: null,
+      prompt_version: null,
+      tokens_in: null,
+      tokens_out: null,
+      cost: null,
+      calls: 2,
+      status: "fallback",
+      error: "TimeoutError",
+      created_at: new Date("2026-01-05T00:00:00Z"),
+    })
+    .returning();
+  expect(row).toMatchObject({ calls: 2, status: "fallback", error: "TimeoutError" });
+});
+
+test("core_state.emotion may be null", async () => {
+  const db = getTestDb();
+  await db.insert(core_state).values({
+    id: 1,
+    emotion: null,
+    mood_valence: 0,
+    mood_arousal: 0.4,
+    energy: 0.6,
+    needs: { autonomy: 0.6, competence: 0.6 },
+    baseline: { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 },
+  });
+  expect((await db.select().from(core_state))[0]!.emotion).toBeNull();
 });

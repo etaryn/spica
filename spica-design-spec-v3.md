@@ -390,7 +390,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 - **`world_event`** (Built): what happened: `at`, `kind`
   (`planned | surprise | resolution`; `planned` and `surprise` are written so
   far), `content`, `valence`, `stakes` (`low | high`), `agents` (core entity
-  ids), `life_day`, `plan_ref`, `goal_ref`, `outcome`, `created_at`, and
+  ids; a surprise's are filled when it lands), `agent_names` (the people by
+  name, so a surprise's new people join `core_entity` only when it lands),
+  `life_day`, `plan_ref`, `goal_ref`, `outcome`, `created_at`, and
   `appraised_at` (when it landed with her; null until its time comes, §8.3).
 - **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
   model, prompt version, tokens, cost, created_at; written by the world and
@@ -554,21 +556,28 @@ that turn values into the phrases of the "How you're feeling" line, from
   knows is coming, with a `thought`: her present-tense thought about it) or
   **spontaneous** (a surprise, no thought); a planned event without a
   thought is invalid. An accepted event is recorded in `world_event` (kind
-  `planned` or `surprise`, `appraised_at` null). A planned one also writes
-  an open `intention` (§8.1; salience `event_salience`, dated now) and, past
+  `planned` or `surprise`, `agent_names`, `appraised_at` null). A planned
+  one's people join `core_entity` at once (the plan is known), and it also
+  writes an open `intention` (§8.1; salience `event_salience`, dated now) and, past
   `preoccupation_min_valence`, becomes her preoccupation; her mood doesn't
   move until the outcome (rising anticipation is `core_anticipate`). A
-  spontaneous one writes nothing to memory or state. **Every** hourly run,
-  independent of the daily generation gate, then appraises each event whose
-  `at` has passed and whose `appraised_at` is null, in one transaction under
-  the tick's lock: `appraiseEvent` is the code-only stand-in for
+  spontaneous one writes nothing to memory, `core_entity` or state.
+  **Every** hourly run, independent of the daily generation gate and
+  **before** it (so what landed overnight is in her recent life when the day
+  is generated; an event generated after its own time lands on the next
+  run), appraises each event whose `at` has passed and whose `appraised_at`
+  is null, in one transaction under the tick's lock (a surprise's people are
+  added to `core_entity` and its `agents` set here): `appraiseEvent` is the code-only stand-in for
   `core_appraise` (the event's own valence is the appraisal). It writes an
   `episode` (dated at the event, salience `event_salience`, confidence
   `event_confidence`, her entities at `entity_salience`), nudges mood and,
   past `preoccupation_min_valence`, sets her preoccupation; it resolves the
   event's intention (a preoccupation on that intention moves to the episode
   only if the episode is strong, else it is cleared), sets `appraised_at`,
-  and writes a `core_appraise_due` trace. A high-stakes event opens an
+  and writes a `core_appraise_due` trace. Each step runs even if the other
+  fails; if both fail the appraisal error is thrown and the generation
+  error is logged (error class only). The inspector's life tab shows each
+  event as `landed <time>` or `pending`. A high-stakes event opens an
   episode (status `open`) that stays on her mind through the preoccupation;
   she has no per-user threads for her own life. Other keys: `event_max_tokens`,
   `event_max_chars`, `injected_event_at` (eval-injected events), and

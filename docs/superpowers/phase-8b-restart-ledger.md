@@ -9,8 +9,9 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 
 - Task 1: complete — baseline checks passed; independent review approved.
 - Task 2: complete — 27c2f72, spec and quality approved by Sartre (gpt-6-sol/high).
-- Task 3: starting atomic runner completion and thought storage.
-- Tasks 4–10: not started.
+- Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
+- Task 4: starting goal-driven events and per-attempt budget checks.
+- Tasks 5–10: not started.
 
 ## Setup evidence
 
@@ -52,3 +53,16 @@ baseline migrations. No default database was targeted by those commands.
   future projection optimization may reduce transfer, without changing required prelimit filtering.
 - User requested weaker subagent models as appropriate. Use sol for ordinary multi-file tasks,
   luna for mechanical fixes, astra for concurrency-heavy review and final branch review.
+
+## Task 3 evidence and review
+
+- Runner RED: four expected failures / eight existing passes. Focused GREEN 17/17; full 759/759,
+  104 files; typecheck/lint passed. Commit b91eafc.
+- Thought initial test run was an import error, not behavioral RED. A later reversible boundary
+  mutation failed the named exact-0.92 assertion; restored code passed. This is a process limitation,
+  not retroactively claimed test-first evidence.
+- Tesla approved atomic write/trace rollback, duplicate guard and legacy runner contract.
+- Minor deferred: malformed-batch test checks persisted rollback but not zero insert calls before
+  validation. Current implementation validates first; final review should triage stronger coverage.
+- Vitest emitted an informational isolation performance hint, not a failing warning.
+- Cross-run dedupe requires the shared lock in Tasks 6–8; Task 3 alone does not acquire it.

@@ -1,6 +1,7 @@
 /**
  * `core_state_tick`: one hourly step of her core state. Mood and arousal drift toward her
- * baseline, energy follows her daily rhythm and her busy blocks, and an old preoccupation lets go.
+ * baseline, energy follows her daily rhythm and her busy blocks, an old preoccupation lets go,
+ * unmet needs slowly deplete, and a feeling fades after a few hours.
  * One row for everyone, so the step is the same whichever user is talking to her.
  */
 import type { CoreDeps } from "@/mind/platform/deps";
@@ -9,7 +10,16 @@ import { HOUR } from "@/mind/platform/time";
 import { localMidnight } from "@/mind/platform/timezone";
 import { todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate, lifeHour, lifeTimezone } from "@/mind/world/her-clock";
-import { dayLoad, driftStep, energyTarget, moodOf, preoccupationExpired } from "./core-state";
+import {
+  baselineNeeds,
+  dayLoad,
+  depleteNeeds,
+  driftStep,
+  emotionExpired,
+  energyTarget,
+  moodOf,
+  preoccupationExpired,
+} from "./core-state";
 
 const sameHour = (a: Date | null, b: Date) =>
   !!a && Math.floor(a.getTime() / HOUR) === Math.floor(b.getTime() / HOUR);
@@ -17,7 +27,7 @@ const sameHour = (a: Date | null, b: Date) =>
 export async function coreStateTick(deps: CoreDeps, now: Date): Promise<"not_due" | "done"> {
   const { core, config } = deps;
   const cfg = config.core.state;
-  await core.state.ensure(cfg.baseline);
+  await core.state.ensure(cfg.baseline, baselineNeeds(cfg));
   if (sameHour((await core.state.get())?.last_tick ?? null, now)) return "not_due";
 
   const day = lifeDate(config.life, now);
@@ -41,13 +51,20 @@ export async function coreStateTick(deps: CoreDeps, now: Date): Promise<"not_due
     const clear = preoccupationExpired(row.preoccupation_since, now, cfg);
     await tx.state.update({
       ...next,
+      needs: depleteNeeds(row.needs, cfg),
+      ...(emotionExpired(row.emotion, now, cfg) ? { emotion: null } : {}),
       last_tick: now,
       ...(clear ? { preoccupation: null, preoccupation_since: null } : {}),
     });
     await tx.traces.insert({
       loop: "core_state_tick",
       inputs: { load, hour: lifeHour(config.life, now) },
-      outputs: { ...next, preoccupation_cleared: clear },
+      outputs: {
+        ...next,
+        needs: depleteNeeds(row.needs, cfg),
+        preoccupation_cleared: clear,
+        emotion_cleared: emotionExpired(row.emotion, now, cfg),
+      },
       model: null,
       prompt_version: null,
       tokens_in: null,

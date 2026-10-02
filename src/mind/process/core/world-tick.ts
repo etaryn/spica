@@ -17,6 +17,7 @@
  */
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
+import { baselineNeeds } from "@/mind/state/core/core-state";
 import { lifeDate, lifeHour } from "@/mind/world/her-clock";
 import {
   generateCoreEvents,
@@ -62,7 +63,7 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
   const { core, config } = deps;
   if (lifeHour(config.life, now) < config.core.world.events_local_hour) return false;
   const day = lifeDate(config.life, now);
-  await core.state.ensure(config.core.state.baseline);
+  await core.state.ensure(config.core.state.baseline, baselineNeeds(config.core.state));
   if (!due((await core.state.get())?.last_event_day ?? null, day)) return false;
 
   const run = await runCoreLoop(deps, "life_event", now, async (ctx) => {
@@ -167,7 +168,7 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
   const { core, config, embedder } = deps;
   const pending = await core.world.dueUnappraised(now);
   if (!pending.length) return 0;
-  await core.state.ensure(config.core.state.baseline);
+  await core.state.ensure(config.core.state.baseline, baselineNeeds(config.core.state));
   const vectors = await embedder.embed(
     pending.map((e) => e.content),
     "document",

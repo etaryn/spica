@@ -6,7 +6,7 @@
 import type { CoreStateConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
 import type { WorldBlock } from "@/mind/world/blocks";
-import type { CoreMood } from "./types";
+import type { CoreEmotion, CoreMood, CoreNeeds } from "./types";
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const clampMood = (s: CoreMood): CoreMood => ({
@@ -14,6 +14,21 @@ const clampMood = (s: CoreMood): CoreMood => ({
   mood_arousal: clamp(s.mood_arousal, 0, 1),
   energy: clamp(s.energy, 0, 1),
 });
+
+export const baselineNeeds = (cfg: CoreStateConfig): CoreNeeds => ({
+  autonomy: cfg.needs_baseline,
+  competence: cfg.needs_baseline,
+});
+
+/** One hour of a need going unmet. */
+export function depleteNeeds(n: CoreNeeds, cfg: CoreStateConfig): CoreNeeds {
+  const step = cfg.need_decay_per_day / 24;
+  return { autonomy: clamp(n.autonomy - step, 0, 1), competence: clamp(n.competence - step, 0, 1) };
+}
+
+export function emotionExpired(e: CoreEmotion | null, now: Date, cfg: CoreStateConfig): boolean {
+  return !!e && now.getTime() - Date.parse(e.since) >= cfg.emotion_hours * HOUR;
+}
 
 export const moodOf = (r: CoreMood): CoreMood => ({
   mood_valence: r.mood_valence,

@@ -60,7 +60,7 @@ test("the same hour gives the same state: noise is seeded by the hour alone", as
 test("an old preoccupation expires", async () => {
   const full = makeTestDeps();
   const deps = coreDepsOf(full);
-  await full.core.state.ensure(full.config.core.state.baseline);
+  await full.core.state.ensure(full.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   const id = await full.core.memory.insert({
     kind: "episode",
     content: "x",
@@ -78,4 +78,30 @@ test("an old preoccupation expires", async () => {
   await full.core.state.update({ preoccupation: id, preoccupation_since: since });
   await coreStateTick(deps, at);
   expect((await full.core.state.get())!.preoccupation).toBeNull();
+});
+
+test("the tick depletes needs and lets an old emotion go", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  const cfg = deps.config.core.state;
+  await deps.core.state.ensure(cfg.baseline, {
+    autonomy: cfg.needs_baseline,
+    competence: cfg.needs_baseline,
+  });
+  const now = new Date("2026-01-05T09:00:00Z");
+  const old = new Date(now.getTime() - (cfg.emotion_hours + 1) * H);
+  await deps.core.state.update({
+    emotion: {
+      label: "giddy",
+      valence: 0.6,
+      arousal: 0.7,
+      phrase: null,
+      about: null,
+      since: old.toISOString(),
+    },
+  });
+  await coreStateTick(deps, now);
+  const row = (await deps.core.state.get())!;
+  expect(row.emotion).toBeNull();
+  expect(row.needs.autonomy).toBeCloseTo(cfg.needs_baseline - cfg.need_decay_per_day / 24);
 });

@@ -401,7 +401,7 @@ test("an appraisal failure writes nothing and the next run lands the event", asy
 
 test("appraisal runs every hour, whether or not today's generation is due", async () => {
   const deps = makeTestDeps({ ...utc, core: { world: { events_local_hour: 20 } } });
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   await deps.core.world.recordEvent({
     at: new Date(at.getTime() - H),
     kind: "surprise",

@@ -304,7 +304,10 @@ const coreState = z.object({
   preoccupation_min_valence: unit,
   event_gain: unit,
   event_arousal_gain: unit,
-  bands: z.object({ energy: band, mood_valence: band, mood_arousal: band }),
+  needs_baseline: unit,
+  need_decay_per_day: unit,
+  emotion_hours: z.number().positive(),
+  bands: z.object({ energy: band, mood_valence: band, mood_arousal: band, needs: band }),
 });
 
 const coreWorld = z.object({

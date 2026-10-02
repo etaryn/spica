@@ -21,7 +21,7 @@ const base = {
 
 async function setup() {
   const deps = makeTestDeps();
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   const wid = await deps.core.world.recordEvent({
     at: now,
     kind: "planned",

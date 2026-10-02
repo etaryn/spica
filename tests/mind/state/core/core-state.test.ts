@@ -2,11 +2,14 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import {
   applyEvent,
+  baselineNeeds,
+  depleteNeeds,
   dayLoad,
   driftStep,
   energyTarget,
   preoccupationExpired,
   rhythm,
+  emotionExpired,
 } from "@/mind/state/core/core-state";
 
 const cfg = loadConfig().core.state;
@@ -57,4 +60,30 @@ test("preoccupation expires after preoccupation_hours", () => {
   expect(preoccupationExpired(null, t(100), cfg)).toBe(false);
   expect(preoccupationExpired(t(0), t(cfg.preoccupation_hours - 1), cfg)).toBe(false);
   expect(preoccupationExpired(t(0), t(cfg.preoccupation_hours), cfg)).toBe(true);
+});
+
+test("needs deplete by a day's rate over 24 hours and never go below 0", () => {
+  const after = depleteNeeds({ autonomy: 0.5, competence: 0.001 }, cfg);
+  expect(after.autonomy).toBeCloseTo(0.5 - cfg.need_decay_per_day / 24);
+  expect(after.competence).toBe(0);
+  expect(baselineNeeds(cfg)).toEqual({
+    autonomy: cfg.needs_baseline,
+    competence: cfg.needs_baseline,
+  });
+});
+
+test("an emotion expires after emotion_hours", () => {
+  const since = new Date("2026-01-05T00:00:00Z");
+  const e = {
+    label: "giddy",
+    valence: 0.6,
+    arousal: 0.7,
+    phrase: null,
+    about: null,
+    since: since.toISOString(),
+  };
+  const at = (h: number) => new Date(since.getTime() + h * H);
+  expect(emotionExpired(e, at(cfg.emotion_hours - 1), cfg)).toBe(false);
+  expect(emotionExpired(e, at(cfg.emotion_hours), cfg)).toBe(true);
+  expect(emotionExpired(null, at(100), cfg)).toBe(false);
 });

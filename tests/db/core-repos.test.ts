@@ -78,8 +78,14 @@ test("snapshots: latest wins, a duplicate version is refused", async () => {
 
 test("state: ensure, lock and update inside a transaction", async () => {
   const layer = core();
-  await layer.state.ensure({ mood_valence: 0.2, mood_arousal: 0.4, energy: 0.6 });
-  await layer.state.ensure({ mood_valence: -1, mood_arousal: 0, energy: 0 });
+  await layer.state.ensure(
+    { mood_valence: 0.2, mood_arousal: 0.4, energy: 0.6 },
+    { autonomy: 0.6, competence: 0.6 },
+  );
+  await layer.state.ensure(
+    { mood_valence: -1, mood_arousal: 0, energy: 0 },
+    { autonomy: 0.6, competence: 0.6 },
+  );
   await layer.transaction(async (tx) => {
     const row = await tx.state.lock();
     expect(row.mood_valence).toBeCloseTo(0.2);

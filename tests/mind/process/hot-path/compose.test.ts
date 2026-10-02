@@ -294,7 +294,10 @@ describe("composeReply", () => {
   test("core state line reaches slot 2; skipped on the crisis path (rule 7)", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
-    await deps.core.state.ensure(deps.config.core.state.baseline);
+    await deps.core.state.ensure(deps.config.core.state.baseline, {
+      autonomy: 0.6,
+      competence: 0.6,
+    });
     await deps.core.state.update({ energy: 0.01 });
 
     await composeReply(deps, u, {
@@ -358,7 +361,10 @@ describe("composeReply", () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     await seedSnapshot(coreDepsOf(deps));
-    await deps.core.state.ensure(deps.config.core.state.baseline);
+    await deps.core.state.ensure(deps.config.core.state.baseline, {
+      autonomy: 0.6,
+      competence: 0.6,
+    });
     await deps.core.memory.insert({
       kind: "episode",
       content: "Spica watched the old film Vertigo.",

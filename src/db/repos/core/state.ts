@@ -4,15 +4,12 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_state } from "@/db/schema";
-import type { CoreState, CoreStateRow } from "@/mind/state/core/types";
+import type { CoreEmotion, CoreNeeds, CoreState, CoreStateRow } from "@/mind/state/core/types";
 
 const ROW = 1;
-const NEUTRAL_EMOTION = { label: "neutral", valence: 0, arousal: 0, about: null, since: null };
-const NEUTRAL_NEEDS = { autonomy: 0.5, competence: 0.5 };
-
 function toRow(r: typeof core_state.$inferSelect): CoreStateRow {
-  const { id: _id, ...rest } = r;
-  return rest;
+  const { id: _id, emotion, needs, ...rest } = r;
+  return { ...rest, emotion: (emotion as CoreEmotion | null) ?? null, needs: needs as CoreNeeds };
 }
 
 export function coreStateRepo(db: Db): CoreState {
@@ -22,15 +19,15 @@ export function coreStateRepo(db: Db): CoreState {
       return row ? toRow(row) : null;
     },
 
-    async ensure(baseline) {
+    async ensure(baseline, needs) {
       await db
         .insert(core_state)
         .values({
           id: ROW,
           ...baseline,
           baseline,
-          emotion: NEUTRAL_EMOTION,
-          needs: NEUTRAL_NEEDS,
+          emotion: null,
+          needs,
         })
         .onConflictDoNothing();
     },

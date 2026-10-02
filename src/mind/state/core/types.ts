@@ -1,8 +1,20 @@
 /**
- * Her core state as the rest of the mind sees it: one row of mood, energy, preoccupation and the
- * slots the core loops will fill (emotion, needs). The same for every user.
+ * Her core state as the rest of the mind sees it: one row of mood, energy, needs, her current
+ * emotion and preoccupation. The same for every user.
  */
 export type CoreMood = { mood_valence: number; mood_arousal: number; energy: number };
+export type CoreNeeds = { autonomy: number; competence: number };
+export type CoreEmotion = {
+  label: string;
+  valence: number;
+  arousal: number;
+  /** A short phrase for what it's about, or null. */
+  phrase: string | null;
+  /** The core memory it's about, or null. */
+  about: string | null;
+  /** ISO time it was felt. */
+  since: string;
+};
 
 export type CoreGoalStatus = "active" | "done" | "dropped";
 export type CoreGoal = {
@@ -29,8 +41,8 @@ export interface CoreGoals {
 }
 
 export type CoreStateRow = CoreMood & {
-  emotion: unknown;
-  needs: unknown;
+  emotion: CoreEmotion | null;
+  needs: CoreNeeds;
   preoccupation: string | null;
   preoccupation_since: Date | null;
   baseline: CoreMood;
@@ -38,12 +50,12 @@ export type CoreStateRow = CoreMood & {
   last_event_day: string | null;
 };
 
-export type CoreStatePatch = Partial<Omit<CoreStateRow, "baseline" | "emotion" | "needs">>;
+export type CoreStatePatch = Partial<Omit<CoreStateRow, "baseline">>;
 
 export interface CoreState {
   get(): Promise<CoreStateRow | null>;
-  /** Creates the row at `baseline` if it doesn't exist yet. */
-  ensure(baseline: CoreMood): Promise<void>;
+  /** Creates the row at `baseline` with `needs` if it doesn't exist yet. */
+  ensure(baseline: CoreMood, needs: CoreNeeds): Promise<void>;
   /** The row, locked for update. Only meaningful inside `core.transaction`. */
   lock(): Promise<CoreStateRow>;
   update(patch: CoreStatePatch): Promise<void>;

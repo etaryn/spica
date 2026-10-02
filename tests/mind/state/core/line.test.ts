@@ -21,14 +21,26 @@ test("bands", () => {
 test("neutral state → no line; non-neutral dimensions → one phrase each, no numbers", () => {
   expect(
     coreStateLine(
-      { mood_valence: 0.1, mood_arousal: 0.4, energy: 0.5 },
+      {
+        mood_valence: 0.1,
+        mood_arousal: 0.4,
+        energy: 0.5,
+        emotion: null,
+        needs: { autonomy: 0.6, competence: 0.6 },
+      },
       c.core.state,
       phrases,
       "s",
     ),
   ).toBeNull();
   const line = coreStateLine(
-    { mood_valence: 0.6, mood_arousal: 0.4, energy: 0.2 },
+    {
+      mood_valence: 0.6,
+      mood_arousal: 0.4,
+      energy: 0.2,
+      emotion: null,
+      needs: { autonomy: 0.6, competence: 0.6 },
+    },
     c.core.state,
     phrases,
     "s",
@@ -40,8 +52,45 @@ test("neutral state → no line; non-neutral dimensions → one phrase each, no 
 
 test("the line is the same for every user at the same hour", async () => {
   const deps = makeTestDeps();
-  await deps.core.state.ensure({ mood_valence: -0.9, mood_arousal: 0.9, energy: 0.1 });
+  await deps.core.state.ensure(
+    { mood_valence: -0.9, mood_arousal: 0.9, energy: 0.1 },
+    { autonomy: 0.6, competence: 0.6 },
+  );
   const now = new Date("2026-01-05T11:20:00Z");
   expect(await loadCoreStateLine(deps, now)).toBe(await loadCoreStateLine(deps, now));
   expect(await loadCoreStateLine(deps, now)).not.toBeNull();
+});
+
+const calm = { mood_valence: 0.1, mood_arousal: 0.4, energy: 0.5 };
+
+test("a current emotion is in the line, with what it's about", () => {
+  const line = coreStateLine(
+    {
+      ...calm,
+      needs: { autonomy: 0.6, competence: 0.6 },
+      emotion: {
+        label: "giddy",
+        valence: 0.6,
+        arousal: 0.7,
+        phrase: "the telescope images",
+        about: null,
+        since: "2026-01-05T00:00:00Z",
+      },
+    },
+    c.core.state,
+    phrases,
+    "s",
+  )!;
+  expect(line).toContain("giddy");
+  expect(line).toContain("the telescope images");
+});
+
+test("a low need gets its phrase", () => {
+  const line = coreStateLine(
+    { ...calm, emotion: null, needs: { autonomy: 0.1, competence: 0.6 } },
+    c.core.state,
+    phrases,
+    "s",
+  )!;
+  expect(phrases["autonomy low"]!.some((p) => line.includes(p))).toBe(true);
 });

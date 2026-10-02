@@ -179,7 +179,7 @@
     "life_plan": "v1",
     "life_event": "v3",
     "life_availability": "v1",
-    "core_state_line": "v2",
+    "core_state_line": "v3",
     "reach_out": "v1"
   },
   "queue": {
@@ -299,7 +299,15 @@
       "preoccupation_min_valence": 0.5,
       "event_gain": 0.3,
       "event_arousal_gain": 0.2,
-      "bands": { "energy": [0.35, 0.7], "mood_valence": [-0.2, 0.4], "mood_arousal": [0.25, 0.7] }
+      "needs_baseline": 0.6,
+      "need_decay_per_day": 0.1,
+      "emotion_hours": 6,
+      "bands": {
+        "energy": [0.35, 0.7],
+        "mood_valence": [-0.2, 0.4],
+        "mood_arousal": [0.25, 0.7],
+        "needs": [0.3, 0.8]
+      }
     },
     "world": {
       "tick_cron": "10 * * * *",

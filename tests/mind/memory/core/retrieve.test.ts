@@ -39,7 +39,7 @@ test("her preoccupation is always there, marked on her mind", async () => {
   const deps = makeTestDeps({ retrieval: { core_top_n: 1 } });
   await addEpisode(deps, "a");
   const pre = await addEpisode(deps, "telescope");
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   await deps.core.state.update({ preoccupation: pre, preoccupation_since: now });
   const r = await retrieveCore(deps, { queryText: "hi", now });
   expect(r.memories.find((m) => m.id === pre)?.onMind).toBe(true);
@@ -87,7 +87,7 @@ test("an open intention is recalled: a plan is on her mind before it happens", a
 test("a resolved intention is never recalled: ranked, forced or as her preoccupation", async () => {
   const deps = makeTestDeps();
   const done = await addIntention(deps, "resolved");
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   await deps.core.state.update({ preoccupation: done, preoccupation_since: now });
   const r = await retrieveCore(deps, { queryText: "Solaris", now, forceIds: [done] });
   expect(r.memories).toEqual([]);

@@ -55,7 +55,7 @@ test("deletes self facts, entities and threads for every user, keeps user facts,
     last_touched: t0,
   });
   const deps = makeTestDeps();
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   const episode = await deps.core.memory.insert({
     kind: "episode",
     content: "She rewatched Solaris.",

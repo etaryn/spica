@@ -122,7 +122,7 @@ test("her day: her core episodes within the lookback, plus her preoccupation; ne
   await episode("too old", ago(80));
   await episode("later", new Date(now.getTime() + H));
   const pre = await episode("Spica keeps thinking about Alcor.", ago(100), "open");
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   await deps.core.state.update({ preoccupation: pre, preoccupation_since: ago(100) });
   // A user's own self fact is never her day: her day comes only from her core memory.
   await insertFact(
@@ -155,7 +155,7 @@ test("her day: open intentions within the lookback are news; resolved or old one
   await intention("Spica was thinking of Solaris.", ago(2), "resolved");
   await intention("Spica meant to go stargazing.", ago(80), "open");
   const done = await intention("Spica is counting down to the images.", ago(100), "resolved");
-  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   // A plan that has happened stays out even as her preoccupation.
   await deps.core.state.update({ preoccupation: done, preoccupation_since: ago(100) });
   const herDay = (await loadCandidateInputs(deps, u, now)).herDay;

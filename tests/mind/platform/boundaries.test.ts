@@ -75,7 +75,7 @@ describe("one-way flow", () => {
 
   it("lets core loops in process/core be imported by world code", async () => {
     const code =
-      'import { appraiseEvent } from "@/mind/process/core/appraise";\nvoid appraiseEvent;\n';
+      'import { applyAppraisal } from "@/mind/process/core/appraise";\nvoid applyAppraisal;\n';
     const errors = await errorsFor(code, "src/mind/world/events.ts");
     expect(hitsBoundary(errors)).toBe(false);
   });

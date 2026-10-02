@@ -310,6 +310,17 @@ const coreState = z.object({
   bands: z.object({ energy: band, mood_valence: band, mood_arousal: band, needs: band }),
 });
 
+const coreAppraise = z.object({
+  max_tokens: positiveInt,
+  episode_max_chars: positiveInt,
+  label_max_chars: positiveInt,
+  about_max_chars: positiveInt,
+  salience: z.object({ low: unit, medium: unit, high: unit }),
+  need_gain: unit,
+  fallback_band: band,
+  fallback_labels: z.object({ negative: text, neutral: text, positive: text }),
+});
+
 const coreWorld = z.object({
   tick_cron: cron,
   events_local_hour: hourOfDay,
@@ -348,6 +359,7 @@ const coreLoop = z.enum(CORE_LOOPS);
 
 const core = z
   .object({
+    appraise: coreAppraise,
     daily_call_budget: countFromZero,
     budget_reserve: countFromZero,
     loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),
@@ -429,6 +441,7 @@ const prompts = z.object({
   relationship_summary: promptVersion,
   life_plan: promptVersion,
   life_event: promptVersion,
+  core_appraise: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
 });

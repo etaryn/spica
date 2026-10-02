@@ -346,7 +346,7 @@ test("at its time a later hourly run writes the episode and the mood nudge, and 
   const traces = await deps.db
     .select()
     .from(core_loop_trace)
-    .where(eq(core_loop_trace.loop, "core_appraise_due"));
+    .where(eq(core_loop_trace.loop, "core_appraise"));
   expect(traces).toHaveLength(1);
   expect(traces[0]!.outputs).toMatchObject({
     episodes: [episode.id],
@@ -381,7 +381,8 @@ test("an appraisal failure writes nothing and the next run lands the event", asy
   const begin = deps.core.transaction.bind(deps.core);
   vi.spyOn(deps.core, "transaction").mockImplementation((fn) =>
     begin(async (tx) => {
-      vi.spyOn(tx.traces, "insert").mockRejectedValue(new Error("disk full"));
+      // Landing the event is the transaction's last write, so everything before it must roll back.
+      vi.spyOn(tx.world, "markAppraised").mockRejectedValue(new Error("disk full"));
       return fn(tx);
     }),
   );
@@ -413,4 +414,21 @@ test("appraisal runs every hour, whether or not today's generation is due", asyn
     created_at: morning,
   });
   expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual({ generated: false, appraised: 1 });
+});
+
+test("a failed appraisal call still lands the event and traces fallback", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(0.3));
+  deps.llm.handlers.core_appraise = sequence(new Error("model down"));
+  await coreWorldTick(coreDepsOf(deps), morning);
+  const landed = new Date(eventTime.getTime() + 10 * 60_000);
+  expect((await coreWorldTick(coreDepsOf(deps), landed)).appraised).toBe(1);
+  expect((await memories(deps)).find((m) => m.kind === "episode")!.content).toBe(
+    "Spica rewatched Solaris with Alcor.",
+  );
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "core_appraise"));
+  expect(trace).toMatchObject({ status: "fallback", calls: 1 });
 });

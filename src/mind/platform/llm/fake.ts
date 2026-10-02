@@ -49,6 +49,23 @@ export class FakeLLMProvider implements LLMProvider {
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
     life_event: () => structuredClone(FAKE_DAY_EVENT),
+    // Echoes the event, so fake-mode episodes keep the generator's words and valence.
+    core_appraise: (input: string) => {
+      const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";
+      const valence = Number(/valence (-?\d+(?:\.\d+)?)/.exec(input)?.[1] ?? 0);
+      return {
+        episode: content,
+        emotion: {
+          label: valence < 0 ? "upset" : "pleased",
+          valence,
+          arousal: Math.abs(valence),
+          about: "",
+        },
+        salience: "medium",
+        goal_effects: [],
+        need_effects: { autonomy: 0, competence: 0 },
+      };
+    },
   };
 
   constructor(options: { classify?: Handler } = {}) {

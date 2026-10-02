@@ -77,11 +77,16 @@ export function driftStep(
   });
 }
 
-export function applyEvent(s: CoreMood, valence: number, cfg: CoreStateConfig): CoreMood {
+export function applyEvent(
+  s: CoreMood,
+  valence: number,
+  cfg: CoreStateConfig,
+  arousal = Math.abs(valence),
+): CoreMood {
   return clampMood({
     ...s,
     mood_valence: s.mood_valence + cfg.event_gain * valence,
-    mood_arousal: s.mood_arousal + cfg.event_arousal_gain * Math.abs(valence),
+    mood_arousal: s.mood_arousal + cfg.event_arousal_gain * arousal,
   });
 }
 

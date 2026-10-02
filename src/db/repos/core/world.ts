@@ -21,6 +21,7 @@ function toRow(r: typeof world_event.$inferSelect): WorldEventRow {
     life_day: r.life_day,
     created_at: r.created_at,
     appraised_at: r.appraised_at,
+    goal_ref: r.goal_ref,
   };
 }
 
@@ -69,6 +70,10 @@ export function worldRepo(db: Db): World {
 
     async setAgents(id, agents) {
       await db.update(world_event).set({ agents }).where(eq(world_event.id, id));
+    },
+
+    async setGoalRef(id, goalId) {
+      await db.update(world_event).set({ goal_ref: goalId }).where(eq(world_event.id, id));
     },
 
     async lastHighStakesAt() {

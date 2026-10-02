@@ -7,7 +7,8 @@
  * spontaneous one leaves nothing in her memory, her people or her state until it happens.
  *
  * Every run, first, each event whose time has come lands with her once: appraisal writes the
- * episode, brings a surprise's people into her life, moves her mood and resolves the plan it
+ * appraisal (a budgeted model call, with a code fallback) writes the episode in its own words,
+ * brings a surprise's people into her life, moves her mood and resolves the plan it
  * fulfils. An event generated after its own time lands on the next run.
  *
  * Model and embedder calls run outside the transactions; each apply holds a global lock and
@@ -25,7 +26,14 @@ import {
   type EventAttempt,
   type InjectedEvent,
 } from "@/mind/world/events";
-import { appraiseEvent, eventRef } from "./appraise";
+import {
+  applyAppraisal,
+  eventRef,
+  proposeAppraisal,
+  type Appraisal,
+  type LandingEvent,
+} from "./appraise";
+import type { WorldEventRow } from "@/mind/world/types";
 import { runCoreLoop } from "./runner";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
@@ -165,63 +173,64 @@ async function applyDay(
 
 /** Lands every event whose time has come. Returns how many landed in this run. */
 async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
-  const { core, config, embedder } = deps;
+  const { core, config } = deps;
   const pending = await core.world.dueUnappraised(now);
   if (!pending.length) return 0;
   await core.state.ensure(config.core.state.baseline, baselineNeeds(config.core.state));
-  const vectors = await embedder.embed(
-    pending.map((e) => e.content),
-    "document",
-  );
-  const embeddings = new Map(pending.map((e, i) => [e.id, vectors[i]]));
-
-  return core.transaction(async (tx) => {
-    await tx.lock(LOCK);
-    const episodes: string[] = [];
-    const resolved: string[] = [];
-    const landed: string[] = [];
-    // Re-read under the lock: another run may have landed some of these already.
-    for (const event of await tx.world.dueUnappraised(now)) {
-      const embedding = embeddings.get(event.id);
-      // Became due after the embed (a concurrent generation); the next run takes it.
-      if (!embedding) continue;
-      const agents = event.agent_names.length
-        ? await tx.memory.addEntities(event.agent_names, config.core.world.entity_salience, now)
-        : event.agents;
-      await tx.world.setAgents(event.id, agents);
-      const out = await appraiseEvent(
-        tx,
-        deps,
-        {
-          worldEventId: event.id,
-          content: event.content,
-          valence: event.valence,
-          stakes: event.stakes,
-          at: event.at,
+  const run = await runCoreLoop(deps, "core_appraise", now, async (ctx) => {
+    // Model and embedder calls run before the transaction; the apply re-checks under the lock.
+    const proposals = new Map<string, Appraisal>();
+    for (const e of pending) proposals.set(e.id, await proposeAppraisal(ctx, landing(e)));
+    const vectors = await ctx.deps.embedder.embed(
+      [...proposals.values()].map((a) => a.episode),
+      "document",
+    );
+    const out = await core.transaction(async (tx) => {
+      await tx.lock(LOCK);
+      const landed: string[] = [];
+      const episodes: string[] = [];
+      const resolved: string[] = [];
+      // Re-read under the lock: another run may have landed some of these already.
+      for (const event of await tx.world.dueUnappraised(now)) {
+        const appraisal = proposals.get(event.id);
+        const embedding = vectors[pending.findIndex((p) => p.id === event.id)];
+        // Became due after the proposals (a concurrent generation); the next run takes it.
+        if (!appraisal || !embedding) continue;
+        const agents = event.agent_names.length
+          ? await tx.memory.addEntities(event.agent_names, config.core.world.entity_salience, now)
+          : event.agents;
+        await tx.world.setAgents(event.id, agents);
+        const result = await applyAppraisal(
+          tx,
+          deps,
+          { ...landing(event), agents },
+          appraisal,
           embedding,
-          agents,
-        },
-        now,
-      );
-      landed.push(event.id);
-      episodes.push(out.episodeId);
-      if (out.intentionId) resolved.push(out.intentionId);
-    }
-    if (!landed.length) return 0;
-    await tx.traces.insert({
-      loop: "core_appraise_due",
-      inputs: { world_events: landed },
-      outputs: { episodes, resolved_intentions: resolved },
-      model: null,
-      prompt_version: null,
-      tokens_in: null,
-      tokens_out: null,
-      cost: null,
-      calls: 0,
-      status: "done",
-      error: null,
-      created_at: now,
+          now,
+        );
+        landed.push(event.id);
+        episodes.push(result.episodeId);
+        if (result.intentionId) resolved.push(result.intentionId);
+      }
+      return { landed, episodes, resolved_intentions: resolved };
     });
-    return landed.length;
+    return {
+      status: [...proposals.values()].some((a) => a.source === "fallback") ? "fallback" : "done",
+      inputs: { world_events: pending.map((e) => e.id) },
+      outputs: out,
+      promptVersion: config.prompts.core_appraise,
+    };
   });
+  return run.outputs?.landed.length ?? 0;
 }
+
+const landing = (e: WorldEventRow): LandingEvent => ({
+  worldEventId: e.id,
+  kind: e.kind,
+  content: e.content,
+  valence: e.valence,
+  stakes: e.stakes,
+  at: e.at,
+  agents: e.agents,
+  goalRef: e.goal_ref,
+});

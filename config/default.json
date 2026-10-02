@@ -180,6 +180,7 @@
     "life_event": "v3",
     "life_availability": "v1",
     "core_state_line": "v3",
+    "core_appraise": "v1",
     "reach_out": "v1"
   },
   "queue": {
@@ -269,6 +270,16 @@
     ]
   },
   "core": {
+    "appraise": {
+      "max_tokens": 800,
+      "episode_max_chars": 400,
+      "label_max_chars": 40,
+      "about_max_chars": 80,
+      "salience": { "low": 0.3, "medium": 0.4, "high": 0.6 },
+      "need_gain": 0.15,
+      "fallback_band": [-0.2, 0.3],
+      "fallback_labels": { "negative": "upset", "neutral": "calm", "positive": "pleased" }
+    },
     "daily_call_budget": 24,
     "budget_reserve": 8,
     "loop_priority": {

@@ -29,6 +29,7 @@ export type WorldEventRow = NewWorldEvent & {
   id: string;
   agent_names: string[];
   appraised_at: Date | null;
+  goal_ref: string | null;
 };
 
 /** One event-generator attempt, for the inspector. */
@@ -56,6 +57,7 @@ export interface World {
   dueUnappraised(now: Date): Promise<WorldEventRow[]>;
   markAppraised(id: string, at: Date): Promise<void>;
   setAgents(id: string, agents: string[]): Promise<void>;
+  setGoalRef(id: string, goalId: string): Promise<void>;
   lastHighStakesAt(): Promise<Date | null>;
   logEventAttempts(attempts: NewEventAttempt[]): Promise<void>;
 }

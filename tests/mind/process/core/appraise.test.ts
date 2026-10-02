@@ -3,7 +3,8 @@
  * one takes over her mind, the plan it fulfils is resolved, and the event is marked as landed.
  */
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { appraiseEvent } from "@/mind/process/core/appraise";
+import { applyAppraisal, codeAppraisal, type LandingEvent } from "@/mind/process/core/appraise";
+import { baselineNeeds } from "@/mind/state/core/core-state";
 import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -15,13 +16,19 @@ const base = {
   worldEventId: "00000000-0000-0000-0000-000000000001",
   content: "Spica got the telescope images.",
   at: now,
-  embedding: vec(0.01),
   agents: [],
+  kind: "planned" as const,
+  valence: 0.8,
+  stakes: "high" as const,
+  goalRef: null,
 };
 
 async function setup() {
   const deps = makeTestDeps();
-  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
+  await deps.core.state.ensure(
+    deps.config.core.state.baseline,
+    baselineNeeds(deps.config.core.state),
+  );
   const wid = await deps.core.world.recordEvent({
     at: now,
     kind: "planned",
@@ -32,7 +39,7 @@ async function setup() {
     life_day: "2026-01-05",
     created_at: earlier,
   });
-  return { deps, event: { ...base, worldEventId: wid } };
+  return { deps, event: { ...base, worldEventId: wid } satisfies LandingEvent };
 }
 
 async function addIntention(deps: ReturnType<typeof makeTestDeps>, worldEventId: string | null) {
@@ -56,7 +63,14 @@ test("a strong event becomes an open episode, lifts her mood and takes her mind"
   const { deps, event } = await setup();
   const before = (await deps.core.state.get())!;
   const out = await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, valence: 0.8, stakes: "high" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.8, stakes: "high" },
+      codeAppraisal({ ...event, valence: 0.8, stakes: "high" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   const episode = (await deps.core.memory.get(out.episodeId))!;
   expect(episode).toMatchObject({
@@ -76,7 +90,14 @@ test("the episode is dated at the event; the event is marked as appraised", asyn
   const { deps, event } = await setup();
   const at = new Date(now.getTime() - 3_600_000);
   const out = await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, at, valence: 0.1, stakes: "low" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, at, valence: 0.1, stakes: "low" },
+      codeAppraisal({ ...event, at, valence: 0.1, stakes: "low" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   const episode = (await deps.core.memory.get(out.episodeId))!;
   expect(episode.occurred_at?.getTime()).toBe(at.getTime());
@@ -91,7 +112,14 @@ test("a mild low-stakes event is a resolved episode and leaves her preoccupation
   const other = await addIntention(deps, null);
   await deps.core.state.update({ preoccupation: other, preoccupation_since: earlier });
   const out = await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, valence: 0.1, stakes: "low" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.1, stakes: "low" },
+      codeAppraisal({ ...event, valence: 0.1, stakes: "low" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   expect((await deps.core.memory.get(out.episodeId))!.status).toBe("resolved");
   expect((await deps.core.state.get())!.preoccupation).toBe(other);
@@ -101,7 +129,14 @@ test("the plan it fulfils is resolved", async () => {
   const { deps, event } = await setup();
   const intention = await addIntention(deps, event.worldEventId);
   const out = await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, valence: 0.1, stakes: "low" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.1, stakes: "low" },
+      codeAppraisal({ ...event, valence: 0.1, stakes: "low" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   expect(out.intentionId).toBe(intention);
   expect((await deps.core.memory.get(intention))!.status).toBe("resolved");
@@ -112,7 +147,14 @@ test("a preoccupation on the plan moves to a strong episode", async () => {
   const intention = await addIntention(deps, event.worldEventId);
   await deps.core.state.update({ preoccupation: intention, preoccupation_since: earlier });
   const out = await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, valence: 0.8, stakes: "high" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.8, stakes: "high" },
+      codeAppraisal({ ...event, valence: 0.8, stakes: "high" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   const state = (await deps.core.state.get())!;
   expect(state.preoccupation).toBe(out.episodeId);
@@ -124,9 +166,61 @@ test("a preoccupation on the plan is let go when the episode itself is mild", as
   const intention = await addIntention(deps, event.worldEventId);
   await deps.core.state.update({ preoccupation: intention, preoccupation_since: earlier });
   await deps.core.transaction((tx) =>
-    appraiseEvent(tx, deps, { ...event, valence: 0.1, stakes: "low" }, now),
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.1, stakes: "low" },
+      codeAppraisal({ ...event, valence: 0.1, stakes: "low" }, deps.config.core),
+      vec(0.01),
+      now,
+    ),
   );
   const state = (await deps.core.state.get())!;
   expect(state.preoccupation).toBeNull();
   expect(state.preoccupation_since).toBeNull();
+});
+
+test("the appraised feeling, needs and goal progress are applied, and a goal at 1 is done", async () => {
+  const { deps, event } = await setup();
+  const goal = await deps.core.goals.insert({
+    title: "Finish the list",
+    why: "w",
+    status: "active",
+    progress: 0.95,
+    source: "seed",
+    source_ref: null,
+    started_at: earlier,
+    target_at: null,
+    embedding: vec(),
+  });
+  const appraisal = {
+    source: "model" as const,
+    episode: "Spica finished the last film on her list and sat with the credits.",
+    emotion: { label: "proud", valence: 0.7, arousal: 0.4, phrase: "the list" },
+    salience: 0.6,
+    goalEffects: [{ goalId: goal, delta: 0.1 }],
+    needEffects: { autonomy: 0, competence: 0.15 },
+  };
+  const before = (await deps.core.state.get())!;
+  const out = await deps.core.transaction((tx) =>
+    applyAppraisal(tx, deps, { ...event, valence: 0.1, stakes: "low" }, appraisal, vec(0.01), now),
+  );
+  expect((await deps.core.memory.get(out.episodeId))!).toMatchObject({
+    content: appraisal.episode,
+    valence: 0.7,
+    salience: 0.6,
+  });
+  const state = (await deps.core.state.get())!;
+  expect(state.emotion).toEqual({
+    label: "proud",
+    valence: 0.7,
+    arousal: 0.4,
+    phrase: "the list",
+    about: out.episodeId,
+    since: now.toISOString(),
+  });
+  expect(state.needs.competence).toBeCloseTo(before.needs.competence + 0.15);
+  expect(state.preoccupation).toBe(out.episodeId);
+  expect(await deps.core.goals.get(goal)).toMatchObject({ progress: 1, status: "done" });
+  expect((await deps.core.world.events("2026-01-05"))[0]!.goal_ref).toBe(goal);
 });

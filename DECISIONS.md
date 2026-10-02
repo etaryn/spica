@@ -36,9 +36,19 @@ code itself.
 | 2026-10-02 | The mind split's exit run is a Vitest test (`tests/exit/mind-split.test.ts`), not an eval script | It needs the capturing fake and direct table scans, which the YAML runner can't express. |
 | 2026-10-02 | The ESLint one-way rule uses `@/mind/process/*` plus `!@/mind/process/core` | A negation can't re-include a path under an excluded parent, so the glob lists the subdirectories core may not import. |
 | 2026-10-02 | Migrations `0014_deferred_block` and `0015_mind_split` were hand-merged | drizzle-kit needs a TTY for its rename prompts. |
-| 2026-10-02 | Core retrieval and outreach `her_day` never surface a core memory whose time hasn't come | Events are recorded about 00:10 her time with later `occurred_at`, so she would otherwise mention things before they happen. |
+| 2026-10-02 | ~~Core retrieval and outreach `her_day` never surface a core memory whose time hasn't come~~ Superseded the same day: episodes are now written only when their event lands, so the guard was removed | Events are recorded about 00:10 her time with later `occurred_at`, so she would otherwise mention things before they happen. |
 | 2026-10-02 | The `fact_source` enum keeps `generated` though nothing writes it | Dropping a Postgres enum value means rebuilding the type; an unused value costs nothing. |
 | 2026-10-02 | A reply embeds its retrieval query once, shared by user and core retrieval | Same text, one embedding call; one embed failure leaves both with nothing ranked, and the reply still sends. |
 | 2026-10-02 | Canon people (`core.world.canon_entities`) are seeded into `core_entity` with snapshot v0 and excluded from the new-person clock | She has always known Alcor, so naming Alcor (or seeding) must never hold back the first genuinely new person. |
 | 2026-10-02 | The event generator reads core values plus her latest snapshot (the seed self until one exists) | Her events should fit who she is lately, and the snapshot is core-only. |
 | 2026-10-02 | The relationship summary skips a param with no phrase for its deviation before capping lines | A faded afterglow (below its learned baseline) has no phrase and would otherwise take a line slot silently. |
+| 2026-10-02 | An intention's content is third person, present tense ("Spica is thinking of …") | It sits beside episodes ("Spica …") in the reply's "From your own life" list, so the same voice keeps the list readable. |
+| 2026-10-02 | Appraisal at an event's time writes its own `core_loop_trace` row (`core_appraise_due`), only in runs where something landed | Generation and appraisal now run at different times; a separate row keeps each traceable without an empty row every hour. |
+| 2026-10-02 | All events due in one run are appraised in one transaction under the world tick's lock | Re-reading the due list under the lock and marking `appraised_at` in the same transaction makes appraisal once-only and retry-safe. |
+| 2026-10-02 | A failed generation still lets the run appraise due events, then rethrows | A model outage on her next day mustn't hold back events whose time has come. |
+| 2026-10-02 | Migration `0016_appraised_at` backfills `appraised_at = created_at` | Events recorded before the change were appraised when recorded; without the backfill they would be appraised again. |
+| 2026-10-02 | A planned event's thought shares `core.world.event_max_chars` with its content | It's one sentence like the content; a second key would add nothing. |
+| 2026-10-02 | The fake model's default event is spontaneous | It keeps fake-mode evals close to their old timing; planned events are covered by injected events and the tests. |
+| 2026-10-02 | `her_day` reads recent episodes and open intentions with `her_day_limit` each | The simplest union; the outreach scorer picks among them as before. |
+| 2026-10-02 | If several strong planned events land in one generation, the last one becomes her preoccupation | At most one event a day is generated today; the rule is just deterministic. |
+| 2026-10-02 | Resolved intentions stay reconcile neighbours of new events | Reconcile checks history, and a plan she already carried out is history worth not repeating. |

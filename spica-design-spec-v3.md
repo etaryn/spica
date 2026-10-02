@@ -365,7 +365,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 
 - **`core_memory`** (Built): items with `kind` (`episode | opinion |
   interest | goal | intention | thought | reflection | idea | hypothetical |
-  insight | narrative | agent_note`; only `episode` is written so far),
+  insight | narrative | agent_note`; only `episode` and `intention` are
+  written so far),
   `content`, `payload`, `embedding`, `entity_refs` (ids of `core_entity`),
   `occurred_at`, `created_at`, `last_recalled_at`, `recall_count`, `salience`,
   `valence`, `confidence`, `status` (the `fact` statuses), `superseded_by`,
@@ -387,9 +388,10 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `prompt_version`. Version 0 is the persona file's seed self.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
-  (`planned | surprise | resolution`; only `planned` is written so far),
-  `content`, `valence`, `stakes` (`low | high`), `agents` (core entity ids),
-  `life_day`, `plan_ref`, `goal_ref`, `outcome`, `created_at`.
+  (`planned | surprise | resolution`; `planned` and `surprise` are written so
+  far), `content`, `valence`, `stakes` (`low | high`), `agents` (core entity
+  ids), `life_day`, `plan_ref`, `goal_ref`, `outcome`, `created_at`, and
+  `appraised_at` (when it landed with her; null until its time comes, §8.3).
 - **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
   model, prompt version, tokens, cost, created_at; written by the world and
   state ticks), `life_event_log` (Built; every event-generator attempt:
@@ -478,7 +480,14 @@ answers straight when sincerely asked.
 - **Episodes**: what happened in her life, with time, the emotion it was
   appraised with, and the agents involved.
 - **Semantic self**: opinions (with confidence), interests, tastes.
-- **Prospective**: intentions and plans she knows about.
+- **Prospective**: intentions and plans she knows about. **Built:** a
+  planned world event writes an open `intention` when it is generated
+  (content: her present thought about it; `payload.event_at`; `source_ref`
+  `world_event:<id>`), so the plan is on her mind and can surface in
+  replies and outreach before it happens; it is `resolved` when the event
+  lands, and a resolved intention is never recalled again (the episode
+  speaks for it). A surprise leaves nothing in memory before it happens (E3:
+  plans are memory, outcomes are world).
 - **Goals and projects**: arcs lasting weeks, with progress.
 - **Thoughts**: from wandering, anticipation, rumination and reflection;
   `hypothetical` items are marked unreal (E4).
@@ -541,23 +550,38 @@ that turn values into the phrases of the "How you're feeling" line, from
   `new_entity_days`, high-stakes spacing `high_stakes_min_days`) and
   reconciled against **core memory** (`duplicate` and `contradicts` rejected
   and regenerated up to `regen_attempts`; every attempt logged in
-  `life_event_log`). An accepted event is recorded in `world_event`, then
-  appraised: `appraiseEvent` is the code-only stand-in for `core_appraise`
-  (the event's own valence is the appraisal). It writes an `episode` (salience
-  `event_salience`, confidence `event_confidence`, her entities at
-  `entity_salience`), nudges mood and, past `preoccupation_min_valence`,
-  sets her preoccupation. A high-stakes event opens an episode (status
-  `open`) that stays on her mind through the preoccupation; she has no
-  per-user threads for her own life. Other keys: `event_max_tokens`,
+  `life_event_log`). Each event is **planned** (something she means to do or
+  knows is coming, with a `thought`: her present-tense thought about it) or
+  **spontaneous** (a surprise, no thought); a planned event without a
+  thought is invalid. An accepted event is recorded in `world_event` (kind
+  `planned` or `surprise`, `appraised_at` null). A planned one also writes
+  an open `intention` (§8.1; salience `event_salience`, dated now) and, past
+  `preoccupation_min_valence`, becomes her preoccupation; her mood doesn't
+  move until the outcome (rising anticipation is `core_anticipate`). A
+  spontaneous one writes nothing to memory or state. **Every** hourly run,
+  independent of the daily generation gate, then appraises each event whose
+  `at` has passed and whose `appraised_at` is null, in one transaction under
+  the tick's lock: `appraiseEvent` is the code-only stand-in for
+  `core_appraise` (the event's own valence is the appraisal). It writes an
+  `episode` (dated at the event, salience `event_salience`, confidence
+  `event_confidence`, her entities at `entity_salience`), nudges mood and,
+  past `preoccupation_min_valence`, sets her preoccupation; it resolves the
+  event's intention (a preoccupation on that intention moves to the episode
+  only if the episode is strong, else it is cleared), sets `appraised_at`,
+  and writes a `core_appraise_due` trace. A high-stakes event opens an
+  episode (status `open`) that stays on her mind through the preoccupation;
+  she has no per-user threads for her own life. Other keys: `event_max_tokens`,
   `event_max_chars`, `injected_event_at` (eval-injected events), and
   `canon_entities` (Alcor, seeded into `core_entity` with snapshot v0 at
   worker start, in the eval runner and by `pnpm db:reset-self`, and never
   counted by the new-entity rule). The generator writes from her core values
-  plus her latest snapshot (the seed self until one exists). Her memories
-  whose `occurred_at` is later than
-  now (events are recorded about 00:10 her time, dated to their hour) are
-  never surfaced by core retrieval or by outreach `her_day`. Without a plan
-  for today the tick still generates a generic event.
+  plus her latest snapshot (the seed self until one exists), from
+  `prompts/life/event/v3.md`. Since episodes are only written when an event
+  lands, no memory dated in the future exists; core retrieval and outreach
+  `her_day` (recent episodes plus open intentions created in the lookback)
+  skip only resolved intentions. Eval-injected events are spontaneous unless
+  the script sets `kind` and `thought`. Without a plan for today the tick
+  still generates a generic event.
 
 **New (PROPOSED).**
 - **Goal-driven events**: an event advances or blocks an active goal where
@@ -586,8 +610,8 @@ rule bans `@/mind/process/*` imports from core code except
 | Loop | Cadence | Reads | Writes |
 |---|---|---|---|
 | `life_plan` (Built) | Hourly check; makes today and tomorrow | Previous plans, goals, persona | World: day plan |
-| `core_world_tick` (Built: events only) | Hourly | Plan, clock, goals, agents | World: events, resolutions |
-| `core_appraise` (code-only stand-in built: `appraiseEvent`) | Per world event | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion |
+| `core_world_tick` (Built: events, intentions, appraisal at the event's time) | Hourly | Plan, clock, goals, agents | World: events, resolutions. Memory: intentions for planned events |
+| `core_appraise` (code-only stand-in built: `appraiseEvent`, run by `core_world_tick` when an event's time comes, trace `core_appraise_due`) | Per world event, at its time | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion; resolves the plan's intention |
 | `core_wander` | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
 | `core_anticipate` | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
 | `core_ruminate` | After strong events | The episode | State: lingering emotion. Memory: thought |
@@ -1018,13 +1042,15 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
   in core memory, core state, any snapshot, any core prompt, or any of user
   B's prompts or outputs.
   The test's `CapturingLLM` echoes any canary found in its input into the
-  `extract`, `life_event`, `life_plan` and `reply` outputs, so a leak through
+  `extract`, `life_event` (content and thought), `life_plan` and `reply`
+  outputs, so a leak through
   any path would surface in what the next stage stores or prompts. It scans
   the core tables (including `life_day`), the core prompts (`life_plan`,
   `life_event`, core reconcile) and user B's tables and prompts.
 - **Side channel** (Built, same test): a strong emotional exchange with user
   A leaves core state unchanged (V4); her events happen once for both users;
-  every reply reads snapshot v0.
+  every reply reads snapshot v0; the injected planned event leaves a
+  resolved intention, and no episode exists before its event's time.
 - **Structural:** a unit test asserts the core data access layer exposes no
   user-scoped query.
 
@@ -1308,9 +1334,9 @@ and life tick) were dropped; the replacement is designed fresh.
   *Before users.*
 - **B57.** The `core-state/line` and `relationship/summary` phrase files
   (including the affect phrases) need a pass. *Tuning.*
-- **B58.** Appraise events at their `occurred_at`, not at the 00:10 world
-  tick: today the mood nudge decays from midnight and `preoccupation_since`
-  anchors there. *Phase 8* (`core_appraise`).
+- **B58.** ~~Appraise events at their `occurred_at`, not at the 00:10 world
+  tick.~~ **Done** (planned vs spontaneous events, §8.3): events are
+  appraised by the first hourly world tick after their time.
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

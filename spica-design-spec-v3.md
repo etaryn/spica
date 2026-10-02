@@ -1024,8 +1024,9 @@ match.
   `core.loop_priority` splits loops into `essential` and `optional`; an
   optional loop runs only while `budget_reserve` (8) calls remain beyond it.
   Over budget, loops with a code fallback (`life_plan`, `life_event`,
-  `core_resolve`, `core_appraise`) still run without calling the model
-  (fallback plan, no event that day, the plan happens, code appraisal) and
+  `core_appraise`, and `core_resolve` once built) still run without calling
+  the model (fallback plan, no event that day, code appraisal, the plan
+  happens) and
   the rest are skipped; each is traced (`fallback` / `skipped_budget`).
 - **User:** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` per user. Idle users cost nothing beyond

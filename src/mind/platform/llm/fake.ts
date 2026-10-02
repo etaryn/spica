@@ -48,13 +48,8 @@ export class FakeLLMProvider implements LLMProvider {
     // The keyword cue check stands in for the turn judge.
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
-    life_event: (input: string) => {
-      const goal = /^Selected active goal: (.+)\. Why:/m.exec(input)?.[1];
-      return {
-        ...FAKE_DAY_EVENT,
-        content: goal ? `Spica made a little progress on ${goal}.` : FAKE_DAY_EVENT.content,
-      };
-    },
+    // Goal identity comes from code; fake content stays stable across fresh goal row IDs.
+    life_event: () => ({ ...structuredClone(FAKE_DAY_EVENT), goal_ref: "model-id-ignored" }),
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

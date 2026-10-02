@@ -221,6 +221,57 @@ test("world events persist the code-selected goal and reconcile target without l
   expect((await deps.core.state.get())!.preoccupation).toBeNull();
 });
 
+test("a goal completed during generation leaves no stale event, intention or entity", async () => {
+  const deps = makeTestDeps({
+    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+    life: { timezone: "UTC" },
+  });
+  const goal = await deps.core.goals.insert({
+    title: "Finish her film list",
+    why: "Old films matter to her",
+    status: "active",
+    progress: 0.8,
+    source: "seed",
+    source_ref: null,
+    started_at: morning,
+    target_at: null,
+    embedding: Array(1024).fill(0.01),
+  });
+  let generationStarted!: () => void;
+  const started = new Promise<void>((resolve) => (generationStarted = resolve));
+  let finishGeneration!: () => void;
+  const pendingGeneration = new Promise<void>((resolve) => (finishGeneration = resolve));
+  deps.llm.handlers.life_event = async () => {
+    generationStarted();
+    await pendingGeneration;
+    return { ...planned(0.7), entity_names: ["Mira"] };
+  };
+
+  const tick = coreWorldTick(coreDepsOf(deps), morning);
+  await started;
+  try {
+    await deps.core.goals.setProgress(goal, 1, morning);
+    await deps.core.goals.setStatus(goal, "done", morning);
+  } finally {
+    finishGeneration();
+  }
+  expect(await tick).toEqual(done);
+  expect(await deps.db.select().from(world_event)).toEqual([]);
+  expect(await memories(deps)).toEqual([]);
+  expect((await deps.core.memory.entities()).map((entity) => entity.name)).not.toContain("Mira");
+  expect((await deps.core.state.get())!.preoccupation).toBeNull();
+  expect((await deps.core.state.get())!.last_event_day).toBe("2026-01-05");
+  const [attempt] = await deps.db.select().from(life_event_log);
+  expect(attempt).toMatchObject({ decision: "stale_goal", world_event_id: null });
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "life_event"));
+  expect(trace).toMatchObject({ status: "done", calls: 1 });
+  expect(trace!.outputs).toMatchObject({ applied: true, world_events: [], intentions: [] });
+  expect(await coreWorldTick(coreDepsOf(deps), new Date(morning.getTime() + H))).toEqual(idle);
+});
+
 test.each([true, false])("injected fallthrough %s is stored explicitly", async (fallthrough) => {
   const deps = makeTestDeps(utc);
   await coreWorldTick(coreDepsOf(deps), morning, {

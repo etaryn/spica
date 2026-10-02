@@ -114,9 +114,15 @@ async function applyDay(
     if (!due(row.last_event_day, day)) return { applied: false, world_events: [], intentions: [] };
 
     const eventIds = new Map<string, string>();
+    const staleGoalKeys = new Set<string>();
     const intentionIds: string[] = [];
     let preoccupation: string | null = null;
     for (const e of accepted) {
+      // The goal may have completed while the model was generating this event.
+      if (e.goalRef && (await tx.goals.get(e.goalRef))?.status !== "active") {
+        staleGoalKeys.add(e.key);
+        continue;
+      }
       const c = e.candidate;
       // A plan's people are known now; a surprise's people don't exist for her until it happens.
       const agents =
@@ -164,7 +170,7 @@ async function applyDay(
         life_day: day,
         attempt: a.attempt,
         candidate: { ...(a.candidate as object), source: a.source },
-        decision: a.decision,
+        decision: staleGoalKeys.has(a.key) ? "stale_goal" : a.decision,
         target_memory_id: a.targetMemoryId,
         world_event_id: eventIds.get(a.key) ?? null,
         model: a.source === "model" ? config.models.life : "injected",

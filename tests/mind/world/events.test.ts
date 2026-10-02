@@ -375,6 +375,43 @@ test("a selected active goal is assigned by code and shown with current needs", 
   expect(input).toContain("competence: 0.7");
 });
 
+test("the deterministic fake keeps event content stable across selected goals", async () => {
+  const deps = makeTestDeps({ core: { world: { event_probability: 1, goal_driven_share: 1 } } });
+  const firstGoal = await deps.core.goals.insert({
+    title: "Learn the winter constellations",
+    why: "She loves stars",
+    status: "active",
+    progress: 0,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  const first = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
+  await deps.core.goals.setStatus(firstGoal, "done", now);
+  const secondGoal = await deps.core.goals.insert({
+    title: "Finish her film list",
+    why: "She loves old films",
+    status: "active",
+    progress: 0,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  const second = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
+  expect(first.accepted[0]!.goalRef).toBe(firstGoal);
+  expect(second.accepted[0]!.goalRef).toBe(secondGoal);
+  expect(first.accepted[0]!.candidate.content).toBe(
+    "Spica found an old film she'd forgotten she loved.",
+  );
+  expect(second.accepted[0]!.candidate.content).toBe(
+    "Spica found an old film she'd forgotten she loved.",
+  );
+});
+
 test("a reconcile resolution target stays on the accepted event", async () => {
   const deps = makeTestDeps(always);
   vi.spyOn(deps.embedder, "embed").mockImplementation(async (xs) => xs.map(() => vec(0.01)));

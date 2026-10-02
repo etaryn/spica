@@ -10,6 +10,7 @@ import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
 import { dueThreads } from "@/db/repos/user/threads";
+import { recallable } from "@/mind/memory/core/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
 import { faded } from "@/mind/state/user/relationship/params";
@@ -87,7 +88,10 @@ export async function loadCandidateInputs(
   };
 }
 
-/** Her recent episodes, plus her preoccupation if it isn't already among them. Core memory: never sensitive. */
+/**
+ * Her recent episodes and the plans on her mind (open intentions from the same window), plus her
+ * preoccupation if it isn't already among them. Core memory: never sensitive.
+ */
 async function loadHerDay(
   deps: Pick<Deps, "core">,
   now: Date,
@@ -96,7 +100,8 @@ async function loadHerDay(
 ): Promise<CandidateInputs["herDay"]> {
   const from = new Date(now.getTime() - lookbackHours * HOUR);
   const episodes = await deps.core.memory.recentEpisodes(from, now, limit);
-  const herDay = episodes.map((e) => ({
+  const intentions = await deps.core.memory.openIntentions(from, now, limit);
+  const herDay = [...episodes, ...intentions].map((e) => ({
     id: e.id,
     content: e.content,
     salience: e.salience,
@@ -104,14 +109,7 @@ async function loadHerDay(
   }));
   const state = await deps.core.state.get();
   const pre = state?.preoccupation ? await deps.core.memory.get(state.preoccupation) : null;
-  if (
-    pre &&
-    pre.status !== "superseded" &&
-    pre.status !== "stale" &&
-    // The world tick records the day's events at midnight; one that hasn't happened yet isn't news.
-    (pre.occurred_at ?? pre.created_at) <= now &&
-    !herDay.some((m) => m.id === pre.id)
-  )
+  if (pre && recallable(pre) && !herDay.some((m) => m.id === pre.id))
     herDay.push({ id: pre.id, content: pre.content, salience: pre.salience, sensitive: false });
   return herDay;
 }

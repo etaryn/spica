@@ -1,11 +1,16 @@
 /**
- * `core_world_tick`: one generation per her local day for everyone, all-or-nothing, logged and traced.
+ * `core_world_tick`: one generation per her local day for everyone, all-or-nothing, logged and
+ * traced. A planned event is on her mind from the moment it's generated; a spontaneous one leaves
+ * no trace until its time. Every hourly run lands the events whose time has come, once each.
  */
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { count, eq } from "drizzle-orm";
 import { core_loop_trace, core_memory, life_event_log, world_event } from "@/db/schema";
+import { ensureRelationship } from "@/db/repos/user/relationship";
+import { retrieveCore } from "@/mind/memory/core/retrieve";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { coreWorldTick } from "@/mind/process/core/world-tick";
+import { loadCandidateInputs } from "@/mind/process/outreach/inputs";
 import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 import { sequence } from "../../../helpers/llm";
@@ -14,17 +19,55 @@ beforeEach(resetDb);
 afterAll(closeTestDb);
 const cfg = { core: { world: { event_probability: 1, events_per_day_max: 1 } } };
 const at = new Date("2026-01-05T09:00:00Z"); // 17:00 in Singapore
-const rows = async (deps: ReturnType<typeof makeTestDeps>, table: typeof world_event) =>
+const H = 3_600_000;
+type TestDeps = ReturnType<typeof makeTestDeps>;
+const rows = async (deps: TestDeps, table: typeof world_event | typeof core_memory) =>
   (await deps.db.select({ n: count() }).from(table))[0]!.n;
+const done = { generated: true, appraised: 1 };
+const idle = { generated: false, appraised: 0 };
+
+const spontaneous = {
+  content: "She found an old film.",
+  at: "15:00",
+  valence: 0.3,
+  stakes: "low",
+  entity_names: [],
+  kind: "spontaneous",
+  thought: null,
+};
+
+// In UTC her day starts at midnight; generation at 01:00 leaves the 15:00 event in the future.
+const utc = { ...cfg, life: { timezone: "UTC" } };
+const morning = new Date("2026-01-05T01:00:00Z");
+const eventTime = new Date("2026-01-05T15:00:00Z");
+const planned = (valence: number) => ({
+  content: "Spica rewatched Solaris with Alcor.",
+  at: "15:00",
+  valence,
+  stakes: "low",
+  entity_names: ["Alcor"],
+  kind: "planned",
+  thought: "Spica is thinking of rewatching Solaris with Alcor tonight.",
+});
+
+async function memories(deps: TestDeps) {
+  return deps.db.select().from(core_memory);
+}
+
+async function herDay(deps: TestDeps, now: Date) {
+  const u = await createTestUser();
+  await ensureRelationship(deps.db, u, now, deps.config.relationship);
+  return (await loadCandidateInputs(deps, u, now)).herDay;
+}
 
 test("generates once per her day, however many users and however many runs", async () => {
   const deps = makeTestDeps(cfg);
   await createTestUser();
   await createTestUser();
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
-  expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + 3_600_000))).toBe("not_due");
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(done);
+  expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + H))).toEqual(idle);
   expect(await rows(deps, world_event)).toBe(1);
-  expect((await deps.db.select({ n: count() }).from(core_memory))[0]!.n).toBe(1);
+  expect(await rows(deps, core_memory)).toBe(1);
   expect((await deps.db.select({ n: count() }).from(life_event_log))[0]!.n).toBe(1);
   const traces = await deps.db
     .select()
@@ -40,17 +83,19 @@ test("a generation failure writes nothing and the next run retries", async () =>
   expect(await rows(deps, world_event)).toBe(0);
   expect((await deps.core.state.get())?.last_event_day ?? null).toBeNull();
 
-  deps.llm.handlers.life_event = sequence({
-    content: "She found an old film.",
-    at: "15:00",
-    valence: 0.3,
-    stakes: "low",
-    entity_names: [],
-    kind: "spontaneous",
-    thought: null,
-  });
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
+  deps.llm.handlers.life_event = sequence(spontaneous);
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(done);
   expect(await rows(deps, world_event)).toBe(1);
+});
+
+test("a generation failure doesn't hold back events already due", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(spontaneous, new Error("model down"));
+  await coreWorldTick(coreDepsOf(deps), morning);
+  // The next day's generation fails, but yesterday's 15:00 event still lands.
+  const next = new Date("2026-01-06T01:00:00Z");
+  await expect(coreWorldTick(coreDepsOf(deps), next)).rejects.toThrow("model down");
+  expect((await memories(deps)).map((m) => m.kind)).toEqual(["episode"]);
 });
 
 test("a failure inside the apply rolls back every write and leaves the day due", async () => {
@@ -65,12 +110,12 @@ test("a failure inside the apply rolls back every write and leaves the day due",
   );
   await expect(coreWorldTick(coreDepsOf(deps), at)).rejects.toThrow("disk full");
   expect(await rows(deps, world_event)).toBe(0);
-  expect((await deps.db.select({ n: count() }).from(core_memory))[0]!.n).toBe(0);
+  expect(await rows(deps, core_memory)).toBe(0);
   expect((await deps.db.select({ n: count() }).from(life_event_log))[0]!.n).toBe(0);
   expect((await deps.core.state.get())?.last_event_day ?? null).toBeNull();
 
   vi.mocked(deps.core.transaction).mockRestore();
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("done");
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(done);
   expect(await rows(deps, world_event)).toBe(1);
 });
 
@@ -79,17 +124,9 @@ test("a run that finds the day already applied under the lock writes nothing", a
   // Another run applies today while this one is still generating.
   deps.llm.handlers.life_event = async () => {
     await deps.core.state.update({ last_event_day: "2026-01-05" });
-    return {
-      content: "She found an old film.",
-      at: "15:00",
-      valence: 0.3,
-      stakes: "low",
-      entity_names: [],
-      kind: "spontaneous",
-      thought: null,
-    };
+    return spontaneous;
   };
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("not_due");
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(idle);
   expect(await rows(deps, world_event)).toBe(0);
   expect((await deps.db.select({ n: count() }).from(life_event_log))[0]!.n).toBe(0);
 });
@@ -104,20 +141,181 @@ test("no plan for today still makes a generic event", async () => {
 
 test("waits for her events hour", async () => {
   const deps = makeTestDeps({ core: { world: { events_local_hour: 20 } } });
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toBe("not_due");
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(idle);
 });
 
 test("new people in an event join her entities", async () => {
   const deps = makeTestDeps(cfg);
   deps.llm.handlers.life_event = sequence({
+    ...spontaneous,
     content: "She met Mira at the observatory.",
-    at: "15:00",
-    valence: 0.4,
-    stakes: "low",
     entity_names: ["Mira"],
-    kind: "spontaneous",
-    thought: null,
   });
   await coreWorldTick(coreDepsOf(deps), at);
   expect((await deps.core.memory.entities()).map((e) => e.name)).toContain("Mira");
+});
+
+test("the kind is stored: planned stays planned, spontaneous is a surprise", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(0.3), spontaneous);
+  await coreWorldTick(coreDepsOf(deps), morning);
+  await coreWorldTick(coreDepsOf(deps), new Date("2026-01-06T01:00:00Z"));
+  const kinds = await deps.db
+    .select({ kind: world_event.kind })
+    .from(world_event)
+    .orderBy(world_event.at);
+  expect(kinds.map((k) => k.kind)).toEqual(["planned", "surprise"]);
+});
+
+test("a planned event's thought is on her mind at once: retrievable and outreach-eligible", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(0.3));
+  const before = (await deps.core.state.get()) ?? null;
+  expect(await coreWorldTick(coreDepsOf(deps), morning)).toEqual({
+    generated: true,
+    appraised: 0,
+  });
+  const [event] = await deps.db.select().from(world_event);
+  expect(event!.appraised_at).toBeNull();
+  const [intention] = await memories(deps);
+  expect(intention).toMatchObject({
+    kind: "intention",
+    content: "Spica is thinking of rewatching Solaris with Alcor tonight.",
+    status: "open",
+    valence: 0.3,
+    salience: deps.config.core.world.event_salience,
+    source: "world",
+    source_ref: `world_event:${event!.id}`,
+    payload: { event_at: eventTime.toISOString() },
+  });
+  expect(intention!.occurred_at?.getTime()).toBe(morning.getTime());
+  expect(intention!.created_at.getTime()).toBe(morning.getTime());
+  expect(intention!.entity_refs).toHaveLength(1);
+  // No mood nudge before it happens; a mild plan doesn't take over her mind.
+  const state = (await deps.core.state.get())!;
+  expect(before).toBeNull();
+  expect(state.mood_valence).toBe(deps.config.core.state.baseline.mood_valence);
+  expect(state.preoccupation).toBeNull();
+
+  const recalled = await retrieveCore(deps, { queryText: "what's up tonight?", now: morning });
+  expect(recalled.memories.map((m) => m.id)).toEqual([intention!.id]);
+  expect((await herDay(deps, morning)).map((m) => m.id)).toEqual([intention!.id]);
+});
+
+test("a strong planned event's thought takes over her mind before it happens", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(-0.7));
+  await coreWorldTick(coreDepsOf(deps), morning);
+  const [intention] = await memories(deps);
+  const state = (await deps.core.state.get())!;
+  expect(state.preoccupation).toBe(intention!.id);
+  expect(state.preoccupation_since?.getTime()).toBe(morning.getTime());
+  expect(state.mood_valence).toBe(deps.config.core.state.baseline.mood_valence);
+});
+
+test("a spontaneous event leaves no memory, no state change and nothing to recall before its time", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence({ ...spontaneous, valence: 0.9 });
+  await coreWorldTick(coreDepsOf(deps), morning);
+  expect(await rows(deps, world_event)).toBe(1);
+  expect(await memories(deps)).toEqual([]);
+  const state = (await deps.core.state.get())!;
+  expect(state).toMatchObject({ ...deps.config.core.state.baseline, preoccupation: null });
+  expect((await retrieveCore(deps, { queryText: "film", now: morning })).memories).toEqual([]);
+  expect(await herDay(deps, morning)).toEqual([]);
+});
+
+test("at its time a later hourly run writes the episode and the mood nudge, and resolves the plan", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(0.3));
+  await coreWorldTick(coreDepsOf(deps), morning);
+  // Still in the future: nothing lands.
+  expect(await coreWorldTick(coreDepsOf(deps), new Date(eventTime.getTime() - H))).toEqual(idle);
+
+  const landed = new Date(eventTime.getTime() + 10 * 60_000);
+  expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
+    generated: false,
+    appraised: 1,
+  });
+  const all = await memories(deps);
+  const episode = all.find((m) => m.kind === "episode")!;
+  const intention = all.find((m) => m.kind === "intention")!;
+  expect(episode.content).toBe("Spica rewatched Solaris with Alcor.");
+  expect(episode.occurred_at?.getTime()).toBe(eventTime.getTime());
+  expect(episode.created_at.getTime()).toBe(landed.getTime());
+  expect(intention.status).toBe("resolved");
+  const state = (await deps.core.state.get())!;
+  expect(state.mood_valence).toBeGreaterThan(deps.config.core.state.baseline.mood_valence);
+  const [event] = await deps.db.select().from(world_event);
+  expect(event!.appraised_at?.getTime()).toBe(landed.getTime());
+  const traces = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "core_appraise_due"));
+  expect(traces).toHaveLength(1);
+  expect(traces[0]!.outputs).toMatchObject({
+    episodes: [episode.id],
+    resolved_intentions: [intention.id],
+  });
+
+  // A resolved plan is history: neither recall nor her day offers it again.
+  const recalled = await retrieveCore(deps, { queryText: "Solaris", now: landed });
+  expect(recalled.memories.map((m) => m.id)).toEqual([episode.id]);
+  expect((await herDay(deps, landed)).map((m) => m.id)).toEqual([episode.id]);
+});
+
+test("each event is appraised once, however many runs follow", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(spontaneous);
+  await coreWorldTick(coreDepsOf(deps), morning);
+  const landed = new Date(eventTime.getTime() + H);
+  expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
+    generated: false,
+    appraised: 1,
+  });
+  expect(await coreWorldTick(coreDepsOf(deps), new Date(landed.getTime() + H))).toEqual(idle);
+  expect((await memories(deps)).filter((m) => m.kind === "episode")).toHaveLength(1);
+});
+
+test("an appraisal failure writes nothing and the next run lands the event", async () => {
+  const deps = makeTestDeps(utc);
+  deps.llm.handlers.life_event = sequence(planned(0.3));
+  await coreWorldTick(coreDepsOf(deps), morning);
+  const landed = new Date(eventTime.getTime() + H);
+
+  const begin = deps.core.transaction.bind(deps.core);
+  vi.spyOn(deps.core, "transaction").mockImplementation((fn) =>
+    begin(async (tx) => {
+      vi.spyOn(tx.traces, "insert").mockRejectedValue(new Error("disk full"));
+      return fn(tx);
+    }),
+  );
+  await expect(coreWorldTick(coreDepsOf(deps), landed)).rejects.toThrow("disk full");
+  expect((await memories(deps)).map((m) => [m.kind, m.status])).toEqual([["intention", "open"]]);
+  expect((await deps.db.select().from(world_event))[0]!.appraised_at).toBeNull();
+  expect((await deps.core.state.get())!.mood_valence).toBe(
+    deps.config.core.state.baseline.mood_valence,
+  );
+
+  vi.mocked(deps.core.transaction).mockRestore();
+  expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
+    generated: false,
+    appraised: 1,
+  });
+});
+
+test("appraisal runs every hour, whether or not today's generation is due", async () => {
+  const deps = makeTestDeps({ ...utc, core: { world: { events_local_hour: 20 } } });
+  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.world.recordEvent({
+    at: new Date(at.getTime() - H),
+    kind: "surprise",
+    content: "A comet showed up in her feed.",
+    valence: 0.2,
+    stakes: "low",
+    agents: [],
+    life_day: "2026-01-05",
+    created_at: morning,
+  });
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual({ generated: false, appraised: 1 });
 });

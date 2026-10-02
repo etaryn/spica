@@ -1,12 +1,14 @@
 /**
- * Appraisal: how an event in her world lands with her. For now the event's own valence is the
- * appraisal; the episode it leaves in her memory carries that feeling, her mood moves with it,
- * and a strong one takes over her mind for a while. The core loops will replace this with a
- * model that weighs the event against her goals and state.
+ * Appraisal: how an event in her world lands with her, at the moment it happens. For now the
+ * event's own valence is the appraisal; the episode it leaves in her memory carries that feeling,
+ * her mood moves with it, and a strong one takes over her mind for a while. If she'd been planning
+ * it, the plan is now done. The core loops will replace this with a model that weighs the event
+ * against her goals and state.
  */
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { applyEvent, moodOf } from "@/mind/state/core/core-state";
+import type { CoreStatePatch } from "@/mind/state/core/types";
 
 export type AppraisableEvent = {
   worldEventId: string;
@@ -18,14 +20,19 @@ export type AppraisableEvent = {
   agents: string[];
 };
 
-/** Inside the caller's transaction. Returns the new episode's id. */
+export type Appraisal = { episodeId: string; intentionId: string | null };
+
+export const eventRef = (worldEventId: string) => `world_event:${worldEventId}`;
+
+/** Inside the caller's transaction, which holds the world tick's lock. */
 export async function appraiseEvent(
   core: CoreScope,
   deps: Pick<CoreDeps, "config">,
   event: AppraisableEvent,
   now: Date,
-): Promise<string> {
+): Promise<Appraisal> {
   const { world, state } = deps.config.core;
+  const ref = eventRef(event.worldEventId);
   const episodeId = await core.memory.insert({
     kind: "episode",
     content: event.content,
@@ -39,15 +46,22 @@ export async function appraiseEvent(
     valence: event.valence,
     confidence: world.event_confidence,
     source: "world",
-    source_ref: `world_event:${event.worldEventId}`,
+    source_ref: ref,
   });
+
+  // Once it has happened the episode speaks for it; the plan stays only as history.
+  const intention = await core.memory.bySourceRef("intention", ref);
+  if (intention) await core.memory.setStatus(intention.id, "resolved");
 
   const row = await core.state.lock();
   const mood = applyEvent(moodOf(row), event.valence, state);
   const strong = Math.abs(event.valence) >= state.preoccupation_min_valence;
-  await core.state.update({
-    ...mood,
-    ...(strong ? { preoccupation: episodeId, preoccupation_since: now } : {}),
-  });
-  return episodeId;
+  let preoccupation: CoreStatePatch = {};
+  if (strong) preoccupation = { preoccupation: episodeId, preoccupation_since: now };
+  else if (intention && row.preoccupation === intention.id)
+    preoccupation = { preoccupation: null, preoccupation_since: null };
+  await core.state.update({ ...mood, ...preoccupation });
+
+  await core.world.markAppraised(event.worldEventId, now);
+  return { episodeId, intentionId: intention?.id ?? null };
 }

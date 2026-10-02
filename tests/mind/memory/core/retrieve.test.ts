@@ -61,20 +61,34 @@ test("an embed failure degrades to the preoccupation only, never throws", async 
   await expect(retrieveCore(deps, { queryText: "hi", now })).resolves.toEqual({ memories: [] });
 });
 
-test("a preoccupation that hasn't happened yet is not surfaced", async () => {
+async function addIntention(deps: ReturnType<typeof makeTestDeps>, status: "open" | "resolved") {
+  return deps.core.memory.insert({
+    kind: "intention",
+    content: `Spica is thinking of rewatching Solaris tonight (${status}).`,
+    embedding: vec(0.01),
+    occurred_at: now,
+    created_at: now,
+    status,
+    salience: 0.4,
+    valence: 0.3,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+}
+
+test("an open intention is recalled: a plan is on her mind before it happens", async () => {
   const deps = makeTestDeps();
-  const later = new Date("2026-01-05T18:00:00Z");
-  const pre = await addEpisode(deps, "tonight's meteor shower", later);
-  await deps.core.state.ensure(deps.config.core.state.baseline);
-  await deps.core.state.update({ preoccupation: pre, preoccupation_since: now });
-  const r = await retrieveCore(deps, { queryText: "", now, forceIds: [pre] });
-  expect(r.memories).toEqual([]);
+  const open = await addIntention(deps, "open");
+  const r = await retrieveCore(deps, { queryText: "tonight?", now });
+  expect(r.memories.map((m) => m.id)).toEqual([open]);
 });
 
-test("an episode dated later today is not ranked in", async () => {
+test("a resolved intention is never recalled: ranked, forced or as her preoccupation", async () => {
   const deps = makeTestDeps();
-  await addEpisode(deps, "later today", new Date("2026-01-05T18:00:00Z"));
-  const done = await addEpisode(deps, "this morning", new Date("2026-01-05T07:00:00Z"));
-  const r = await retrieveCore(deps, { queryText: "hi", now });
-  expect(r.memories.map((m) => m.id)).toEqual([done]);
+  const done = await addIntention(deps, "resolved");
+  await deps.core.state.ensure(deps.config.core.state.baseline);
+  await deps.core.state.update({ preoccupation: done, preoccupation_since: now });
+  const r = await retrieveCore(deps, { queryText: "Solaris", now, forceIds: [done] });
+  expect(r.memories).toEqual([]);
 });

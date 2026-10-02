@@ -77,8 +77,9 @@ test("generates once per her day, however many users and however many runs", asy
   const traces = await deps.db
     .select()
     .from(core_loop_trace)
-    .where(eq(core_loop_trace.loop, "core_world_tick"));
+    .where(eq(core_loop_trace.loop, "life_event"));
   expect(traces).toHaveLength(1);
+  expect(traces[0]).toMatchObject({ status: "done", calls: 1 });
 });
 
 test("a generation failure writes nothing and the next run retries", async () => {
@@ -108,8 +109,7 @@ test("a failure inside the apply rolls back every write and leaves the day due",
   const begin = deps.core.transaction.bind(deps.core);
   vi.spyOn(deps.core, "transaction").mockImplementation((fn) =>
     begin(async (tx) => {
-      // The trace is the apply's last write, so everything before it must roll back too.
-      vi.spyOn(tx.traces, "insert").mockRejectedValue(new Error("disk full"));
+      vi.spyOn(tx.state, "update").mockRejectedValue(new Error("disk full"));
       return fn(tx);
     }),
   );
@@ -122,6 +122,38 @@ test("a failure inside the apply rolls back every write and leaves the day due",
   vi.mocked(deps.core.transaction).mockRestore();
   expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(done);
   expect(await rows(deps, world_event)).toBe(1);
+});
+
+test("over budget the day is marked done with no event and no model call", async () => {
+  const deps = makeTestDeps({
+    ...cfg,
+    core: { ...cfg.core, daily_call_budget: 0, budget_reserve: 0 },
+  });
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual(done);
+  expect(await rows(deps, world_event)).toBe(0);
+  expect((await deps.core.state.get())!.last_event_day).toBe("2026-01-05");
+  expect(deps.llm.structuredCalls.filter((c) => c.purpose === "life_event")).toEqual([]);
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "life_event"));
+  expect(trace).toMatchObject({ status: "fallback", calls: 0 });
+  // The next run doesn't try again.
+  expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + H))).toEqual({
+    generated: false,
+    appraised: 0,
+  });
+});
+
+test("a generation failure is traced as failed", async () => {
+  const deps = makeTestDeps(cfg);
+  deps.llm.handlers.life_event = sequence(new Error("model down"));
+  await expect(coreWorldTick(coreDepsOf(deps), at)).rejects.toThrow("model down");
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "life_event"));
+  expect(trace).toMatchObject({ status: "failed", error: "Error" });
 });
 
 test("a run that finds the day already applied under the lock writes nothing", async () => {

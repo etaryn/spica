@@ -12,13 +12,20 @@
  *
  * Model and embedder calls run outside the transactions; each apply holds a global lock and
  * re-checks what it's about to do, so a retry never doubles a day or an event and a failure writes
- * nothing.
+ * nothing. Event generation is one budgeted `life_event` run; over budget the day passes with no
+ * event.
  */
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { lifeDate, lifeHour } from "@/mind/world/her-clock";
-import { generateCoreEvents, type InjectedEvent } from "@/mind/world/events";
+import {
+  generateCoreEvents,
+  type AcceptedEvent,
+  type EventAttempt,
+  type InjectedEvent,
+} from "@/mind/world/events";
 import { appraiseEvent, eventRef } from "./appraise";
+import { runCoreLoop } from "./runner";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
 export type WorldTickResult = { generated: boolean; appraised: number };
@@ -58,12 +65,37 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
   await core.state.ensure(config.core.state.baseline);
   if (!due((await core.state.get())?.last_event_day ?? null, day)) return false;
 
-  const { accepted, attempts } = await generateCoreEvents(deps, day, now, opts.inject);
+  const run = await runCoreLoop(deps, "life_event", now, async (ctx) => {
+    // Over budget the day still counts as done, so later runs don't spend past the budget.
+    if (!ctx.canCall()) {
+      const out = await applyDay(ctx.deps, day, now, [], []);
+      return { status: "fallback", inputs: { day }, outputs: out };
+    }
+    const { accepted, attempts } = await generateCoreEvents(ctx.deps, day, now, opts.inject);
+    const out = await applyDay(ctx.deps, day, now, accepted, attempts);
+    return {
+      inputs: { day, attempts: attempts.length },
+      outputs: out,
+      promptVersion: config.prompts.life_event,
+    };
+  });
+  return run.outputs?.applied ?? false;
+}
 
+type DayApplied = { applied: boolean; world_events: string[]; intentions: string[] };
+
+async function applyDay(
+  deps: CoreDeps,
+  day: string,
+  now: Date,
+  accepted: AcceptedEvent[],
+  attempts: EventAttempt[],
+): Promise<DayApplied> {
+  const { core, config } = deps;
   return core.transaction(async (tx) => {
     await tx.lock(LOCK);
     const row = await tx.state.lock();
-    if (!due(row.last_event_day, day)) return false;
+    if (!due(row.last_event_day, day)) return { applied: false, world_events: [], intentions: [] };
 
     const eventIds = new Map<string, string>();
     const intentionIds: string[] = [];
@@ -126,21 +158,7 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
       // Anticipation moves her mind now; her mood waits for the outcome.
       ...(preoccupation ? { preoccupation, preoccupation_since: now } : {}),
     });
-    await tx.traces.insert({
-      loop: "core_world_tick",
-      inputs: { day, attempts: attempts.length },
-      outputs: { world_events: [...eventIds.values()], intentions: intentionIds },
-      model: config.models.life,
-      prompt_version: config.prompts.life_event,
-      tokens_in: null,
-      tokens_out: null,
-      cost: null,
-      calls: 0,
-      status: "done",
-      error: null,
-      created_at: now,
-    });
-    return true;
+    return { applied: true, world_events: [...eventIds.values()], intentions: intentionIds };
   });
 }
 

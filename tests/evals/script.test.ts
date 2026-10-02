@@ -187,3 +187,23 @@ test("phase 5 script keys parse", () => {
     }),
   ).toThrow();
 });
+
+test("an injected event is spontaneous by default; a planned one needs its thought", () => {
+  const parse = (inject: unknown[]) =>
+    ScriptSchema.parse({
+      name: "x",
+      sessions: [{ at: "day 0 10:00", turns: ["hi"] }],
+      life: { inject },
+      assertions: [{ type: "life" }],
+    });
+  expect(parse([{ day: 1, content: "Spica read." }]).life!.inject[0]).toMatchObject({
+    kind: "spontaneous",
+    thought: null,
+  });
+  const planned = { day: 1, content: "Spica read.", kind: "planned" };
+  expect(parse([{ ...planned, thought: "Spica means to read." }]).life!.inject[0]).toMatchObject({
+    kind: "planned",
+    thought: "Spica means to read.",
+  });
+  expect(() => parse([planned])).toThrow();
+});

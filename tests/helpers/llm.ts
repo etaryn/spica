@@ -20,8 +20,9 @@ export const CANARY = /CANARY-[a-z0-9]+/;
 
 /**
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
- * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event), so a
- * canary that reaches any input spreads to that step's output, including the user's relationship.
+ * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event and its
+ * thought), so a canary that reaches any input spreads to that step's output, including the user's
+ * relationship.
  */
 export class CapturingLLM extends FakeLLMProvider {
   seen: { kind: "reply" | "structured"; purpose: string; text: string }[] = [];
@@ -81,8 +82,12 @@ export class CapturingLLM extends FakeLLMProvider {
       });
     }
     if (canary && request.purpose === "life_event" && handler) {
-      const out = (await handler(request.input)) as { content: string };
-      return request.schema.parse({ ...out, content: `${out.content} ${canary}` });
+      const out = (await handler(request.input)) as { content: string; thought: string | null };
+      return request.schema.parse({
+        ...out,
+        content: `${out.content} ${canary}`,
+        thought: out.thought === null ? null : `${out.thought} ${canary}`,
+      });
     }
     return super.classifyJson(request);
   }

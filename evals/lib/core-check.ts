@@ -3,7 +3,7 @@
  * the generator's attempts; `core` reads her core state tick history, whether a strong event ever
  * took over her mind, and how many episodes and world events she has. Nothing here is per user.
  */
-import { asc, count, eq } from "drizzle-orm";
+import { asc, count, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_loop_trace, core_memory, life_day, life_event_log, world_event } from "@/db/schema";
 import type { Config } from "@/mind/platform/config";
@@ -69,8 +69,8 @@ export type CoreHistory = {
 };
 
 /**
- * `preoccupationEverSet`: an episode strong enough to take over her mind exists, which is exactly
- * when appraisal sets her preoccupation.
+ * `preoccupationEverSet`: an episode or a planned event's intention strong enough to take over her
+ * mind exists, which is exactly when the world tick sets her preoccupation.
  */
 export async function coreHistory(db: Db, config: Config): Promise<CoreHistory> {
   const ticks = await db
@@ -78,14 +78,15 @@ export async function coreHistory(db: Db, config: Config): Promise<CoreHistory> 
     .from(core_loop_trace)
     .where(eq(core_loop_trace.loop, "core_state_tick"))
     .orderBy(asc(core_loop_trace.created_at));
-  const episodes = await db
-    .select({ valence: core_memory.valence })
+  const memories = await db
+    .select({ kind: core_memory.kind, valence: core_memory.valence })
     .from(core_memory)
-    .where(eq(core_memory.kind, "episode"));
+    .where(inArray(core_memory.kind, ["episode", "intention"]));
+  const episodes = memories.filter((m) => m.kind === "episode");
   const min = config.core.state.preoccupation_min_valence;
   return {
     ticks: ticks.map((t) => ({ at: t.at, energy: (t.outputs as { energy: number }).energy })),
-    preoccupationEverSet: episodes.some((e) => Math.abs(e.valence) >= min),
+    preoccupationEverSet: memories.some((m) => Math.abs(m.valence) >= min),
     episodes: episodes.length,
     worldEvents: await rows(db, world_event),
   };

@@ -2,9 +2,19 @@
  * Eval checks on her world and her core mind: life counts and event decisions, and her core state
  * history (energy, preoccupation, episodes, world events).
  */
-import { expect, test } from "vitest";
-import { checkCore, checkLife, energyAt, type CoreHistory } from "../../evals/lib/core-check";
+import { afterAll, expect, test } from "vitest";
+import {
+  checkCore,
+  checkLife,
+  coreHistory,
+  energyAt,
+  type CoreHistory,
+} from "../../evals/lib/core-check";
 import { CoreAssertion, LifeAssertion } from "../../evals/lib/script";
+import { closeTestDb, resetDb, vec } from "../helpers/db";
+import { makeTestDeps } from "../helpers/deps";
+
+afterAll(closeTestDb);
 
 const snap = {
   plans: 15,
@@ -85,4 +95,25 @@ test("preoccupation_set reads the core state's preoccupation history", () => {
   expect(
     checkCore(h, CoreAssertion.parse({ type: "core", world_events: { min: 1, max: 2 } }), at).ok,
   ).toBe(true);
+});
+
+test("coreHistory: a strong planned event's intention counts as taking over her mind", async () => {
+  await resetDb();
+  const deps = makeTestDeps();
+  const t = new Date("2026-01-05T09:00:00Z");
+  await deps.core.memory.insert({
+    kind: "intention",
+    content: "Spica is dreading the call with Alcor.",
+    embedding: vec(0.01),
+    occurred_at: t,
+    created_at: t,
+    status: "open",
+    salience: 0.4,
+    valence: -0.8,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  const h = await coreHistory(deps.db, deps.config);
+  expect(h).toMatchObject({ preoccupationEverSet: true, episodes: 0 });
 });

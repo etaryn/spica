@@ -44,7 +44,9 @@ export function makeLifeLoop(
     Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${day0}T00:00:00Z`)) / DAY);
   const inject = (day: string) => {
     const hit = life.inject.find((x) => x.day === dayIndex(day));
-    return hit ? { content: hit.content, valence: hit.valence } : null;
+    return hit
+      ? { content: hit.content, valence: hit.valence, kind: hit.kind, thought: hit.thought }
+      : null;
   };
   let hours = 0;
   let cursor = start.getTime();

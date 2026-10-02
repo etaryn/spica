@@ -244,13 +244,20 @@ export const LifeScript = z
   .object({
     plan: z.enum(["model", "scripted"]).default("model"),
     plans: z.record(z.string().regex(/^(\d+|\*)$/), z.array(ScriptBlock)).default({}),
+    /** Her scripted events: spontaneous unless `kind: planned`, which needs her `thought` about it. */
     inject: z
       .array(
-        z.object({
-          day: z.number().int().min(0),
-          content: z.string().min(1),
-          valence: z.number().min(-1).max(1).default(0),
-        }),
+        z
+          .object({
+            day: z.number().int().min(0),
+            content: z.string().min(1),
+            valence: z.number().min(-1).max(1).default(0),
+            kind: z.enum(["planned", "spontaneous"]).default("spontaneous"),
+            thought: z.string().min(1).nullable().default(null),
+          })
+          .refine((e) => e.kind === "spontaneous" || e.thought !== null, {
+            message: "a planned injected event needs a thought",
+          }),
       )
       .default([]),
     until: z.string().optional(),

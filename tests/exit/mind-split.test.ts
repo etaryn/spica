@@ -3,7 +3,8 @@
  * job, replies, the cold path and a reach-out. A canary in user A's data (a fact, and the cause of
  * a hurt in A's relationship) must never reach the core or user B; A's emotional exchange must
  * leave core state and her core loops' traces untouched; her events happen once for both; every
- * reply reads snapshot v0.
+ * reply reads snapshot v0. Her telescope event is planned: the plan is on her mind from the day's
+ * generation, and the episode exists only once its time has come.
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -55,7 +56,15 @@ function script(aText: string) {
     relationship_seed: {},
     life: {
       plan: "model",
-      inject: [{ day: 1, content: "Spica finally got the telescope images.", valence: 0.8 }],
+      inject: [
+        {
+          day: 1,
+          content: "Spica finally got the telescope images.",
+          valence: 0.8,
+          kind: "planned",
+          thought: "Spica is counting the hours until the telescope images come in.",
+        },
+      ],
       until: "day 3 20:00",
     },
     outreach: { user_replies: "never" },
@@ -188,6 +197,23 @@ describe("leak canary", () => {
     expect(bobPrompts.length).toBeGreaterThan(0);
     expect(alicePrompts.some((c) => c.text.includes(event))).toBe(true);
     expect(bobPrompts.some((c) => c.text.includes(event))).toBe(true);
+  });
+
+  test("the plan was on her mind before it happened; the episode only exists from its time", async () => {
+    const intentions = await getTestDb().execute(
+      sql`SELECT content, status, created_at FROM core_memory WHERE kind = 'intention'`,
+    );
+    expect(intentions.rows.map((r) => [r.content, r.status])).toEqual([
+      ["Spica is counting the hours until the telescope images come in.", "resolved"],
+    ]);
+    const episodes = await getTestDb().execute(
+      sql`SELECT content, occurred_at, created_at FROM core_memory WHERE kind = 'episode'`,
+    );
+    expect(episodes.rows.some((r) => String(r.content).includes("telescope images"))).toBe(true);
+    for (const r of episodes.rows)
+      expect(new Date(String(r.created_at)).getTime()).toBeGreaterThanOrEqual(
+        new Date(String(r.occurred_at)).getTime(),
+      );
   });
 
   test("every reply read snapshot v0 and logged it", async () => {

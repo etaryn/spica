@@ -10,8 +10,9 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 1: complete — baseline checks passed; independent review approved.
 - Task 2: complete — 27c2f72, spec and quality approved by Sartre (gpt-6-sol/high).
 - Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
-- Task 4: starting goal-driven events and per-attempt budget checks.
-- Tasks 5–10: not started.
+- Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
+- Task 5: starting same-tick resolution and B51 landing.
+- Tasks 6–10: not started.
 
 ## Setup evidence
 
@@ -66,3 +67,15 @@ baseline migrations. No default database was targeted by those commands.
   validation. Current implementation validates first; final review should triage stronger coverage.
 - Vitest emitted an informational isolation performance hint, not a failing warning.
 - Cross-run dedupe requires the shared lock in Tasks 6–8; Task 3 alone does not acquire it.
+
+## Task 4 evidence and review
+
+- Initial behavioral RED 3 failures/43 passes; GREEN focused52/full768/typecheck/lint.
+- Rawls (sol/high) found Important missing locked goal eligibility recheck. Fix8693965 rejects stale
+  goal-bound proposals before entity/event/intention writes, logs stale_goal, preserves daily gate.
+- Fix RED reproduced stale writes; full suite then caught goal-title-dependent fake text varying
+  across fresh seed UUIDs. Added regression and restored stable fake event text.
+- Final focused54/full770/typecheck/lint passed. Kant scoped re-review: all findings addressed,
+  no new Critical/Important findings. Scratch report untracked but retained locally.
+- Minor deferred: injected first event disables goals for later model events when max events >1.
+  Final review must triage. v3 event-prompt reference update remains Task10.

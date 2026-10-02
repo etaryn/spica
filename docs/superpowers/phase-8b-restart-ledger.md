@@ -7,8 +7,9 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 
 ## Task status
 
-- Task 1: in progress — isolated checkout and databases created; baseline checks running.
-- Tasks 2–10: not started.
+- Task 1: complete — baseline checks passed; independent review approved.
+- Task 2: ready for implementation dispatch.
+- Tasks 3–10: not started.
 
 ## Setup evidence
 
@@ -20,6 +21,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - typecheck: exit 0 before baseline test run.
 - Baseline full test run: exit 0, 103 files / 741 tests passed, 142.89s.
 - Fake eval comparison on restart eval DB: exit 0, no regressions; real-only scripts skipped by design.
+- Baseline lint: exit 0, ESLint and Prettier checks passed.
 - Diagnostic sidecar Pascal confirmed no unresolved test issue after the quiet test run completed.
 - Installed Bash artifact scripts required normal filesystem permission; a failed sandbox helper
   was stopped. No product-code workaround was introduced.
@@ -30,3 +32,12 @@ Repository stop-on-conflict rule overrides the skill's autonomous-ruling guidanc
 Tool model-selection restrictions override the skill's explicit-model instruction.
 No nested subagents. Task 1 is driver setup; subsequent product tasks use implementer subagents.
 No implementation begins until baseline and Task 1 review pass.
+
+## Task 1 review
+
+Boyle: spec pass, quality approved, no blocking findings. Minor stale status corrected above.
+Controller verified ancestry, unchanged source checkout status, document carry and AGENTS hashes.
+Operational evidence is in controller tool results: database absence check, explicit process URLs,
+serial tests/evals and successful exits. Missing .env is expected: both database URLs were set
+in the process, and setup/evals use those before their fallback URLs. Restart test DB has 19
+baseline migrations. No default database was targeted by those commands.

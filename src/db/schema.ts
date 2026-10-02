@@ -591,6 +591,8 @@ export const world_event = pgTable(
     goal_ref: uuid("goal_ref"),
     outcome: text("outcome"),
     created_at: ts("created_at").notNull(),
+    /** When it landed with her; null until its time comes and the world tick appraises it. */
+    appraised_at: ts("appraised_at"),
   },
   (t) => [
     index("world_event_life_day_idx").on(t.life_day),

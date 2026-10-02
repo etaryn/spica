@@ -78,6 +78,7 @@ export function coreMemoryRepo(db: Db): CoreMemory {
                          WHERE e.id = ANY(m.entity_refs)), 1.0)::float8 AS entity_salience
         FROM core_memory m
         WHERE m.status NOT IN ('superseded', 'stale') AND m.kind <> 'hypothetical'
+          AND NOT (m.kind = 'intention' AND m.status = 'resolved')
         ORDER BY m.embedding <=> ${q}::vector
         LIMIT ${limit}`);
       return res.rows.map((r) => ({
@@ -107,6 +108,38 @@ export function coreMemoryRepo(db: Db): CoreMemory {
         .orderBy(core_memory.occurred_at)
         .limit(limit);
       return rows.map(toItem);
+    },
+
+    async openIntentions(from, to, limit) {
+      const rows = await db
+        .select()
+        .from(core_memory)
+        .where(
+          and(
+            eq(core_memory.kind, "intention"),
+            eq(core_memory.status, "open"),
+            gt(core_memory.created_at, from),
+            lte(core_memory.created_at, to),
+          ),
+        )
+        .orderBy(core_memory.created_at)
+        .limit(limit);
+      return rows.map(toItem);
+    },
+
+    async bySourceRef(kind, sourceRef) {
+      const row = (
+        await db
+          .select()
+          .from(core_memory)
+          .where(and(eq(core_memory.kind, kind), eq(core_memory.source_ref, sourceRef)))
+          .limit(1)
+      )[0];
+      return row ? toItem(row) : null;
+    },
+
+    async setStatus(id, status) {
+      await db.update(core_memory).set({ status }).where(eq(core_memory.id, id));
     },
 
     async entities(): Promise<CoreEntity[]> {

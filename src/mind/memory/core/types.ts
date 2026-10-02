@@ -86,10 +86,18 @@ export interface CoreMemory {
   get(id: string): Promise<CoreMemoryItem | null>;
   /** Active memories at or above `minSimilarity`, closest first (reconcile candidates). */
   near(embedding: number[], k: number, minSimilarity: number): Promise<Neighbor[]>;
-  /** The `limit` closest active, real (not hypothetical) memories, for ranking. */
+  /**
+   * The `limit` closest active, real (not hypothetical) memories, for ranking. A resolved
+   * intention is left out: once the plan has happened, the episode speaks for it.
+   */
   candidates(embedding: number[], limit: number): Promise<CoreCandidate[]>;
   /** Episodes whose time falls in (from, to], oldest first, at most `limit`. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  /** Open intentions created in (from, to], oldest first, at most `limit`. */
+  openIntentions(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  /** The memory of this kind written from `sourceRef` (e.g. `world_event:<id>`), if any. */
+  bySourceRef(kind: CoreMemoryKind, sourceRef: string): Promise<CoreMemoryItem | null>;
+  setStatus(id: string, status: CoreMemoryStatus): Promise<void>;
   entities(): Promise<CoreEntity[]>;
   /** When the newest person she met first appeared, ignoring `excludeNames` (her canon people). */
   latestEntityFirstSeen(excludeNames: string[]): Promise<Date | null>;

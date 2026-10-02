@@ -113,3 +113,66 @@ test("world events and the high-stakes clock", async () => {
   expect((await w.events("2026-01-05")).map((e) => e.content)).toEqual(["x"]);
   expect((await w.lastHighStakesAt())?.getTime()).toBe(now.getTime());
 });
+
+const intention = (content: string, status: "open" | "resolved", at: Date, ref: string | null) => ({
+  ...episode(content, 0.01, at),
+  kind: "intention" as const,
+  status,
+  source_ref: ref,
+});
+
+test("a resolved intention is no ranking candidate; an open one is", async () => {
+  const open = await core().memory.insert(intention("thinking of Solaris", "open", now, null));
+  await core().memory.insert(intention("dreading the call", "resolved", now, null));
+  const ep = await core().memory.insert({ ...episode("done", 0.01, now), status: "resolved" });
+  const ids = (await core().memory.candidates(vec(0.01), 10)).map((c) => c.id).sort();
+  expect(ids).toEqual([open, ep].sort());
+});
+
+test("openIntentions: open intentions created in the window, oldest first", async () => {
+  const h = 3_600_000;
+  const a = await core().memory.insert(
+    intention("a", "open", new Date(now.getTime() - 2 * h), null),
+  );
+  const b = await core().memory.insert(intention("b", "open", now, null));
+  await core().memory.insert(intention("resolved", "resolved", now, null));
+  await core().memory.insert(intention("too old", "open", new Date(now.getTime() - 9 * h), null));
+  await core().memory.insert(episode("an episode", 0.01, now));
+  const got = await core().memory.openIntentions(new Date(now.getTime() - 3 * h), now, 10);
+  expect(got.map((m) => m.id)).toEqual([a, b]);
+});
+
+test("bySourceRef finds a memory of a kind by its source; setStatus moves it", async () => {
+  const id = await core().memory.insert(intention("plan", "open", now, "world_event:abc"));
+  await core().memory.insert(episode("other", 0.01, now));
+  expect((await core().memory.bySourceRef("intention", "world_event:abc"))?.id).toBe(id);
+  expect(await core().memory.bySourceRef("episode", "world_event:abc")).toBeNull();
+  await core().memory.setStatus(id, "resolved");
+  expect((await core().memory.get(id))?.status).toBe("resolved");
+});
+
+test("due unappraised world events: at or before now, oldest first, until marked", async () => {
+  const w = core().world;
+  const h = 3_600_000;
+  const ev = (content: string, at: Date) =>
+    w.recordEvent({
+      at,
+      kind: "surprise",
+      content,
+      valence: 0.1,
+      stakes: "low",
+      agents: [],
+      life_day: "2026-01-05",
+      created_at: new Date(now.getTime() - 9 * h),
+    });
+  const later = await ev("later", new Date(now.getTime() - h));
+  const earlier = await ev("earlier", new Date(now.getTime() - 2 * h));
+  await ev("future", new Date(now.getTime() + h));
+  const due = await w.dueUnappraised(now);
+  expect(due.map((e) => e.id)).toEqual([earlier, later]);
+  expect(due[0]!.appraised_at).toBeNull();
+  await w.markAppraised(earlier, now);
+  expect((await w.dueUnappraised(now)).map((e) => e.id)).toEqual([later]);
+  const stored = (await w.events("2026-01-05")).find((e) => e.id === earlier)!;
+  expect(stored.appraised_at?.getTime()).toBe(now.getTime());
+});

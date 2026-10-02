@@ -145,6 +145,97 @@ test("over budget the day is marked done with no event and no model call", async
   });
 });
 
+test("one remaining call cannot accept an event needing reconciliation", async () => {
+  const deps = makeTestDeps({
+    ...utc,
+    core: { ...utc.core, daily_call_budget: 1, budget_reserve: 0 },
+  });
+  await deps.core.memory.insert({
+    kind: "episode",
+    content: "Spica found an old film.",
+    embedding: Array(1024).fill(0.01),
+    occurred_at: morning,
+    created_at: morning,
+    status: "resolved",
+    salience: 0.4,
+    valence: 0,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  vi.spyOn(deps.embedder, "embed").mockImplementation(async (xs) =>
+    xs.map(() => Array(1024).fill(0.01)),
+  );
+  deps.llm.handlers.life_event = sequence(spontaneous);
+  expect(await coreWorldTick(coreDepsOf(deps), morning)).toEqual(done);
+  expect(
+    deps.llm.structuredCalls.filter((c) => c.purpose === "life_event" || c.purpose === "reconcile"),
+  ).toHaveLength(1);
+  expect(await rows(deps, world_event)).toBe(0);
+  expect((await deps.core.state.get())!.last_event_day).toBe("2026-01-05");
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "life_event"));
+  expect(trace).toMatchObject({ status: "fallback", calls: 1 });
+});
+
+test("world events persist the code-selected goal and reconcile target without landing a surprise", async () => {
+  const deps = makeTestDeps({
+    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+    life: { timezone: "UTC" },
+  });
+  const goal = await deps.core.goals.insert({
+    title: "Finish her film list",
+    why: "Old films matter to her",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: morning,
+    target_at: null,
+    embedding: Array(1024).fill(0.01),
+  });
+  const target = await deps.core.memory.insert({
+    kind: "episode",
+    content: "Spica started a film list.",
+    embedding: Array(1024).fill(0.01),
+    occurred_at: morning,
+    created_at: morning,
+    status: "open",
+    salience: 0.4,
+    valence: 0,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  vi.spyOn(deps.embedder, "embed").mockImplementation(async (xs) =>
+    xs.map(() => Array(1024).fill(0.01)),
+  );
+  deps.llm.handlers.life_event = sequence({ ...spontaneous, goal_ref: "model-invented-id" });
+  deps.llm.handlers.reconcile = sequence({ relation: "resolves", target_fact_id: target });
+  await coreWorldTick(coreDepsOf(deps), morning);
+  const [event] = await deps.db.select().from(world_event);
+  expect(event).toMatchObject({ goal_ref: goal, resolves_memory_id: target, fallthrough: null });
+  expect((await memories(deps)).map((memory) => memory.id)).toEqual([target]);
+  expect((await deps.core.state.get())!.preoccupation).toBeNull();
+});
+
+test.each([true, false])("injected fallthrough %s is stored explicitly", async (fallthrough) => {
+  const deps = makeTestDeps(utc);
+  await coreWorldTick(coreDepsOf(deps), morning, {
+    inject: () => ({
+      content: "Spica planned to read.",
+      valence: 0.2,
+      kind: "planned",
+      thought: "Spica is looking forward to reading.",
+      fallthrough,
+    }),
+  });
+  const [event] = await deps.db.select().from(world_event);
+  expect(event).toMatchObject({ fallthrough, goal_ref: null });
+});
+
 test("a generation failure is traced as failed", async () => {
   const deps = makeTestDeps(cfg);
   deps.llm.handlers.life_event = sequence(new Error("model down"));

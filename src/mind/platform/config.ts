@@ -326,6 +326,8 @@ const coreWorld = z.object({
   events_local_hour: hourOfDay,
   events_per_day_max: countFromZero,
   event_probability: unit,
+  goal_driven_share: unit,
+  goal_weight_floor: unit,
   event_context_items: countFromZero,
   event_context_days: nonNegative,
   event_max_tokens: positiveInt,

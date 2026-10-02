@@ -80,9 +80,16 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
       const out = await applyDay(ctx.deps, day, now, [], []);
       return { status: "fallback", inputs: { day }, outputs: out };
     }
-    const { accepted, attempts } = await generateCoreEvents(ctx.deps, day, now, opts.inject);
+    const { accepted, attempts, budgetExhausted } = await generateCoreEvents(
+      ctx.deps,
+      day,
+      now,
+      ctx.canCall,
+      opts.inject,
+    );
     const out = await applyDay(ctx.deps, day, now, accepted, attempts);
     return {
+      ...(budgetExhausted ? { status: "fallback" as const } : {}),
       inputs: { day, attempts: attempts.length },
       outputs: out,
       promptVersion: config.prompts.life_event,
@@ -124,6 +131,9 @@ async function applyDay(
         stakes: c.stakes,
         agents,
         agent_names: c.entity_names,
+        goal_ref: e.goalRef,
+        resolves_memory_id: e.resolvesMemoryId,
+        fallthrough: e.fallthrough,
         life_day: day,
         created_at: now,
       });

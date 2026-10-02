@@ -7,7 +7,14 @@ import { loadConfig } from "@/mind/platform/config";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
 import { seedCore } from "@/mind/memory/core/seed";
-import { buildEventInput, checkEvent, checkRules, generateCoreEvents } from "@/mind/world/events";
+import {
+  buildEventInput,
+  checkEvent,
+  checkRules,
+  generateCoreEvents,
+  selectEventGoal,
+} from "@/mind/world/events";
+import type { CoreGoal } from "@/mind/state/core/types";
 import { closeTestDb, resetDb, vec } from "../../helpers/db";
 import { makeTestDeps } from "../../helpers/deps";
 import { sequence } from "../../helpers/llm";
@@ -104,6 +111,8 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
       },
       episodes: [{ content: "She rewatched Solaris.", when: new Date(now.getTime() - DAY) }],
       people: ["Alcor"],
+      goal: null,
+      needs: { autonomy: 0.3, competence: 0.7 },
     },
     day,
     [{ candidate: { content: "x" }, reason: "it repeats something" }],
@@ -115,7 +124,12 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
   expect(input).toContain("People she knows: Alcor.");
   expect(input).toContain("Rejected attempts");
 
-  const empty = buildEventInput({ plan: null, episodes: [], people: [] }, day, [], now);
+  const empty = buildEventInput(
+    { plan: null, episodes: [], people: [], goal: null, needs: { autonomy: 0.6, competence: 0.6 } },
+    day,
+    [],
+    now,
+  );
   expect(empty).toContain("unknown, keep the event generic");
   expect(empty).toContain("What has happened in her life lately: nothing yet.");
 });
@@ -139,7 +153,7 @@ async function withEpisode(deps: ReturnType<typeof makeTestDeps>, content: strin
 test("accepts a valid event with no near memory, without asking reconcile", async () => {
   const deps = makeTestDeps(always);
   deps.llm.handlers.life_event = sequence(ev("She found an old film."));
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.accepted).toHaveLength(1);
   expect(out.attempts.map((a) => a.decision)).toEqual(["accepted"]);
   expect(deps.llm.structuredCalls.filter((c) => c.purpose === "reconcile")).toHaveLength(0);
@@ -158,7 +172,7 @@ test.each(["duplicate", "contradicts"] as const)(
       { relation, target_fact_id: near[0]!.id },
       { relation: "new", target_fact_id: null },
     );
-    const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+    const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
     expect(out.attempts.map((a) => a.decision)).toEqual([relation, "accepted"]);
     expect(out.attempts[0]!.targetMemoryId).toBe(near[0]!.id);
     const second = deps.llm.structuredCalls.filter((c) => c.purpose === "life_event")[1]!;
@@ -172,7 +186,7 @@ test("two new people at once breaks the new-entity rule", async () => {
     ev("She met Ana and Bo.", { entity_names: ["Ana", "Bo"] }),
     ev("She read alone."),
   );
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.attempts.map((a) => a.decision)).toEqual(["rule:new_entity", "accepted"]);
 });
 
@@ -192,14 +206,14 @@ test("high stakes too soon after the last one is refused", async () => {
     ev("Another big thing.", { stakes: "high" }),
     ev("small"),
   );
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.attempts[0]!.decision).toBe("rule:high_stakes");
 });
 
 test("an invalid event (bad time) is retried, and gives up after regen_attempts", async () => {
   const deps = makeTestDeps(always);
   deps.llm.handlers.life_event = sequence(ev("x", { at: "25:99" }));
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.accepted).toHaveLength(0);
   expect(out.attempts).toHaveLength(1 + deps.config.core.world.regen_attempts);
   expect(new Set(out.attempts.map((a) => a.decision))).toEqual(new Set(["invalid"]));
@@ -208,24 +222,32 @@ test("an invalid event (bad time) is retried, and gives up after regen_attempts"
 test("a model error or timeout propagates (the tick retries next hour)", async () => {
   const deps = makeTestDeps(always);
   deps.llm.handlers.life_event = sequence(new Error("timeout"));
-  await expect(generateCoreEvents(coreDepsOf(deps), day, now)).rejects.toThrow("timeout");
+  await expect(generateCoreEvents(coreDepsOf(deps), day, now, () => true)).rejects.toThrow(
+    "timeout",
+  );
 });
 
 test("draws are seeded by day only: the same day gives the same draws", async () => {
   const cfg = { core: { world: { event_probability: 0.5, events_per_day_max: 3 } } };
   const a = makeTestDeps(cfg);
   const b = makeTestDeps(cfg);
-  const ra = await generateCoreEvents(coreDepsOf(a), day, now);
-  const rb = await generateCoreEvents(coreDepsOf(b), day, now);
+  const ra = await generateCoreEvents(coreDepsOf(a), day, now, () => true);
+  const rb = await generateCoreEvents(coreDepsOf(b), day, now, () => true);
   expect(ra.attempts.length).toBe(rb.attempts.length);
 });
 
 test("an injected event is the first attempt, spontaneous unless it says otherwise", async () => {
   const deps = makeTestDeps({ core: { world: { event_probability: 0 } } });
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => ({
-    content: "Spica got the telescope images.",
-    valence: 0.8,
-  }));
+  const out = await generateCoreEvents(
+    coreDepsOf(deps),
+    day,
+    now,
+    () => true,
+    () => ({
+      content: "Spica got the telescope images.",
+      valence: 0.8,
+    }),
+  );
   expect(out.accepted[0]!.candidate).toMatchObject({
     content: "Spica got the telescope images.",
     kind: "spontaneous",
@@ -234,12 +256,18 @@ test("an injected event is the first attempt, spontaneous unless it says otherwi
   expect(out.accepted[0]!.thoughtEmbedding).toBeNull();
   expect(out.attempts[0]!.source).toBe("injected");
 
-  const planned = await generateCoreEvents(coreDepsOf(deps), day, now, () => ({
-    content: "Spica got the telescope images.",
-    valence: 0.8,
-    kind: "planned",
-    thought: "Spica is counting the hours until the telescope images arrive.",
-  }));
+  const planned = await generateCoreEvents(
+    coreDepsOf(deps),
+    day,
+    now,
+    () => true,
+    () => ({
+      content: "Spica got the telescope images.",
+      valence: 0.8,
+      kind: "planned",
+      thought: "Spica is counting the hours until the telescope images arrive.",
+    }),
+  );
   expect(planned.accepted[0]!.candidate).toMatchObject({
     kind: "planned",
     thought: "Spica is counting the hours until the telescope images arrive.",
@@ -256,7 +284,7 @@ test("a planned event carries its thought's embedding; a planned one without a t
       thought: "Spica is thinking of rewatching Solaris tonight.",
     }),
   );
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.attempts.map((a) => a.decision)).toEqual(["invalid", "accepted"]);
   const [accepted] = out.accepted;
   expect(accepted!.thoughtEmbedding).toHaveLength(accepted!.embedding.length);
@@ -265,19 +293,20 @@ test("a planned event carries its thought's embedding; a planned one without a t
   );
 });
 
-test("the generator's prompt is life/event v3, which explains both kinds", async () => {
+test("the generator's prompt is life/event v4, which explains both kinds and the selected goal", async () => {
   const deps = makeTestDeps(always);
-  expect(deps.config.prompts.life_event).toBe("v3");
-  await generateCoreEvents(coreDepsOf(deps), day, now);
+  expect(deps.config.prompts.life_event).toBe("v4");
+  await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain("planned");
   expect(call.system).toContain("spontaneous");
+  expect(call.system).toContain("selected active goal");
 });
 
 test("the generator sees only core context: her episodes, her people, her plan", async () => {
   const deps = makeTestDeps(always);
   await withEpisode(deps, "She rewatched Solaris.");
-  await generateCoreEvents(coreDepsOf(deps), day, now);
+  await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.input).toContain("She rewatched Solaris.");
   expect(call.input).toContain("Alcor");
@@ -290,7 +319,7 @@ test("seeding her canon people doesn't hold back the first new person", async ()
   deps.llm.handlers.life_event = sequence(
     ev("She met Mira at the planetarium.", { entity_names: ["Mira"] }),
   );
-  const out = await generateCoreEvents(coreDepsOf(deps), day, now);
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   expect(out.attempts.map((a) => a.decision)).toEqual(["accepted"]);
 });
 
@@ -305,7 +334,7 @@ test("the generator writes as who she is lately: core values plus her latest sna
     model: "m",
     prompt_version: "v1",
   });
-  await generateCoreEvents(coreDepsOf(deps), day, now);
+  await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain(loadPersona(deps.config).coreValues);
   expect(call.system).toContain("Lately she can't stop thinking about comets.");
@@ -313,7 +342,116 @@ test("the generator writes as who she is lately: core values plus her latest sna
 
 test("with no snapshot yet the generator falls back to the seed self", async () => {
   const deps = makeTestDeps(always);
-  await generateCoreEvents(coreDepsOf(deps), day, now);
+  await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain(loadPersona(deps.config).seedSelf);
+});
+
+test("a selected active goal is assigned by code and shown with current needs", async () => {
+  const deps = makeTestDeps({
+    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+  });
+  const id = await deps.core.goals.insert({
+    title: "Finish her film list",
+    why: "She cares about old films",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.3, competence: 0.7 });
+  deps.llm.handlers.life_event = sequence({
+    ...ev("Spica found a forgotten film."),
+    goal_ref: "model-id",
+  });
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
+  expect(out.accepted[0]).toMatchObject({ goalRef: id });
+  const input = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!.input;
+  expect(input).toContain("Finish her film list");
+  expect(input).toContain("autonomy: 0.3");
+  expect(input).toContain("competence: 0.7");
+});
+
+test("a reconcile resolution target stays on the accepted event", async () => {
+  const deps = makeTestDeps(always);
+  vi.spyOn(deps.embedder, "embed").mockImplementation(async (xs) => xs.map(() => vec(0.01)));
+  await withEpisode(deps, "Spica began reading Solaris.");
+  const [near] = await deps.core.memory.near(vec(0.01), 1, 0);
+  deps.llm.handlers.life_event = sequence(ev("Spica finished Solaris."));
+  deps.llm.handlers.reconcile = sequence({ relation: "resolves", target_fact_id: near!.id });
+  const out = await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
+  expect(out.accepted[0]).toMatchObject({ resolvesMemoryId: near!.id });
+});
+
+test("goal selection is seeded, weighted and independent of repository order", () => {
+  const goal = (id: string, progress: number): CoreGoal => ({
+    id,
+    title: id,
+    why: id,
+    status: "active",
+    progress,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    updated_at: now,
+  });
+  const a = goal("a", 0.99);
+  const b = goal("b", 0);
+  const force = { ...cfg, goal_driven_share: 1 };
+  expect(selectEventGoal([a, b], day, force)?.id).toBe("b");
+  expect(selectEventGoal([b, a], day, force)?.id).toBe("b");
+  expect(selectEventGoal([a, b], day, { ...force, goal_driven_share: 0 })).toBeNull();
+  expect(selectEventGoal([], day, force)).toBeNull();
+  expect(selectEventGoal([{ ...a, status: "done" }], day, force)).toBeNull();
+});
+
+test("injected events have no implicit goal and retain explicit fallthrough overrides", async () => {
+  const deps = makeTestDeps({ core: { world: { goal_driven_share: 1, event_probability: 0 } } });
+  await deps.core.goals.insert({
+    title: "Read more",
+    why: "She loves books",
+    status: "active",
+    progress: 0,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  for (const fallthrough of [true, false] as const) {
+    const out = await generateCoreEvents(
+      coreDepsOf(deps),
+      day,
+      now,
+      () => false,
+      () => ({
+        content: "Spica read a book.",
+        valence: 0.2,
+        fallthrough,
+      }),
+    );
+    expect(out.accepted[0]).toMatchObject({ goalRef: null, fallthrough });
+    expect(out.budgetExhausted).toBe(false);
+  }
+});
+
+test("budget exhaustion before regeneration retains only earlier accepted events", async () => {
+  const deps = makeTestDeps({ core: { world: { event_probability: 1, events_per_day_max: 2 } } });
+  deps.llm.handlers.life_event = sequence(
+    ev("Spica found a film."),
+    ev("Bad time", { at: "25:00" }),
+  );
+  const out = await generateCoreEvents(
+    coreDepsOf(deps),
+    day,
+    now,
+    () => deps.llm.structuredCalls.filter((call) => call.purpose === "life_event").length < 2,
+  );
+  expect(out.accepted.map((event) => event.candidate.content)).toEqual(["Spica found a film."]);
+  expect(out.attempts.map((attempt) => attempt.decision)).toEqual(["accepted", "invalid"]);
+  expect(out.budgetExhausted).toBe(true);
 });

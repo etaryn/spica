@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-03-phase-8b-world-and-thinking-design.md` (approved).
 
-**Status:** Written plan awaiting Ethan's review. Implementation has not started.
+**Status:** Approved by Ethan on 2026-10-03. Task 1 setup in progress.
 
 ## Global Constraints
 

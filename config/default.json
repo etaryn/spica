@@ -182,6 +182,7 @@
     "core_state_line": "v3",
     "core_appraise": "v1",
     "core_anticipate": "v1",
+    "core_ruminate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
   },
@@ -290,6 +291,13 @@
       "fallback_labels": { "negative": "upset", "neutral": "calm", "positive": "pleased" }
     },
     "anticipate": { "lead_hours": 12, "arousal_gain": 0.3 },
+    "ruminate": {
+      "delay_hours": 2,
+      "window_hours": 24,
+      "min_valence": 0.5,
+      "max_per_episode": 1,
+      "gain": 0.1
+    },
     "resolve": { "max_tokens": 512 },
     "daily_call_budget": 24,
     "budget_reserve": 8,

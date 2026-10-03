@@ -11,7 +11,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 2: complete — 27c2f72, spec and quality approved by Sartre (gpt-6-sol/high).
 - Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
 - Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
-- Task 5: implementation resumed after Ethan approved the test-only scope expansion.
+- Task 5: complete — 9bba422, product review approved; both test-only scope adjustments approved.
 - Tasks 6–10: not started.
 
 ## Setup evidence
@@ -96,3 +96,18 @@ baseline migrations. No default database was targeted by those commands.
 Ethan approved the proposed test-only expansion. The plan now includes world-tick.test.ts for
 filtering the generated-kind assertion to root events. Resume the same implementer, rerun checks,
 then independent review; no product behavior change authorized or needed.
+
+## Task 5 evidence and review
+
+- Commit 9bba422: focused/adjacent 69 tests, full 786 tests in 105 files, typecheck/lint passed.
+- Goodall reviewed c318b06..9bba422: product spec compliance verified, quality approved with minors.
+  The only Important gate was the additional shared legacy fixture adjustment. Ethan explicitly
+  approved it after review: set fallthrough_probability to zero in legacy world-tick tests only.
+  Dedicated resolution tests retain seeded/forced coverage and production probability stays 0.15.
+- Minor deferred: add a mild landing test that clears both matching preoccupation fields.
+- Minor deferred: add positive-budget exhaustion coverage across multiple resolutions and appraisals.
+- Minor deferred: correct appraise.ts's obsolete "Never throws" comment; context failures propagate.
+- All deferred findings must be triaged by the final branch review. No blocking product findings.
+- Ethan reiterated Sonnet-like, weaker subagent routing: sol for implementation and reviews,
+  luna for mechanical work. This user preference supersedes the strongest-model final-review default;
+  request approval before escalating beyond sol.

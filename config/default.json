@@ -185,6 +185,7 @@
     "core_ruminate": "v1",
     "core_wander": "v1",
     "core_reflect": "v1",
+    "core_snapshot": "v1",
     "core_consolidate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
@@ -276,6 +277,7 @@
     ]
   },
   "core": {
+    "snapshot": { "max_items": 8, "max_tokens": 1024 },
     "loops": {
       "max_chars": 300,
       "max_tokens": 512,

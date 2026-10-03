@@ -471,6 +471,16 @@ part and a `# Seed self` part (the starting snapshot, version 0); the seed
 self's own sections are `###`, so they nest under the reply's "Who you are
 lately".
 
+Nightly rendering uses `core.snapshot.max_items` (8 per active kind) and
+`core.snapshot.max_tokens` (1024), with `prompts.core_snapshot: v1` at
+`prompts/core/snapshot/v1.md`. Its six sections are Lately, Opinions,
+Interests, Goals, People, and Habits of speech; transient mood and energy
+are excluded and speech habits carry forward unless core evidence changes
+them. Insights are selected newest-first since the previous render. The
+full snapshot and each bullet are embedded before the new version, its
+self lines and successful trace commit atomically. Seed fills historical
+v0 embeddings and fixed-value/v0 bullet lines once without rewriting them.
+
 ### 7.3 Drift watch (DECIDED: watched; PROPOSED: mechanics)
 
 On every new snapshot version (`core_render_snapshot`, §8.5):

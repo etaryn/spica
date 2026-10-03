@@ -91,6 +91,22 @@ export class FakeLLMProvider implements LLMProvider {
         ],
       };
     },
+    core_render_snapshot: (input: string) => {
+      const context = JSON.parse(input);
+      const habits =
+        /### Habits of speech\s*\n([\s\S]*?)(?=\n### |$)/.exec(context.previous)?.[1] ?? "";
+      return {
+        Lately: ["She is exploring her own interests."],
+        Opinions: [],
+        Interests: [],
+        Goals: [],
+        People: [],
+        "Habits of speech": habits
+          .split("\n")
+          .filter((line) => line.startsWith("- "))
+          .map((line) => line.slice(2)),
+      };
+    },
     core_reflect: () => ({
       insights: [],
       opinions: [],

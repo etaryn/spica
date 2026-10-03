@@ -123,6 +123,24 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       ).map(toItem);
     },
 
+    async recentInsights(from, to, limit) {
+      return (
+        await db
+          .select()
+          .from(core_memory)
+          .where(
+            and(
+              ACTIVE,
+              eq(core_memory.kind, "insight"),
+              from === null ? undefined : gt(core_memory.created_at, from),
+              lte(core_memory.created_at, to),
+            ),
+          )
+          .orderBy(desc(core_memory.created_at), core_memory.id)
+          .limit(limit)
+      ).map(toItem);
+    },
+
     async latestNarrative() {
       const [row] = await db
         .select()

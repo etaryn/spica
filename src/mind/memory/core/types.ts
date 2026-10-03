@@ -102,6 +102,8 @@ export interface CoreMemory {
   ): Promise<CoreMemoryItem[]>;
   /** Active items by descending salience, newest creation time, then ID. */
   activeByKind(kind: CoreMemoryKind, limit: number): Promise<CoreMemoryItem[]>;
+  /** Active insights in (from, to], newest first then ID; null starts all history. */
+  recentInsights(from: Date | null, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   latestNarrative(): Promise<CoreMemoryItem | null>;
   supersede(id: string, replacementId: string): Promise<void>;
   /** True when an active item was faded. */

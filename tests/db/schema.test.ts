@@ -271,6 +271,8 @@ describe("assertDisposableDatabase", () => {
 });
 
 const CORE_TABLES = [
+  "core_self_line",
+  "drift_log",
   "core_memory",
   "core_entity",
   "core_state",
@@ -369,4 +371,30 @@ test("core_state.emotion may be null", async () => {
     baseline: { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 },
   });
   expect((await db.select().from(core_state))[0]!.emotion).toBeNull();
+});
+
+test("nightly vectors enforce dimensions and drift rows enforce diagnostic categories", async () => {
+  const db = getTestDb();
+  const snapshot = {
+    version: 0,
+    content: "seed",
+    sections: {},
+    source_ids: [],
+    rendered_at: T,
+    model: "seed",
+    prompt_version: "v1",
+  };
+  await db.insert(s.core_snapshot).values(snapshot);
+  await expect(db.update(s.core_snapshot).set({ embedding: [0.1, 0.2] })).rejects.toThrow();
+  await expect(
+    db.insert(s.core_self_line).values({ version: 0, text: "line", embedding: [0.1, 0.2] }),
+  ).rejects.toThrow();
+  await expect(
+    db.execute(sql`INSERT INTO drift_log (version, "check", created_at) VALUES (0, 'bad', ${T})`),
+  ).rejects.toThrow();
+  await expect(
+    db.execute(
+      sql`INSERT INTO drift_log (version, "check", verdict, created_at) VALUES (0, 'values', 'bad', ${T})`,
+    ),
+  ).rejects.toThrow();
 });

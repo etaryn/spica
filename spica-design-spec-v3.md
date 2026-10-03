@@ -395,7 +395,20 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   snapshot v0 wherever the canon people are seeded.
 - **`core_snapshot`** (Built): `version` (int pk), `content` (text),
   `sections` (jsonb), `source_ids` (core memory ids), `rendered_at`, `model`,
-  `prompt_version`. Version 0 is the persona file's seed self.
+  `prompt_version`, and `embedding` (vector 1024; nullable for historical
+  rows awaiting seed backfill, required for new repository inserts). Version
+  0 is the persona file's seed self.
+- **Nightly storage** (Built; loop wiring follows in 8c): `core_state.last_nightly_day`
+  is a nullable local date used to claim a night. `core_self_line` stores `id`,
+  nullable `version` (snapshot FK; null for fixed values), `text`, and a
+  required 1024-dimension `embedding`. Versioned lines cascade on snapshot
+  deletion; fixed lines survive. `drift_log` stores `id`, `version` (snapshot
+  FK, cascades on deletion), `check` (`values | diff | trend`), nullable
+  `value`, `excerpt`, `verdict` (`ok | contradicts | strains`), `score`, and
+  required clock-supplied `created_at`. These tables have no user identifier.
+  All writes are available through the core transaction scope. The trace
+  repository's `latestDone(loop, before)` includes zero-call successful runs
+  and excludes unsuccessful statuses and the upper time boundary.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
   (`planned | surprise | resolution`; all three are written), `content`,

@@ -70,3 +70,4 @@ code itself.
 | 2026-10-03 | The three thought prompts share a 512-token cap; resolution has its own 512-token cap | Separate resolution and thinking budgets keep each model request bounded without a per-loop key for identical thought limits. |
 | 2026-10-03 | Thought valence comes from its source: proposed anticipation emotion, rumination episode or wander seed | The model writes the text, while existing core evidence determines the stored valence. |
 | 2026-10-03 | Equal-time/equal-score source candidates break ties by stable ID | A retry or reordered repository result then chooses the same source. |
+| 2026-10-03 | Nightly gist groups use Monday-start local calendar weeks; snapshot deletion cascades versioned self lines and drift rows, while fixed-value lines have no snapshot FK target | PostgreSQL's local week boundary gives deterministic grouping; version-owned diagnostics and lines cannot outlive their source snapshot. |

@@ -13,9 +13,12 @@ type SeedDeps = Pick<CoreDeps, "core" | "clock" | "config" | "embedder">;
 /** True when this call wrote version 0. */
 export async function seedSnapshot(deps: SeedDeps): Promise<boolean> {
   if (await deps.core.memory.latestSnapshot()) return false;
+  const content = loadPersona(deps.config).seedSelf;
+  const [embedding] = await deps.embedder.embed([content], "document");
   return deps.core.memory.insertSnapshot({
     version: 0,
-    content: loadPersona(deps.config).seedSelf,
+    content,
+    embedding: embedding!,
     sections: {},
     source_ids: [],
     rendered_at: deps.clock.now(),

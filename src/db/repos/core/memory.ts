@@ -1,10 +1,10 @@
 /**
  * Her core memory in Postgres. No query here takes or returns a user id.
  */
-import { and, desc, eq, gt, gte, lte, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
-import { core_entity, core_memory, core_snapshot, world_event } from "@/db/schema";
+import { core_entity, core_memory, core_self_line, core_snapshot, world_event } from "@/db/schema";
 import type {
   CoreCandidate,
   CoreEntity,
@@ -45,6 +45,16 @@ function payloadObject(value: unknown): Record<string, unknown> | null {
 }
 
 export function coreMemoryRepo(db: Db): CoreMemory {
+  const gistWeek = (timezone: string) =>
+    sql<string>`date_trunc('week', ${core_memory.occurred_at} AT TIME ZONE ${timezone})::date::text`;
+  const gistEligible = (beforeLocalDay: string, timezone: string) =>
+    and(
+      eq(core_memory.kind, "episode"),
+      eq(core_memory.status, "resolved"),
+      sql`(${core_memory.occurred_at} AT TIME ZONE ${timezone})::date < ${beforeLocalDay}::date`,
+      sql`NOT (COALESCE(${core_memory.payload}, '{}'::jsonb) ? 'gisted_into')`,
+      sql`NOT (COALESCE(${core_memory.payload}, '{}'::jsonb) ? 'gist_of')`,
+    );
   async function neighbors(
     embedding: number[],
     k: number,
@@ -69,6 +79,142 @@ export function coreMemoryRepo(db: Db): CoreMemory {
   }
 
   return {
+    async reflectInputs(from, to, limit) {
+      return (
+        await db
+          .select()
+          .from(core_memory)
+          .where(
+            and(
+              ACTIVE,
+              inArray(core_memory.kind, ["episode", "thought", "idea"]),
+              from === null ? undefined : gt(core_memory.created_at, from),
+              lte(core_memory.created_at, to),
+            ),
+          )
+          .orderBy(core_memory.created_at, core_memory.id)
+          .limit(limit)
+      ).map(toItem);
+    },
+
+    async nearestActive(embedding, kinds, limit) {
+      if (!kinds.length) return [];
+      return (
+        await db
+          .select()
+          .from(core_memory)
+          .where(and(ACTIVE, inArray(core_memory.kind, kinds)))
+          .orderBy(
+            sql`${core_memory.embedding} <=> ${vecLiteral(embedding)}::vector`,
+            core_memory.id,
+          )
+          .limit(limit)
+      ).map(toItem);
+    },
+
+    async activeByKind(kind, limit) {
+      return (
+        await db
+          .select()
+          .from(core_memory)
+          .where(and(ACTIVE, eq(core_memory.kind, kind)))
+          .orderBy(desc(core_memory.salience), desc(core_memory.created_at), core_memory.id)
+          .limit(limit)
+      ).map(toItem);
+    },
+
+    async latestNarrative() {
+      const [row] = await db
+        .select()
+        .from(core_memory)
+        .where(and(ACTIVE, eq(core_memory.kind, "narrative")))
+        .orderBy(desc(core_memory.created_at), core_memory.id)
+        .limit(1);
+      return row ? toItem(row) : null;
+    },
+
+    async supersede(id, replacementId) {
+      await db
+        .update(core_memory)
+        .set({ status: "superseded", superseded_by: replacementId })
+        .where(and(eq(core_memory.id, id), ACTIVE));
+    },
+
+    async scaleSalience(id, factor) {
+      await db
+        .update(core_memory)
+        .set({ salience: sql`${core_memory.salience} * ${factor}` })
+        .where(and(eq(core_memory.id, id), ACTIVE));
+    },
+
+    async decay(cutoff, rate, staleFloor) {
+      const next = sql`salience * (1 - ${rate}::float8 * (1 - salience))`;
+      const result = await db.execute(sql`
+        UPDATE core_memory m SET salience = ${next},
+          status = CASE WHEN ${next} <= ${staleFloor} THEN 'stale'::fact_status ELSE status END
+        WHERE m.status NOT IN ('stale', 'superseded')
+          AND COALESCE(m.last_recalled_at, m.created_at) < ${cutoff}
+          AND NOT (m.kind = 'intention' AND m.status = 'open')
+          AND NOT EXISTS (SELECT 1 FROM core_state s WHERE s.preoccupation = m.id)
+          AND m.id IS DISTINCT FROM (SELECT id FROM core_memory WHERE kind = 'narrative'
+            AND status NOT IN ('stale', 'superseded') ORDER BY created_at DESC, id LIMIT 1)
+          AND NOT (m.kind = 'episode' AND EXISTS (
+            SELECT 1 FROM world_event e JOIN core_goal g ON g.id = e.goal_ref
+            WHERE m.source_ref = 'world_event:' || e.id::text AND g.status = 'active'))
+        RETURNING m.id`);
+      return result.rows.length;
+    },
+
+    async eligibleGistGroups(beforeLocalDay, timezone, minSources, limit) {
+      const week = gistWeek(timezone);
+      const weeks = await db
+        .select({ week })
+        .from(core_memory)
+        .where(gistEligible(beforeLocalDay, timezone))
+        .groupBy(sql`1`)
+        .having(sql`count(*) >= ${minSources}`)
+        .orderBy(sql`1`)
+        .limit(limit);
+      if (!weeks.length) return [];
+      const rows = await db
+        .select({ item: core_memory, week })
+        .from(core_memory)
+        .where(
+          and(
+            gistEligible(beforeLocalDay, timezone),
+            inArray(
+              week,
+              weeks.map((w) => w.week),
+            ),
+          ),
+        )
+        .orderBy(core_memory.occurred_at, core_memory.id);
+      return weeks.map(({ week }) => ({
+        week,
+        sources: rows.filter((r) => r.week === week).map((r) => toItem(r.item)),
+      }));
+    },
+
+    async gistSources(ids, gistId, factor, beforeLocalDay, timezone, minSources) {
+      if (new Set(ids).size !== ids.length || ids.length < minSources || !ids.length) return false;
+      return db.transaction(async (tx) => {
+        const rows = await tx
+          .select({ item: core_memory, week: gistWeek(timezone) })
+          .from(core_memory)
+          .where(and(inArray(core_memory.id, ids), gistEligible(beforeLocalDay, timezone)))
+          .orderBy(core_memory.id)
+          .for("update");
+        if (rows.length !== ids.length || new Set(rows.map((r) => r.week)).size !== 1) return false;
+        await tx
+          .update(core_memory)
+          .set({
+            payload: sql`COALESCE(${core_memory.payload}, '{}'::jsonb) || ${JSON.stringify({ gisted_into: gistId })}::jsonb`,
+            salience: sql`${core_memory.salience} * ${factor}`,
+          })
+          .where(inArray(core_memory.id, ids));
+        return true;
+      });
+    },
     async insert(item) {
       const row = one(
         await db
@@ -303,6 +449,33 @@ export function coreMemoryRepo(db: Db): CoreMemory {
         await db.select().from(core_snapshot).orderBy(desc(core_snapshot.version)).limit(1)
       )[0];
       return row ?? null;
+    },
+
+    async snapshot(version) {
+      return (
+        (await db.select().from(core_snapshot).where(eq(core_snapshot.version, version)))[0] ?? null
+      );
+    },
+
+    async backfillSnapshotEmbedding(version, embedding) {
+      await db
+        .update(core_snapshot)
+        .set({ embedding })
+        .where(and(eq(core_snapshot.version, version), isNull(core_snapshot.embedding)));
+    },
+
+    async selfLines(version) {
+      return db
+        .select()
+        .from(core_self_line)
+        .where(
+          version === null ? isNull(core_self_line.version) : eq(core_self_line.version, version),
+        )
+        .orderBy(core_self_line.id);
+    },
+
+    async insertSelfLines(lines) {
+      if (lines.length) await db.insert(core_self_line).values(lines);
     },
 
     async insertSnapshot(snapshot) {

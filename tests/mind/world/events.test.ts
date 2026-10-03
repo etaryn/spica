@@ -360,6 +360,7 @@ test("the generator writes as who she is lately: core values plus her latest sna
   const deps = makeTestDeps(always);
   await deps.core.memory.insertSnapshot({
     version: 3,
+    embedding: vec(),
     content: "Lately she can't stop thinking about comets.",
     sections: {},
     source_ids: [],

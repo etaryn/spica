@@ -28,7 +28,7 @@ export async function adminResetSelf(
       .where(eq(thread.subject, "self"))
       .returning({ id: thread.id });
     await tx.execute(
-      sql`TRUNCATE life_event_log, world_event, core_memory, core_entity, core_snapshot, core_loop_trace, core_state, core_goal`,
+      sql`TRUNCATE life_event_log, world_event, core_memory, core_entity, core_snapshot, core_self_line, drift_log, core_loop_trace, core_state, core_goal`,
     );
     return { facts: facts.length, entities: entities.length, threads: threads.length };
   });

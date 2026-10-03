@@ -74,6 +74,7 @@ export type CoreEntity = {
 
 export type CoreSnapshot = {
   version: number;
+  embedding: number[] | null;
   content: string;
   sections: Record<string, string>;
   source_ids: string[];
@@ -82,7 +83,46 @@ export type CoreSnapshot = {
   prompt_version: string;
 };
 
+export type CoreSelfLine = {
+  id: string;
+  version: number | null;
+  text: string;
+  embedding: number[];
+};
+export type CoreGistGroup = { week: string; sources: CoreMemoryItem[] };
+
 export interface CoreMemory {
+  /** Active episodes, thoughts and ideas in (from, to], oldest first then ID. Null starts all history. */
+  reflectInputs(from: Date | null, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  /** Active memories of the requested kinds, closest first then ID. */
+  nearestActive(
+    embedding: number[],
+    kinds: CoreMemoryKind[],
+    limit: number,
+  ): Promise<CoreMemoryItem[]>;
+  /** Active items by descending salience, newest creation time, then ID. */
+  activeByKind(kind: CoreMemoryKind, limit: number): Promise<CoreMemoryItem[]>;
+  latestNarrative(): Promise<CoreMemoryItem | null>;
+  supersede(id: string, replacementId: string): Promise<void>;
+  scaleSalience(id: string, factor: number): Promise<void>;
+  /** Untouched before cutoff, excluding open intentions, preoccupation, latest narrative and direct active-goal episodes. */
+  decay(cutoff: Date, rate: number, staleFloor: number): Promise<number>;
+  /** Resolved ungisted episodes before the local cutoff day, grouped by Monday week; oldest week first, sources by time then ID. */
+  eligibleGistGroups(
+    beforeLocalDay: string,
+    timezone: string,
+    minSources: number,
+    limit: number,
+  ): Promise<CoreGistGroup[]>;
+  /** Locks and rechecks every source (including age and one local week); false writes nothing. Use with gist insertion inside a transaction. */
+  gistSources(
+    ids: string[],
+    gistId: string,
+    factor: number,
+    beforeLocalDay: string,
+    timezone: string,
+    minSources: number,
+  ): Promise<boolean>;
   insert(item: NewCoreMemory): Promise<string>;
   get(id: string): Promise<CoreMemoryItem | null>;
   /** Active factual memories, including resolved intentions, closest first then ID. */
@@ -118,6 +158,11 @@ export interface CoreMemory {
   /** Ids for these names, inserting the ones she doesn't know yet (salience from the caller). */
   addEntities(names: string[], salience: number, now: Date): Promise<string[]>;
   latestSnapshot(): Promise<CoreSnapshot | null>;
+  snapshot(version: number): Promise<CoreSnapshot | null>;
+  /** Only fills an existing null embedding; never changes content or a populated vector. */
+  backfillSnapshotEmbedding(version: number, embedding: number[]): Promise<void>;
+  selfLines(version: number | null): Promise<CoreSelfLine[]>;
+  insertSelfLines(lines: Omit<CoreSelfLine, "id">[]): Promise<void>;
   /** False when that version already exists. */
-  insertSnapshot(snapshot: CoreSnapshot): Promise<boolean>;
+  insertSnapshot(snapshot: CoreSnapshot & { embedding: number[] }): Promise<boolean>;
 }

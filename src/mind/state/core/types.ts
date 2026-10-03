@@ -48,6 +48,7 @@ export type CoreStateRow = CoreMood & {
   baseline: CoreMood;
   last_tick: Date | null;
   last_event_day: string | null;
+  last_nightly_day: string | null;
 };
 
 export type CoreStatePatch = Partial<Omit<CoreStateRow, "baseline">>;

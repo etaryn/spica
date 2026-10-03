@@ -28,6 +28,8 @@ export type NewCoreLoopTrace = {
 };
 
 export interface CoreTraces {
+  /** Most recent done run strictly before the boundary, including successful zero-call runs. */
+  latestDone(loop: string, before: Date): Promise<Date | null>;
   insert(trace: NewCoreLoopTrace): Promise<void>;
   /** Model calls traced at or after `from`: what today's budget has spent. */
   callsSince(from: Date): Promise<number>;
@@ -39,12 +41,29 @@ export interface CoreTraces {
   ): Promise<{ count: number; latest: Date | null }>;
 }
 
+export type CoreDriftRow = {
+  id: string;
+  version: number;
+  check: "values" | "diff" | "trend";
+  value: string | null;
+  excerpt: string | null;
+  verdict: "ok" | "contradicts" | "strains" | null;
+  score: number | null;
+  created_at: Date;
+};
+
+export interface CoreDrift {
+  insert(row: Omit<CoreDriftRow, "id">): Promise<void>;
+  forVersion(version: number): Promise<CoreDriftRow[]>;
+}
+
 export interface CoreScope {
   memory: CoreMemory;
   state: CoreState;
   goals: CoreGoals;
   world: World;
   traces: CoreTraces;
+  drift: CoreDrift;
   /** A transaction-scoped advisory lock; only meaningful inside `transaction`. */
   lock(key: string): Promise<void>;
 }

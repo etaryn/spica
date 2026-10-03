@@ -18,12 +18,14 @@ test("seeds version 0 from the seed self, once", async () => {
   const snap = await deps.core.memory.latestSnapshot();
   expect(snap).toMatchObject({ version: 0, model: "seed", prompt_version: "v5" });
   expect(snap!.content).toBe(loadPersona(deps.config).seedSelf);
+  expect(snap!.embedding).toHaveLength(1024);
 });
 
 test("never overwrites a later version", async () => {
   const deps = coreDepsOf(makeTestDeps());
   await deps.core.memory.insertSnapshot({
     version: 4,
+    embedding: vec(),
     content: "later",
     sections: {},
     source_ids: [],

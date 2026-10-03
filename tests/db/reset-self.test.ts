@@ -70,6 +70,29 @@ test("deletes self facts, entities and threads for every user, keeps user facts,
     source_ref: null,
   });
   await deps.core.state.update({ preoccupation: episode, last_event_day: "2026-01-05" });
+  await deps.core.memory.insertSnapshot({
+    version: 0,
+    content: "old self",
+    embedding: vec(),
+    sections: {},
+    source_ids: [],
+    rendered_at: t0,
+    model: "seed",
+    prompt_version: "v1",
+  });
+  await deps.core.memory.insertSelfLines([
+    { version: null, text: "old fixed value", embedding: vec() },
+    { version: 0, text: "old self", embedding: vec() },
+  ]);
+  await deps.core.drift.insert({
+    version: 0,
+    check: "diff",
+    value: null,
+    excerpt: null,
+    verdict: null,
+    score: null,
+    created_at: t0,
+  });
   await deps.core.world.recordEvent({
     at: t0,
     kind: "planned",
@@ -85,4 +108,7 @@ test("deletes self facts, entities and threads for every user, keeps user facts,
   expect(await db.select().from(core_memory)).toEqual([]);
   expect(await db.select().from(world_event)).toEqual([]);
   expect(await deps.core.state.get()).toBeNull();
+  expect(await deps.core.memory.selfLines(null)).toEqual([]);
+  expect(await deps.core.memory.selfLines(0)).toEqual([]);
+  expect(await deps.core.drift.forVersion(0)).toEqual([]);
 });

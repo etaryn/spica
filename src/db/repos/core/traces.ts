@@ -7,6 +7,19 @@ import { toDateOrNull } from "../util";
 
 export function coreTracesRepo(db: Db): CoreTraces {
   return {
+    async latestDone(loop, before) {
+      const [row] = await db
+        .select({ at: sql<string | null>`max(${core_loop_trace.created_at})` })
+        .from(core_loop_trace)
+        .where(
+          and(
+            eq(core_loop_trace.loop, loop),
+            eq(core_loop_trace.status, "done"),
+            lt(core_loop_trace.created_at, before),
+          ),
+        );
+      return toDateOrNull(row?.at);
+    },
     async insert(trace) {
       await db.insert(core_loop_trace).values(trace);
     },

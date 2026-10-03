@@ -141,6 +141,13 @@
       "when": 1790961792611,
       "tag": "0019_world_resolution",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791042087136,
+      "tag": "0020_core_nightly",
+      "breakpoints": true
     }
   ]
 }

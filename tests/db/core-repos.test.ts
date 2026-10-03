@@ -4,7 +4,7 @@
  */
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
-import { core_memory } from "@/db/schema";
+import { core_memory, core_snapshot } from "@/db/schema";
 import { createCoreLayer } from "@/db/repos/core";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
@@ -65,6 +65,7 @@ test("entities are added once and keep their first_seen", async () => {
 test("snapshots: latest wins, a duplicate version is refused", async () => {
   const s = {
     version: 0,
+    embedding: vec(),
     content: "seed",
     sections: {},
     source_ids: [],
@@ -76,6 +77,284 @@ test("snapshots: latest wins, a duplicate version is refused", async () => {
   expect(await core().memory.insertSnapshot(s)).toBe(false);
   expect(await core().memory.insertSnapshot({ ...s, version: 1, content: "next" })).toBe(true);
   expect((await core().memory.latestSnapshot())?.content).toBe("next");
+});
+
+test("nightly state and zero-call done traces preserve the successful boundary", async () => {
+  const layer = core();
+  await layer.state.ensure(
+    { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 },
+    { autonomy: 0.6, competence: 0.6 },
+  );
+  expect((await layer.state.get())?.last_nightly_day).toBeNull();
+  await layer.transaction(async (tx) => {
+    await tx.state.update({ last_nightly_day: "2026-01-05" });
+  });
+  expect((await layer.state.get())?.last_nightly_day).toBe("2026-01-05");
+  for (const [offset, status] of [
+    "done",
+    "fallback",
+    "failed",
+    "skipped_budget",
+    "done",
+  ].entries()) {
+    await layer.traces.insert({
+      loop: "core_reflect",
+      inputs: {},
+      outputs: {},
+      model: null,
+      prompt_version: null,
+      tokens_in: null,
+      tokens_out: null,
+      cost: null,
+      calls: 0,
+      status: status as "done" | "fallback" | "failed" | "skipped_budget",
+      error: null,
+      created_at: atHour(offset),
+    });
+  }
+  expect(await layer.traces.latestDone("core_reflect", atHour(4))).toEqual(now);
+  expect(await layer.traces.latestDone("core_reflect", atHour(5))).toEqual(atHour(4));
+  expect(await layer.traces.latestDone("other", atHour(5))).toBeNull();
+});
+
+test("reflect and snapshot context filter before deterministic limits", async () => {
+  const memory = core().memory;
+  await memory.insert({ ...episode("stale", 0.01, now), status: "stale" });
+  await memory.insert({ ...episode("excluded", 0.01, now), kind: "hypothetical" });
+  await memory.insert(episode("boundary", 0.01, atHour(-1)));
+  await memory.insert(episode("future", 0.01, atHour(1)));
+  const ids: string[] = [];
+  for (const kind of ["episode", "thought", "idea"] as const) {
+    ids.push(await memory.insert({ ...episode(kind, 0.01, now), kind }));
+  }
+  expect((await memory.reflectInputs(atHour(-1), now, 2)).map((m) => m.id)).toEqual(
+    ids.sort().slice(0, 2),
+  );
+  const opinion = await memory.insert({
+    ...episode("opinion", 0.01, now),
+    kind: "opinion",
+    salience: 0.8,
+  });
+  const interest = await memory.insert({ ...episode("interest", 0.01, now), kind: "interest" });
+  await memory.insert({
+    ...episode("old opinion", 0.01, now),
+    kind: "opinion",
+    status: "superseded",
+  });
+  expect((await memory.nearestActive(vec(), ["opinion", "interest"], 1)).map((m) => m.id)).toEqual(
+    [opinion, interest].sort().slice(0, 1),
+  );
+  expect((await memory.activeByKind("opinion", 1)).map((m) => m.id)).toEqual([opinion]);
+  expect(await memory.reflectInputs(null, now, 0)).toEqual([]);
+  expect(await memory.nearestActive(vec(), [], 5)).toEqual([]);
+  expect(await memory.latestNarrative()).toBeNull();
+  const old = await memory.insert({ ...episode("old story", 0.01, atHour(-1)), kind: "narrative" });
+  const next = await memory.insert({ ...episode("new story", 0.01, now), kind: "narrative" });
+  expect((await memory.latestNarrative())?.id).toBe(next);
+  await memory.supersede(old, next);
+  expect(
+    (await getTestDb().select().from(core_memory).where(eq(core_memory.id, old)))[0],
+  ).toMatchObject({ status: "superseded", superseded_by: next });
+  await memory.scaleSalience(opinion, 0.5);
+  expect((await memory.get(opinion))?.salience).toBeCloseTo(0.4);
+});
+
+test("decay is atomic, inclusive at the stale floor, and only direct active-goal episodes are exempt", async () => {
+  const layer = core();
+  const old = atHour(-240);
+  await layer.state.ensure(
+    { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 },
+    { autonomy: 0.6, competence: 0.6 },
+  );
+  const goal = await layer.goals.insert({
+    title: "Read",
+    why: "curiosity",
+    status: "active",
+    progress: 0,
+    embedding: vec(),
+    source: "seed",
+    source_ref: null,
+    started_at: old,
+    target_at: null,
+  });
+  const event = await layer.world.recordEvent({
+    at: old,
+    kind: "planned",
+    content: "read",
+    valence: 0,
+    stakes: "low",
+    agents: [],
+    life_day: "2025-12-26",
+    created_at: old,
+    goal_ref: goal,
+  });
+  const preoccupation = await layer.memory.insert(episode("preoccupation", 0.01, old));
+  await layer.state.update({ preoccupation });
+  const exempt = [
+    preoccupation,
+    await layer.memory.insert({ ...episode("open", 0.01, old), kind: "intention", status: "open" }),
+    await layer.memory.insert({ ...episode("narrative", 0.01, old), kind: "narrative" }),
+    await layer.memory.insert({
+      ...episode("goal episode", 0.01, old),
+      source_ref: `world_event:${event}`,
+    }),
+  ];
+  const indirect = await layer.memory.insert({
+    ...episode("thought", 0.01, old),
+    kind: "thought",
+    source_ref: `world_event:${event}`,
+  });
+  const malformed = await layer.memory.insert({
+    ...episode("bad link", 0.01, old),
+    source_ref: "world_event:bad",
+  });
+  const stale = await layer.memory.insert({ ...episode("floor", 0.01, old), salience: 0.0625 });
+  const recent = await layer.memory.insert(episode("recent", 0.01, now));
+  const recalled = await layer.memory.insert(episode("recalled", 0.01, old));
+  await layer.memory.reinforce(recalled, now, 0, 1);
+  const oldNarrative = await layer.memory.insert({
+    ...episode("old narrative", 0.01, atHour(-241)),
+    kind: "narrative",
+  });
+  await expect(
+    layer.transaction(async (tx) => {
+      await tx.memory.decay(atHour(-72), 0.2, 0.0625 * (1 - 0.2 * (1 - 0.0625)));
+      throw new Error("rollback");
+    }),
+  ).rejects.toThrow("rollback");
+  expect((await layer.memory.get(indirect))?.salience).toBeCloseTo(0.4);
+  expect(await layer.memory.decay(atHour(-72), 0.2, 0.0625 * (1 - 0.2 * (1 - 0.0625)))).toBe(4);
+  for (const id of exempt) expect((await layer.memory.get(id))?.salience).toBeCloseTo(0.4);
+  for (const id of [indirect, malformed, oldNarrative])
+    expect((await layer.memory.get(id))?.salience).toBeCloseTo(0.4 * (1 - 0.2 * 0.6));
+  expect((await layer.memory.get(stale))?.status).toBe("stale");
+  for (const id of [recent, recalled])
+    expect((await layer.memory.get(id))?.salience).toBeCloseTo(0.4);
+});
+
+test("gist groups follow local weeks, age and status; source damping happens once", async () => {
+  const memory = core().memory;
+  const early = new Date("2025-12-28T15:59:00Z"); // Sunday in Singapore
+  const monday = new Date("2025-12-28T16:00:00Z");
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++) ids.push(await memory.insert(episode(`week ${i}`, 0.01, monday)));
+  await memory.insert(episode("previous week singleton", 0.01, early));
+  await memory.insert(episode("age boundary", 0.01, new Date("2026-01-04T16:00:00Z")));
+  await memory.insert({ ...episode("open", 0.01, monday), status: "open" });
+  await memory.insert({ ...episode("gisted", 0.01, monday), payload: { gisted_into: "already" } });
+  const groups = await memory.eligibleGistGroups("2026-01-05", "Asia/Singapore", 3, 1);
+  expect(groups).toHaveLength(1);
+  expect(groups[0]!.week).toBe("2025-12-29");
+  expect(groups[0]!.sources.map((m) => m.id)).toEqual(ids.sort());
+  const gistId = await memory.insert({
+    ...episode("gist", 0.01, monday),
+    status: "recurring",
+    payload: { gist_of: ids },
+  });
+  expect(
+    await core().transaction((tx) =>
+      tx.memory.gistSources(ids, gistId, 0.5, "2026-01-05", "Asia/Singapore", 3),
+    ),
+  ).toBe(true);
+  expect(
+    await core().transaction((tx) =>
+      tx.memory.gistSources(ids, gistId, 0.5, "2026-01-05", "Asia/Singapore", 3),
+    ),
+  ).toBe(false);
+  for (const id of ids)
+    expect(await memory.get(id)).toMatchObject({
+      content: expect.any(String),
+      payload: { gisted_into: gistId },
+      salience: expect.closeTo(0.2),
+    });
+  expect(await memory.eligibleGistGroups("2026-01-05", "Asia/Singapore", 3, 1)).toEqual([]);
+});
+
+test("snapshot history, self lines and drift share the core transaction and preserve old null embeddings", async () => {
+  const layer = core();
+  const snapshot = {
+    version: 0,
+    content: "seed",
+    sections: {},
+    source_ids: [],
+    rendered_at: now,
+    model: "seed",
+    prompt_version: "v1",
+  };
+  await getTestDb().insert(core_snapshot).values(snapshot);
+  expect((await layer.memory.snapshot(0))?.embedding).toBeNull();
+  expect(await layer.memory.snapshot(9)).toBeNull();
+  await layer.memory.backfillSnapshotEmbedding(0, vec());
+  await layer.memory.backfillSnapshotEmbedding(0, vec(0.02));
+  expect((await layer.memory.snapshot(0))?.embedding?.[0]).toBeCloseTo(0.01);
+  const write = async (tx: import("@/mind/platform/core").CoreScope) => {
+    await tx.memory.insertSnapshot({ ...snapshot, version: 1, embedding: vec() });
+    await tx.memory.insertSelfLines([{ version: 1, text: "lately", embedding: vec() }]);
+    await tx.drift.insert({
+      version: 1,
+      check: "diff",
+      value: null,
+      excerpt: null,
+      verdict: null,
+      score: null,
+      created_at: now,
+    });
+  };
+  await expect(
+    layer.transaction(async (tx) => {
+      await write(tx);
+      throw new Error("rollback");
+    }),
+  ).rejects.toThrow("rollback");
+  expect(await layer.memory.snapshot(1)).toBeNull();
+  expect(await layer.memory.selfLines(1)).toEqual([]);
+  expect(await layer.drift.forVersion(1)).toEqual([]);
+  await layer.transaction(write);
+  await layer.memory.insertSelfLines([{ version: null, text: "fixed value", embedding: vec() }]);
+  expect(await layer.memory.selfLines(null)).toMatchObject([
+    { text: "fixed value", version: null },
+  ]);
+  expect(await layer.memory.selfLines(1)).toMatchObject([{ text: "lately", version: 1 }]);
+  expect(await layer.drift.forVersion(1)).toMatchObject([{ check: "diff", score: null }]);
+  await expect(
+    layer.memory.insertSelfLines([{ version: 99, text: "missing", embedding: vec() }]),
+  ).rejects.toThrow();
+  await expect(
+    layer.drift.insert({
+      version: 99,
+      check: "trend",
+      value: null,
+      excerpt: null,
+      verdict: null,
+      score: null,
+      created_at: now,
+    }),
+  ).rejects.toThrow();
+  await getTestDb().delete(core_snapshot).where(eq(core_snapshot.version, 1));
+  expect(await layer.memory.selfLines(1)).toEqual([]);
+  expect(await layer.drift.forVersion(1)).toEqual([]);
+  expect(await layer.memory.selfLines(null)).toHaveLength(1);
+});
+
+test("gist source rechecks refuse partial, mixed-week, duplicate and concurrent damping", async () => {
+  const layer = core();
+  const at = new Date("2025-12-29T00:00:00Z");
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++) ids.push(await layer.memory.insert(episode(`source ${i}`, 0.01, at)));
+  const other = await layer.memory.insert(
+    episode("another week", 0.01, new Date("2025-12-22T00:00:00Z")),
+  );
+  const gistId = await layer.memory.insert({ ...episode("gist", 0.01, at), status: "recurring" });
+  const apply = (sources: string[]) =>
+    layer.memory.gistSources(sources, gistId, 0.5, "2026-01-05", "Asia/Singapore", 3);
+  expect(await apply([ids[0]!, ids[1]!, other])).toBe(false);
+  expect(await apply([ids[0]!, ids[0]!, ids[1]!])).toBe(false);
+  await layer.memory.mergePayload(ids[0]!, { gisted_into: "prior", preserved: true });
+  expect(await apply(ids)).toBe(false);
+  expect((await layer.memory.get(ids[1]!))?.salience).toBeCloseTo(0.4);
+  const clean = [ids[1]!, ids[2]!, await layer.memory.insert(episode("third clean", 0.01, at))];
+  expect((await Promise.all([apply(clean), apply(clean)])).sort()).toEqual([false, true]);
+  for (const id of clean) expect((await layer.memory.get(id))?.salience).toBeCloseTo(0.2);
 });
 
 test("state: ensure, lock and update inside a transaction", async () => {

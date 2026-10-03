@@ -563,6 +563,7 @@ export const core_state = pgTable(
     // Her local date of the last finished event generation, so a retried world tick never doubles
     // a day.
     last_event_day: date("last_event_day", { mode: "string" }),
+    last_nightly_day: date("last_nightly_day", { mode: "string" }),
   },
   (t) => [
     check("core_state_single_row", sql`${t.id} = 1`),
@@ -575,6 +576,7 @@ export const core_state = pgTable(
 /** "Who I am right now", versioned. Version 0 is the persona file's seed self. */
 export const core_snapshot = pgTable("core_snapshot", {
   version: integer("version").primaryKey(),
+  embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
   content: text("content").notNull(),
   sections: jsonb("sections").$type<Record<string, string>>().notNull(),
   source_ids: uuid("source_ids").array().notNull().default(emptyUuidArray),
@@ -582,6 +584,35 @@ export const core_snapshot = pgTable("core_snapshot", {
   model: text("model").notNull(),
   prompt_version: text("prompt_version").notNull(),
 });
+
+/** Fixed values have no version; other lines belong to one rendered self. */
+export const core_self_line = pgTable("core_self_line", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  version: integer("version").references(() => core_snapshot.version, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+});
+
+/** Diagnostic evidence of self drift; a finding never blocks a snapshot. */
+export const drift_log = pgTable(
+  "drift_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: integer("version")
+      .notNull()
+      .references(() => core_snapshot.version, { onDelete: "cascade" }),
+    check: text("check", { enum: ["values", "diff", "trend"] }).notNull(),
+    value: text("value"),
+    excerpt: text("excerpt"),
+    verdict: text("verdict", { enum: ["ok", "contradicts", "strains"] }),
+    score: real("score"),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [
+    check("drift_log_check_valid", sql`${t.check} IN ('values', 'diff', 'trend')`),
+    check("drift_log_verdict_valid", sql`${t.verdict} IN ('ok', 'contradicts', 'strains')`),
+  ],
+);
 
 /** Her goals: arcs lasting weeks. Progress moves only in code, from appraised events. */
 export const core_goal = pgTable(

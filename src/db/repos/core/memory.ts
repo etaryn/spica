@@ -4,7 +4,7 @@
 import { and, desc, eq, gt, gte, lte, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
-import { core_entity, core_memory, core_snapshot } from "@/db/schema";
+import { core_entity, core_memory, core_snapshot, world_event } from "@/db/schema";
 import type {
   CoreCandidate,
   CoreEntity,
@@ -108,6 +108,15 @@ export function coreMemoryRepo(db: Db): CoreMemory {
         if (!parsed.success) continue;
         const at = new Date(parsed.data).getTime();
         if (at > now.getTime() && at <= until.getTime() && at < soonest) {
+          const source = /^world_event:(.+)$/.exec(row.source_ref ?? "");
+          const eventId = source ? z.uuid().safeParse(source[1]) : null;
+          if (!eventId?.success) continue;
+          const [event] = await db
+            .select({ kind: world_event.kind })
+            .from(world_event)
+            .where(eq(world_event.id, eventId.data))
+            .limit(1);
+          if (event?.kind !== "planned") continue;
           selected = row;
           soonest = at;
         }

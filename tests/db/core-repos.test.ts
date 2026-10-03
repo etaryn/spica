@@ -193,6 +193,38 @@ test("resolution metadata round trips and target deletion nulls FK", async () =>
 
 const atHour = (hour: number) => new Date(now.getTime() + hour * 3_600_000);
 
+async function plannedEventRef(at: Date): Promise<string> {
+  const id = await core().world.recordEvent({
+    at,
+    kind: "planned",
+    content: "A real upcoming plan",
+    valence: 0.2,
+    stakes: "low",
+    agents: [],
+    life_day: "2026-01-05",
+    created_at: now,
+  });
+  return `world_event:${id}`;
+}
+
+test("a broken earliest event link does not hide a later valid anticipation", async () => {
+  const layer = core();
+  const memory = layer.memory;
+  await memory.insert({
+    ...intention("malformed link", "open", now, "world_event:missing"),
+    payload: { event_at: atHour(1).toISOString() },
+  });
+  await memory.insert({
+    ...intention("missing event", "open", now, "world_event:00000000-0000-4000-8000-000000000000"),
+    payload: { event_at: atHour(2).toISOString() },
+  });
+  const valid = await memory.insert({
+    ...intention("valid later plan", "open", now, await plannedEventRef(atHour(3))),
+    payload: { event_at: atHour(3).toISOString() },
+  });
+  expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(valid);
+});
+
 test("anticipation candidate filters precede limit and timestamp/ID break ties", async () => {
   const memory = core().memory;
   for (const payload of [
@@ -206,10 +238,11 @@ test("anticipation candidate filters precede limit and timestamp/ID break ties",
     payload: { event_at: atHour(1).toISOString() },
   });
   const ids = [];
+  const tiedEvent = await plannedEventRef(atHour(12));
   for (let i = 0; i < 2; i++)
     ids.push(
       await memory.insert({
-        ...intention("next", "open", now, null),
+        ...intention("next", "open", now, tiedEvent),
         payload: { event_at: atHour(12).toISOString() },
       }),
     );
@@ -218,7 +251,7 @@ test("anticipation candidate filters precede limit and timestamp/ID break ties",
   await memory.setStatus(ids[0]!, "resolved");
   expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(ids[1]);
   const sooner = await memory.insert({
-    ...intention("sooner", "open", now, null),
+    ...intention("sooner", "open", now, await plannedEventRef(atHour(1))),
     payload: { event_at: "2026-01-05T18:00:00+08:00" },
   });
   expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(sooner);

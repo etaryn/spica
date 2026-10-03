@@ -1,11 +1,14 @@
 /** Nightly core memory decay and one bounded gist of older resolved episodes. */
+import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
+import { errorName } from "@/mind/platform/errors";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { localMidnight } from "@/mind/platform/timezone";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { runCoreLoop } from "./runner";
+
+const DAY_MS = 86_400_000;
 
 function daysBefore(day: string, count: number): string {
   const date = new Date(`${day}T00:00:00Z`);
@@ -18,8 +21,27 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
   const timezone = lifeTimezone(config.life, now);
   const day = lifeDate(config.life, now);
   const bounds = config.core.consolidate;
-  const cutoff = localMidnight(daysBefore(day, config.core.decay.grace_days), timezone);
-  await core.memory.decay(cutoff, config.core.decay.rate, config.core.decay.stale_floor);
+  const cutoff = new Date(now.getTime() - config.core.decay.grace_days * DAY_MS);
+  try {
+    await core.memory.decay(cutoff, config.core.decay.rate, config.core.decay.stale_floor);
+  } catch (error) {
+    await core.traces.insert({
+      id: randomUUID(),
+      loop: "core_consolidate",
+      inputs: {},
+      outputs: {},
+      prompt_version: null,
+      status: "failed",
+      error: errorName(error),
+      created_at: now,
+      calls: 0,
+      model: null,
+      tokens_in: null,
+      tokens_out: null,
+      cost: null,
+    });
+    throw error;
+  }
 
   const run = await runCoreLoop<{ gist_id: string | null; source_ids: string[] }>(
     deps,

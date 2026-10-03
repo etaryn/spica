@@ -52,6 +52,31 @@ test("decays untouched memory even with no gist and traces zero calls", async ()
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "done", calls: 0 }]);
 });
 
+test("decay uses the exact three-day grace interval, not local midnight", async () => {
+  const { deps } = setup();
+  const before = await item(deps, "Before the exact cutoff.", {
+    at: new Date("2026-01-16T21:00:00Z"), // Jan 17, 05:00 in Singapore.
+  });
+  const after = await item(deps, "After the exact cutoff.", {
+    at: new Date("2026-01-17T04:00:00Z"), // Jan 17, 12:00 in Singapore.
+  });
+  await coreConsolidate(deps, now); // Jan 20, 11:00 in Singapore.
+  expect((await deps.core.memory.get(before))?.salience).toBeCloseTo(0.48);
+  expect((await deps.core.memory.get(after))?.salience).toBe(0.5);
+});
+
+test("a decay error writes one failed zero-call trace", async () => {
+  const { all, deps } = setup();
+  deps.core.memory.decay = async () => {
+    throw new Error("decay unavailable");
+  };
+  await expect(coreConsolidate(deps, now)).rejects.toThrow("decay unavailable");
+  expect(all.llm.structuredCalls).toHaveLength(0);
+  expect(await all.db.select().from(core_loop_trace)).toMatchObject([
+    { loop: "core_consolidate", status: "failed", calls: 0, error: "Error" },
+  ]);
+});
+
 test("exhausted budget still applies decay and traces skipped_budget", async () => {
   const { all, deps } = setup({ core: { daily_call_budget: 0, budget_reserve: 0 } });
   const id = await item(deps, "An old episode.");
@@ -157,33 +182,31 @@ test("invalid gist output keeps decay and records fallback", async () => {
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "fallback" }]);
 });
 
-test("gist and source damping roll back with an outer transaction", async () => {
-  const { deps } = setup();
+test("a loop failure after source damping rolls back gist and markers but retains decay", async () => {
+  const { all, deps } = setup();
   const ids = [await item(deps, "One"), await item(deps, "Two"), await item(deps, "Three")];
-  await expect(
-    deps.core.transaction(async (tx) => {
-      const gistId = await tx.memory.insert({
-        kind: "episode",
-        content: "A gist",
-        embedding: vec(),
-        occurred_at: old,
-        created_at: now,
-        status: "recurring",
-        salience: 0.5,
-        valence: 0,
-        confidence: 0.6,
-        source: "loop",
-        source_ref: "core_consolidate:test",
-        payload: { gist_of: ids },
-      });
-      expect(await tx.memory.gistSources(ids, gistId, 0.5, "2026-01-13", "Asia/Singapore", 3)).toBe(
-        true,
-      );
-      throw new Error("rollback");
-    }),
-  ).rejects.toThrow("rollback");
-  expect(await deps.core.memory.get(ids[0]!)).toMatchObject({ salience: 0.5, payload: null });
-  expect(
-    await deps.core.memory.eligibleGistGroups("2026-01-13", "Asia/Singapore", 3, 1),
-  ).toHaveLength(1);
+  const transaction = deps.core.transaction;
+  deps.core.transaction = (apply) =>
+    transaction(async (tx) =>
+      apply({
+        ...tx,
+        memory: {
+          ...tx.memory,
+          gistSources: async (...args) => {
+            const updated = await tx.memory.gistSources(...args);
+            if (updated) throw new Error("after source update");
+            return updated;
+          },
+        },
+      }),
+    );
+  await expect(coreConsolidate(deps, now)).rejects.toThrow("after source update");
+  expect(await all.db.select().from(core_memory)).toHaveLength(3);
+  for (const id of ids) {
+    expect(await deps.core.memory.get(id)).toMatchObject({ payload: null });
+    expect((await deps.core.memory.get(id))?.salience).toBeCloseTo(0.48);
+  }
+  expect(await all.db.select().from(core_loop_trace)).toMatchObject([
+    { loop: "core_consolidate", status: "failed", calls: 1 },
+  ]);
 });

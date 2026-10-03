@@ -81,6 +81,16 @@ export class FakeLLMProvider implements LLMProvider {
         },
       };
     },
+    core_wander: (input: string) => {
+      const seed = /^Seed memory: (.*)$/m.exec(input)?.[1] ?? "her own day";
+      const prefix = "She finds herself thinking again about ";
+      const available = defaults.core.loops.max_chars - prefix.length - 1;
+      return {
+        items: [
+          { kind: "thought", content: `${prefix}${seed.slice(0, available)}.`, salience: "low" },
+        ],
+      };
+    },
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

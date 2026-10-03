@@ -185,6 +185,7 @@
     "core_ruminate": "v1",
     "core_wander": "v1",
     "core_reflect": "v1",
+    "core_consolidate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
   },
@@ -321,6 +322,14 @@
       "salience": { "insight": 0.5, "opinion": 0.5, "interest": 0.4, "narrative": 0.6 },
       "fade_factor": 0.5,
       "max_tokens": 1024
+    },
+    "decay": { "grace_days": 3, "rate": 0.08, "stale_floor": 0.05 },
+    "consolidate": {
+      "gist_after_days": 7,
+      "min_group": 3,
+      "max_groups": 1,
+      "gist_source_factor": 0.5,
+      "max_tokens": 512
     },
     "mind": { "tick_cron": "50 * * * *" },
     "daily_call_budget": 24,

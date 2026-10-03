@@ -393,6 +393,14 @@ const core = z
       fade_factor: unit,
       max_tokens: positiveInt,
     }),
+    decay: z.object({ grace_days: nonNegative, rate: unit, stale_floor: unit }),
+    consolidate: z.object({
+      gist_after_days: positiveInt,
+      min_group: positiveInt,
+      max_groups: positiveInt,
+      gist_source_factor: unit,
+      max_tokens: positiveInt,
+    }),
     mind: z.object({ tick_cron: cron }),
     loops: z.object({
       max_chars: positiveInt,
@@ -487,6 +495,7 @@ const prompts = z.object({
   core_ruminate: promptVersion,
   core_wander: promptVersion,
   core_reflect: promptVersion,
+  core_consolidate: promptVersion,
   core_resolve: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,

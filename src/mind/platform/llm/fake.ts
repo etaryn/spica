@@ -98,6 +98,11 @@ export class FakeLLMProvider implements LLMProvider {
       goals: { add: [], drop: [] },
       narrative: null,
     }),
+    core_consolidate: (input: string) => ({
+      gist: `She remembers ${JSON.parse(input)
+        .sources.map((source: { content: string }) => source.content)
+        .join("; ")}.`,
+    }),
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

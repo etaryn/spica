@@ -90,12 +90,12 @@ test("a failed render does not stop earlier steps or trigger drift and cannot re
 test("a failed reflect leaves later steps eligible", async () => {
   const { deps, all } = setup();
   await seedSnapshot(deps);
-  const original = deps.core.traces.latestDone;
-  deps.core.traces.latestDone = async () => {
+  const original = deps.core.memory.reflectInputs;
+  deps.core.memory.reflectInputs = async () => {
     throw new Error("reflect read failed");
   };
   expect(await coreNightly(deps, first)).toBe(true);
-  deps.core.traces.latestDone = original;
+  deps.core.memory.reflectInputs = original;
   expect((await all.db.select().from(core_loop_trace)).map((row) => row.loop)).toEqual([
     "core_reflect",
     "core_consolidate",

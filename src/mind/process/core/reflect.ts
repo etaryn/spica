@@ -14,13 +14,8 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
   const { config, core } = deps;
   const bounds = config.core.reflect;
   const run = await runCoreLoop(deps, "core_reflect", now, async (ctx) => {
-    const since = await core.traces.latestDone("core_reflect", now);
-    const inputs = await core.memory.reflectInputs(since, now, bounds.max_inputs);
+    const inputs = await core.memory.reflectInputs(now, bounds.max_inputs);
     const inputIds = inputs.map((item) => item.id);
-    const last = inputs.at(-1);
-    const cursor = last
-      ? { at: last.created_at.toISOString(), id: last.id }
-      : { at: now.toISOString(), id: null };
     if (!inputs.length)
       return {
         inputs: { ids: [] },
@@ -29,7 +24,6 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           goal_ids: [],
           faded_interest_ids: [],
           dropped_goal_ids: [],
-          cursor,
         },
       };
 
@@ -140,6 +134,8 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     const embeddings = texts.length ? await deps.embedder.embed(texts, "document") : [];
     return ctx.commit(async (tx) => {
       await tx.lock("core_reflect");
+      if ((await tx.memory.markReflected(inputIds, now)) !== inputIds.length)
+        throw new Error("reflect inputs changed");
       const memoryIds: string[] = [];
       const goalIds: string[] = [];
       const fadedInterestIds: string[] = [];
@@ -206,7 +202,6 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           goal_ids: goalIds,
           faded_interest_ids: fadedInterestIds,
           dropped_goal_ids: droppedGoalIds,
-          cursor,
         },
         promptVersion: config.prompts.core_reflect,
       };

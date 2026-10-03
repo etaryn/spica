@@ -369,7 +369,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `thought`, `idea` and `hypothetical`; 8c also writes `insight`, `opinion`,
   `interest`, `narrative` and gist `episode`),
   `content`, `payload`, `embedding`, `entity_refs` (ids of `core_entity`),
-  `occurred_at`, `created_at`, `last_recalled_at`, `recall_count`, `salience`,
+  `occurred_at`, `created_at`, nullable `reflected_at` (migration `0021`, set
+  only for selected successful reflection inputs), `last_recalled_at`, `recall_count`, `salience`,
   `valence`, `confidence`, `status` (the `fact` statuses), `superseded_by`,
   `source` (`world | loop`), `source_ref` (the loop run or world event). It
   has the same retrieval index and range checks as `fact`. Repository-visible
@@ -409,9 +410,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `value`, `excerpt`, `verdict` (`ok | contradicts | strains`), `score`, and
   required clock-supplied `created_at`. These tables have no user identifier.
   All writes are available through the core transaction scope. The trace
-  repository's `latestDone(loop, before)` returns the last consumed reflection
-  cursor from successful runs, including zero-call runs, and excludes
-  unsuccessful statuses and the upper time boundary.
+  reflection repository reads bounded unreflected core memories and marks
+  selected IDs within the successful loop transaction. Failed and zero-input
+  runs mark no memories; the trace still records each run's status and calls.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
   (`planned | surprise | resolution`; all three are written), `content`,
@@ -758,15 +759,16 @@ budget and a versioned prompt:
 
 - `core_reflect` (`prompts/core/reflect/v1.md`, `prompts.core_reflect: v1`)
   reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
-  after the last consumed `(created_at, id)` cursor in its successful trace,
-  plus `context_items` (6) active neighbours. A capped run retains later
-  equal-time IDs and all other unconsumed input for subsequent nights.
+  with `reflected_at IS NULL` and `created_at <= now`, ordered by
+  `(created_at, id)`, plus `context_items` (6) active neighbours. A capped run
+  marks exactly its selected IDs in the success transaction; later inserts
+  remain due even when their `created_at` precedes the run.
   It may write up to `max_insights` (2), `max_opinions` (3) and
   `max_interests` (2); goal additions respect `core.goals.max_active`.
   Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
   interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
-  produces a zero-call successful trace with a time-only cursor at `now`.
+  produces a zero-call successful trace and marks no memories.
 - `core_consolidate` (`prompts/core/consolidate/v1.md`,
   `prompts.core_consolidate: v1`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes

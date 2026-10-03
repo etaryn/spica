@@ -108,7 +108,7 @@ test("snapshots: latest wins, a duplicate version is refused", async () => {
   expect((await core().memory.latestSnapshot())?.content).toBe("next");
 });
 
-test("nightly state and zero-call done traces preserve the successful boundary", async () => {
+test("nightly state records the claimed local day", async () => {
   const layer = core();
   await layer.state.ensure(
     { mood_valence: 0, mood_arousal: 0.4, energy: 0.6 },
@@ -119,49 +119,23 @@ test("nightly state and zero-call done traces preserve the successful boundary",
     await tx.state.update({ last_nightly_day: "2026-01-05" });
   });
   expect((await layer.state.get())?.last_nightly_day).toBe("2026-01-05");
-  for (const [offset, status] of [
-    "done",
-    "fallback",
-    "failed",
-    "skipped_budget",
-    "done",
-  ].entries()) {
-    await layer.traces.insert({
-      loop: "core_reflect",
-      inputs: {},
-      outputs: {},
-      model: null,
-      prompt_version: null,
-      tokens_in: null,
-      tokens_out: null,
-      cost: null,
-      calls: 0,
-      status: status as "done" | "fallback" | "failed" | "skipped_budget",
-      error: null,
-      created_at: atHour(offset),
-    });
-  }
-  expect(await layer.traces.latestDone("core_reflect", atHour(4))).toEqual({ at: now, id: null });
-  expect(await layer.traces.latestDone("core_reflect", atHour(5))).toEqual({
-    at: atHour(4),
-    id: null,
-  });
-  expect(await layer.traces.latestDone("other", atHour(5))).toBeNull();
 });
 
 test("reflect and snapshot context filter before deterministic limits", async () => {
   const memory = core().memory;
   await memory.insert({ ...episode("stale", 0.01, now), status: "stale" });
   await memory.insert({ ...episode("excluded", 0.01, now), kind: "hypothetical" });
-  await memory.insert(episode("boundary", 0.01, atHour(-1)));
+  const boundary = await memory.insert(episode("boundary", 0.01, atHour(-1)));
+  expect(await memory.markReflected([boundary], now)).toBe(1);
   await memory.insert(episode("future", 0.01, atHour(1)));
   const ids: string[] = [];
   for (const kind of ["episode", "thought", "idea"] as const) {
     ids.push(await memory.insert({ ...episode(kind, 0.01, now), kind }));
   }
+  expect((await memory.reflectInputs(now, 2)).map((m) => m.id)).toEqual(ids.sort().slice(0, 2));
   expect(
-    (await memory.reflectInputs({ at: atHour(-1), id: null }, now, 2)).map((m) => m.id),
-  ).toEqual(ids.sort().slice(0, 2));
+    (await getTestDb().select().from(core_memory).where(eq(core_memory.id, boundary)))[0],
+  ).toMatchObject({ reflected_at: now });
   const opinion = await memory.insert({
     ...episode("opinion", 0.01, now),
     kind: "opinion",
@@ -177,7 +151,7 @@ test("reflect and snapshot context filter before deterministic limits", async ()
     [opinion, interest].sort().slice(0, 1),
   );
   expect((await memory.activeByKind("opinion", 1)).map((m) => m.id)).toEqual([opinion]);
-  expect(await memory.reflectInputs(null, now, 0)).toEqual([]);
+  expect(await memory.reflectInputs(now, 0)).toEqual([]);
   expect(await memory.nearestActive(vec(), [], 5)).toEqual([]);
   expect(await memory.latestNarrative()).toBeNull();
   const old = await memory.insert({ ...episode("old story", 0.01, atHour(-1)), kind: "narrative" });

@@ -300,6 +300,12 @@ test("core tables exist and none has a user_id column", async () => {
       sql`, `,
     )})`);
   expect(userCols.rows).toEqual([]);
+  const marker = await db.execute(sql`
+    SELECT data_type, is_nullable FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'core_memory' AND column_name = 'reflected_at'`);
+  expect(marker.rows).toMatchObject([
+    { data_type: "timestamp with time zone", is_nullable: "YES" },
+  ]);
 });
 
 test("core_state holds exactly one row", async () => {

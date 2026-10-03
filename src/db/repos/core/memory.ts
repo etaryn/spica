@@ -1,7 +1,7 @@
 /**
  * Her core memory in Postgres. No query here takes or returns a user id.
  */
-import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { core_entity, core_memory, core_self_line, core_snapshot, world_event } from "@/db/schema";
@@ -79,7 +79,7 @@ export function coreMemoryRepo(db: Db): CoreMemory {
   }
 
   return {
-    async reflectInputs(from, to, limit) {
+    async reflectInputs(to, limit) {
       return (
         await db
           .select()
@@ -88,20 +88,30 @@ export function coreMemoryRepo(db: Db): CoreMemory {
             and(
               ACTIVE,
               inArray(core_memory.kind, ["episode", "thought", "idea"]),
-              from === null
-                ? undefined
-                : from.id === null
-                  ? gt(core_memory.created_at, from.at)
-                  : or(
-                      gt(core_memory.created_at, from.at),
-                      and(eq(core_memory.created_at, from.at), gt(core_memory.id, from.id)),
-                    ),
+              isNull(core_memory.reflected_at),
               lte(core_memory.created_at, to),
             ),
           )
           .orderBy(core_memory.created_at, core_memory.id)
           .limit(limit)
       ).map(toItem);
+    },
+
+    async markReflected(ids, now) {
+      if (!ids.length) return 0;
+      const rows = await db
+        .update(core_memory)
+        .set({ reflected_at: now })
+        .where(
+          and(
+            inArray(core_memory.id, ids),
+            inArray(core_memory.kind, ["episode", "thought", "idea"]),
+            ACTIVE,
+            isNull(core_memory.reflected_at),
+          ),
+        )
+        .returning({ id: core_memory.id });
+      return rows.length;
     },
 
     async nearestActive(embedding, kinds, limit) {

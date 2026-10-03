@@ -523,6 +523,7 @@ export const core_memory = pgTable(
     entity_refs: uuid("entity_refs").array().notNull().default(emptyUuidArray),
     occurred_at: ts("occurred_at"),
     created_at: ts("created_at").notNull(),
+    reflected_at: ts("reflected_at"),
     last_recalled_at: ts("last_recalled_at"),
     recall_count: integer("recall_count").notNull().default(0),
     status: factStatus("status").notNull(),

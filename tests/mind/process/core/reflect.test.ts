@@ -44,15 +44,12 @@ async function memory(
   });
 }
 
-test("no new inputs completes with zero calls and advances the successful boundary", async () => {
+test("no new inputs completes with zero calls and no memory marks", async () => {
   const { all, deps } = setup();
   expect(await coreReflect(deps, now)).toBe("done");
   expect(all.llm.structuredCalls).toHaveLength(0);
-  expect(await deps.core.traces.latestDone("core_reflect", new Date(now.getTime() + 1))).toEqual({
-    at: now,
-    id: null,
-  });
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "done", calls: 0 }]);
+  expect(await all.db.select().from(core_memory)).toEqual([]);
 });
 
 test("model input caps new experience and active context independently", async () => {
@@ -91,18 +88,26 @@ test("overflow drains in stable timestamp and ID order across nights without dup
   expect((await all.db.select().from(core_loop_trace)).map((trace) => trace.calls)).toEqual([
     1, 1, 1, 0,
   ]);
+  expect(
+    (await all.db.select().from(core_memory))
+      .filter((row) => ids.includes(row.id))
+      .every((row) => row.reflected_at !== null),
+  ).toBe(true);
 });
 
-test("zero-input success advances the boundary while failed runs leave their inputs due", async () => {
+test("zero-input success still reflects late backfill while failed runs leave inputs due", async () => {
   const { all, deps } = setup();
   expect(await coreReflect(deps, now)).toBe("done");
-  await memory(deps, "episode", "older backfill", new Date(now.getTime() - 1000));
+  const backfill = await memory(deps, "episode", "older backfill", new Date(now.getTime() - 1000));
   const fresh = await memory(deps, "episode", "new event", new Date(now.getTime() + 1000));
   const next = new Date(now.getTime() + 86_400_000);
   all.llm.handlers.core_reflect = () => {
     throw new Error("model failure");
   };
   await expect(coreReflect(deps, next)).rejects.toThrow("model failure");
+  expect((await all.db.select().from(core_memory)).every((row) => row.reflected_at === null)).toBe(
+    true,
+  );
   all.llm.handlers.core_reflect = () => ({
     insights: [],
     opinions: [],
@@ -114,7 +119,76 @@ test("zero-input success advances the boundary while failed runs leave their inp
   const calls = all.llm.structuredCalls.map((call) =>
     JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
   );
-  expect(calls).toEqual([[fresh], [fresh]]);
+  expect(calls).toEqual([
+    [backfill, fresh],
+    [backfill, fresh],
+  ]);
+});
+
+test("late insert with earlier created_at remains due after the selected batch commits", async () => {
+  const { all, deps } = setup();
+  const selected = await memory(deps, "episode", "selected", new Date(now.getTime() - 1000));
+  let entered!: () => void;
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  all.llm.handlers.core_reflect = async () => {
+    entered();
+    await gate;
+    return {
+      insights: [],
+      opinions: [],
+      interests: [],
+      goals: { add: [], drop: [] },
+      narrative: null,
+    };
+  };
+  const first = coreReflect(deps, now);
+  await waiting;
+  const late = await memory(deps, "episode", "late", new Date(now.getTime() - 2000));
+  release();
+  expect(await first).toBe("done");
+  const afterCommit = await memory(deps, "episode", "after commit", new Date(now.getTime() - 3000));
+  expect(
+    (await all.db.select().from(core_memory)).find((row) => row.id === selected)?.reflected_at,
+  ).toEqual(now);
+  expect(
+    (await all.db.select().from(core_memory)).find((row) => row.id === late)?.reflected_at,
+  ).toBeNull();
+  expect(
+    (await all.db.select().from(core_memory)).find((row) => row.id === afterCommit)?.reflected_at,
+  ).toBeNull();
+  expect(await coreReflect(deps, new Date(now.getTime() + 86_400_000))).toBe("done");
+  expect(
+    all.llm.structuredCalls.map((call) =>
+      JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+    ),
+  ).toEqual([[selected], [afterCommit, late]]);
+});
+
+test("transaction failure after marking rolls the marker and success trace back", async () => {
+  const { all, deps } = setup();
+  const id = await memory(deps, "episode", "A day.");
+  const original = deps.core.transaction.bind(deps.core);
+  deps.core.transaction = async (fn) =>
+    original(async (tx) => {
+      await fn(tx);
+      throw new Error("commit failure");
+    });
+  await expect(coreReflect(deps, now)).rejects.toThrow("commit failure");
+  expect(
+    (await all.db.select().from(core_memory)).find((row) => row.id === id)?.reflected_at,
+  ).toBeNull();
+  expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "failed" }]);
+  deps.core.transaction = original;
+  expect(await coreReflect(deps, new Date(now.getTime() + 86_400_000))).toBe("done");
+  expect(
+    (await all.db.select().from(core_memory)).find((row) => row.id === id)?.reflected_at,
+  ).not.toBeNull();
 });
 
 test("bounded proposals supersede opinions and narrative, fade interests, and change goals", async () => {

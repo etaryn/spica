@@ -9,6 +9,7 @@ code itself.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-03 | Resolution model errors and invalid output are handled inside the runner callback as `fallback`; the runner still traces and rethrows unexpected failures | Ethan approved preserving the tested runner contract while allowing the planned event to happen when resolution cannot generate an outcome. |
 | 2026-10-01 | New config keys `turn.timer_job_retry_limit` (2), `turn.timer_job_retry_delay_seconds` (1), `life.min_busy` (0.3), `life.fallback_busy` (0.5) | Moves the last literals of the turn-timer queue policy and the day plan's busy levels into config. |
 | 2026-10-01 | The inspector resolves due-thread ids in `judge_log` input to thread titles | They were shown as "(deleted)" because only facts were looked up. |
 | 2026-10-01 | `src/lib` → `src/server` | It holds the Next.js server-only helpers (auth, session, inspector access); "server" says that, "lib" didn't. |

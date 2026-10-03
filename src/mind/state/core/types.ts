@@ -37,7 +37,8 @@ export interface CoreGoals {
   count(): Promise<number>;
   insert(goal: NewCoreGoal): Promise<string>;
   setProgress(id: string, progress: number, now: Date): Promise<void>;
-  setStatus(id: string, status: CoreGoalStatus, now: Date): Promise<void>;
+  /** Terminal transitions only apply while active; true means the transition won. */
+  setStatus(id: string, status: Exclude<CoreGoalStatus, "active">, now: Date): Promise<boolean>;
 }
 
 export type CoreStateRow = CoreMood & {

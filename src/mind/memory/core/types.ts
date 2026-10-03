@@ -104,7 +104,8 @@ export interface CoreMemory {
   activeByKind(kind: CoreMemoryKind, limit: number): Promise<CoreMemoryItem[]>;
   latestNarrative(): Promise<CoreMemoryItem | null>;
   supersede(id: string, replacementId: string): Promise<void>;
-  scaleSalience(id: string, factor: number): Promise<void>;
+  /** True when an active item was faded. */
+  scaleSalience(id: string, factor: number): Promise<boolean>;
   /** Untouched before cutoff, excluding open intentions, preoccupation, latest narrative and direct active-goal episodes. */
   decay(cutoff: Date, rate: number, staleFloor: number): Promise<number>;
   /** Resolved ungisted episodes before the local cutoff day, grouped by Monday week; oldest week first, sources by time then ID. */

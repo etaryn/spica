@@ -141,10 +141,12 @@ export function coreMemoryRepo(db: Db): CoreMemory {
     },
 
     async scaleSalience(id, factor) {
-      await db
+      const rows = await db
         .update(core_memory)
         .set({ salience: sql`${core_memory.salience} * ${factor}` })
-        .where(and(eq(core_memory.id, id), ACTIVE));
+        .where(and(eq(core_memory.id, id), ACTIVE))
+        .returning({ id: core_memory.id });
+      return rows.length > 0;
     },
 
     async decay(cutoff, rate, staleFloor) {

@@ -1,7 +1,7 @@
 /**
  * Her goals in Postgres: the core_goal table. No query here takes or returns a user id.
  */
-import { asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_goal } from "@/db/schema";
 import type { CoreGoal, CoreGoals } from "@/mind/state/core/types";
@@ -38,10 +38,18 @@ export function coreGoalsRepo(db: Db): CoreGoals {
       ).id;
     },
     async setProgress(id, progress, now) {
-      await db.update(core_goal).set({ progress, updated_at: now }).where(eq(core_goal.id, id));
+      await db
+        .update(core_goal)
+        .set({ progress, updated_at: now })
+        .where(and(eq(core_goal.id, id), eq(core_goal.status, "active")));
     },
     async setStatus(id, status, now) {
-      await db.update(core_goal).set({ status, updated_at: now }).where(eq(core_goal.id, id));
+      const rows = await db
+        .update(core_goal)
+        .set({ status, updated_at: now })
+        .where(and(eq(core_goal.id, id), eq(core_goal.status, "active")))
+        .returning({ id: core_goal.id });
+      return rows.length > 0;
     },
   };
 }

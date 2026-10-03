@@ -17,7 +17,11 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     const since = await core.traces.latestDone("core_reflect", now);
     const inputs = await core.memory.reflectInputs(since, now, bounds.max_inputs);
     const inputIds = inputs.map((item) => item.id);
-    if (!inputs.length) return { inputs: { ids: [] }, outputs: { memory_ids: [], goal_ids: [] } };
+    if (!inputs.length)
+      return {
+        inputs: { ids: [] },
+        outputs: { memory_ids: [], goal_ids: [], faded_interest_ids: [], dropped_goal_ids: [] },
+      };
 
     const [query] = await deps.embedder.embed(
       [inputs.map((item) => item.content).join("\n")],
@@ -119,17 +123,17 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         : []),
     ];
     const goalAdds = result.goals.add;
-    const embeddings = await deps.embedder.embed(
-      [
-        ...proposals.map((item) => item.content),
-        ...goalAdds.map((goal) => `${goal.title}: ${goal.why}`),
-      ],
-      "document",
-    );
+    const texts = [
+      ...proposals.map((item) => item.content),
+      ...goalAdds.map((goal) => `${goal.title}: ${goal.why}`),
+    ];
+    const embeddings = texts.length ? await deps.embedder.embed(texts, "document") : [];
     return ctx.commit(async (tx) => {
       await tx.lock("core_reflect");
       const memoryIds: string[] = [];
       const goalIds: string[] = [];
+      const fadedInterestIds: string[] = [];
+      const droppedGoalIds: string[] = [];
       const sourceRef = `core_reflect:${ctx.traceId}`;
       for (const [index, proposal] of proposals.entries()) {
         const priorNarrative =
@@ -160,12 +164,14 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         if (
           interest.status === "fading" &&
           active(await tx.memory.get(interest.target_id), "interest")
-        )
-          await tx.memory.scaleSalience(interest.target_id, bounds.fade_factor);
+        ) {
+          if (await tx.memory.scaleSalience(interest.target_id, bounds.fade_factor))
+            fadedInterestIds.push(interest.target_id);
+        }
       }
       for (const id of result.goals.drop)
         if ((await tx.goals.get(id))?.status === "active")
-          await tx.goals.setStatus(id, "dropped", now);
+          if (await tx.goals.setStatus(id, "dropped", now)) droppedGoalIds.push(id);
       let available = config.core.goals.max_active - (await tx.goals.active()).length;
       for (const [index, goal] of goalAdds.entries()) {
         if (available <= 0) break;
@@ -185,7 +191,12 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       }
       return {
         inputs: { ids: inputIds },
-        outputs: { memory_ids: memoryIds, goal_ids: goalIds },
+        outputs: {
+          memory_ids: memoryIds,
+          goal_ids: goalIds,
+          faded_interest_ids: fadedInterestIds,
+          dropped_goal_ids: droppedGoalIds,
+        },
         promptVersion: config.prompts.core_reflect,
       };
     });

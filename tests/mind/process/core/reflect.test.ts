@@ -1,5 +1,5 @@
 /** Nightly reflection turns new core experience into bounded core memory and goal changes. */
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { core_loop_trace, core_memory, core_goal } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { coreReflect } from "@/mind/process/core/reflect";
@@ -229,4 +229,42 @@ test("a target becoming stale during generation cannot be superseded", async () 
   expect(
     (await all.db.select().from(core_memory)).filter((m) => m.kind === "opinion"),
   ).toHaveLength(2);
+});
+
+test("fade and drop only needs no document embeddings and traces both accepted IDs", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "A day.");
+  const interest = await memory(deps, "interest", "Films.");
+  const goal = await deps.core.goals.insert({
+    title: "Watch",
+    why: "Curiosity",
+    status: "active",
+    progress: 0,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  const embed = deps.embedder.embed.bind(deps.embedder);
+  vi.spyOn(deps.embedder, "embed").mockImplementation((texts, kind) => {
+    if (texts.length === 0) throw new Error("empty embedding batch");
+    return embed(texts, kind);
+  });
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [{ status: "fading", target_id: interest }],
+    goals: { add: [], drop: [goal] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect((await deps.core.memory.get(interest))?.salience).toBeCloseTo(0.25);
+  expect((await deps.core.goals.get(goal))?.status).toBe("dropped");
+  expect((await all.db.select().from(core_loop_trace))[0]?.outputs).toMatchObject({
+    memory_ids: [],
+    goal_ids: [],
+    faded_interest_ids: [interest],
+    dropped_goal_ids: [goal],
+  });
 });

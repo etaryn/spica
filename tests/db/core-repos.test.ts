@@ -36,6 +36,35 @@ test("memory round-trips and ranks candidates", async () => {
   expect(cands[0]!.sim).toBeGreaterThan(0.99);
 });
 
+test("goal terminal transitions compete atomically and later appraisal updates cannot revive a dropped goal", async () => {
+  const goals = core().goals;
+  const id = await goals.insert({
+    title: "Read",
+    why: "Learn",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  const outcomes = await Promise.all([
+    goals.setStatus(id, "done", now),
+    goals.setStatus(id, "dropped", now),
+  ]);
+  expect(outcomes.filter(Boolean)).toHaveLength(1);
+  const terminal = (await goals.get(id))!.status;
+  expect(["done", "dropped"]).toContain(terminal);
+  await goals.setProgress(id, 0.9, new Date(now.getTime() + 1000));
+  await goals.setStatus(
+    id,
+    terminal === "done" ? "dropped" : "done",
+    new Date(now.getTime() + 1000),
+  );
+  expect(await goals.get(id)).toMatchObject({ status: terminal, progress: 0.2 });
+});
+
 test("near skips superseded memories and respects the threshold", async () => {
   await core().memory.insert({ ...episode("old", 0.01, now), status: "superseded" });
   const live = await core().memory.insert(episode("live", 0.01, now));

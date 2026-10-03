@@ -15,7 +15,8 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 6: complete — 81c8aac + 40e4917; scoped fix rereview approved.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
-- Task 9: implementation resuming after approved test-file expansion; Task 10 not started.
+- Task 9: complete — 0f02b4e + 58c995f; scoped fix rereview approved.
+- Task 10: starting; isolation exit and documentation remain outstanding.
 
 ## Setup evidence
 
@@ -180,3 +181,12 @@ addressed, no new blocking breakage. Full suite remains unverified at this head;
 Ethan approved adding `tests/mind/platform/job-names.test.ts` to Task9 ownership and adding the
 required queue name to its expected list. The plan is amended; Kepler may finish verification,
 commit and report for independent review. The Task10 side-channel fixture remains outstanding.
+
+Task9 fix review: Kepler committed 0f02b4e with the coordinator, queue and eval integration plus
+the approved job-name expectation. Focused18/typecheck/lint passed. Full829/831 failed only the
+Task10 mind-split file: generated event count included resolution rows, and the paired run used
+random-ID fallthrough. Kuhn (sol/high) approved product behavior but found one Important missing
+fresh-queue create assertion. Kepler added it in 58c995f; a deliberately wrong create policy
+failed the test, restored worker/job-name tests passed12, with typecheck/lint green. Dalton
+(luna/high) scoped rereview found that finding addressed and no new blocking breakage. Task10
+still must make its exit deterministic and achieve a final green full suite.

@@ -12,7 +12,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
 - Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
 - Task 5: complete — 9bba422, product review approved; both test-only scope adjustments approved.
-- Task 6: paused for repository-scope approval — 81c8aac; review requires selection fix.
+- Task 6: fix round 1 in progress — 81c8aac; Ethan approved repository/test scope expansion.
 - Tasks 7–10: not started.
 
 ## Setup evidence
@@ -130,3 +130,8 @@ then independent review; no product behavior change authorized or needed.
   under the repository stop-on-conflict rule. Pauli is held; Tasks7–10 have not begun.
 - Minor deferred: anticipate fake's prefix/suffix can exceed a very small configured max_chars.
   Final branch review must triage this with earlier deferred findings.
+
+Ethan approved the proposed narrow Task 6 expansion. The Task 2 repository contract keeps its
+singleton signature, but eligibility now must skip missing/malformed linked world events before
+selection. Pauli resumes fix round 1 with repository and test ownership. The Task 10 seeded
+side-channel comparison remains required; the current full-suite failure is still open.

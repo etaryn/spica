@@ -229,6 +229,10 @@ Null means original happens. `LandingEvent` gains optional `intentionEventId: st
 
 **Files:** create `src/mind/process/core/anticipate.ts`, `prompts/core/anticipate/v1.md`,
 `tests/mind/process/core/anticipate.test.ts`; modify config/default, platform/config and fake.
+Ethan-approved fix-round scope: also modify `src/db/repos/core/memory.ts` and
+`tests/db/core-repos.test.ts` so invalid or missing linked world events are filtered before
+choosing the first anticipation candidate. Retain the existing singleton repository signature
+and deterministic timestamp/ID ordering.
 **Produces:** shared `ThinkingResult = {status: LoopStatus|"not_due"; applied:boolean; ids:string[]}`
 in thoughts.ts; `coreAnticipate(deps:CoreDeps, now:Date):Promise<ThinkingResult>`.
 **Consumes:** Tasks 2–3; get event through intention source_ref; ignore malformed/missing event links.

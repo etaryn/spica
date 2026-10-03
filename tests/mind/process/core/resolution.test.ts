@@ -126,6 +126,42 @@ test("forced fallthrough appraises its replacement in the same tick and resolves
   ).toHaveLength(1);
 });
 
+test("a resolution keeps an unplanned goal reference null while appraisal advances an active goal", async () => {
+  const deps = makeTestDeps(quietGeneration);
+  const goal = await deps.core.goals.insert({
+    title: "See the film",
+    why: "To share it with Alcor",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: earlier,
+    target_at: null,
+    embedding: vec(),
+  });
+  const { id } = await plan(deps, true);
+  deps.llm.handlers.core_resolve = () => ({
+    content: "The screening was cancelled, so Spica found another film.",
+    valence: 0.4,
+    stakes: "low",
+  });
+  deps.llm.handlers.core_appraise = () => ({
+    episode: "Spica found another film after the cancellation.",
+    emotion: { label: "pleased", valence: 0.4, arousal: 0.3, about: "the new film" },
+    salience: "medium",
+    goal_effects: [{ goal_id: goal, effect: "advance", size: "small" }],
+    need_effects: { autonomy: 0, competence: 0 },
+  });
+  await coreWorldTick(coreDepsOf(deps), now);
+  const original = await deps.core.world.getEvent(id);
+  const replacement = (await deps.db.select().from(world_event)).find(
+    (row) => row.plan_ref === id,
+  )!;
+  expect(original?.goal_ref).toBeNull();
+  expect(replacement.goal_ref).toBeNull();
+  expect((await deps.core.goals.get(goal))!.progress).toBeGreaterThan(0.2);
+});
+
 test("a valid resolution clamps surface valence before landing", async () => {
   const deps = makeTestDeps(quietGeneration);
   const { id } = await plan(deps, true);

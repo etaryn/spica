@@ -6,7 +6,7 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { baselineNeeds } from "@/mind/state/core/core-state";
 import { runCoreLoop } from "./runner";
-import { prepareThoughts, storeThoughts } from "./thoughts";
+import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
 import type { ThinkingResult } from "./thoughts";
 
 const HOUR_MS = 3_600_000;
@@ -24,7 +24,12 @@ const HistoricalEmotion = z.object({
   arousal: z.number().min(0).max(1),
   phrase: z.string().nullable(),
 });
-type ApplyOutput = { applied: boolean; ids: string[]; dropped: string[]; reason?: string };
+type ApplyOutput = {
+  applied: boolean;
+  ids: string[];
+  dropped: ReturnType<typeof traceDrops>;
+  reason?: string;
+};
 
 function payloadOf(item: CoreMemoryItem): Record<string, unknown> | null {
   const value = item.payload;
@@ -141,7 +146,11 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
       }
       return {
         inputs: { episode: episode.id },
-        outputs: { applied: stored.ids.length > 0, ids: stored.ids, dropped: stored.dropped },
+        outputs: {
+          applied: stored.ids.length > 0,
+          ids: stored.ids,
+          dropped: traceDrops(stored.dropped),
+        },
         promptVersion: config.prompts.core_ruminate,
       };
     });

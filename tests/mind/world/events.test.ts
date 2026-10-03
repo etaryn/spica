@@ -274,6 +274,39 @@ test("an injected event is the first attempt, spontaneous unless it says otherwi
   });
 });
 
+test("an injected first event does not suppress the selected goal for a later model event", async () => {
+  const deps = makeTestDeps({
+    core: { world: { event_probability: 1, events_per_day_max: 2, goal_driven_share: 1 } },
+  });
+  const goal = await deps.core.goals.insert({
+    title: "Finish her film list",
+    why: "She cares about old films",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+    embedding: vec(),
+  });
+  deps.llm.handlers.life_event = sequence(ev("Spica found a forgotten film."));
+  const out = await generateCoreEvents(
+    coreDepsOf(deps),
+    day,
+    now,
+    () => true,
+    () => ({
+      content: "Spica received the telescope images.",
+      valence: 0.4,
+    }),
+  );
+  expect(out.accepted).toHaveLength(2);
+  expect(out.accepted.map((event) => event.goalRef)).toEqual([null, goal]);
+  expect(deps.llm.structuredCalls.find((call) => call.purpose === "life_event")!.input).toContain(
+    "Finish her film list",
+  );
+});
+
 test("a planned event carries its thought's embedding; a planned one without a thought is retried", async () => {
   const deps = makeTestDeps(always);
   const embed = vi.spyOn(deps.embedder, "embed");

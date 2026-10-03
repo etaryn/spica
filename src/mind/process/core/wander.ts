@@ -9,7 +9,7 @@ import { seededUnit } from "@/mind/platform/seeded-random";
 import { blockAt, blocksForDay, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate } from "@/mind/world/her-clock";
 import { budgetDayStart, runCoreLoop } from "./runner";
-import { prepareThoughts, storeThoughts } from "./thoughts";
+import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
 import type { ThinkingResult } from "./thoughts";
 
 const HOUR_MS = 3_600_000;
@@ -26,7 +26,12 @@ const Output = z.object({
     )
     .min(1),
 });
-type ApplyOutput = { applied: boolean; ids: string[]; dropped: string[]; reason?: string };
+type ApplyOutput = {
+  applied: boolean;
+  ids: string[];
+  dropped: ReturnType<typeof traceDrops>;
+  reason?: string;
+};
 
 async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope }, now: Date) {
   const day = lifeDate(deps.config.life, now);
@@ -163,7 +168,7 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
       }
       return {
         inputs: { seed: seed.id, chain: chain.map((item) => item.id) },
-        outputs: { applied: true, ids, dropped },
+        outputs: { applied: true, ids, dropped: traceDrops(dropped) },
         promptVersion: config.prompts.core_wander,
       };
     });

@@ -398,12 +398,40 @@ describe("side channel", () => {
         ...memories.map((row) => [row.id, `<memory:${row.content}>`] as const),
         ...traces.map((row) => [row.id, `<trace:${row.loop}>`] as const),
       ]);
-      const snapshot = JSON.stringify({
-        state: await deps.db.select().from(core_state),
-        memories,
-        events,
-        traces,
-      }).replace(UUID, (id) => labels.get(id) ?? id);
+      const state = await deps.db.select().from(core_state);
+      const snapshotOf = (
+        stateRows: typeof state,
+        memoryRows: typeof memories,
+        eventRows: typeof events,
+        traceRows: typeof traces,
+      ) =>
+        JSON.stringify({
+          state: [...stateRows].sort((a, b) => a.id - b.id),
+          memories: [...memoryRows].sort((a, b) =>
+            `${a.kind}:${a.source_ref ?? ""}:${a.content}`.localeCompare(
+              `${b.kind}:${b.source_ref ?? ""}:${b.content}`,
+            ),
+          ),
+          events: [...eventRows].sort((a, b) =>
+            `${a.at.toISOString()}:${a.kind}:${a.content}:${a.id}`.localeCompare(
+              `${b.at.toISOString()}:${b.kind}:${b.content}:${b.id}`,
+            ),
+          ),
+          traces: [...traceRows].sort((a, b) =>
+            `${a.created_at.toISOString()}:${a.loop}:${a.status}`.localeCompare(
+              `${b.created_at.toISOString()}:${b.loop}:${b.status}`,
+            ),
+          ),
+        }).replace(UUID, (id) => labels.get(id) ?? id);
+      const snapshot = snapshotOf(state, memories, events, traces);
+      expect(
+        snapshotOf(
+          [...state].reverse(),
+          [...memories].reverse(),
+          [...events].reverse(),
+          [...traces].reverse(),
+        ),
+      ).toBe(snapshot);
       expect(snapshot).not.toContain(TOKEN);
       return { snapshot, affect };
     };

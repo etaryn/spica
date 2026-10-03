@@ -218,7 +218,7 @@ export async function generateCoreEvents(
   const attempts: EventAttempt[] = [];
   if (!draws.some(Boolean)) return { accepted, attempts, budgetExhausted: false };
 
-  const goal = injected ? null : selectEventGoal(await deps.core.goals.active(), day, cfg);
+  const goal = selectEventGoal(await deps.core.goals.active(), day, cfg);
   const ctx = await coreEventContext(deps, day, now, goal);
   const known = new Set(ctx.people.map(normalizeName));
   let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen(cfg.canon_entities);

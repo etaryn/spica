@@ -214,11 +214,18 @@ test("a valid all-deduped invocation counts once toward the cap and gap", async 
   const { all, deps } = setup();
   await plan(deps);
   await seed(deps);
-  const [embedding] = await deps.embedder.embed([item.content], "document");
-  await seed(deps, item.content, { embedding });
+  const second = { ...item, content: "She keeps another film in mind." };
+  all.llm.handlers.core_wander = () => ({ items: [item, second] });
+  vi.spyOn(all.embedder, "embed").mockImplementation(async (texts) => texts.map(() => vec()));
   const first = await coreWander(deps, now);
   expect(first).toEqual({ status: "done", applied: true, ids: [] });
-  expect((await traces(all))[0]?.outputs).toMatchObject({ applied: true, dropped: [item.content] });
+  expect((await traces(all))[0]?.outputs).toMatchObject({
+    applied: true,
+    dropped: [
+      { content: item.content, reason: "dedupe" },
+      { content: second.content, reason: "dedupe" },
+    ],
+  });
   expect(await coreWander(deps, new Date(now.getTime() + 2 * hour))).toEqual({
     status: "not_due",
     applied: false,

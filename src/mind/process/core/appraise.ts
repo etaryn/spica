@@ -122,7 +122,7 @@ export function codeAppraisal(event: LandingEvent, cfg: Config["core"]): Apprais
   };
 }
 
-/** Outside any transaction: one model call, bounded, or the code appraisal. Never throws. */
+/** Outside any transaction: model failures fall back; context read failures propagate. */
 export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): Promise<Appraisal> {
   const { deps } = ctx;
   const { config, core, log } = deps;
@@ -215,7 +215,7 @@ export async function applyAppraisal(
     if (progress >= 1) await core.goals.setStatus(goal.id, "done", now);
   }
   const firstGoal = a.goalEffects[0];
-  if (firstGoal && !event.goalRef)
+  if (firstGoal && !event.goalRef && event.kind !== "resolution")
     await core.world.setGoalRef(event.worldEventId, firstGoal.goalId);
   const row = await core.state.lock();
   const mood = applyEvent(moodOf(row), a.emotion.valence, state, a.emotion.arousal);

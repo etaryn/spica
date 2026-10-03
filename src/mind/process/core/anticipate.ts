@@ -5,7 +5,7 @@ import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { baselineNeeds } from "@/mind/state/core/core-state";
-import { prepareThoughts, storeThoughts } from "./thoughts";
+import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
 import { runCoreLoop } from "./runner";
 import type { ThinkingResult } from "./thoughts";
 
@@ -42,7 +42,12 @@ function eligible(item: CoreMemoryItem | null, now: Date, until: Date): item is 
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const tidy = (text: string) => text.trim().replace(/\s+/g, " ");
-type ApplyOutput = { applied: boolean; ids: string[]; dropped: string[]; reason?: string };
+type ApplyOutput = {
+  applied: boolean;
+  ids: string[];
+  dropped: ReturnType<typeof traceDrops>;
+  reason?: string;
+};
 
 export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<ThinkingResult> {
   const { config, core } = deps;
@@ -141,7 +146,11 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
       }
       return {
         inputs: { intention: intention.id, event: sourceEventId },
-        outputs: { applied: stored.ids.length > 0, ids: stored.ids, dropped: stored.dropped },
+        outputs: {
+          applied: stored.ids.length > 0,
+          ids: stored.ids,
+          dropped: traceDrops(stored.dropped),
+        },
         promptVersion: config.prompts.core_anticipate,
       };
     });

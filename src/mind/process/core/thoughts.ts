@@ -14,6 +14,9 @@ export type ThoughtInput = {
 
 export type PreparedThought = { item: ThoughtInput; embedding: number[] };
 
+export const traceDrops = (dropped: string[]) =>
+  dropped.map((content) => ({ content, reason: "dedupe" as const }));
+
 function validItem(item: ThoughtInput, maxChars: number): ThoughtInput {
   if (
     !item ||

@@ -209,7 +209,7 @@ test("dedupe records the drop but leaves marker and state untouched", async () =
     emotion: null,
   });
   expect((await rows(all)).traces[0]?.outputs).toMatchObject({
-    dropped: ["She wonders how the screening will go."],
+    dropped: [{ content: "She wonders how the screening will go.", reason: "dedupe" }],
   });
 });
 

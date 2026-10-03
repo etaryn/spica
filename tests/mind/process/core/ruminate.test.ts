@@ -246,7 +246,7 @@ test("deduped thought leaves marker, recall and state untouched", async () => {
   expect(await deps.core.state.get()).toBeNull();
   expect((await rows(all)).traces[0]?.outputs).toMatchObject({
     applied: false,
-    dropped: [thought],
+    dropped: [{ content: thought, reason: "dedupe" }],
   });
 });
 

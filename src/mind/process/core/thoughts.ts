@@ -1,7 +1,10 @@
 /** Prepares core thoughts outside write transactions and stores accepted items in one core scope. */
 import type { CoreLoopName } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
+import type { LoopStatus } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
+
+export type ThinkingResult = { status: LoopStatus | "not_due"; applied: boolean; ids: string[] };
 
 export type ThoughtInput = {
   kind: "thought" | "idea" | "hypothetical";

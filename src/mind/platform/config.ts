@@ -363,6 +363,7 @@ const coreLoop = z.enum(CORE_LOOPS);
 const core = z
   .object({
     appraise: coreAppraise,
+    anticipate: z.object({ lead_hours: z.number().positive(), arousal_gain: unit }),
     resolve: z.object({ max_tokens: positiveInt }),
     loops: z.object({
       max_chars: positiveInt,
@@ -453,6 +454,7 @@ const prompts = z.object({
   life_plan: promptVersion,
   life_event: promptVersion,
   core_appraise: promptVersion,
+  core_anticipate: promptVersion,
   core_resolve: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,

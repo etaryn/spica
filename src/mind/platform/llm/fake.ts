@@ -55,6 +55,20 @@ export class FakeLLMProvider implements LLMProvider {
       valence: 0,
       stakes: "low",
     }),
+    core_anticipate: (input: string) => {
+      const event = /^Upcoming plan: (.*)$/m.exec(input)?.[1] ?? "her plan";
+      const prefix = "She wonders how ";
+      const suffix = " will go.";
+      const available = defaults.core.loops.max_chars - prefix.length - suffix.length;
+      return {
+        thought: {
+          kind: "thought",
+          content: `${prefix}${event.slice(0, available)}${suffix}`,
+          salience: "low",
+        },
+        emotion: { label: "curious", valence: 0.2, arousal: 0.5, about: "the plan ahead" },
+      };
+    },
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

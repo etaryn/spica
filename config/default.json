@@ -181,6 +181,7 @@
     "life_availability": "v1",
     "core_state_line": "v3",
     "core_appraise": "v1",
+    "core_anticipate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
   },
@@ -288,6 +289,7 @@
       "fallback_band": [-0.2, 0.3],
       "fallback_labels": { "negative": "upset", "neutral": "calm", "positive": "pleased" }
     },
+    "anticipate": { "lead_hours": 12, "arousal_gain": 0.3 },
     "resolve": { "max_tokens": 512 },
     "daily_call_budget": 24,
     "budget_reserve": 8,

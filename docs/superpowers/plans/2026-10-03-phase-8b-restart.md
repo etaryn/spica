@@ -299,6 +299,8 @@ in thoughts.ts; `coreAnticipate(deps:CoreDeps, now:Date):Promise<ThinkingResult>
 `tests/mind/process/core/mind-tick.test.ts`; modify `src/mind/platform/jobs.ts`,
 `src/worker/{index,jobs}.ts`, `tests/worker/jobs.test.ts`, config/default, platform/config,
 `evals/lib/{life-loop,script,profile}.ts`; create `tests/evals/core-mind-order.test.ts`.
+Ethan-approved test scope expansion: also modify `tests/mind/platform/job-names.test.ts` to
+include the required `core_mind_tick` queue in its exact exported-name list.
 **Produces:** `coreMindTick(deps:CoreDeps, now:Date):Promise<Record<"anticipate"|"ruminate"|"wander",ThinkingResult>>`;
 `CORE_MIND_TICK_QUEUE = "core_mind_tick"`;
 `registerCoreMindJob(boss:PgBoss, deps:CoreDeps):Promise<void>`.

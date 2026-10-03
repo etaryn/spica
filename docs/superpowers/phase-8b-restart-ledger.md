@@ -15,7 +15,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 6: complete — 81c8aac + 40e4917; scoped fix rereview approved.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
-- Task 9: implementation blocked on one test-file ownership decision; Task 10 not started.
+- Task 9: implementation resuming after approved test-file expansion; Task 10 not started.
 
 ## Setup evidence
 
@@ -176,3 +176,7 @@ addressed, no new blocking breakage. Full suite remains unverified at this head;
   to Task9 and add `core_mind_tick` to the expected list. User approval requested under the
   project's stop-on-plan/code-disagreement rule. Kepler stopped without editing it or committing.
 - Task10 remains pending; full suite is not green at this state. The original checkout is untouched.
+
+Ethan approved adding `tests/mind/platform/job-names.test.ts` to Task9 ownership and adding the
+required queue name to its expected list. The plan is amended; Kepler may finish verification,
+commit and report for independent review. The Task10 side-channel fixture remains outstanding.

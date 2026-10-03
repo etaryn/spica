@@ -15,7 +15,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 6: complete — 81c8aac + 40e4917; scoped fix rereview approved.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
-- Task 9: starting; Task 10 not started.
+- Task 9: implementation blocked on one test-file ownership decision; Task 10 not started.
 
 ## Setup evidence
 
@@ -164,3 +164,15 @@ addressed, no new blocking breakage. Full suite remains unverified at this head;
   limitation, without mislabeling it as test-first behavior proof.
 - The side-channel comparison happened to pass in this full run; Task10 still must make the
   paired fixed-ID/seed canary deterministic and pass the final exit tests.
+
+## Task 9 pending scope decision
+
+- Kepler (sol/high) implemented coordinator, worker and eval integration in Task9-owned files;
+  no product commit yet. Focused 17/17, typecheck and lint passed per report.
+- Full suite: 829/831. The known Task10 paired side-channel comparison failed again. The other
+  failure is deterministic: `tests/mind/platform/job-names.test.ts` enumerates all queue string
+  exports, but its expected list lacks the required new `core_mind_tick` name.
+- This test is outside the approved Task9 file list. The narrow proposed expansion is to add it
+  to Task9 and add `core_mind_tick` to the expected list. User approval requested under the
+  project's stop-on-plan/code-disagreement rule. Kepler stopped without editing it or committing.
+- Task10 remains pending; full suite is not green at this state. The original checkout is untouched.

@@ -63,3 +63,9 @@ code itself.
 | 2026-10-02 | Two placeholder seed goals ship in persona v5 | Ethan writes the real ones. |
 | 2026-10-02 | Migration `0018` nulls the old placeholder emotion (`label = neutral`) and backfills trace `calls` as 1 where a model was recorded | A placeholder would read as a feeling in the line; earlier rows made one call when they named a model. |
 | 2026-10-02 | `AGENTS.md` points coding agents at `CLAUDE.md` | Phase 8 is implemented with Codex as well as Claude; one source of project instructions avoids drift. |
+| 2026-10-03 | A successful thinking run commits its trace with its thought, source marker and state writes | A retry or overlapping tick must see completion as one atomic fact. |
+| 2026-10-03 | Dropped anticipation/rumination thoughts apply no source or state effects; a valid all-deduped wander still uses a slot | Source completion follows accepted thoughts, while a completed wander invocation counts toward its daily cap. |
+| 2026-10-03 | Malformed legacy memory payloads are skipped during candidate selection; missing historical emotion stays absent | Corrupt JSON must neither abort selection nor invent a past feeling. |
+| 2026-10-03 | The three thought prompts share a 512-token cap; resolution has its own 512-token cap | Separate resolution and thinking budgets keep each model request bounded without a per-loop key for identical thought limits. |
+| 2026-10-03 | Thought valence comes from its source: proposed anticipation emotion, rumination episode or wander seed | The model writes the text, while existing core evidence determines the stored valence. |
+| 2026-10-03 | Equal-time/equal-score source candidates break ties by stable ID | A retry or reordered repository result then chooses the same source. |

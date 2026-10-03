@@ -16,7 +16,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
 - Task 9: complete — 0f02b4e + 58c995f; scoped fix rereview approved.
-- Task 10: starting; isolation exit and documentation remain outstanding.
+- Task 10: exit coverage and v3/decision documentation verified; controller review pending.
 
 ## Setup evidence
 
@@ -190,3 +190,23 @@ fresh-queue create assertion. Kepler added it in 58c995f; a deliberately wrong c
 failed the test, restored worker/job-name tests passed12, with typecheck/lint green. Dalton
 (luna/high) scoped rereview found that finding addressed and no new blocking breakage. Task10
 still must make its exit deterministic and achieve a final green full suite.
+
+## Task 10 isolation exit evidence
+
+- RED: forcing the canary fixture through resolution exposed an absent rumination purpose;
+  a strong replacement appraisal made all four new purposes due. The generated-event assertion
+  then failed 2 > 1 because it counted the replacement; filtering `plan_ref IS NULL` retained
+  the once-per-day root-event assertion. A first short-scenario run found an invalid test UUID
+  that starved anticipation; a valid fixed UUID passed. These were fixture corrections only.
+- The paired side-channel run now inserts the same explicit world UUID
+  `00000000-0000-4000-8000-000000000001` in each reset run with nullable fallthrough, so both
+  evaluate the same ID-derived seed. The scenario invokes A's real cold path in one run and
+  compares semantic core state, memory, world and traces with only memory/trace IDs normalized.
+  It also verifies A's affect changes. The canary covers all four new purposes and user B.
+- A separate short 8b exit fixes event IDs, forces a replacement appraised in the same tick,
+  then exercises anticipation, strong-episode rumination, downtime wander and budget exhaustion.
+  It asserts one applied trace per source and five metered calls.
+- Focused exits: 2 files / 11 tests passed. `pnpm.cmd typecheck` and `pnpm.cmd lint` exited 0.
+  Full `pnpm.cmd test`: 111 files / 834 tests passed. Fake eval comparison exited 0 with
+  `no regressions against baseline`; real-only scripts were skipped by design. Both commands
+  used the isolated restart databases. Controller task and whole-branch reviews remain pending.

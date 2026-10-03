@@ -365,13 +365,18 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 
 - **`core_memory`** (Built): items with `kind` (`episode | opinion |
   interest | goal | intention | thought | reflection | idea | hypothetical |
-  insight | narrative | agent_note`; only `episode` and `intention` are
-  written so far),
+  insight | narrative | agent_note`; Phase 8b writes `episode`, `intention`,
+  `thought`, `idea` and `hypothetical`),
   `content`, `payload`, `embedding`, `entity_refs` (ids of `core_entity`),
   `occurred_at`, `created_at`, `last_recalled_at`, `recall_count`, `salience`,
   `valence`, `confidence`, `status` (the `fact` statuses), `superseded_by`,
   `source` (`world | loop`), `source_ref` (the loop run or world event). It
-  has the same retrieval index and range checks as `fact`.
+  has the same retrieval index and range checks as `fact`. Repository-visible
+  payloads now include `episode.appraisal_emotion`,
+  `intention.event_at` / `anticipated_at`, `episode.ruminated`, thought
+  `anticipates` / `ruminates`, wander `seed` / `chain`, and
+  `hypothetical.unreal = true`. A loop thought's `source_ref` is
+  `<loop>:<trace-id>`.
 - **`core_entity`** (Built): Alcor and her other agents: `name` (unique),
   `aliases`, `salience`, `first_seen`.
 - **`core_state`** (Built; one row, `id = 1`): `emotion` (null, or `{label,
@@ -393,12 +398,14 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `prompt_version`. Version 0 is the persona file's seed self.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
-  (`planned | surprise | resolution`; `planned` and `surprise` are written so
-  far), `content`, `valence`, `stakes` (`low | high`), `agents` (core entity
+  (`planned | surprise | resolution`; all three are written), `content`,
+  `valence`, `stakes` (`low | high`), `agents` (core entity
   ids; a surprise's are filled when it lands), `agent_names` (the people by
   name, so a surprise's new people join `core_entity` only when it lands),
-  `life_day`, `plan_ref`, `goal_ref` (→ `core_goal`; set by appraisal to the first goal
-  it moved), `outcome`, `created_at`, and
+  `life_day`, `plan_ref` (resolution → original planned event),
+  `goal_ref` (→ selected active `core_goal`), `outcome`
+  (`happened | fell_through | null`), nullable `fallthrough` override,
+  `resolves_memory_id` (→ target `core_memory`; deletion sets null), `created_at`, and
   `appraised_at` (when it landed with her; null until its time comes, §8.3).
 - **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
   model, prompt version, tokens, cost, `calls` (model calls made, retries
@@ -483,7 +490,7 @@ answers straight when sincerely asked.
 
 ---
 
-## 8. Core mind (New unless marked)
+## 8. Core mind (Built through 8b where marked)
 
 ### 8.1 Core memory
 
@@ -499,8 +506,12 @@ answers straight when sincerely asked.
   speaks for it). A surprise leaves nothing in memory before it happens (E3:
   plans are memory, outcomes are world).
 - **Goals and projects**: arcs lasting weeks, with progress.
-- **Thoughts**: from wandering, anticipation, rumination and reflection;
-  `hypothetical` items are marked unreal (E4).
+- **Thoughts (Built in 8b)**: anticipation binds a thought to an upcoming
+  intention and marks that source; rumination binds one to a strong landed
+  episode and marks it. Downtime wander writes a thought, idea or explicitly
+  unreal hypothetical from a recent factual seed and up to three neighbours.
+  Reflection remains later. Hypotheticals are excluded from factual recall
+  and reconciliation (E4).
 - **Narrative**: who she's been lately.
 - **Social**: Alcor and her other agents, and her history with them.
 - **Snapshots** (§6.2).
@@ -612,7 +623,7 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   worker start, in the eval runner and by `pnpm db:reset-self`, and never
   counted by the new-entity rule). The generator writes from her core values
   plus her latest snapshot (the seed self until one exists), from
-  `prompts/life/event/v3.md`. Since episodes are only written when an event
+  `prompts/life/event/v4.md`. Since episodes are only written when an event
   lands, no memory dated in the future exists; core retrieval and outreach
   `her_day` (recent episodes plus open intentions created in the lookback)
   skip only resolved intentions. Eval-injected events are spontaneous unless
@@ -621,11 +632,26 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   run; over budget the day is marked done with no event, so later runs don't
   spend past the budget.
 
-**New (PROPOSED).**
-- **Goal-driven events**: an event advances or blocks an active goal where
-  possible; random otherwise.
-- **Resolution**: plans can fall through and surprises can happen; the world
-  records what actually happened (`world_event`).
+**Built in 8b.**
+- **Goal-driven events**: a day-stable roll with
+  `core.world.goal_driven_share` (0.5) selects an active goal; weights are
+  `1 - progress + core.world.goal_weight_floor` (0.1), with stable ID ties.
+  The model reads that goal and her current needs but cannot assign its ID.
+  Injected events have no implicit goal. The generation budget is checked
+  before every model attempt, including reconciliation.
+- **Resolution**: a due planned event's nullable `fallthrough` overrides the
+  ID-seeded roll against `core.world.fallthrough_probability` (0.15). On a
+  true roll `core_resolve` (`prompts/core/resolve/v1.md`,
+  `core.resolve.max_tokens` 512) proposes a replacement. The original becomes
+  `fell_through` without an episode; a `resolution` event with its day, time,
+  people, goal and target is appraised in the same transaction and resolves
+  the original intention. False records `happened`. A model error, invalid
+  output or exhausted budget lets the original happen; database failures
+  still roll back. A reconcile `resolves` target is kept in
+  `world_event.resolves_memory_id` and closed only on landing. Preoccupation
+  clears only when it still points at that target.
+
+**Still New (PROPOSED).**
 - **Activities with real content**: she "reads" a real book or "watches" a
   real film across several days; opinions form from the content.
 - **Other agents**: Alcor and a small cast with light arcs of their own.
@@ -650,13 +676,46 @@ rule bans `@/mind/process/*` imports from core code except
 | `life_plan` (Built) | Hourly check; makes today and tomorrow | Previous plans, goals, persona | World: day plan |
 | `core_world_tick` (Built: events, intentions, appraisal at the event's time) | Hourly | Plan, clock, goals, agents | World: events, resolutions. Memory: intentions for planned events |
 | `core_appraise` (Built: Haiku with a code fallback, run by `core_world_tick` when an event's time comes) | Per world event, at its time | Event, goals, state | State: emotion, mood, needs, progress. Memory: episode with emotion; resolves the plan's intention |
-| `core_wander` | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
-| `core_anticipate` | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
-| `core_ruminate` | After strong events | The episode | State: lingering emotion. Memory: thought |
+| `core_wander` (Built 8b) | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
+| `core_anticipate` (Built 8b) | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
+| `core_ruminate` (Built 8b) | After strong events | The episode | State: lingering emotion. Memory: thought |
 | `core_reflect` | Nightly | Recent episodes and thoughts | Memory: insights, opinion updates, narrative |
 | `core_consolidate` | Nightly | Episodes | Memory: gist, decay |
 | `core_render_snapshot` | Nightly, after reflect | Core memory, core state, core values | Snapshot vN+1; triggers the drift watch |
 | `core_state_tick` (Built: drift, energy, preoccupation expiry) | Hourly | State, day plan | State: drift, energy rhythm, need depletion, preoccupation expiry |
+
+**8b hourly thinking (Built).** `core_mind_tick` runs anticipate, ruminate,
+then wander. Before a loop is due it makes no model call or trace. A due
+optional loop without budget writes `skipped_budget`; one loop's failure does
+not stop the others. Successful thought, marker, state and trace writes share
+one transaction. Model and embedding work is outside it. The shared
+`core.loops` settings are `max_chars` (300), `max_tokens` (512),
+`salience.low` (0.25), `salience.medium` (0.4), `thought_confidence` (0.6),
+and `dedupe_similarity` (0.92). A nearest eligible neighbour with similarity
+**greater than** 0.92 drops an item; dropped items appear in trace outputs.
+Invalid model output or embedding leaves thought and source unchanged.
+
+- `core_anticipate` (`prompts/core/anticipate/v1.md`) chooses the soonest open,
+  unanticipated intention in the next `core.anticipate.lead_hours` (12),
+  ties by ID. Accepted thought gets `payload.anticipates`; the intention gets
+  `anticipated_at`. Emotion is bounded and mood arousal moves by
+  `core.anticipate.arousal_gain` (0.3) toward proposed arousal; mood valence
+  stays. Landing before apply makes the proposal ineligible.
+- `core_ruminate` (`prompts/core/ruminate/v1.md`) chooses the oldest eligible
+  episode, ties by ID: age 2 through 24 hours from landing, absolute valence
+  at least 0.5 and `payload.ruminated` below 1. Keys are
+  `core.ruminate.delay_hours`, `window_hours`, `min_valence`,
+  `max_per_episode`, `gain` (0.1). Acceptance writes `payload.ruminates`,
+  increments the episode marker, reinforces recall and nudges mood valence
+  toward the episode's sign. An absent historical emotion stays absent.
+- `core_wander` (`prompts/core/wander/v1.md`) needs today's plan and no busy
+  or quiet block. Keys `core.wander.max_per_day` (2), `min_gap_hours` (3),
+  `seed_days` (7), `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
+  `min_similarity` (0.3), `max_items` (2) bound the selection and output.
+  The seed is chosen by a local-day stable roll weighted by salience and
+  mood; its valence goes on the thought, with `payload.seed` and `chain`.
+  A valid all-deduped invocation still uses one wander slot; a stale or
+  concurrent loser does not. Wander never changes core state.
 
 ---
 
@@ -1017,17 +1076,19 @@ match.
 - **Core (Built):** `core.daily_call_budget` (24) model calls a day in
   total, regardless of user count: the plan, generated events (and their
   reconcile calls), appraisals, a handful of wander and anticipate runs,
-  nightly reflect, consolidate and render, one drift judge. Every core model
+  later nightly reflect, consolidate and render, one later drift judge. Every core model
   call goes through `runCoreLoop`, which meters calls, tokens and cost
   (`core.prices`, dollars per million tokens) and writes one trace per run;
   spend is the summed trace `calls` since her local midnight.
   `core.loop_priority` splits loops into `essential` and `optional`; an
   optional loop runs only while `budget_reserve` (8) calls remain beyond it.
   Over budget, loops with a code fallback (`life_plan`, `life_event`,
-  `core_appraise`, and `core_resolve` once built) still run without calling
+  `core_appraise`, and `core_resolve`) still run without calling
   the model (fallback plan, no event that day, code appraisal, the plan
   happens) and
   the rest are skipped; each is traced (`fallback` / `skipped_budget`).
+  Phase 8b's `core_resolve` cap is 512 tokens; the three thought prompts
+  share `core.loops.max_tokens` (512).
 - **User:** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` per user. Idle users cost nothing beyond
   the built per-user ticks (relationship, outreach), which are code-only
@@ -1076,8 +1137,10 @@ generator (`life_event_log`); `core` reads her core state and memory (energy
 at a time, one time's energy lower than another's, preoccupation set,
 episode and world-event counts). A script's `seed_core_memory` lists
 episodes that happened before day 0, embedded with the run's embedder. The harness
-runs the production hourly jobs between sessions, including the core world
-and state ticks. **New:** a core loop runner (`core: {days, inject}`),
+  runs the production hourly jobs between sessions, in world → state →
+  mind → outreach order. Injected planned events accept explicit true/false
+  `fallthrough` overrides. Fake mode has deterministic `core_resolve`,
+  `core_anticipate`, `core_ruminate` and `core_wander` purposes. **New:** a core loop runner (`core: {days, inject}`),
 `core` extended (memory kinds, snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
 outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
 
@@ -1091,12 +1154,17 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
   in core memory, core state, any snapshot, any core prompt, or any of user
   B's prompts or outputs.
   The test's `CapturingLLM` echoes any canary found in its input into the
-  `extract`, `life_event` (content and thought), `life_plan` and `reply`
+  `extract`, `life_event` (content and thought), `life_plan`,
+  `core_appraise`, `core_resolve`, `core_anticipate`, `core_ruminate`,
+  `core_wander` and `reply`
   outputs, so a leak through
   any path would surface in what the next stage stores or prompts. It scans
-  the core tables (including `life_day`), the core prompts (`life_plan`,
-  `life_event`, core reconcile) and user B's tables and prompts.
-- **Side channel** (Built, same test): a strong emotional exchange with user
+  the core memory, state, world, goals, entities, snapshots and traces
+  (including trace inputs/outputs), every exercised core prompt and user B's
+  tables and prompts.
+- **Side channel** (Built, same test): paired runs with the same fixed world
+  event ID and fallthrough seed compare semantic core results; only incidental
+  memory and trace IDs are normalized. A strong emotional exchange with user
   A leaves core state unchanged (V4); her events happen once for both users;
   every reply reads snapshot v0; the injected planned event leaves a
   resolved intention, and no episode exists before its event's time.
@@ -1105,18 +1173,20 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
 
 ### 17.4 Scheduled jobs
 
-Built (twelve): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
+Built (thirteen): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
 `turn_backchannel`, `turn_sweep`, `relationship_tick`, `life_plan`,
-`core_world_tick`, `core_state_tick`, `outreach_tick`, `reach_out_send`.
+`core_world_tick`, `core_state_tick`, `core_mind_tick`, `outreach_tick`, `reach_out_send`.
 
 v3 changes:
 - **Retired (Built):** `life_tick` (per-user block copy and events) and
   `ego_tick` (per-user ego). A dev database that ran them still has their
   pg-boss schedules registered; unschedule them by hand.
 - **Core jobs built:** `core_world_tick` (`core.world.tick_cron`) and
-  `core_state_tick` (`core.state.tick_cron`), both hourly.
-- **Core jobs, PROPOSED:** `core_appraise` (per event); `core_wander`, `core_anticipate`,
-  `core_ruminate` (scheduled by the world tick); `core_nightly` (reflect,
+  `core_state_tick` (`core.state.tick_cron`), both hourly, and
+  `core_mind_tick` (`core.mind.tick_cron`, `50 * * * *`, retry limit zero).
+  Appraisal and resolution run inside `core_world_tick`; anticipation,
+  rumination and wandering run inside `core_mind_tick`.
+- **Core jobs, PROPOSED:** `core_nightly` (reflect,
   consolidate, render snapshot, drift watch, in order).
 - **New user job:** `user_mind_run {userId, trigger}`, enqueued by the cold
   path or the relationship tick on a big event.
@@ -1176,12 +1246,14 @@ two minds or at reply time.
 | 5. Life sim, availability, ego | Shared day plan, per-user events and ego, availability deferral |
 | 6. Proactive outreach | Candidates, send gate, compose, Web Push |
 | 7. Mind split | Core scope and the core-only data layer (`CoreDeps`, no `db`); `core_state` (ego moved to core, ticked hourly); world reads from the day plan (`life_tick` retired); core events made once by `core_world_tick`; user affect params; "what she told this user"; persona split into core values and seed self, `core_snapshot` v0; reply assembly order (§10.3); inspector Core tab; leak canary and side channel as `tests/exit/mind-split.test.ts` (`pnpm test` 99 files / 664 tests at close) |
+| 8a. Core foundation | Core appraisal, goals and needs, loop runner, traces and daily call budget |
+| 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phase 7 is built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8b is built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **8. Core loops** | Appraisal, goals and needs, world resolution, wander, anticipate, ruminate, reflect, consolidate, snapshot rendering, drift watch, `core.daily_call_budget`, inspector Core tab | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
+| **8. Core loops (remaining 8c/8d)** | Nightly reflect, consolidate, snapshot rendering and drift watch; remaining inspector/recall/claim work and full exit | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
 | **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
@@ -1372,8 +1444,10 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B50.** ~~`generatePlan` still takes a `Deps` with `db`.~~ **Done**: the
   day plan runs on `CoreDeps` through `World.plansBefore` / `insertPlan` and
   the budgeted runner.
-- **B51.** Core `resolves` reconcile verdicts don't yet act on the target
-  episode (an open episode is never closed by a later event). *Phase 8.*
+- **B51.** ~~Core `resolves` reconcile verdicts don't act on the target
+  episode.~~ **Done in 8b**: `resolves_memory_id` persists the target and
+  landing closes it; a replacement carries the target, and a deleted target
+  is harmless.
 - **B52.** `recentEpisodes` returns the oldest N episodes in its window, not
   the newest; harmless at one event a day. *Later.*
 - **B53.** Mood-congruent and goal-biased core retrieval (§10.3 slot 6).

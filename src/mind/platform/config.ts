@@ -382,6 +382,7 @@ const core = z
       max_items: positiveInt,
     }),
     resolve: z.object({ max_tokens: positiveInt }),
+    mind: z.object({ tick_cron: cron }),
     loops: z.object({
       max_chars: positiveInt,
       max_tokens: positiveInt,

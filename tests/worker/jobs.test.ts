@@ -5,6 +5,7 @@ import type { Logger } from "@/mind/platform/log";
 import {
   DECAY_QUEUE,
   CORE_STATE_TICK_QUEUE,
+  CORE_MIND_TICK_QUEUE,
   LIFE_PLAN_QUEUE,
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -12,7 +13,10 @@ import {
 } from "@/mind/platform/jobs";
 import { errorName } from "@/mind/platform/errors";
 import { ensureSystemQueues, scrubErrors } from "@/worker/jobs";
-import { testDbUrl } from "../helpers/db";
+import { registerCoreMindJob } from "@/worker/core-jobs";
+import { coreDepsOf } from "@/mind/platform/deps";
+import { makeTestDeps } from "../helpers/deps";
+import { resetDb, testDbUrl } from "../helpers/db";
 
 const boss = new PgBoss(testDbUrl);
 let started = false;
@@ -113,4 +117,62 @@ test("ensureSystemQueues creates outreach_tick without retries", async () => {
   started = true;
   await ensureSystemQueues(boss);
   expect(await boss.getQueue(OUTREACH_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("ensureSystemQueues sets core_mind_tick to zero retries even on an existing queue", async () => {
+  await boss.start();
+  started = true;
+  await boss.createQueue(CORE_MIND_TICK_QUEUE, { retryLimit: 3 });
+  await boss.updateQueue(CORE_MIND_TICK_QUEUE, { retryLimit: 3 });
+  await ensureSystemQueues(boss);
+  expect(await boss.getQueue(CORE_MIND_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("registerCoreMindJob schedules the hourly cron and its worker runs the coordinator", async () => {
+  await resetDb();
+  const work: { queue?: string; handler?: (jobs: { id: string }[]) => Promise<void> } = {};
+  const schedules: { queue: string; cron: string }[] = [];
+  const fakeBoss = {
+    work: async (queue: string, handler: (jobs: { id: string }[]) => Promise<void>) => {
+      work.queue = queue;
+      work.handler = handler;
+    },
+    schedule: async (queue: string, cron: string) => {
+      schedules.push({ queue, cron });
+    },
+  } as unknown as PgBoss;
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await registerCoreMindJob(fakeBoss, deps);
+  expect(work.queue).toBe(CORE_MIND_TICK_QUEUE);
+  expect(schedules).toEqual([{ queue: CORE_MIND_TICK_QUEUE, cron: "50 * * * *" }]);
+
+  const at = all.clock.now();
+  await deps.core.world.insertPlan({
+    date: "2026-01-05",
+    plan: { blocks: [] },
+    source: "scripted",
+    model: "fake",
+    prompt_version: "v1",
+    generated_at: at,
+  });
+  await deps.core.memory.insert({
+    kind: "episode",
+    content: "Spica remembered an old film.",
+    payload: {},
+    embedding: Array.from({ length: 1024 }, () => 0.01),
+    occurred_at: new Date(at.getTime() - 3_600_000 * 3),
+    created_at: new Date(at.getTime() - 3_600_000 * 3),
+    status: "resolved",
+    salience: 0.9,
+    valence: 0.6,
+    confidence: 0.8,
+    source: "world",
+    source_ref: null,
+  });
+  await work.handler!([{ id: "job-1" }]);
+  expect(all.llm.structuredCalls.map((call) => call.purpose)).toEqual([
+    "core_ruminate",
+    "core_wander",
+  ]);
 });

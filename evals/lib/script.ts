@@ -254,6 +254,7 @@ export const LifeScript = z
             valence: z.number().min(-1).max(1).default(0),
             kind: z.enum(["planned", "spontaneous"]).default("spontaneous"),
             thought: z.string().min(1).nullable().default(null),
+            fallthrough: z.boolean().optional(),
           })
           .refine((e) => e.kind === "spontaneous" || e.thought !== null, {
             message: "a planned injected event needs a thought",

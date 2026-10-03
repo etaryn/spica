@@ -310,6 +310,7 @@
       "max_items": 2
     },
     "resolve": { "max_tokens": 512 },
+    "mind": { "tick_cron": "50 * * * *" },
     "daily_call_budget": 24,
     "budget_reserve": 8,
     "loop_priority": {

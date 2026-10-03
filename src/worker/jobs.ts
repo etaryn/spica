@@ -7,6 +7,7 @@ import type { Logger } from "@/mind/platform/log";
 import {
   DECAY_QUEUE,
   CORE_STATE_TICK_QUEUE,
+  CORE_MIND_TICK_QUEUE,
   LIFE_PLAN_QUEUE,
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -54,6 +55,7 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
     LIFE_PLAN_QUEUE,
     CORE_WORLD_TICK_QUEUE,
     CORE_STATE_TICK_QUEUE,
+    CORE_MIND_TICK_QUEUE,
     OUTREACH_TICK_QUEUE,
   ]) {
     await boss.createQueue(q, { retryLimit: 0 });

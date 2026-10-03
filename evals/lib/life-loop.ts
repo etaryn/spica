@@ -6,6 +6,7 @@ import { coreStateTick } from "@/mind/state/core/tick";
 import { lifeDate } from "@/mind/world/her-clock";
 import { ensurePlans } from "@/mind/world/day-plan";
 import { coreWorldTick } from "@/mind/process/core/world-tick";
+import { coreMindTick } from "@/mind/process/core/mind-tick";
 import { outreachTick } from "@/mind/process/outreach/tick";
 import type { RecordingQueue } from "@/mind/platform/jobs";
 import { HOUR } from "@/mind/platform/time";
@@ -26,7 +27,7 @@ export type LoopOutreach = {
 };
 
 /**
- * Runs the production hourly world jobs (plan, world tick, core state tick) at every whole simulated
+ * Runs the production hourly world jobs (plan, world tick, core state tick, core mind tick) at every whole simulated
  * hour between sessions, never moving the clock backwards. Scripted plans are inserted instead of generated.
  * With `outreach`, each hour first runs due jobs (reach-out sends, simulated replies' turn timers),
  * then the script's auto-replies to reach-outs, then the world jobs and the outreach tick.
@@ -45,7 +46,13 @@ export function makeLifeLoop(
   const inject = (day: string) => {
     const hit = life.inject.find((x) => x.day === dayIndex(day));
     return hit
-      ? { content: hit.content, valence: hit.valence, kind: hit.kind, thought: hit.thought }
+      ? {
+          content: hit.content,
+          valence: hit.valence,
+          kind: hit.kind,
+          thought: hit.thought,
+          fallthrough: hit.fallthrough,
+        }
       : null;
   };
   let hours = 0;
@@ -111,6 +118,7 @@ export function makeLifeLoop(
     else await ensurePlans(coreDepsOf(deps), now);
     await coreWorldTick(coreDepsOf(deps), now, { inject: (day) => inject(day) });
     await coreStateTick(coreDepsOf(deps), now);
+    await coreMindTick(coreDepsOf(deps), now);
     if (outreach) {
       const ot = await outreachTick(deps, now);
       if (ot.failed > 0)

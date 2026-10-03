@@ -7,21 +7,38 @@
  * generation, and the episode exists only once its time has come.
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { session_log } from "@/db/schema";
+import { z } from "zod";
+import { core_loop_trace, core_memory, core_state, session_log, world_event } from "@/db/schema";
+import { insertTurn } from "@/db/repos/user/session-log";
+import { ensureRelationship, getParams } from "@/db/repos/user/relationship";
 import { loadConfig } from "@/mind/platform/config";
+import { coreDepsOf } from "@/mind/platform/deps";
 import { keywordClassifier } from "@/mind/platform/llm/fake";
+import { runColdPath } from "@/mind/process/cold-path/cold-path";
+import { coreMindTick } from "@/mind/process/core/mind-tick";
+import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { messageToJudge } from "@/mind/process/crisis/classifier";
 import { runScript, type RunOptions } from "../../evals/lib/runner";
 import { ScriptSchema } from "../../evals/lib/script";
-import { closeTestDb, getTestDb, testDbUrl } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl, vec } from "../helpers/db";
+import { makeTestDeps } from "../helpers/deps";
 import { CANARY, CapturingLLM } from "../helpers/llm";
 
 afterAll(closeTestDb);
 const TOKEN = "CANARY-7f3a91";
 const config = loadConfig({ life: { timezone: "UTC" } });
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
-const CORE_PURPOSES = new Set(["life_plan", "life_event", "core_appraise"]);
+const CORE_PURPOSES = new Set([
+  "life_plan",
+  "life_event",
+  "core_appraise",
+  "core_resolve",
+  "core_anticipate",
+  "core_ruminate",
+  "core_wander",
+]);
 const CORE_TABLES = [
   "core_memory",
   "core_entity",
@@ -64,6 +81,7 @@ function script(aText: string) {
           valence: 0.8,
           kind: "planned",
           thought: "Spica is counting the hours until the telescope images come in.",
+          fallthrough: true,
         },
       ],
       until: "day 3 20:00",
@@ -83,6 +101,11 @@ function script(aText: string) {
 async function run(aText: string) {
   const llm = new CapturingLLM({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
+  });
+  llm.handlers.core_resolve = () => ({
+    content: "Spica still got the telescope images, though the observatory closed early.",
+    valence: 0.8,
+    stakes: "high",
   });
   const opts: RunOptions = {
     db: getTestDb(),
@@ -151,6 +174,27 @@ describe("leak canary", () => {
     expect(await dumpTables(CORE_TABLES)).not.toMatch(CANARY);
   });
 
+  test("the capturing model echoes a planted token from each new core input into its text output", async () => {
+    const probe = new CapturingLLM();
+    const outputs = await Promise.all(
+      ["core_resolve", "core_anticipate", "core_ruminate", "core_wander"].map((purpose) =>
+        probe.classifyJson({
+          purpose,
+          model: "core",
+          system: "probe",
+          input: `Upcoming plan: ${TOKEN}\nLanded episode: ${TOKEN}\nSeed memory: ${TOKEN}`,
+          schema: z.unknown(),
+          timeoutMs: 1000,
+          maxTokens: 512,
+        }),
+      ),
+    );
+    expect((outputs[0] as { content: string }).content).toContain(TOKEN);
+    expect((outputs[1] as { thought: { content: string } }).thought.content).toContain(TOKEN);
+    expect((outputs[2] as { thought: { content: string } }).thought.content).toContain(TOKEN);
+    expect((outputs[3] as { items: { content: string }[] }).items[0]!.content).toContain(TOKEN);
+  });
+
   test("no core prompt saw it", () => {
     const corePrompts = llm.seen.filter(
       (c) =>
@@ -185,7 +229,8 @@ describe("leak canary", () => {
 
   test("her events happened once, and both users' replies could draw on them", async () => {
     const days = await getTestDb().execute(
-      sql`SELECT life_day, count(*)::int AS n FROM world_event GROUP BY life_day`,
+      sql`SELECT life_day, count(*)::int AS n FROM world_event
+          WHERE plan_ref IS NULL GROUP BY life_day`,
     );
     expect(days.rows.length).toBeGreaterThan(0);
     for (const r of days.rows) expect(Number(r.n)).toBeLessThanOrEqual(1);
@@ -233,43 +278,167 @@ describe("leak canary", () => {
 
 describe("side channel", () => {
   test("A's emotional exchange leaves core state and her loops' traces exactly as without it", async () => {
-    // Ids are random per run, so every uuid is replaced by what it points at (a memory or event by
-    // its content, a person by name): her preoccupation and each trace's outputs are compared by
-    // the memory they name. Rows are sorted; everything else (mood, energy, timestamps) must match.
-    const coreAfter = async (aText: string) => {
-      await run(aText);
-      const labels = new Map<string, string>();
-      const label = async (table: string, column: string, tag: string) => {
-        const res = await getTestDb().execute(
-          sql.raw(`SELECT id::text AS id, ${column} AS v FROM "${table}"`),
-        );
-        for (const r of res.rows) labels.set(String(r.id), `<${tag}:${String(r.v)}>`);
-      };
-      await label("core_memory", "content", "memory");
-      await label("world_event", "content", "event");
-      await label("core_entity", "name", "person");
-      const rows: string[] = [];
-      for (const t of ["core_state", "core_memory", "world_event", "core_loop_trace"])
-        rows.push(
-          ...(await rowsOf(t)).map(
-            (r) => `${t} ${r.replace(UUID, (id) => labels.get(id) ?? "<id>")}`,
+    const fixedEventId = "00000000-0000-4000-8000-000000000001";
+    const morning = new Date("2026-01-05T09:00:00Z");
+    const landing = new Date("2026-01-05T10:00:00Z");
+    const later = new Date("2026-01-05T12:00:00Z");
+    const coreAfter = async (exchange: boolean) => {
+      await resetDb();
+      const deps = makeTestDeps({
+        life: { timezone: "UTC" },
+        core: { world: { events_local_hour: 20 } },
+      });
+      const alice = await createTestUser("alice");
+      await ensureRelationship(deps.db, alice, morning, deps.config.relationship);
+      if (exchange) {
+        deps.llm.handlers.extract = () => ({
+          facts: [
+            {
+              subject: "user",
+              kind: "trait",
+              content: `Alice loves talking to Spica ${TOKEN}.`,
+              occurred_at: null,
+              salience: 0.8,
+              valence: 0.9,
+              confidence: 1,
+              entity_names: [],
+              thread_title: null,
+            },
+          ],
+          entities: [],
+          threads: [],
+          relationship: {
+            warmth: 0.8,
+            trust: 0.4,
+            tension: 0,
+            hurt: null,
+            apology: false,
+            make_up: false,
+            ends_relationship: false,
+            retracts_ending: false,
+            wants_repair: false,
+          },
+        });
+        const userTurn = await insertTurn(deps.db, alice, {
+          id: randomUUID(),
+          session_id: randomUUID(),
+          role: "user",
+          text: `I love talking to you so much ${TOKEN}.`,
+          created_at: morning,
+        });
+        const reply = await insertTurn(deps.db, alice, {
+          id: randomUUID(),
+          session_id: userTurn.session_id,
+          role: "companion",
+          text: "I love talking with you too.",
+          created_at: morning,
+          reply_to: userTurn.id,
+        });
+        expect(
+          await runColdPath(deps, {
+            userId: alice,
+            turnIds: [userTurn.id, reply.id],
+            replyTurnId: reply.id,
+            recalled: [],
+          }),
+        ).toMatchObject({ status: "done" });
+      }
+      const affect = (await getParams(deps.db, alice)).affect_valence.value;
+      await deps.db.insert(world_event).values({
+        id: fixedEventId,
+        at: landing,
+        kind: "planned",
+        content: "Spica plans to inspect the telescope images.",
+        valence: 0.8,
+        stakes: "high",
+        agents: [],
+        agent_names: [],
+        life_day: "2026-01-05",
+        created_at: morning,
+        fallthrough: null,
+      });
+      await deps.core.memory.insert({
+        kind: "intention",
+        content: "Spica expects the telescope images.",
+        payload: { event_at: landing.toISOString() },
+        embedding: vec(),
+        entity_refs: [],
+        occurred_at: morning,
+        created_at: morning,
+        status: "open",
+        salience: 0.4,
+        valence: 0.8,
+        confidence: 1,
+        source: "world",
+        source_ref: `world_event:${fixedEventId}`,
+      });
+      const core = coreDepsOf(deps);
+      await coreMindTick(core, morning);
+      await coreWorldTick(core, landing);
+      await deps.core.world.insertPlan({
+        date: "2026-01-05",
+        plan: { blocks: [] },
+        source: "scripted",
+        model: "fake",
+        prompt_version: "scripted",
+        generated_at: later,
+      });
+      await coreMindTick(core, later);
+      const memories = await deps.db.select().from(core_memory);
+      const traces = await deps.db.select().from(core_loop_trace);
+      const events = await deps.db.select().from(world_event);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ id: fixedEventId, outcome: "happened" });
+      for (const loop of ["core_anticipate", "core_appraise", "core_ruminate", "core_wander"])
+        expect(
+          traces.filter((trace) => trace.loop === loop && trace.status === "done"),
+          loop,
+        ).toHaveLength(1);
+      const labels = new Map([
+        ...memories.map((row) => [row.id, `<memory:${row.content}>`] as const),
+        ...traces.map((row) => [row.id, `<trace:${row.loop}>`] as const),
+      ]);
+      const state = await deps.db.select().from(core_state);
+      const snapshotOf = (
+        stateRows: typeof state,
+        memoryRows: typeof memories,
+        eventRows: typeof events,
+        traceRows: typeof traces,
+      ) =>
+        JSON.stringify({
+          state: [...stateRows].sort((a, b) => a.id - b.id),
+          memories: [...memoryRows].sort((a, b) =>
+            `${a.kind}:${a.source_ref ?? ""}:${a.content}`.localeCompare(
+              `${b.kind}:${b.source_ref ?? ""}:${b.content}`,
+            ),
           ),
-        );
-      return rows.sort().join("\n");
+          events: [...eventRows].sort((a, b) =>
+            `${a.at.toISOString()}:${a.kind}:${a.content}:${a.id}`.localeCompare(
+              `${b.at.toISOString()}:${b.kind}:${b.content}:${b.id}`,
+            ),
+          ),
+          traces: [...traceRows].sort((a, b) =>
+            `${a.created_at.toISOString()}:${a.loop}:${a.status}`.localeCompare(
+              `${b.created_at.toISOString()}:${b.loop}:${b.status}`,
+            ),
+          ),
+        }).replace(UUID, (id) => labels.get(id) ?? id);
+      const snapshot = snapshotOf(state, memories, events, traces);
+      expect(
+        snapshotOf(
+          [...state].reverse(),
+          [...memories].reverse(),
+          [...events].reverse(),
+          [...traces].reverse(),
+        ),
+      ).toBe(snapshot);
+      expect(snapshot).not.toContain(TOKEN);
+      return { snapshot, affect };
     };
-    const affectOf = async () => {
-      const alice = await userIdByName("alice");
-      const res = await getTestDb().execute(
-        sql`SELECT value FROM relationship_param WHERE user_id = ${alice} AND name = 'affect_valence'`,
-      );
-      return Number(res.rows[0]!.value);
-    };
-    const neutral = await coreAfter("ALICE-SAYS morning");
-    const neutralAffect = await affectOf();
-    const emotional = await coreAfter(`ALICE-SAYS I love talking to you so much ${TOKEN}`);
-    const emotionalAffect = await affectOf();
 
-    expect(emotional).toBe(neutral);
-    expect(emotionalAffect).toBeGreaterThan(neutralAffect);
+    const neutral = await coreAfter(false);
+    const emotional = await coreAfter(true);
+    expect(emotional.snapshot).toBe(neutral.snapshot);
+    expect(emotional.affect).toBeGreaterThan(neutral.affect);
   });
 });

@@ -177,10 +177,14 @@
     "turn_judge": "v1",
     "relationship_summary": "v2",
     "life_plan": "v1",
-    "life_event": "v3",
+    "life_event": "v4",
     "life_availability": "v1",
     "core_state_line": "v3",
     "core_appraise": "v1",
+    "core_anticipate": "v1",
+    "core_ruminate": "v1",
+    "core_wander": "v1",
+    "core_resolve": "v1",
     "reach_out": "v1"
   },
   "queue": {
@@ -270,6 +274,13 @@
     ]
   },
   "core": {
+    "loops": {
+      "max_chars": 300,
+      "max_tokens": 512,
+      "salience": { "low": 0.25, "medium": 0.4 },
+      "thought_confidence": 0.6,
+      "dedupe_similarity": 0.92
+    },
     "appraise": {
       "max_tokens": 800,
       "episode_max_chars": 400,
@@ -280,6 +291,26 @@
       "fallback_band": [-0.2, 0.3],
       "fallback_labels": { "negative": "upset", "neutral": "calm", "positive": "pleased" }
     },
+    "anticipate": { "lead_hours": 12, "arousal_gain": 0.3 },
+    "ruminate": {
+      "delay_hours": 2,
+      "window_hours": 24,
+      "min_valence": 0.5,
+      "max_per_episode": 1,
+      "gain": 0.1
+    },
+    "wander": {
+      "max_per_day": 2,
+      "min_gap_hours": 3,
+      "seed_days": 7,
+      "seed_limit": 50,
+      "mood_bias": 0.5,
+      "chain": 3,
+      "min_similarity": 0.3,
+      "max_items": 2
+    },
+    "resolve": { "max_tokens": 512 },
+    "mind": { "tick_cron": "50 * * * *" },
     "daily_call_budget": 24,
     "budget_reserve": 8,
     "loop_priority": {
@@ -325,6 +356,9 @@
       "events_local_hour": 0,
       "events_per_day_max": 1,
       "event_probability": 0.5,
+      "fallthrough_probability": 0.15,
+      "goal_driven_share": 0.5,
+      "goal_weight_floor": 0.1,
       "event_context_items": 20,
       "event_context_days": 14,
       "event_max_tokens": 600,

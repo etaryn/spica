@@ -621,7 +621,11 @@ export const world_event = pgTable(
     life_day: date("life_day", { mode: "string" }).notNull(),
     plan_ref: text("plan_ref"),
     goal_ref: uuid("goal_ref").references(() => core_goal.id, { onDelete: "set null" }),
-    outcome: text("outcome"),
+    outcome: text("outcome").$type<"happened" | "fell_through">(),
+    fallthrough: boolean("fallthrough"),
+    resolves_memory_id: uuid("resolves_memory_id").references(() => core_memory.id, {
+      onDelete: "set null",
+    }),
     created_at: ts("created_at").notNull(),
     /** When it landed with her; null until its time comes and the world tick appraises it. */
     appraised_at: ts("appraised_at"),

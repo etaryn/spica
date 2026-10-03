@@ -957,4 +957,7 @@ Import `CORE_MIND_TICK_QUEUE` into `src/worker/jobs.ts` and add it to the hourly
 - [ ] **Step 5: Run final verification.** `pnpm typecheck` (0 errors), `pnpm lint` (exit 0), `pnpm test` (all tests pass), and `pnpm eval --llm=fake --compare` (all scenarios pass, including leak canary). Do not alter baselines; if an expected count changes, document the exact assertion and reason in the plan.
 
 
+# Superseded for the restart
+
+Use `2026-10-03-phase-8b-restart.md` and its approved spec. This document remains historical.
 

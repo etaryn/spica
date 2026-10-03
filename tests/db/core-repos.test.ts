@@ -3,6 +3,8 @@
  * anywhere.
  */
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { eq } from "drizzle-orm";
+import { core_memory } from "@/db/schema";
 import { createCoreLayer } from "@/db/repos/core";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
@@ -126,6 +128,316 @@ const intention = (content: string, status: "open" | "resolved", at: Date, ref: 
   kind: "intention" as const,
   status,
   source_ref: ref,
+});
+
+test("resolution metadata round trips and target deletion nulls FK", async () => {
+  const layer = core();
+  const target = await layer.memory.insert(episode("unfinished", 0.01, now));
+  const event = {
+    at: now,
+    kind: "resolution" as const,
+    content: "changed plans",
+    valence: -0.2,
+    stakes: "low" as const,
+    agents: [],
+    life_day: "2026-01-05",
+    created_at: now,
+  };
+  const original = await layer.world.recordEvent({ ...event, kind: "planned" });
+  const goal = await layer.goals.insert({
+    title: "Read",
+    why: "Curiosity",
+    status: "active",
+    progress: 0,
+    embedding: vec(),
+    source: "seed",
+    source_ref: null,
+    started_at: now,
+    target_at: null,
+  });
+  const id = await layer.world.recordEvent({
+    ...event,
+    plan_ref: original,
+    goal_ref: goal,
+    outcome: "happened",
+    fallthrough: false,
+    resolves_memory_id: target,
+  });
+  const metadata = {
+    plan_ref: original,
+    goal_ref: goal,
+    outcome: "happened",
+    fallthrough: false,
+    resolves_memory_id: target,
+  };
+  expect((await layer.world.events("2026-01-05")).find((row) => row.id === id)).toMatchObject(
+    metadata,
+  );
+  expect((await layer.world.dueUnappraised(now)).find((row) => row.id === id)).toMatchObject(
+    metadata,
+  );
+  expect(await layer.world.getEvent(id)).toMatchObject(metadata);
+  expect(await layer.world.getEvent(original)).toMatchObject({
+    plan_ref: null,
+    goal_ref: null,
+    outcome: null,
+    fallthrough: null,
+    resolves_memory_id: null,
+  });
+  await layer.world.setOutcome(original, "fell_through");
+  expect((await layer.world.getEvent(original))?.outcome).toBe("fell_through");
+  await getTestDb().delete(core_memory).where(eq(core_memory.id, target));
+  expect((await layer.world.getEvent(id))?.resolves_memory_id).toBeNull();
+  expect(await layer.world.getEvent("00000000-0000-0000-0000-000000000000")).toBeNull();
+});
+
+const atHour = (hour: number) => new Date(now.getTime() + hour * 3_600_000);
+
+async function plannedEventRef(at: Date): Promise<string> {
+  const id = await core().world.recordEvent({
+    at,
+    kind: "planned",
+    content: "A real upcoming plan",
+    valence: 0.2,
+    stakes: "low",
+    agents: [],
+    life_day: "2026-01-05",
+    created_at: now,
+  });
+  return `world_event:${id}`;
+}
+
+test("a broken earliest event link does not hide a later valid anticipation", async () => {
+  const layer = core();
+  const memory = layer.memory;
+  await memory.insert({
+    ...intention("malformed link", "open", now, "world_event:missing"),
+    payload: { event_at: atHour(1).toISOString() },
+  });
+  await memory.insert({
+    ...intention("missing event", "open", now, "world_event:00000000-0000-4000-8000-000000000000"),
+    payload: { event_at: atHour(2).toISOString() },
+  });
+  const valid = await memory.insert({
+    ...intention("valid later plan", "open", now, await plannedEventRef(atHour(3))),
+    payload: { event_at: atHour(3).toISOString() },
+  });
+  expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(valid);
+});
+
+test("anticipation candidate filters precede limit and timestamp/ID break ties", async () => {
+  const memory = core().memory;
+  for (const payload of [
+    { event_at: now.toISOString() },
+    { event_at: atHour(1).toISOString(), anticipated_at: now.toISOString() },
+    { event_at: atHour(13).toISOString() },
+  ])
+    await memory.insert({ ...intention("ineligible", "open", atHour(-1), null), payload });
+  await memory.insert({
+    ...intention("resolved", "resolved", now, null),
+    payload: { event_at: atHour(1).toISOString() },
+  });
+  const ids = [];
+  const tiedEvent = await plannedEventRef(atHour(12));
+  for (let i = 0; i < 2; i++)
+    ids.push(
+      await memory.insert({
+        ...intention("next", "open", now, tiedEvent),
+        payload: { event_at: atHour(12).toISOString() },
+      }),
+    );
+  ids.sort();
+  expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(ids[0]);
+  await memory.setStatus(ids[0]!, "resolved");
+  expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(ids[1]);
+  const sooner = await memory.insert({
+    ...intention("sooner", "open", now, await plannedEventRef(atHour(1))),
+    payload: { event_at: "2026-01-05T18:00:00+08:00" },
+  });
+  expect((await memory.anticipationCandidate(now, atHour(12)))?.id).toBe(sooner);
+});
+
+test("rumination candidate filters precede limit and uses inclusive landing times", async () => {
+  const memory = core().memory;
+  for (const item of [
+    { created_at: atHour(-25), valence: 0.9 },
+    { created_at: atHour(-1), valence: 0.9 },
+    { valence: 0.49 },
+    { payload: { ruminated: 1 }, valence: 0.9 },
+    { status: "stale" as const, valence: 0.9 },
+    { status: "superseded" as const, valence: 0.9 },
+    { kind: "thought" as const, valence: 0.9 },
+  ])
+    await memory.insert({ ...episode("ineligible", 0.01, atHour(-24)), ...item });
+  const ids = [];
+  for (let i = 0; i < 2; i++)
+    ids.push(
+      await memory.insert({
+        ...episode("old landing", 0.01, atHour(-24)),
+        occurred_at: atHour(-72),
+        valence: -0.5,
+      }),
+    );
+  ids.sort();
+  const latest = await memory.insert({
+    ...episode("recent landing", 0.01, atHour(-2)),
+    valence: 0.5,
+    payload: { ruminated: 0 },
+  });
+  expect((await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 1))?.id).toBe(ids[0]);
+  await memory.setStatus(ids[0]!, "stale");
+  expect((await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 1))?.id).toBe(ids[1]);
+  await memory.setStatus(ids[1]!, "stale");
+  expect((await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 1))?.id).toBe(latest);
+  expect(await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 0)).toBeNull();
+});
+
+test("malformed payload is ineligible", async () => {
+  const memory = core().memory;
+  for (const payload of [
+    null,
+    [],
+    "bad",
+    7,
+    {},
+    { event_at: 1767607200000 },
+    { event_at: [] },
+    { event_at: "garbage" },
+    { event_at: "2026-02-30T10:00:00Z" },
+    { event_at: atHour(1).toISOString(), anticipated_at: null },
+  ])
+    await memory.insert({ ...intention("bad plan", "open", now, null), payload });
+  for (const payload of [
+    [],
+    "bad",
+    7,
+    { ruminated: null },
+    { ruminated: "0" },
+    { ruminated: -1 },
+    { ruminated: 0.5 },
+    { ruminated: true },
+    { ruminated: {} },
+  ])
+    await memory.insert({ ...episode("bad episode", 0.01, atHour(-3)), valence: 0.9, payload });
+  expect(await memory.anticipationCandidate(now, atHour(2000))).toBeNull();
+  expect(await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 1)).toBeNull();
+});
+
+test("recall keeps history but excludes unreal and resolved intentions", async () => {
+  const memory = core().memory;
+  for (const item of [
+    { kind: "hypothetical" as const },
+    { kind: "intention" as const },
+    { status: "stale" as const },
+    { status: "superseded" as const },
+    { created_at: atHour(-2) },
+    { created_at: atHour(1) },
+  ])
+    await memory.insert({ ...episode("excluded", 0.01, now), ...item });
+  const entities = await memory.addEntities(["Alcor"], 0.5, now);
+  const old = await memory.insert({
+    ...episode("history", 0.01, atHour(-1)),
+    entity_refs: entities,
+  });
+  const newest = [];
+  for (let i = 0; i < 2; i++)
+    newest.push(await memory.insert(intention("open", "open", now, null)));
+  newest.sort();
+  expect((await memory.recallable(atHour(-1), now, 3)).map((m) => m.id)).toEqual([...newest, old]);
+  expect((await memory.recallable(atHour(-1), now, 1)).map((m) => m.id)).toEqual([newest[0]]);
+  expect((await memory.get(old))?.entity_refs).toEqual(entities);
+  expect((await memory.recallable(atHour(-1), now, 3))[2]?.entity_refs).toEqual(entities);
+});
+
+test("dedupe can see hypotheticals while factual near retains resolved intention history", async () => {
+  const memory = core().memory;
+  const imagined = await memory.insert({ ...episode("imagined", 0.01, now), kind: "hypothetical" });
+  const history = await memory.insert(intention("completed", "resolved", now, null));
+  await memory.insert({ ...episode("stale", 0.01, now), status: "stale" });
+  await memory.insert({ ...episode("superseded", 0.01, now), status: "superseded" });
+  await memory.insert(episode("opposite", -0.01, now));
+  expect((await memory.near(vec(), 10, 0.9)).map((m) => m.id)).toEqual([history]);
+  const expected = [imagined, history].sort();
+  expect((await memory.dedupeNear(vec(), 10, 0.9)).map((m) => m.id)).toEqual(expected);
+  expect((await memory.dedupeNear(vec(), 1, 0.9)).map((m) => m.id)).toEqual([expected[0]]);
+});
+
+test("payload merges preserve other keys", async () => {
+  const memory = core().memory;
+  const id = await memory.insert({
+    ...episode("payload", 0.01, now),
+    payload: { emotion: { label: "joy" }, ruminated: 0 },
+  });
+  await memory.mergePayload(id, { ruminated: 1, marker: true });
+  expect((await memory.get(id))?.payload).toEqual({
+    emotion: { label: "joy" },
+    ruminated: 1,
+    marker: true,
+  });
+  const empty = await memory.insert(episode("empty", 0.01, now));
+  await memory.mergePayload(empty, { ruminated: 1 });
+  expect((await memory.get(empty))?.payload).toEqual({ ruminated: 1 });
+});
+
+test("reinforcement caps salience and increments recall count/time", async () => {
+  const memory = core().memory;
+  const id = await memory.insert({ ...episode("reinforce", 0.01, now), salience: 0.94 });
+  await memory.reinforce(id, atHour(1), 0.03, 0.95);
+  const reinforced = (await memory.get(id))!;
+  expect(reinforced.salience).toBe(0.95);
+  expect(reinforced.last_recalled_at).toEqual(atHour(1));
+  expect(
+    (await getTestDb().select().from(core_memory).where(eq(core_memory.id, id)))[0]?.recall_count,
+  ).toBe(1);
+  await memory.reinforce(id, atHour(2), 0.03, 0.95);
+  expect((await memory.get(id))?.salience).toBe(0.95);
+  expect(
+    (await getTestDb().select().from(core_memory).where(eq(core_memory.id, id)))[0],
+  ).toMatchObject({ recall_count: 2, last_recalled_at: atHour(2) });
+});
+
+test("appliedSummary excludes failed and race-loser traces in a half-open window", async () => {
+  const traces = core().traces;
+  expect(await traces.appliedSummary("core_wander", now, atHour(3))).toEqual({
+    count: 0,
+    latest: null,
+  });
+  for (const fields of [
+    { created_at: atHour(-1) },
+    { created_at: now },
+    { created_at: atHour(2) },
+    { created_at: atHour(3) },
+    { status: "failed" as const },
+    { status: "fallback" as const },
+    { status: "skipped_budget" as const },
+    { outputs: { applied: false } },
+    { outputs: { applied: "true" } },
+    { outputs: {} },
+    { loop: "core_ruminate" },
+  ])
+    await traces.insert({
+      loop: "core_wander",
+      inputs: {},
+      outputs: { applied: true },
+      model: null,
+      prompt_version: null,
+      tokens_in: null,
+      tokens_out: null,
+      cost: null,
+      calls: 0,
+      status: "done",
+      error: null,
+      created_at: atHour(1),
+      ...fields,
+    });
+  expect(await traces.appliedSummary("core_wander", now, atHour(3))).toEqual({
+    count: 2,
+    latest: atHour(2),
+  });
+  expect(await traces.appliedSummary("core_wander", atHour(-10), now)).toEqual({
+    count: 1,
+    latest: atHour(-1),
+  });
 });
 
 test("a resolved intention is no ranking candidate; an open one is", async () => {

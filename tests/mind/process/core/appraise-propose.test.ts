@@ -3,7 +3,9 @@
  * clamped, unknown goals dropped, an unusable answer or a failed call falls back to the code
  * appraisal, and over budget the model isn't called at all.
  */
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
+import { eq } from "drizzle-orm";
+import { core_loop_trace } from "@/db/schema";
 import { loadConfig } from "@/mind/platform/config";
 import { coreDepsOf } from "@/mind/platform/deps";
 import {
@@ -164,4 +166,17 @@ test("over budget the model isn't called", async () => {
   await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
   expect((await propose(deps)).source).toBe("fallback");
   expect(deps.llm.structuredCalls.filter((c) => c.purpose === "core_appraise")).toEqual([]);
+});
+
+test("a context read failure is traced and rethrown, not used as appraisal fallback", async () => {
+  const deps = makeTestDeps();
+  vi.spyOn(deps.core.memory, "latestSnapshot").mockRejectedValueOnce(
+    new Error("database unavailable"),
+  );
+  await expect(propose(deps)).rejects.toThrow("database unavailable");
+  const [trace] = await deps.db
+    .select()
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.loop, "core_appraise"));
+  expect(trace).toMatchObject({ status: "failed", error: "Error", calls: 0 });
 });

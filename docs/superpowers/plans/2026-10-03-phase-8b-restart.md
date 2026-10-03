@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-03-phase-8b-world-and-thinking-design.md` (approved).
 
-**Status:** Written plan awaiting Ethan's review. Implementation has not started.
+**Status:** Approved by Ethan on 2026-10-03. Task 1 setup in progress.
 
 ## Global Constraints
 
@@ -195,7 +195,11 @@ attempts:EventAttempt[]; budgetExhausted:boolean}>`; update callers and tests in
 
 **Files:** create `src/mind/process/core/resolve.ts`, `prompts/core/resolve/v1.md`,
 `tests/mind/process/core/resolution.test.ts`; modify world-tick/appraise, config/default,
-platform/config, platform/llm/fake and existing appraisal tests.
+platform/config, platform/llm/fake and existing appraisal tests, plus
+`tests/mind/process/core/world-tick.test.ts` (Ethan-approved test-only scope expansion:
+the generated-kind assertion selects root events with `plan_ref IS NULL`, and the shared legacy
+`utc` fixture sets `fallthrough_probability:0` for deterministic appraisal assertions. Dedicated
+resolution tests retain seeded/forced fallthrough coverage; production defaults are unchanged).
 **Produces:** `ResolutionProposal = {content:string; valence:number; stakes:"low"|"high"}`;
 `proposeResolution(ctx: LoopContext, event: WorldEventRow): Promise<ResolutionProposal|null>`.
 Null means original happens. `LandingEvent` gains optional `intentionEventId: string` and
@@ -225,6 +229,10 @@ Null means original happens. `LandingEvent` gains optional `intentionEventId: st
 
 **Files:** create `src/mind/process/core/anticipate.ts`, `prompts/core/anticipate/v1.md`,
 `tests/mind/process/core/anticipate.test.ts`; modify config/default, platform/config and fake.
+Ethan-approved fix-round scope: also modify `src/db/repos/core/memory.ts` and
+`tests/db/core-repos.test.ts` so invalid or missing linked world events are filtered before
+choosing the first anticipation candidate. Retain the existing singleton repository signature
+and deterministic timestamp/ID ordering.
 **Produces:** shared `ThinkingResult = {status: LoopStatus|"not_due"; applied:boolean; ids:string[]}`
 in thoughts.ts; `coreAnticipate(deps:CoreDeps, now:Date):Promise<ThinkingResult>`.
 **Consumes:** Tasks 2–3; get event through intention source_ref; ignore malformed/missing event links.
@@ -291,6 +299,8 @@ in thoughts.ts; `coreAnticipate(deps:CoreDeps, now:Date):Promise<ThinkingResult>
 `tests/mind/process/core/mind-tick.test.ts`; modify `src/mind/platform/jobs.ts`,
 `src/worker/{index,jobs}.ts`, `tests/worker/jobs.test.ts`, config/default, platform/config,
 `evals/lib/{life-loop,script,profile}.ts`; create `tests/evals/core-mind-order.test.ts`.
+Ethan-approved test scope expansion: also modify `tests/mind/platform/job-names.test.ts` to
+include the required `core_mind_tick` queue in its exact exported-name list.
 **Produces:** `coreMindTick(deps:CoreDeps, now:Date):Promise<Record<"anticipate"|"ruminate"|"wander",ThinkingResult>>`;
 `CORE_MIND_TICK_QUEUE = "core_mind_tick"`;
 `registerCoreMindJob(boss:PgBoss, deps:CoreDeps):Promise<void>`.

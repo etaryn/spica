@@ -48,7 +48,49 @@ export class FakeLLMProvider implements LLMProvider {
     // The keyword cue check stands in for the turn judge.
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
-    life_event: () => structuredClone(FAKE_DAY_EVENT),
+    // Goal identity comes from code; fake content stays stable across fresh goal row IDs.
+    life_event: () => ({ ...structuredClone(FAKE_DAY_EVENT), goal_ref: "model-id-ignored" }),
+    core_resolve: (input: string) => ({
+      content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
+      valence: 0,
+      stakes: "low",
+    }),
+    core_anticipate: (input: string) => {
+      const event = /^Upcoming plan: (.*)$/m.exec(input)?.[1] ?? "her plan";
+      const prefix = "She wonders how ";
+      const suffix = " will go.";
+      const available = defaults.core.loops.max_chars - prefix.length - suffix.length;
+      return {
+        thought: {
+          kind: "thought",
+          content: `${prefix}${event.slice(0, available)}${suffix}`,
+          salience: "low",
+        },
+        emotion: { label: "curious", valence: 0.2, arousal: 0.5, about: "the plan ahead" },
+      };
+    },
+    core_ruminate: (input: string) => {
+      const episode = /^Landed episode: (.*)$/m.exec(input)?.[1] ?? "an episode";
+      const prefix = "She keeps thinking about ";
+      const available = defaults.core.loops.max_chars - prefix.length - 1;
+      return {
+        thought: {
+          kind: "thought",
+          content: `${prefix}${episode.slice(0, available)}.`,
+          salience: "low",
+        },
+      };
+    },
+    core_wander: (input: string) => {
+      const seed = /^Seed memory: (.*)$/m.exec(input)?.[1] ?? "her own day";
+      const prefix = "She finds herself thinking again about ";
+      const available = defaults.core.loops.max_chars - prefix.length - 1;
+      return {
+        items: [
+          { kind: "thought", content: `${prefix}${seed.slice(0, available)}.`, salience: "low" },
+        ],
+      };
+    },
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

@@ -100,6 +100,24 @@ export class CapturingLLM extends FakeLLMProvider {
         emotion: { ...out.emotion, label: `${out.emotion.label} ${canary}` },
       });
     }
+    if (canary && request.purpose === "core_resolve" && handler) {
+      const out = (await handler(request.input)) as { content: string };
+      return request.schema.parse({ ...out, content: `${out.content} ${canary}` });
+    }
+    if (canary && ["core_anticipate", "core_ruminate"].includes(request.purpose) && handler) {
+      const out = (await handler(request.input)) as { thought: { content: string } };
+      return request.schema.parse({
+        ...out,
+        thought: { ...out.thought, content: `${out.thought.content} ${canary}` },
+      });
+    }
+    if (canary && request.purpose === "core_wander" && handler) {
+      const out = (await handler(request.input)) as { items: { content: string }[] };
+      return request.schema.parse({
+        ...out,
+        items: out.items.map((item) => ({ ...item, content: `${item.content} ${canary}` })),
+      });
+    }
     return super.classifyJson(request);
   }
 }

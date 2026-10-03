@@ -9,6 +9,11 @@ export const ALL_PURPOSES = [
   "turn_judge",
   "life_plan",
   "life_event",
+  "core_resolve",
+  "core_appraise",
+  "core_anticipate",
+  "core_ruminate",
+  "core_wander",
   "embed",
 ];
 /** The annotation judges, made real by `--annotate`. */

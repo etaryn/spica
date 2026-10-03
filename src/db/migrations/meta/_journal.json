@@ -134,6 +134,13 @@
       "when": 1790935070382,
       "tag": "0018_quiet_stellaris",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790961792611,
+      "tag": "0019_world_resolution",
+      "breakpoints": true
     }
   ]
 }

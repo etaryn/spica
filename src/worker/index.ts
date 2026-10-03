@@ -9,6 +9,7 @@ import { buildRuntime } from "@/runtime/deps";
 import { readEnv } from "@/runtime/env";
 import { PgBossQueue } from "@/runtime/pg-boss-jobs";
 import { ensureSystemQueues } from "./jobs";
+import { CORE_QUEUES, registerCoreMindJob } from "./core-jobs";
 import { MEMORY_QUEUES, registerMemoryJobs } from "./memory-jobs";
 import { PROCESS_QUEUES, registerProcessJobs } from "./process-jobs";
 import { registerStateJobs, STATE_QUEUES } from "./state-jobs";
@@ -24,12 +25,13 @@ await registerMemoryJobs(boss, deps);
 await registerProcessJobs(boss, deps);
 await registerStateJobs(boss, deps);
 await registerWorldJobs(boss, deps);
+await registerCoreMindJob(boss, coreDepsOf(deps));
 
 // Pick up anything left unfinished from before this start.
 await sweepUnfinishedColdPaths(deps, deps.clock.now());
 
 deps.log.info("worker started", {
-  queues: [...MEMORY_QUEUES, ...PROCESS_QUEUES, ...STATE_QUEUES, ...WORLD_QUEUES],
+  queues: [...MEMORY_QUEUES, ...PROCESS_QUEUES, ...STATE_QUEUES, ...WORLD_QUEUES, ...CORE_QUEUES],
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

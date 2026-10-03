@@ -25,6 +25,7 @@ export type CoreMemoryItem = {
   kind: CoreMemoryKind;
   content: string;
   payload: unknown;
+  entity_refs: string[];
   occurred_at: Date | null;
   created_at: Date;
   last_recalled_at: Date | null;
@@ -84,8 +85,21 @@ export type CoreSnapshot = {
 export interface CoreMemory {
   insert(item: NewCoreMemory): Promise<string>;
   get(id: string): Promise<CoreMemoryItem | null>;
-  /** Active memories at or above `minSimilarity`, closest first (reconcile candidates). */
+  /** Active factual memories, including resolved intentions, closest first then ID. */
   near(embedding: number[], k: number, minSimilarity: number): Promise<Neighbor[]>;
+  /** Dedupe compares text, including hypotheticals; stale and superseded items are excluded. */
+  dedupeNear(embedding: number[], k: number, minSimilarity: number): Promise<Neighbor[]>;
+  anticipationCandidate(now: Date, until: Date): Promise<CoreMemoryItem | null>;
+  ruminationCandidate(
+    from: Date,
+    to: Date,
+    minValence: number,
+    maxCount: number,
+  ): Promise<CoreMemoryItem | null>;
+  /** Factual history created in [from, to], newest first, then ID; no resolved intentions. */
+  recallable(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  mergePayload(id: string, patch: Record<string, unknown>): Promise<void>;
+  reinforce(id: string, now: Date, bump: number, cap: number): Promise<void>;
   /**
    * The `limit` closest active, real (not hypothetical) memories, for ranking. A resolved
    * intention is left out: once the plan has happened, the episode speaks for it.

@@ -11,6 +11,7 @@ import type { LifePlan } from "@/db/schema";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Config } from "@/mind/platform/config";
 import type { CoreDeps } from "@/mind/platform/deps";
+import type { CoreGoal, CoreNeeds } from "@/mind/state/core/types";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { relativeDate } from "@/mind/platform/relative-date";
@@ -34,6 +35,7 @@ export type InjectedEvent = {
   valence: number;
   kind?: EventCandidate["kind"];
   thought?: string | null;
+  fallthrough?: boolean;
 };
 export type EventDecision =
   | "accepted"
@@ -58,11 +60,16 @@ export type AcceptedEvent = {
   /** The thought's embedding for a planned event; null for a spontaneous one. */
   thoughtEmbedding: number[] | null;
   at: Date;
+  goalRef: string | null;
+  resolvesMemoryId: string | null;
+  fallthrough: boolean | null;
 };
 export type CoreEventContext = {
   plan: LifePlan | null;
   episodes: { content: string; when: Date }[];
   people: string[];
+  goal: CoreGoal | null;
+  needs: CoreNeeds;
 };
 type WorldConfig = Config["core"]["world"];
 
@@ -71,7 +78,27 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 const normalizeName = (s: string) => tidy(s).toLowerCase();
 
-async function coreEventContext(deps: CoreDeps, day: string, now: Date): Promise<CoreEventContext> {
+/** Day-stable goal selection does not depend on repository ordering. */
+export function selectEventGoal(goals: CoreGoal[], day: string, cfg: WorldConfig): CoreGoal | null {
+  const active = goals
+    .filter((goal) => goal.status === "active")
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!active.length || seededUnit(`${day}:goal`) >= cfg.goal_driven_share) return null;
+  const weights = active.map((goal) => 1 - goal.progress + cfg.goal_weight_floor);
+  let draw = seededUnit(`${day}:goal-pick`) * weights.reduce((sum, weight) => sum + weight, 0);
+  for (const [index, goal] of active.entries()) {
+    draw -= weights[index]!;
+    if (draw < 0) return goal;
+  }
+  return active.at(-1)!;
+}
+
+async function coreEventContext(
+  deps: CoreDeps,
+  day: string,
+  now: Date,
+  goal: CoreGoal | null,
+): Promise<CoreEventContext> {
   const cfg = deps.config.core.world;
   const from = new Date(now.getTime() - cfg.event_context_days * DAY);
   const episodes = await deps.core.memory.recentEpisodes(from, now, cfg.event_context_items);
@@ -80,6 +107,11 @@ async function coreEventContext(deps: CoreDeps, day: string, now: Date): Promise
     plan: await deps.core.world.plan(day),
     episodes: episodes.map((e) => ({ content: e.content, when: e.occurred_at ?? e.created_at })),
     people: [...new Set([...cfg.canon_entities, ...known])],
+    goal,
+    needs: (await deps.core.state.get())?.needs ?? {
+      autonomy: deps.config.core.state.needs_baseline,
+      competence: deps.config.core.state.needs_baseline,
+    },
   };
 }
 
@@ -101,6 +133,14 @@ export function buildEventInput(
       : "What has happened in her life lately: nothing yet.",
   );
   parts.push(`People she knows: ${ctx.people.join(", ") || "none"}.`);
+  parts.push(
+    `Current needs: autonomy: ${ctx.needs.autonomy}; competence: ${ctx.needs.competence}.`,
+  );
+  parts.push(
+    ctx.goal
+      ? `Selected active goal: ${ctx.goal.title}. Why: ${ctx.goal.why}. Progress: ${ctx.goal.progress}. Let this event advance or block it where possible.`
+      : "Selected active goal: none. Write an ordinary event.",
+  );
   if (rejected.length)
     parts.push(
       `Rejected attempts (write something different):\n${rejected.map((r) => `- ${JSON.stringify(r.candidate)}: ${r.reason}`).join("\n")}`,
@@ -163,8 +203,9 @@ export async function generateCoreEvents(
   deps: CoreDeps,
   day: string,
   now: Date,
+  canCall: () => boolean,
   inject?: (day: string) => InjectedEvent | null,
-): Promise<{ accepted: AcceptedEvent[]; attempts: EventAttempt[] }> {
+): Promise<{ accepted: AcceptedEvent[]; attempts: EventAttempt[]; budgetExhausted: boolean }> {
   const { config, llm, embedder } = deps;
   const cfg = config.core.world;
   const injected = inject?.(day) ?? null;
@@ -175,9 +216,10 @@ export async function generateCoreEvents(
   );
   const accepted: AcceptedEvent[] = [];
   const attempts: EventAttempt[] = [];
-  if (!draws.some(Boolean)) return { accepted, attempts };
+  if (!draws.some(Boolean)) return { accepted, attempts, budgetExhausted: false };
 
-  const ctx = await coreEventContext(deps, day, now);
+  const goal = selectEventGoal(await deps.core.goals.active(), day, cfg);
+  const ctx = await coreEventContext(deps, day, now, goal);
   const known = new Set(ctx.people.map(normalizeName));
   let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen(cfg.canon_entities);
   let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
@@ -196,6 +238,7 @@ export async function generateCoreEvents(
     for (let attempt = 1; attempt <= 1 + cfg.regen_attempts; attempt++) {
       const key = `${i}:${attempt}`;
       const useInjected = !!injected && i === 0 && attempt === 1;
+      if (!useInjected && !canCall()) return { accepted, attempts, budgetExhausted: true };
       const raw: EventCandidate = useInjected
         ? {
             content: injected!.content,
@@ -237,6 +280,7 @@ export async function generateCoreEvents(
         config.reconcile.neighbor_k,
         config.reconcile.near_match_similarity,
       );
+      if (neighbors.length && !canCall()) return { accepted, attempts, budgetExhausted: true };
       const decision = await reconcileAgainstNeighbours(
         deps,
         { label: "episode", content: c.content },
@@ -265,6 +309,9 @@ export async function generateCoreEvents(
         embedding,
         thoughtEmbedding,
         at: lifeInstant(config.life, day, c.at),
+        goalRef: useInjected ? null : (goal?.id ?? null),
+        resolvesMemoryId: decision.relation === "resolves" ? decision.targetId : null,
+        fallthrough: useInjected ? (injected!.fallthrough ?? null) : null,
       });
       if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {
         lastNewEntityAt = now;
@@ -274,5 +321,5 @@ export async function generateCoreEvents(
       break;
     }
   }
-  return { accepted, attempts };
+  return { accepted, attempts, budgetExhausted: false };
 }

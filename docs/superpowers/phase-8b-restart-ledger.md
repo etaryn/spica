@@ -12,7 +12,8 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
 - Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
 - Task 5: complete — 9bba422, product review approved; both test-only scope adjustments approved.
-- Tasks 6–10: not started.
+- Task 6: paused for repository-scope approval — 81c8aac; review requires selection fix.
+- Tasks 7–10: not started.
 
 ## Setup evidence
 
@@ -111,3 +112,21 @@ then independent review; no product behavior change authorized or needed.
 - Ethan reiterated Sonnet-like, weaker subagent routing: sol for implementation and reviews,
   luna for mechanical work. This user preference supersedes the strongest-model final-review default;
   request approval before escalating beyond sol.
+
+## Task 6 evidence, review and scope gate
+
+- Pauli (sol/high) committed 81c8aac: anticipation, prompt/config/fake and eight focused tests.
+  Focused8/typecheck/lint passed; initial full793 passed before last fake change, final full793/794
+  failed the existing side-channel comparison. Do not claim a green full suite at this commit.
+- The failing comparison regenerates random world IDs, while fallthrough rolls use event IDs.
+  Controller and reviewer verified world-tick.ts202 and mind-split.test.ts236. Task10 explicitly
+  owns fixed-ID/seed paired isolation scenarios; that exit remains required, not waived.
+- Kierkegaard (sol/high) reviewed d2ee850..81c8aac: Important candidate starvation. Task6 must
+  ignore malformed/missing event links, but Task2's anticipationCandidate returns a single row
+  before checking the link. A broken earliest link therefore hides later valid intentions.
+- Controller verified the mismatch. Proposed narrow expansion: include the core memory repo and
+  repository tests in Task6; filter invalid/missing linked events before choosing the first eligible
+  intention, retaining the existing signature and deterministic ordering. Await Ethan's approval
+  under the repository stop-on-conflict rule. Pauli is held; Tasks7–10 have not begun.
+- Minor deferred: anticipate fake's prefix/suffix can exceed a very small configured max_chars.
+  Final branch review must triage this with earlier deferred findings.

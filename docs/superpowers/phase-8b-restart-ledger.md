@@ -13,7 +13,8 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
 - Task 5: complete — 9bba422, product review approved; both test-only scope adjustments approved.
 - Task 6: complete — 81c8aac + 40e4917; scoped fix rereview approved.
-- Task 7: starting; Tasks 8–10 not started.
+- Task 7: complete — ec6a489, independent spec/quality review approved.
+- Task 8: starting; Tasks 9–10 not started.
 
 ## Setup evidence
 
@@ -141,3 +142,13 @@ Behavioral RED exposed the broken earliest link; focused repository + anticipati
 31/31, with typecheck and lint green. Hume (sol/high) scoped rereview found the Important finding
 addressed, no new blocking breakage. Full suite remains unverified at this head; the prior
 793/794 side-channel failure is still open for Task10. Minor fake bound remains deferred.
+
+## Task 7 evidence and review
+
+- Galileo (sol/high) committed ec6a489: focused rumination tests 13/13, typecheck/lint passed.
+- Full suite 807/808: only the already diagnosed paired side-channel fixture failed, with one
+  telescope event happened and the other fell through due to random event IDs. The Task10 fixed
+  ID/seed exit is still required; no green full-suite claim is made.
+- Nietzsche (sol/high) reviewed the diff: spec compliant, quality approved, no Task7 blocking
+  findings. The report carries commands/output for focused/full/typecheck/lint; no independent
+  rerun was needed. Atomic thought/marker/reinforcement/mood/trace and race checks verified.

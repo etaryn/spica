@@ -326,6 +326,7 @@ const coreWorld = z.object({
   events_local_hour: hourOfDay,
   events_per_day_max: countFromZero,
   event_probability: unit,
+  fallthrough_probability: unit,
   goal_driven_share: unit,
   goal_weight_floor: unit,
   event_context_items: countFromZero,
@@ -362,6 +363,7 @@ const coreLoop = z.enum(CORE_LOOPS);
 const core = z
   .object({
     appraise: coreAppraise,
+    resolve: z.object({ max_tokens: positiveInt }),
     loops: z.object({
       max_chars: positiveInt,
       max_tokens: positiveInt,
@@ -451,6 +453,7 @@ const prompts = z.object({
   life_plan: promptVersion,
   life_event: promptVersion,
   core_appraise: promptVersion,
+  core_resolve: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
 });

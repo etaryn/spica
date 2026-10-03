@@ -209,6 +209,7 @@ test("the appraised feeling, needs and goal progress are applied, and a goal at 
     content: appraisal.episode,
     valence: 0.7,
     salience: 0.6,
+    payload: { appraisal_emotion: appraisal.emotion },
   });
   const state = (await deps.core.state.get())!;
   expect(state.emotion).toEqual({

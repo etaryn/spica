@@ -181,6 +181,7 @@
     "life_availability": "v1",
     "core_state_line": "v3",
     "core_appraise": "v1",
+    "core_resolve": "v1",
     "reach_out": "v1"
   },
   "queue": {
@@ -287,6 +288,7 @@
       "fallback_band": [-0.2, 0.3],
       "fallback_labels": { "negative": "upset", "neutral": "calm", "positive": "pleased" }
     },
+    "resolve": { "max_tokens": 512 },
     "daily_call_budget": 24,
     "budget_reserve": 8,
     "loop_priority": {
@@ -332,6 +334,7 @@
       "events_local_hour": 0,
       "events_per_day_max": 1,
       "event_probability": 0.5,
+      "fallthrough_probability": 0.15,
       "goal_driven_share": 0.5,
       "goal_weight_floor": 0.1,
       "event_context_items": 20,

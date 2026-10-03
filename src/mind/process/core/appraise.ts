@@ -54,6 +54,8 @@ export type LandingEvent = {
   at: Date;
   agents: string[];
   goalRef: string | null;
+  intentionEventId?: string;
+  resolvesMemoryId?: string | null;
 };
 export const eventRef = (worldEventId: string) => `world_event:${worldEventId}`;
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -125,31 +127,35 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
   const { deps } = ctx;
   const { config, core, log } = deps;
   if (!ctx.canCall()) return codeAppraisal(event, config.core);
+  const persona = loadPersona(config);
+  const self = (await core.memory.latestSnapshot())?.content ?? persona.seedSelf;
+  const expected = await core.memory.bySourceRef(
+    "intention",
+    eventRef(event.intentionEventId ?? event.worldEventId),
+  );
+  const state = await core.state.get();
+  const goals = await core.goals.active();
+  const input = [
+    `Event (${event.kind}, ${event.stakes} stakes): ${event.content}`,
+    `How it went on the surface: valence ${event.valence.toFixed(2)}`,
+    `What she expected: ${expected?.content ?? "nothing; she didn't see it coming"}`,
+    state
+      ? `How she is right now: mood ${state.mood_valence.toFixed(2)}, energy ${state.energy.toFixed(2)}, autonomy ${state.needs.autonomy.toFixed(2)}, competence ${state.needs.competence.toFixed(2)}${state.emotion ? `, feeling ${state.emotion.label}` : ""}`
+      : "How she is right now: unknown",
+    goals.length
+      ? `Her goals:\n${goals.map((g) => `- [${g.id}] ${g.title} (${Math.round(g.progress * 100)}% there): ${g.why}`).join("\n")}`
+      : "Her goals: none right now.",
+  ].join("\n\n");
+  const system = [
+    persona.coreValues,
+    self,
+    loadPrompt("core/appraise", config.prompts.core_appraise),
+  ].join("\n\n");
   try {
-    const persona = loadPersona(config);
-    const self = (await core.memory.latestSnapshot())?.content ?? persona.seedSelf;
-    const expected = await core.memory.bySourceRef("intention", eventRef(event.worldEventId));
-    const state = await core.state.get();
-    const goals = await core.goals.active();
-    const input = [
-      `Event (${event.kind}, ${event.stakes} stakes): ${event.content}`,
-      `How it went on the surface: valence ${event.valence.toFixed(2)}`,
-      `What she expected: ${expected?.content ?? "nothing; she didn't see it coming"}`,
-      state
-        ? `How she is right now: mood ${state.mood_valence.toFixed(2)}, energy ${state.energy.toFixed(2)}, autonomy ${state.needs.autonomy.toFixed(2)}, competence ${state.needs.competence.toFixed(2)}${state.emotion ? `, feeling ${state.emotion.label}` : ""}`
-        : "How she is right now: unknown",
-      goals.length
-        ? `Her goals:\n${goals.map((g) => `- [${g.id}] ${g.title} (${Math.round(g.progress * 100)}% there): ${g.why}`).join("\n")}`
-        : "Her goals: none right now.",
-    ].join("\n\n");
     const raw = await deps.llm.classifyJson({
       purpose: "core_appraise",
       model: "core",
-      system: [
-        persona.coreValues,
-        self,
-        loadPrompt("core/appraise", config.prompts.core_appraise),
-      ].join("\n\n"),
+      system,
       input,
       schema: AppraisalSchema,
       timeoutMs: config.models.structured_timeout_ms,
@@ -178,9 +184,11 @@ export async function applyAppraisal(
 ): Promise<{ episodeId: string; intentionId: string | null }> {
   const { world, state } = deps.config.core;
   const ref = eventRef(event.worldEventId);
+  const intentionRef = eventRef(event.intentionEventId ?? event.worldEventId);
   const episodeId = await core.memory.insert({
     kind: "episode",
     content: a.episode,
+    payload: { appraisal_emotion: a.emotion },
     embedding,
     entity_refs: event.agents,
     occurred_at: event.at,
@@ -194,8 +202,11 @@ export async function applyAppraisal(
     source_ref: ref,
   });
   // Once it has happened the episode speaks for it; the plan stays only as history.
-  const intention = await core.memory.bySourceRef("intention", ref);
+  const intention = await core.memory.bySourceRef("intention", intentionRef);
   if (intention) await core.memory.setStatus(intention.id, "resolved");
+  const target = event.resolvesMemoryId ? await core.memory.get(event.resolvesMemoryId) : null;
+  if (target?.kind === "episode" && target.status === "open")
+    await core.memory.setStatus(target.id, "resolved");
   for (const g of a.goalEffects) {
     const goal = await core.goals.get(g.goalId);
     if (!goal || goal.status !== "active") continue;
@@ -210,9 +221,11 @@ export async function applyAppraisal(
   const mood = applyEvent(moodOf(row), a.emotion.valence, state, a.emotion.arousal);
   const strong = Math.abs(a.emotion.valence) >= state.preoccupation_min_valence;
   let preoccupation: CoreStatePatch = {};
-  if (strong) preoccupation = { preoccupation: episodeId, preoccupation_since: now };
-  else if (intention && row.preoccupation === intention.id)
+  if (target?.kind === "episode" && row.preoccupation === target.id)
     preoccupation = { preoccupation: null, preoccupation_since: null };
+  if (intention && row.preoccupation === intention.id)
+    preoccupation = { preoccupation: null, preoccupation_since: null };
+  if (strong) preoccupation = { preoccupation: episodeId, preoccupation_since: now };
   await core.state.update({
     ...mood,
     ...preoccupation,

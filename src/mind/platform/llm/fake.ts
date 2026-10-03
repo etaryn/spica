@@ -50,6 +50,11 @@ export class FakeLLMProvider implements LLMProvider {
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
     // Goal identity comes from code; fake content stays stable across fresh goal row IDs.
     life_event: () => ({ ...structuredClone(FAKE_DAY_EVENT), goal_ref: "model-id-ignored" }),
+    core_resolve: (input: string) => ({
+      content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
+      valence: 0,
+      stakes: "low",
+    }),
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

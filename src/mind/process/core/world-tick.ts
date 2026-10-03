@@ -34,6 +34,8 @@ import {
   type LandingEvent,
 } from "./appraise";
 import type { WorldEventRow } from "@/mind/world/types";
+import { seededUnit } from "@/mind/platform/seeded-random";
+import { proposeResolution, type ResolutionProposal } from "./resolve";
 import { runCoreLoop } from "./runner";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
@@ -193,10 +195,30 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
   const pending = await core.world.dueUnappraised(now);
   if (!pending.length) return 0;
   await core.state.ensure(config.core.state.baseline, baselineNeeds(config.core.state));
+  const resolutions = new Map<string, ResolutionProposal>();
+  for (const event of pending) {
+    if (event.kind !== "planned" || event.outcome !== null) continue;
+    const fallsThrough =
+      event.fallthrough ??
+      seededUnit(`${event.id}:fallthrough`) < config.core.world.fallthrough_probability;
+    if (!fallsThrough) continue;
+    let proposal: ResolutionProposal | null = null;
+    const run = await runCoreLoop(deps, "core_resolve", now, async (ctx) => {
+      proposal = await proposeResolution(ctx, event);
+      return {
+        status: proposal ? "done" : "fallback",
+        inputs: { world_event: event.id },
+        outputs: { proposed: proposal !== null },
+        promptVersion: config.prompts.core_resolve,
+      };
+    });
+    if (run.status === "done" && proposal) resolutions.set(event.id, proposal);
+  }
   const run = await runCoreLoop(deps, "core_appraise", now, async (ctx) => {
     // Model and embedder calls run before the transaction; the apply re-checks under the lock.
     const proposals = new Map<string, Appraisal>();
-    for (const e of pending) proposals.set(e.id, await proposeAppraisal(ctx, landing(e)));
+    for (const e of pending)
+      proposals.set(e.id, await proposeAppraisal(ctx, landing(e, resolutions.get(e.id))));
     const vectors = await ctx.deps.embedder.embed(
       [...proposals.values()].map((a) => a.episode),
       "document",
@@ -208,22 +230,47 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       const resolved: string[] = [];
       // Re-read under the lock: another run may have landed some of these already.
       for (const event of await tx.world.dueUnappraised(now)) {
+        const prepared = pending.find((p) => p.id === event.id);
+        if (!prepared || prepared.outcome !== event.outcome) continue;
         const appraisal = proposals.get(event.id);
         const embedding = vectors[pending.findIndex((p) => p.id === event.id)];
         // Became due after the proposals (a concurrent generation); the next run takes it.
         if (!appraisal || !embedding) continue;
+        const resolution = resolutions.get(event.id);
         const agents = event.agent_names.length
           ? await tx.memory.addEntities(event.agent_names, config.core.world.entity_salience, now)
           : event.agents;
-        await tx.world.setAgents(event.id, agents);
+        let landedEvent = landing(event, resolution);
+        if (resolution) {
+          const replacementId = await tx.world.recordEvent({
+            at: event.at,
+            kind: "resolution",
+            content: resolution.content,
+            valence: resolution.valence,
+            stakes: resolution.stakes,
+            agents,
+            agent_names: event.agent_names,
+            life_day: event.life_day,
+            created_at: now,
+            plan_ref: event.id,
+            goal_ref: event.goal_ref,
+            resolves_memory_id: event.resolves_memory_id,
+          });
+          landedEvent = { ...landedEvent, worldEventId: replacementId };
+        } else {
+          await tx.world.setAgents(event.id, agents);
+        }
+        if (event.kind === "planned" && event.outcome === null)
+          await tx.world.setOutcome(event.id, resolution ? "fell_through" : "happened");
         const result = await applyAppraisal(
           tx,
           deps,
-          { ...landing(event), agents },
+          { ...landedEvent, agents },
           appraisal,
           embedding,
           now,
         );
+        if (resolution) await tx.world.markAppraised(event.id, now);
         landed.push(event.id);
         episodes.push(result.episodeId);
         if (result.intentionId) resolved.push(result.intentionId);
@@ -240,13 +287,15 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
   return run.outputs?.landed.length ?? 0;
 }
 
-const landing = (e: WorldEventRow): LandingEvent => ({
+const landing = (e: WorldEventRow, resolution?: ResolutionProposal): LandingEvent => ({
   worldEventId: e.id,
-  kind: e.kind,
-  content: e.content,
-  valence: e.valence,
-  stakes: e.stakes,
+  kind: resolution ? "resolution" : e.kind,
+  content: resolution?.content ?? e.content,
+  valence: resolution?.valence ?? e.valence,
+  stakes: resolution?.stakes ?? e.stakes,
   at: e.at,
   agents: e.agents,
   goalRef: e.goal_ref,
+  intentionEventId: resolution ? e.id : undefined,
+  resolvesMemoryId: e.resolves_memory_id,
 });

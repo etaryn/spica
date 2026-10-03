@@ -4,7 +4,7 @@
  * no trace until its time. Every hourly run lands the events whose time has come, once each.
  */
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
-import { count, eq } from "drizzle-orm";
+import { count, eq, isNull } from "drizzle-orm";
 import { core_loop_trace, core_memory, life_event_log, world_event } from "@/db/schema";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { retrieveCore } from "@/mind/memory/core/retrieve";
@@ -37,7 +37,11 @@ const spontaneous = {
 };
 
 // In UTC her day starts at midnight; generation at 01:00 leaves the 15:00 event in the future.
-const utc = { ...cfg, life: { timezone: "UTC" } };
+const utc = {
+  ...cfg,
+  life: { timezone: "UTC" },
+  core: { world: { ...cfg.core.world, fallthrough_probability: 0 } },
+};
 const morning = new Date("2026-01-05T01:00:00Z");
 const eventTime = new Date("2026-01-05T15:00:00Z");
 const planned = (valence: number) => ({
@@ -400,6 +404,7 @@ test("the kind is stored: planned stays planned, spontaneous is a surprise", asy
   const kinds = await deps.db
     .select({ kind: world_event.kind })
     .from(world_event)
+    .where(isNull(world_event.plan_ref))
     .orderBy(world_event.at);
   expect(kinds.map((k) => k.kind)).toEqual(["planned", "surprise"]);
 });

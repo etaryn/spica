@@ -409,8 +409,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `value`, `excerpt`, `verdict` (`ok | contradicts | strains`), `score`, and
   required clock-supplied `created_at`. These tables have no user identifier.
   All writes are available through the core transaction scope. The trace
-  repository's `latestDone(loop, before)` includes zero-call successful runs
-  and excludes unsuccessful statuses and the upper time boundary.
+  repository's `latestDone(loop, before)` returns the last consumed reflection
+  cursor from successful runs, including zero-call runs, and excludes
+  unsuccessful statuses and the upper time boundary.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
   (`planned | surprise | resolution`; all three are written), `content`,
@@ -757,13 +758,15 @@ budget and a versioned prompt:
 
 - `core_reflect` (`prompts/core/reflect/v1.md`, `prompts.core_reflect: v1`)
   reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
-  since its last successful run, plus `context_items` (6) active neighbours.
+  after the last consumed `(created_at, id)` cursor in its successful trace,
+  plus `context_items` (6) active neighbours. A capped run retains later
+  equal-time IDs and all other unconsumed input for subsequent nights.
   It may write up to `max_insights` (2), `max_opinions` (3) and
   `max_interests` (2); goal additions respect `core.goals.max_active`.
   Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
   interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
-  produces a zero-call successful trace.
+  produces a zero-call successful trace with a time-only cursor at `now`.
 - `core_consolidate` (`prompts/core/consolidate/v1.md`,
   `prompts.core_consolidate: v1`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes

@@ -90,10 +90,11 @@ export type CoreSelfLine = {
   embedding: number[];
 };
 export type CoreGistGroup = { week: string; sources: CoreMemoryItem[] };
+export type CoreReflectCursor = { at: Date; id: string | null };
 
 export interface CoreMemory {
-  /** Active episodes, thoughts and ideas in (from, to], oldest first then ID. Null starts all history. */
-  reflectInputs(from: Date | null, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  /** Active episodes, thoughts and ideas after the last consumed `(created_at, id)`, oldest first. */
+  reflectInputs(from: CoreReflectCursor | null, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** Active memories of the requested kinds, closest first then ID. */
   nearestActive(
     embedding: number[],

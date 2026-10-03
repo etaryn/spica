@@ -76,3 +76,4 @@ code itself.
 | 2026-10-04 | Snapshot rendering uses at most 8 items per kind and 1024 output tokens; recent insights are bounded newest-first since the previous render | Limits bound nightly context while preserving recent low-salience changes. |
 | 2026-10-04 | The drift values judge has a 512-token output cap; code diagnostics use cosine distance and changed-section share | One bounded judge call supplements measurements that survive budget or judge failure. |
 | 2026-10-04 | Schedule `core_nightly` at minute 55 each hour, after `core_mind_tick` at minute 50 | The date claim gates the once-nightly run while the hourly cron allows startup or delayed jobs to catch the local night. |
+| 2026-10-04 | Reflection records the last consumed `(created_at, id)` pair in each successful trace; a zero-input run records `(now, null)` | A fixed input cap then drains older backlog in stable order across nights, including rows that share a creation time. |

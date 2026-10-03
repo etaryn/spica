@@ -48,9 +48,10 @@ test("no new inputs completes with zero calls and advances the successful bounda
   const { all, deps } = setup();
   expect(await coreReflect(deps, now)).toBe("done");
   expect(all.llm.structuredCalls).toHaveLength(0);
-  expect(await deps.core.traces.latestDone("core_reflect", new Date(now.getTime() + 1))).toEqual(
-    now,
-  );
+  expect(await deps.core.traces.latestDone("core_reflect", new Date(now.getTime() + 1))).toEqual({
+    at: now,
+    id: null,
+  });
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "done", calls: 0 }]);
 });
 
@@ -69,6 +70,51 @@ test("model input caps new experience and active context independently", async (
     id: narrativeId,
     content: "She remembers her changing taste.",
   });
+});
+
+test("overflow drains in stable timestamp and ID order across nights without duplicates", async () => {
+  const { all, deps } = setup({ core: { reflect: { max_inputs: 2 } } });
+  const created = new Date(now.getTime() - 1000);
+  const ids: string[] = [];
+  for (const content of ["a", "b", "c", "d", "e"])
+    ids.push(await memory(deps, "episode", content, created));
+  for (let day = 0; day < 4; day++) {
+    const night = new Date(now.getTime() + day * 86_400_000);
+    expect(await coreReflect(deps, night)).toBe("done");
+  }
+  expect(all.llm.structuredCalls).toHaveLength(3);
+  expect(
+    all.llm.structuredCalls.flatMap((call) =>
+      JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+    ),
+  ).toEqual(ids.sort());
+  expect((await all.db.select().from(core_loop_trace)).map((trace) => trace.calls)).toEqual([
+    1, 1, 1, 0,
+  ]);
+});
+
+test("zero-input success advances the boundary while failed runs leave their inputs due", async () => {
+  const { all, deps } = setup();
+  expect(await coreReflect(deps, now)).toBe("done");
+  await memory(deps, "episode", "older backfill", new Date(now.getTime() - 1000));
+  const fresh = await memory(deps, "episode", "new event", new Date(now.getTime() + 1000));
+  const next = new Date(now.getTime() + 86_400_000);
+  all.llm.handlers.core_reflect = () => {
+    throw new Error("model failure");
+  };
+  await expect(coreReflect(deps, next)).rejects.toThrow("model failure");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: { add: [], drop: [] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, new Date(next.getTime() + 86_400_000))).toBe("done");
+  const calls = all.llm.structuredCalls.map((call) =>
+    JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+  );
+  expect(calls).toEqual([[fresh], [fresh]]);
 });
 
 test("bounded proposals supersede opinions and narrative, fade interests, and change goals", async () => {

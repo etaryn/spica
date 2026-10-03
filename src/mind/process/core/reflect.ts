@@ -17,10 +17,20 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     const since = await core.traces.latestDone("core_reflect", now);
     const inputs = await core.memory.reflectInputs(since, now, bounds.max_inputs);
     const inputIds = inputs.map((item) => item.id);
+    const last = inputs.at(-1);
+    const cursor = last
+      ? { at: last.created_at.toISOString(), id: last.id }
+      : { at: now.toISOString(), id: null };
     if (!inputs.length)
       return {
         inputs: { ids: [] },
-        outputs: { memory_ids: [], goal_ids: [], faded_interest_ids: [], dropped_goal_ids: [] },
+        outputs: {
+          memory_ids: [],
+          goal_ids: [],
+          faded_interest_ids: [],
+          dropped_goal_ids: [],
+          cursor,
+        },
       };
 
     const [query] = await deps.embedder.embed(
@@ -196,6 +206,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           goal_ids: goalIds,
           faded_interest_ids: fadedInterestIds,
           dropped_goal_ids: droppedGoalIds,
+          cursor,
         },
         promptVersion: config.prompts.core_reflect,
       };

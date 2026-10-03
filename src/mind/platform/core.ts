@@ -2,7 +2,7 @@
  * The core mind's data layer: her memory, her state and her world, with no way to name a user.
  * Core loops get only this (never the database), so they can't read user data even by mistake.
  */
-import type { CoreMemory } from "@/mind/memory/core/types";
+import type { CoreMemory, CoreReflectCursor } from "@/mind/memory/core/types";
 import type { CoreGoals, CoreState } from "@/mind/state/core/types";
 import type { World } from "@/mind/world/types";
 
@@ -28,8 +28,8 @@ export type NewCoreLoopTrace = {
 };
 
 export interface CoreTraces {
-  /** Most recent done run strictly before the boundary, including successful zero-call runs. */
-  latestDone(loop: string, before: Date): Promise<Date | null>;
+  /** Last consumed input cursor from a done run strictly before the boundary. */
+  latestDone(loop: string, before: Date): Promise<CoreReflectCursor | null>;
   insert(trace: NewCoreLoopTrace): Promise<void>;
   /** Model calls traced at or after `from`: what today's budget has spent. */
   callsSince(from: Date): Promise<number>;

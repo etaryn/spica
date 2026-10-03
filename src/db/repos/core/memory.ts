@@ -1,7 +1,7 @@
 /**
  * Her core memory in Postgres. No query here takes or returns a user id.
  */
-import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { core_entity, core_memory, core_self_line, core_snapshot, world_event } from "@/db/schema";
@@ -88,7 +88,14 @@ export function coreMemoryRepo(db: Db): CoreMemory {
             and(
               ACTIVE,
               inArray(core_memory.kind, ["episode", "thought", "idea"]),
-              from === null ? undefined : gt(core_memory.created_at, from),
+              from === null
+                ? undefined
+                : from.id === null
+                  ? gt(core_memory.created_at, from.at)
+                  : or(
+                      gt(core_memory.created_at, from.at),
+                      and(eq(core_memory.created_at, from.at), gt(core_memory.id, from.id)),
+                    ),
               lte(core_memory.created_at, to),
             ),
           )

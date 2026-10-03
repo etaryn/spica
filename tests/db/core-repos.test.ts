@@ -141,8 +141,11 @@ test("nightly state and zero-call done traces preserve the successful boundary",
       created_at: atHour(offset),
     });
   }
-  expect(await layer.traces.latestDone("core_reflect", atHour(4))).toEqual(now);
-  expect(await layer.traces.latestDone("core_reflect", atHour(5))).toEqual(atHour(4));
+  expect(await layer.traces.latestDone("core_reflect", atHour(4))).toEqual({ at: now, id: null });
+  expect(await layer.traces.latestDone("core_reflect", atHour(5))).toEqual({
+    at: atHour(4),
+    id: null,
+  });
   expect(await layer.traces.latestDone("other", atHour(5))).toBeNull();
 });
 
@@ -156,9 +159,9 @@ test("reflect and snapshot context filter before deterministic limits", async ()
   for (const kind of ["episode", "thought", "idea"] as const) {
     ids.push(await memory.insert({ ...episode(kind, 0.01, now), kind }));
   }
-  expect((await memory.reflectInputs(atHour(-1), now, 2)).map((m) => m.id)).toEqual(
-    ids.sort().slice(0, 2),
-  );
+  expect(
+    (await memory.reflectInputs({ at: atHour(-1), id: null }, now, 2)).map((m) => m.id),
+  ).toEqual(ids.sort().slice(0, 2));
   const opinion = await memory.insert({
     ...episode("opinion", 0.01, now),
     kind: "opinion",

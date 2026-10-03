@@ -166,10 +166,16 @@ test("two nights render self, track drift, gist once, decay selectively and keep
       "core_drift_watch",
       "core_drift_watch",
       "core_reflect",
+      "core_reflect",
       "core_render_snapshot",
       "core_render_snapshot",
     ].sort(),
   );
+  const reflectCalls = all.llm.structuredCalls.filter((call) => call.purpose === "core_reflect");
+  expect(reflectCalls).toHaveLength(2);
+  expect(
+    JSON.parse(reflectCalls[1]!.input).inputs.map((item: { id: string }) => item.id),
+  ).toContain(gists[0]!.id);
   for (const call of all.llm.structuredCalls)
     expect(`${call.system}\n${call.input}`).not.toContain(canary);
   for (const table of [

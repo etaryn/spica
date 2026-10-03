@@ -114,6 +114,7 @@ export class FakeLLMProvider implements LLMProvider {
       goals: { add: [], drop: [] },
       narrative: null,
     }),
+    core_drift_watch: () => ({ findings: [] }),
     core_consolidate: (input: string) => ({
       gist: `She remembers ${JSON.parse(input)
         .sources.map((source: { content: string }) => source.content)

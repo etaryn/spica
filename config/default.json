@@ -186,6 +186,7 @@
     "core_wander": "v1",
     "core_reflect": "v1",
     "core_snapshot": "v1",
+    "core_drift": "v1",
     "core_consolidate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
@@ -314,6 +315,7 @@
       "max_items": 2
     },
     "resolve": { "max_tokens": 512 },
+    "drift": { "max_tokens": 512 },
     "reflect": {
       "max_inputs": 30,
       "context_items": 6,

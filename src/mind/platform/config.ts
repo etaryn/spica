@@ -383,6 +383,7 @@ const core = z
     }),
     resolve: z.object({ max_tokens: positiveInt }),
     snapshot: z.object({ max_items: positiveInt, max_tokens: positiveInt }),
+    drift: z.object({ max_tokens: positiveInt }),
     reflect: z.object({
       max_inputs: positiveInt,
       context_items: positiveInt,
@@ -497,6 +498,7 @@ const prompts = z.object({
   core_wander: promptVersion,
   core_reflect: promptVersion,
   core_snapshot: promptVersion,
+  core_drift: promptVersion,
   core_consolidate: promptVersion,
   core_resolve: promptVersion,
   life_availability: promptVersion,

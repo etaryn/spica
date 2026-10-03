@@ -1,5 +1,5 @@
 import { PgBoss } from "pg-boss";
-import { afterAll, expect, test } from "vitest";
+import { afterAll, expect, test, vi } from "vitest";
 import { LockBusyError } from "@/mind/process/cold-path/cold-path";
 import type { Logger } from "@/mind/platform/log";
 import {
@@ -117,6 +117,29 @@ test("ensureSystemQueues creates outreach_tick without retries", async () => {
   started = true;
   await ensureSystemQueues(boss);
   expect(await boss.getQueue(OUTREACH_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("ensureSystemQueues creates core_mind_tick with zero retries before updating it", async () => {
+  await boss.start();
+  started = true;
+  if (await boss.getQueue(CORE_MIND_TICK_QUEUE)) await boss.deleteQueue(CORE_MIND_TICK_QUEUE);
+  expect(await boss.getQueue(CORE_MIND_TICK_QUEUE)).toBeNull();
+
+  const updateQueue = boss.updateQueue.bind(boss);
+  let retryLimitAtCreation: number | undefined;
+  const spy = vi.spyOn(boss, "updateQueue").mockImplementation(async (name, options) => {
+    if (name === CORE_MIND_TICK_QUEUE)
+      retryLimitAtCreation = (await boss.getQueue(CORE_MIND_TICK_QUEUE))?.retryLimit;
+    await updateQueue(name, options);
+  });
+  try {
+    await ensureSystemQueues(boss);
+  } finally {
+    spy.mockRestore();
+  }
+
+  expect(retryLimitAtCreation).toBe(0);
+  expect(await boss.getQueue(CORE_MIND_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
 });
 
 test("ensureSystemQueues sets core_mind_tick to zero retries even on an existing queue", async () => {

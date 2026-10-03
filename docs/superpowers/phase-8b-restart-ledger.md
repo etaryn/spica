@@ -14,7 +14,8 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 5: complete — 9bba422, product review approved; both test-only scope adjustments approved.
 - Task 6: complete — 81c8aac + 40e4917; scoped fix rereview approved.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
-- Task 8: starting; Tasks 9–10 not started.
+- Task 8: complete — 772a5d0, independent spec/quality review approved.
+- Task 9: starting; Task 10 not started.
 
 ## Setup evidence
 
@@ -152,3 +153,14 @@ addressed, no new blocking breakage. Full suite remains unverified at this head;
 - Nietzsche (sol/high) reviewed the diff: spec compliant, quality approved, no Task7 blocking
   findings. The report carries commands/output for focused/full/typecheck/lint; no independent
   rerun was needed. Atomic thought/marker/reinforcement/mood/trace and race checks verified.
+
+## Task 8 evidence and review
+
+- Einstein (sol/high) committed 772a5d0: focused14, full822 across108 files, typecheck/lint passed.
+- Faraday (sol/high) approved spec and quality: downtime gate, deterministic seed/chain, daily cap,
+  midnight gap, overlap, applied trace and hypothetical exclusion verified from code/tests.
+- Minor deferred process evidence: initial RED was a missing-module import failure with zero tests
+  collected, so it does not establish a failing behavioral assertion. Final review can note this
+  limitation, without mislabeling it as test-first behavior proof.
+- The side-channel comparison happened to pass in this full run; Task10 still must make the
+  paired fixed-ID/seed canary deterministic and pass the final exit tests.

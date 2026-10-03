@@ -16,7 +16,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
 - Task 9: complete — 0f02b4e + 58c995f; scoped fix rereview approved.
-- Task 10: complete — f2bc21e, independent spec/quality review approved; final branch review pending.
+- Task 10: complete — f2bc21e, independent spec/quality review and final branch fix re-review approved.
 
 ## Setup evidence
 
@@ -218,3 +218,19 @@ paired test serializes unsorted database row arrays; stable semantic sort would 
 order-only test failures. The final whole-branch review must triage this and every earlier minor.
 Controller will rerun required checks after review/fix wave; Task10 report records 834 tests and
 fake eval no regressions at f2bc21e. No full Phase8/8d exit is claimed.
+
+## Whole-branch review and final verification
+
+- Whole-branch review of ae87bd0..6c7efd2 found four required fixes: preserve a null
+  resolution replacement goal reference, permit later goal-linked events after an injected
+  first event, sort paired semantic rows before comparison, and record dedupe reasons for
+  dropped thought trace items. No other Critical or Important findings were reported.
+- Commit 5e7a4be addressed all four. The fix report records behavioral RED failures,
+  followed by 136 covering tests and passing typecheck/lint. Independent scoped re-review
+  confirmed all four addressed and found no new Critical or Important breakage.
+- Controller verification at 5e7a4be: typecheck and lint exit 0; full test suite exits 0
+  with 111 files / 836 tests passed on spica_8b_restart_test; fake-model eval comparison
+  exits 0 with no regressions against baseline on spica_8b_restart_eval. Real-only eval
+  scenarios were skipped by design. No default database or real model calls were used.
+- Phase 8b restart is ready for integration choice. This does not claim completion of
+  Phase 8c, Phase 8d, or the full Phase 8 exit. Original phase-8b checkout remains untouched.

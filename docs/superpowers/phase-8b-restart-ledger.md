@@ -16,7 +16,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 7: complete — ec6a489, independent spec/quality review approved.
 - Task 8: complete — 772a5d0, independent spec/quality review approved.
 - Task 9: complete — 0f02b4e + 58c995f; scoped fix rereview approved.
-- Task 10: exit coverage and v3/decision documentation verified; controller review pending.
+- Task 10: complete — f2bc21e, independent spec/quality review approved; final branch review pending.
 
 ## Setup evidence
 
@@ -209,4 +209,12 @@ still must make its exit deterministic and achieve a final green full suite.
 - Focused exits: 2 files / 11 tests passed. `pnpm.cmd typecheck` and `pnpm.cmd lint` exited 0.
   Full `pnpm.cmd test`: 111 files / 834 tests passed. Fake eval comparison exited 0 with
   `no regressions against baseline`; real-only scripts were skipped by design. Both commands
-  used the isolated restart databases. Controller task and whole-branch reviews remain pending.
+  used the isolated restart databases. Whole-branch review remains pending.
+
+Copernicus (sol/high) reviewed Task10: spec compliant and quality approved. The literal fixed
+world UUID, null fallthrough seed, non-vacuous four-purpose canary, short deterministic exit,
+v3 fields/config/job/prompt/B51 updates and six decisions were checked. Minor deferred: the
+paired test serializes unsorted database row arrays; stable semantic sort would prevent
+order-only test failures. The final whole-branch review must triage this and every earlier minor.
+Controller will rerun required checks after review/fix wave; Task10 report records 834 tests and
+fake eval no regressions at f2bc21e. No full Phase8/8d exit is claimed.

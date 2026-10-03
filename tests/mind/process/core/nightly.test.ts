@@ -104,14 +104,43 @@ test("a failed reflect leaves later steps eligible", async () => {
   ]);
 });
 
-test("an interruption after the claim cannot retry until the next night", async () => {
-  const { deps } = setup({ core: { daily_call_budget: 0, budget_reserve: 0 } });
+test("a pre-render snapshot read failure is logged and cannot retry until the next night", async () => {
+  const { deps, all, errors } = setup({ core: { daily_call_budget: 0, budget_reserve: 0 } });
   const original = deps.core.memory.latestSnapshot;
+  class SnapshotReadFailure extends Error {}
   deps.core.memory.latestSnapshot = async () => {
-    throw new Error("interrupted");
+    throw new SnapshotReadFailure("private snapshot content");
   };
-  await expect(coreNightly(deps, first)).rejects.toThrow("interrupted");
+  expect(await coreNightly(deps, first)).toBe(true);
   deps.core.memory.latestSnapshot = original;
+  expect((await all.db.select().from(core_loop_trace)).map((row) => row.loop)).toEqual([
+    "core_reflect",
+    "core_consolidate",
+  ]);
+  expect(JSON.stringify(errors)).toContain("SnapshotReadFailure");
+  expect(JSON.stringify(errors)).not.toContain("private snapshot content");
   expect(await coreNightly(deps, first)).toBe(false);
   expect(await coreNightly(deps, next)).toBe(true);
+});
+
+test("a post-render snapshot read failure preserves the new snapshot and skips drift", async () => {
+  const { deps, all, errors } = setup();
+  await seedSnapshot(deps);
+  const original = deps.core.memory.latestSnapshot;
+  class SnapshotReadFailure extends Error {}
+  deps.core.memory.latestSnapshot = async () => {
+    const snapshot = await original();
+    if (snapshot?.version === 1) throw new SnapshotReadFailure("private snapshot content");
+    return snapshot;
+  };
+  expect(await coreNightly(deps, first)).toBe(true);
+  deps.core.memory.latestSnapshot = original;
+  expect((await deps.core.memory.latestSnapshot())?.version).toBe(1);
+  expect((await all.db.select().from(core_loop_trace)).map((row) => row.loop)).toEqual([
+    "core_reflect",
+    "core_consolidate",
+    "core_render_snapshot",
+  ]);
+  expect(JSON.stringify(errors)).toContain("SnapshotReadFailure");
+  expect(JSON.stringify(errors)).not.toContain("private snapshot content");
 });

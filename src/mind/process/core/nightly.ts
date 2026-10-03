@@ -34,10 +34,16 @@ export async function coreNightly(deps: CoreDeps, now: Date): Promise<boolean> {
 
   await run("core_reflect", () => coreReflect(deps, now));
   await run("core_consolidate", () => coreConsolidate(deps, now));
-  const previousVersion = (await core.memory.latestSnapshot())?.version ?? -1;
-  const rendered = await run("core_render_snapshot", () => coreRenderSnapshot(deps, now));
-  const version = (await core.memory.latestSnapshot())?.version;
-  if (rendered && version !== undefined && version > previousVersion)
-    await run("core_drift_watch", () => coreDriftWatch(deps, now, version));
+  let version: number | undefined;
+  await run("core_render_snapshot", async () => {
+    const previousVersion = (await core.memory.latestSnapshot())?.version ?? -1;
+    const status = await coreRenderSnapshot(deps, now);
+    if (status !== "done") return;
+    const currentVersion = (await core.memory.latestSnapshot())?.version;
+    if (currentVersion !== undefined && currentVersion > previousVersion) version = currentVersion;
+  });
+  const renderedVersion = version;
+  if (renderedVersion !== undefined)
+    await run("core_drift_watch", () => coreDriftWatch(deps, now, renderedVersion));
   return true;
 }

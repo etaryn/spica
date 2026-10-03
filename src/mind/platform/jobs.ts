@@ -15,6 +15,7 @@ export const LIFE_PLAN_QUEUE = "life_plan";
 export const CORE_WORLD_TICK_QUEUE = "core_world_tick";
 export const CORE_STATE_TICK_QUEUE = "core_state_tick";
 export const CORE_MIND_TICK_QUEUE = "core_mind_tick";
+export const CORE_NIGHTLY_QUEUE = "core_nightly";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 

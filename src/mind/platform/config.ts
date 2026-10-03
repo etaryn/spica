@@ -404,6 +404,7 @@ const core = z
       max_tokens: positiveInt,
     }),
     mind: z.object({ tick_cron: cron }),
+    nightly: z.object({ tick_cron: cron, local_hour: hourOfDay }),
     loops: z.object({
       max_chars: positiveInt,
       max_tokens: positiveInt,

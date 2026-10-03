@@ -8,6 +8,7 @@ import {
   DECAY_QUEUE,
   CORE_STATE_TICK_QUEUE,
   CORE_MIND_TICK_QUEUE,
+  CORE_NIGHTLY_QUEUE,
   LIFE_PLAN_QUEUE,
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -56,6 +57,7 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
     CORE_WORLD_TICK_QUEUE,
     CORE_STATE_TICK_QUEUE,
     CORE_MIND_TICK_QUEUE,
+    CORE_NIGHTLY_QUEUE,
     OUTREACH_TICK_QUEUE,
   ]) {
     await boss.createQueue(q, { retryLimit: 0 });

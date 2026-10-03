@@ -6,6 +6,7 @@ import {
   DECAY_QUEUE,
   CORE_STATE_TICK_QUEUE,
   CORE_MIND_TICK_QUEUE,
+  CORE_NIGHTLY_QUEUE,
   LIFE_PLAN_QUEUE,
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
@@ -13,7 +14,7 @@ import {
 } from "@/mind/platform/jobs";
 import { errorName } from "@/mind/platform/errors";
 import { ensureSystemQueues, scrubErrors } from "@/worker/jobs";
-import { registerCoreMindJob } from "@/worker/core-jobs";
+import { registerCoreMindJob, registerCoreNightlyJob } from "@/worker/core-jobs";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../helpers/deps";
 import { resetDb, testDbUrl } from "../helpers/db";
@@ -149,6 +150,28 @@ test("ensureSystemQueues sets core_mind_tick to zero retries even on an existing
   await boss.updateQueue(CORE_MIND_TICK_QUEUE, { retryLimit: 3 });
   await ensureSystemQueues(boss);
   expect(await boss.getQueue(CORE_MIND_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("ensureSystemQueues gives core_nightly no retries", async () => {
+  await boss.start();
+  started = true;
+  await boss.createQueue(CORE_NIGHTLY_QUEUE, { retryLimit: 3 });
+  await boss.updateQueue(CORE_NIGHTLY_QUEUE, { retryLimit: 3 });
+  await ensureSystemQueues(boss);
+  expect(await boss.getQueue(CORE_NIGHTLY_QUEUE)).toMatchObject({ retryLimit: 0 });
+});
+
+test("registerCoreNightlyJob schedules an hourly job after the mind tick", async () => {
+  const schedules: { queue: string; cron: string }[] = [];
+  const fakeBoss = {
+    work: async () => {},
+    schedule: async (queue: string, cron: string) => {
+      schedules.push({ queue, cron });
+    },
+  } as unknown as PgBoss;
+  const deps = coreDepsOf(makeTestDeps());
+  await registerCoreNightlyJob(fakeBoss, deps);
+  expect(schedules).toEqual([{ queue: CORE_NIGHTLY_QUEUE, cron: "55 * * * *" }]);
 });
 
 test("registerCoreMindJob schedules the hourly cron and its worker runs the coordinator", async () => {

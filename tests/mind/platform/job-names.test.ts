@@ -15,6 +15,7 @@ describe("job names", () => {
       "cold_path",
       "cold_path_sweep",
       "core_mind_tick",
+      "core_nightly",
       "core_state_tick",
       "core_world_tick",
       "decay_pass",

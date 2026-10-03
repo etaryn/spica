@@ -357,7 +357,7 @@ Every table here references `user(id) ON DELETE CASCADE`.
   `relationship_event`, and **new (PROPOSED)** `user_loop_trace` (§9.5).
   `ego_tick` is gone with the per-user ego.
 
-### 6.2 Core scope (Built in part; the rest New)
+### 6.2 Core scope (Built through 8c where marked; the rest New)
 
 Holds no user data; no `user_id`. Core memory is **separate tables**
 (§21 #5, settled), reached only through the `CoreMemory`, `CoreState` and
@@ -366,7 +366,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 - **`core_memory`** (Built): items with `kind` (`episode | opinion |
   interest | goal | intention | thought | reflection | idea | hypothetical |
   insight | narrative | agent_note`; Phase 8b writes `episode`, `intention`,
-  `thought`, `idea` and `hypothetical`),
+  `thought`, `idea` and `hypothetical`; 8c also writes `insight`, `opinion`,
+  `interest`, `narrative` and gist `episode`),
   `content`, `payload`, `embedding`, `entity_refs` (ids of `core_entity`),
   `occurred_at`, `created_at`, `last_recalled_at`, `recall_count`, `salience`,
   `valence`, `confidence`, `status` (the `fact` statuses), `superseded_by`,
@@ -375,7 +376,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   payloads now include `episode.appraisal_emotion`,
   `intention.event_at` / `anticipated_at`, `episode.ruminated`, thought
   `anticipates` / `ruminates`, wander `seed` / `chain`, and
-  `hypothetical.unreal = true`. A loop thought's `source_ref` is
+  `hypothetical.unreal = true`, gist `episode.gist_of` (source IDs), and
+  source episode `gisted_into` (gist ID). A loop memory's `source_ref` is
   `<loop>:<trace-id>`.
 - **`core_entity`** (Built): Alcor and her other agents: `name` (unique),
   `aliases`, `salience`, `first_seen`.
@@ -398,8 +400,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `prompt_version`, and `embedding` (vector 1024; nullable for historical
   rows awaiting seed backfill, required for new repository inserts). Version
   0 is the persona file's seed self.
-- **Nightly storage** (Built; loop wiring follows in 8c): `core_state.last_nightly_day`
-  is a nullable local date used to claim a night. `core_self_line` stores `id`,
+- **Nightly storage** (Built 8c): `core_state.last_nightly_day` is the
+  nullable local date used to claim a night. `core_self_line` stores `id`,
   nullable `version` (snapshot FK; null for fixed values), `text`, and a
   required 1024-dimension `embedding`. Versioned lines cascade on snapshot
   deletion; fixed lines survive. `drift_log` stores `id`, `version` (snapshot
@@ -428,7 +430,7 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `life_day`, `attempt`, `candidate`, `decision`, `target_memory_id` (the core
   memory a reconcile verdict pointed at), `world_event_id` (the event an
   accepted attempt became), model, prompt version; no `user_id`), and
-  `drift_log` (New, §7.3).
+  `drift_log` (Built 8c, §7.3).
 
 ---
 
@@ -481,16 +483,22 @@ full snapshot and each bullet are embedded before the new version, its
 self lines and successful trace commit atomically. Seed fills historical
 v0 embeddings and fixed-value/v0 bullet lines once without rewriting them.
 
-### 7.3 Drift watch (DECIDED: watched; PROPOSED: mechanics)
+### 7.3 Drift watch (Built 8c; future response OPEN)
 
 On every new snapshot version (`core_render_snapshot`, §8.5):
-1. **Values check:** a judge reads the core values and the new snapshot and
-   lists each contradiction (`drift_log`: version, value, excerpt, verdict).
-2. **Diff:** against the previous version, with a change-size score.
-3. **Trend:** distance from version 0 over time, to spot slow convergence on
-   blandness or exaggerated traits.
+1. **Values check:** a Haiku judge reads the core values and the new snapshot
+   (`prompts/core/drift/v1.md`, `prompts.core_drift: v1`). It writes one `ok`
+   row or one row per `contradicts`/`strains` finding. A failed judge leaves
+   no fabricated verdict.
+2. **Diff:** cosine distance from the previous snapshot embedding, with the
+   changed-section share in `excerpt`.
+3. **Trend:** cosine distance from version 0's embedding. Missing historical
+   embeddings yield no distance row.
 
-Drift is logged for manual review and shown in the inspector. Nothing is
+The code-only diff and trend rows are written before the judge, including
+when its call is skipped for budget. `core.drift.max_tokens` is 512.
+
+Drift is logged for manual review; inspector display remains 8d. Nothing is
 blocked automatically in the test phase. Whether a values contradiction
 should later block or roll back a snapshot is OPEN (§21).
 
@@ -702,9 +710,9 @@ rule bans `@/mind/process/*` imports from core code except
 | `core_wander` (Built 8b) | During downtime blocks | Associative recall, mood | Memory: thoughts, ideas, hypotheticals |
 | `core_anticipate` (Built 8b) | Before known events | Upcoming plans | State: rising emotion. Memory: anticipation |
 | `core_ruminate` (Built 8b) | After strong events | The episode | State: lingering emotion. Memory: thought |
-| `core_reflect` | Nightly | Recent episodes and thoughts | Memory: insights, opinion updates, narrative |
-| `core_consolidate` | Nightly | Episodes | Memory: gist, decay |
-| `core_render_snapshot` | Nightly, after reflect | Core memory, core state, core values | Snapshot vN+1; triggers the drift watch |
+| `core_reflect` (Built 8c) | Nightly | New episodes, thoughts and ideas; active context and goals | Memory: insights, opinion and interest changes, narrative; goals |
+| `core_consolidate` (Built 8c) | Nightly | Older resolved episodes and core memory | Memory: decay and at most one gist |
+| `core_render_snapshot` (Built 8c) | Nightly, after reflect | Core memory, goals, people and fixed values | Snapshot vN+1 and self lines; triggers drift watch |
 | `core_state_tick` (Built: drift, energy, preoccupation expiry) | Hourly | State, day plan | State: drift, energy rhythm, need depletion, preoccupation expiry |
 
 **8b hourly thinking (Built).** `core_mind_tick` runs anticipate, ruminate,
@@ -739,6 +747,41 @@ Invalid model output or embedding leaves thought and source unchanged.
   mood; its valence goes on the thought, with `payload.seed` and `chain`.
   A valid all-deduped invocation still uses one wander slot; a stale or
   concurrent loser does not. Wander never changes core state.
+
+**8c nightly sequence (Built).** Hourly `core_nightly` claims one local date
+at or after `core.nightly.local_hour` (3), then runs reflect, consolidate and
+render in order; drift runs only for a new snapshot. A step failure is traced
+and does not stop later steps. The date claim prevents a second run that
+night, including after a crash. Each loop uses the shared 24-call daily
+budget and a versioned prompt:
+
+- `core_reflect` (`prompts/core/reflect/v1.md`, `prompts.core_reflect: v1`)
+  reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
+  since its last successful run, plus `context_items` (6) active neighbours.
+  It may write up to `max_insights` (2), `max_opinions` (3) and
+  `max_interests` (2); goal additions respect `core.goals.max_active`.
+  Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
+  insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
+  interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
+  produces a zero-call successful trace.
+- `core_consolidate` (`prompts/core/consolidate/v1.md`,
+  `prompts.core_consolidate: v1`) applies core decay before any model call:
+  after `core.decay.grace_days` (3) without recall, salience becomes
+  `salience * (1 - rate * (1 - salience))`, with `rate` 0.08; at or below
+  `stale_floor` (0.05) it becomes stale, never deleted. Open intentions,
+  current preoccupation, latest narrative and episodes directly linked to
+  active goals are exempt. A gist needs at least `min_group` (3) resolved,
+  ungisted episodes older than `gist_after_days` (7) local days in one
+  Monday-start local week. It handles at most `max_groups` (1) per night;
+  sources remain and receive `gist_source_factor` (0.5) once. `max_tokens`
+  is 512. Decay still runs on budget exhaustion or gist failure.
+- `core_render_snapshot` (`prompts/core/snapshot/v1.md`,
+  `prompts.core_snapshot: v1`) reads at most `core.snapshot.max_items` (8)
+  per active kind, with `max_tokens` 1024. It writes six sections and their
+  embedded bullet lines in one transaction with version N+1 and its trace;
+  a failed render preserves the previous version and lines.
+- `core_drift_watch` (`prompts/core/drift/v1.md`) writes the diagnostic
+  rows described in §7.3. A finding never blocks the new snapshot.
 
 ---
 
@@ -1099,7 +1142,7 @@ match.
 - **Core (Built):** `core.daily_call_budget` (24) model calls a day in
   total, regardless of user count: the plan, generated events (and their
   reconcile calls), appraisals, a handful of wander and anticipate runs,
-  later nightly reflect, consolidate and render, one later drift judge. Every core model
+  nightly reflect, consolidate and render, and one drift judge. Every core model
   call goes through `runCoreLoop`, which meters calls, tokens and cost
   (`core.prices`, dollars per million tokens) and writes one trace per run;
   spend is the summed trace `calls` since her local midnight.
@@ -1111,7 +1154,9 @@ match.
   happens) and
   the rest are skipped; each is traced (`fallback` / `skipped_budget`).
   Phase 8b's `core_resolve` cap is 512 tokens; the three thought prompts
-  share `core.loops.max_tokens` (512).
+  share `core.loops.max_tokens` (512). Nightly reflect and render each cap
+  output at 1024 tokens; consolidation and drift each cap at 512. A no-input
+  reflection or no-gist consolidation records a zero-call `done` trace.
 - **User:** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` per user. Idle users cost nothing beyond
   the built per-user ticks (relationship, outreach), which are code-only
@@ -1143,10 +1188,10 @@ events (`turn.received`, `reply.sent`, `fact.written`,
 
 Admin-only, allowlisted, off in production. Built tabs: facts with retrieval
 breakdowns, entities and threads, relationship, turn-taking, judge log,
-reach-outs, life. **New:** **Core** (core state, goals, recent core memory,
-snapshot versions with diffs, drift log, core loop traces and spend) and
-**User mind** (triggers fired, summaries, reflections, disclosure ledger,
-user loop traces).
+reach-outs, life and Core's existing state, goals and recent memory view.
+**New:** expand Core with snapshot versions, diffs, drift log, core loop
+traces and spend; add **User mind** (triggers fired, summaries, reflections,
+disclosure ledger, user loop traces).
 
 ### 17.2 Eval harness (Built)
 
@@ -1163,7 +1208,10 @@ episodes that happened before day 0, embedded with the run's embedder. The harne
   runs the production hourly jobs between sessions, in world → state →
   mind → outreach order. Injected planned events accept explicit true/false
   `fallthrough` overrides. Fake mode has deterministic `core_resolve`,
-  `core_anticipate`, `core_ruminate` and `core_wander` purposes. **New:** a core loop runner (`core: {days, inject}`),
+  `core_anticipate`, `core_ruminate` and `core_wander` purposes. Fake mode
+  also has deterministic `core_reflect`, `core_consolidate`,
+  `core_render_snapshot` and `core_drift_watch` outputs; the two-night 8c
+  exit lives in `tests/exit/phase-8c.test.ts`. **New:** a core loop runner (`core: {days, inject}`),
 `core` extended (memory kinds, snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
 outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
 
@@ -1192,13 +1240,16 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
   every reply reads snapshot v0; the injected planned event leaves a
   resolved intention, and no episode exists before its event's time.
 - **Structural:** a unit test asserts the core data access layer exposes no
-  user-scoped query.
+  user-scoped query. The 8c exit also plants separate user A/B turns beside
+  nightly core input and checks core prompts and stored output for leakage;
+  the existing canary and side-channel tests run at the 8c exit.
 
 ### 17.4 Scheduled jobs
 
-Built (thirteen): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
+Built (fourteen): `cold_path`, `cold_path_sweep`, `decay_pass`, `turn_timer`,
 `turn_backchannel`, `turn_sweep`, `relationship_tick`, `life_plan`,
-`core_world_tick`, `core_state_tick`, `core_mind_tick`, `outreach_tick`, `reach_out_send`.
+`core_world_tick`, `core_state_tick`, `core_mind_tick`, `core_nightly`,
+`outreach_tick`, `reach_out_send`.
 
 v3 changes:
 - **Retired (Built):** `life_tick` (per-user block copy and events) and
@@ -1209,8 +1260,9 @@ v3 changes:
   `core_mind_tick` (`core.mind.tick_cron`, `50 * * * *`, retry limit zero).
   Appraisal and resolution run inside `core_world_tick`; anticipation,
   rumination and wandering run inside `core_mind_tick`.
-- **Core jobs, PROPOSED:** `core_nightly` (reflect,
-  consolidate, render snapshot, drift watch, in order).
+- **Core nightly built:** `core_nightly` (`core.nightly.tick_cron`,
+  `55 * * * *`; local hour 3). It claims her local date once and runs reflect,
+  consolidate, render snapshot and, after a successful render, drift watch.
 - **New user job:** `user_mind_run {userId, trigger}`, enqueued by the cold
   path or the relationship tick on a big event.
 
@@ -1271,12 +1323,13 @@ two minds or at reply time.
 | 7. Mind split | Core scope and the core-only data layer (`CoreDeps`, no `db`); `core_state` (ego moved to core, ticked hourly); world reads from the day plan (`life_tick` retired); core events made once by `core_world_tick`; user affect params; "what she told this user"; persona split into core values and seed self, `core_snapshot` v0; reply assembly order (§10.3); inspector Core tab; leak canary and side channel as `tests/exit/mind-split.test.ts` (`pnpm test` 99 files / 664 tests at close) |
 | 8a. Core foundation | Core appraisal, goals and needs, loop runner, traces and daily call budget |
 | 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
+| 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8b is built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8c is built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **8. Core loops (remaining 8c/8d)** | Nightly reflect, consolidate, snapshot rendering and drift watch; remaining inspector/recall/claim work and full exit | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
+| **8d. Core integration** | Remaining inspector/recall/claim work and full Phase 8 exit | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
 | **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |

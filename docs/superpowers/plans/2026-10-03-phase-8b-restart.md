@@ -195,7 +195,9 @@ attempts:EventAttempt[]; budgetExhausted:boolean}>`; update callers and tests in
 
 **Files:** create `src/mind/process/core/resolve.ts`, `prompts/core/resolve/v1.md`,
 `tests/mind/process/core/resolution.test.ts`; modify world-tick/appraise, config/default,
-platform/config, platform/llm/fake and existing appraisal tests.
+platform/config, platform/llm/fake and existing appraisal tests, plus
+`tests/mind/process/core/world-tick.test.ts` (Ethan-approved test-only scope expansion:
+the generated-kind assertion selects root events with `plan_ref IS NULL`; resolution behavior is unchanged).
 **Produces:** `ResolutionProposal = {content:string; valence:number; stakes:"low"|"high"}`;
 `proposeResolution(ctx: LoopContext, event: WorldEventRow): Promise<ResolutionProposal|null>`.
 Null means original happens. `LandingEvent` gains optional `intentionEventId: string` and

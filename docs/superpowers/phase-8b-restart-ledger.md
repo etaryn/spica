@@ -11,7 +11,7 @@ Detailed task/review artifacts: `.superpowers/sdd/2026-10-03-phase-8b-restart/`.
 - Task 2: complete — 27c2f72, spec and quality approved by Sartre (gpt-6-sol/high).
 - Task 3: complete — b91eafc, spec and quality approved by Tesla (astra/high).
 - Task 4: complete — adcf31a + 8693965, fix re-review approved by Kant (luna/high).
-- Task 5: starting same-tick resolution and B51 landing.
+- Task 5: implementation resumed after Ethan approved the test-only scope expansion.
 - Tasks 6–10: not started.
 
 ## Setup evidence
@@ -79,3 +79,20 @@ baseline migrations. No default database was targeted by those commands.
   no new Critical/Important findings. Scratch report untracked but retained locally.
 - Minor deferred: injected first event disables goals for later model events when max events >1.
   Final review must triage. v3 event-prompt reference update remains Task10.
+
+## Task 5 pending scope clarification
+
+- Implementer Schrodinger (sol/high), base c318b06. Product implementation and owned tests are
+  uncommitted. Focused+adjacent69/69, typecheck/lint pass; full785/786, 105 files.
+- Failure: `tests/mind/process/core/world-tick.test.ts`, “the kind is stored: planned stays planned,
+  spontaneous is a surprise” selects all world rows and expects planned/surprise only. Approved
+  fallthrough adds a resolution row during the second tick; the test is nondeterministic because
+  the original event ID is random. Controller verified the assertion.
+- Proposed test-only scope expansion: include this test file in Task5, restrict its kind assertion
+  to root generated events (`plan_ref IS NULL`), retain resolution coverage in resolution.test.ts,
+  then rerun full checks and independent review. Await Ethan under the stop-on-disagreement rule.
+- No Task5 commit or independent review yet. Tasks6–10 have not begun. Original checkout untouched.
+
+Ethan approved the proposed test-only expansion. The plan now includes world-tick.test.ts for
+filtering the generated-kind assertion to root events. Resume the same implementer, rerun checks,
+then independent review; no product behavior change authorized or needed.

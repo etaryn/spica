@@ -38,9 +38,7 @@ export async function coreNightly(deps: CoreDeps, now: Date): Promise<boolean> {
   await run("core_render_snapshot", async () => {
     const previousVersion = (await core.memory.latestSnapshot())?.version ?? -1;
     const status = await coreRenderSnapshot(deps, now);
-    if (status !== "done") return;
-    const currentVersion = (await core.memory.latestSnapshot())?.version;
-    if (currentVersion !== undefined && currentVersion > previousVersion) version = currentVersion;
+    if (status === "done") version = previousVersion + 1;
   });
   const renderedVersion = version;
   if (renderedVersion !== undefined)

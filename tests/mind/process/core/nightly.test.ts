@@ -123,15 +123,15 @@ test("a pre-render snapshot read failure is logged and cannot retry until the ne
   expect(await coreNightly(deps, next)).toBe(true);
 });
 
-test("a post-render snapshot read failure preserves the new snapshot and skips drift", async () => {
+test("successful render runs drift without a second coordinator metadata read", async () => {
   const { deps, all, errors } = setup();
   await seedSnapshot(deps);
   const original = deps.core.memory.latestSnapshot;
-  class SnapshotReadFailure extends Error {}
+  let reads = 0;
   deps.core.memory.latestSnapshot = async () => {
-    const snapshot = await original();
-    if (snapshot?.version === 1) throw new SnapshotReadFailure("private snapshot content");
-    return snapshot;
+    reads += 1;
+    if (reads === 4) throw new Error("would-be second coordinator read failed");
+    return original();
   };
   expect(await coreNightly(deps, first)).toBe(true);
   deps.core.memory.latestSnapshot = original;
@@ -140,7 +140,7 @@ test("a post-render snapshot read failure preserves the new snapshot and skips d
     "core_reflect",
     "core_consolidate",
     "core_render_snapshot",
+    "core_drift_watch",
   ]);
-  expect(JSON.stringify(errors)).toContain("SnapshotReadFailure");
-  expect(JSON.stringify(errors)).not.toContain("private snapshot content");
+  expect(errors).toEqual([]);
 });

@@ -184,6 +184,7 @@
     "core_anticipate": "v1",
     "core_ruminate": "v1",
     "core_wander": "v1",
+    "core_reflect": "v1",
     "core_resolve": "v1",
     "reach_out": "v1"
   },
@@ -310,6 +311,17 @@
       "max_items": 2
     },
     "resolve": { "max_tokens": 512 },
+    "reflect": {
+      "max_inputs": 30,
+      "context_items": 6,
+      "max_insights": 2,
+      "max_opinions": 3,
+      "max_interests": 2,
+      "confidence": { "low": 0.4, "medium": 0.7, "high": 0.9 },
+      "salience": { "insight": 0.5, "opinion": 0.5, "interest": 0.4, "narrative": 0.6 },
+      "fade_factor": 0.5,
+      "max_tokens": 1024
+    },
     "mind": { "tick_cron": "50 * * * *" },
     "daily_call_budget": 24,
     "budget_reserve": 8,

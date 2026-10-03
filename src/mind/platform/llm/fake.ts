@@ -91,6 +91,13 @@ export class FakeLLMProvider implements LLMProvider {
         ],
       };
     },
+    core_reflect: () => ({
+      insights: [],
+      opinions: [],
+      interests: [],
+      goals: { add: [], drop: [] },
+      narrative: null,
+    }),
     // Echoes the event, so fake-mode episodes keep the generator's words and valence.
     core_appraise: (input: string) => {
       const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica had an ordinary day.";

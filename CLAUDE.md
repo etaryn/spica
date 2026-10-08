@@ -27,6 +27,12 @@ and phases this summary compresses.
   plus a one-line entry in `DECISIONS.md`.
 - **Test phase: functionality over accuracy.** Get the pipeline working end
   to end; quality is reviewed by hand and tuned together later.
+- **Development goal: a working product first.** Postpone the real
+  framework, security hardening, frontend, database tuning and scaling, but
+  never design them out: when cutting a corner, keep the seam (an interface,
+  a config key, a `ponytail:` comment or a §25 backlog entry). Prefer the
+  simplest code that works; delete before adding. The scope rules and the
+  crisis guardrails still hold.
 - Definition of done: compiles, tests pass, the phase's exit test passes,
   **the leak canary passes**, and every new field, job, config key or prompt
   is added back into v3.
@@ -200,9 +206,10 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 7 built (mind split); next phase per v3 §20, confirm
-with Ethan.** The phase order is OPEN (v3 §21 #9). Each phase starts with its
-own design doc.
+**Current phase: Phase 8 (core loops), slices 8a–8c built; next is 8d**
+(design in `docs/superpowers/specs/2026-10-02-phase-8-core-loops-design.md`).
+The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
+design doc; finished plans are deleted once built (history is in git).
 
 **Exit tests:** only the phase's own functionality, deterministic
 assertions; exit runs call the real API only for the phase's own LLM

@@ -802,3 +802,9 @@ test("the world stores plans and reads the ones before a day, oldest first", asy
   ]);
   expect(await deps.core.world.plansBefore("2026-01-04", 0)).toEqual([]);
 });
+
+test("candidates carry valence and goal_sim (0 without active goals)", async () => {
+  await core().memory.insert({ ...episode("x", 0.01, now), valence: -0.4 });
+  const [c] = await core().memory.candidates(vec(0.01), 5);
+  expect(c).toMatchObject({ valence: -0.4, goal_sim: 0 });
+});

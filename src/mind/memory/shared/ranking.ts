@@ -11,6 +11,8 @@ export type RankableMemory = {
   entity_salience: number;
   created_at: Date;
   last_recalled_at: Date | null;
+  /** Extra weight a mind gives this candidate; 1 when absent. */
+  boost?: number;
 };
 
 export type Scored<M extends RankableMemory = RankableMemory> = M & {
@@ -41,7 +43,12 @@ export function rankMemories<M extends RankableMemory>(
     const recency = recencyFactor(ageDays, settings.recency_half_life_days);
 
     const similarity = Math.max(0, candidate.sim);
-    const score = similarity * candidate.salience * candidate.entity_salience * recency;
+    const score =
+      similarity *
+      candidate.salience *
+      candidate.entity_salience *
+      recency *
+      (candidate.boost ?? 1);
     return { ...candidate, recency, score };
   });
 

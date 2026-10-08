@@ -37,3 +37,12 @@ test("score = sim × salience × entity salience × recency; recall refreshes re
   expect(ranked[0]!.score).toBeCloseTo(0.8 * 0.9 * 0.9 * 1, 10);
   expect(ranked[2]!.recency).toBeCloseTo(0.5, 10);
 });
+
+test("an optional boost multiplies the score; no boost means 1", () => {
+  const [plain] = rankMemories([c("a")], now, { top_n: 5, recency_half_life_days: 30 });
+  const [boosted] = rankMemories([c("b", { boost: 1.3 })], now, {
+    top_n: 5,
+    recency_half_life_days: 30,
+  });
+  expect(boosted!.score).toBeCloseTo(plain!.score * 1.3);
+});

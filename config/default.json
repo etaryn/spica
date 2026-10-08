@@ -47,7 +47,9 @@
     "reinforce_min_sim": 0.5,
     "embed_timeout_ms": 2000,
     "context_turns": 2,
-    "max_due_threads": 5
+    "max_due_threads": 5,
+    "core_mood_bias": 0.3,
+    "core_goal_bias": 0.3
   },
   "extraction": {
     "context_turns": 6,

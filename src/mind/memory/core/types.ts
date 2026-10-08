@@ -62,6 +62,9 @@ export type CoreCandidate = {
   occurred_at: Date | null;
   sim: number;
   entity_salience: number;
+  valence: number;
+  /** Best similarity to an active goal; 0 with none. */
+  goal_sim: number;
 };
 
 export type CoreEntity = {

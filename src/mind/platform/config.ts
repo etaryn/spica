@@ -149,6 +149,8 @@ const retrieval = z.object({
   embed_timeout_ms: positiveInt,
   context_turns: countFromZero,
   max_due_threads: countFromZero,
+  core_mood_bias: unit,
+  core_goal_bias: unit,
 });
 
 const extraction = z.object({

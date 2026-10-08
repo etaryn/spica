@@ -34,6 +34,7 @@ const models = z.object({
   judge: text,
   life: text,
   core: text,
+  user_mind: text,
   guard: text,
   turn_judge: text,
   reply_max_tokens: positiveInt,
@@ -512,8 +513,26 @@ const prompts = z.object({
   core_drift: promptVersion,
   core_consolidate: promptVersion,
   core_resolve: promptVersion,
+  user_summarise: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
+});
+
+const userMind = z.object({
+  max_triggers_per_day: positiveInt,
+  sweep_after_minutes: countFromZero,
+  triggers: z.object({
+    param_jump: unit,
+    bands: z.array(unit).min(1),
+    fact_salience: unit,
+  }),
+  summarise: z.object({
+    max_facts: positiveInt,
+    max_threads: countFromZero,
+    max_chars: positiveInt,
+    max_tokens: positiveInt,
+    salience: unit,
+  }),
 });
 
 // ---------- The whole config ----------
@@ -543,6 +562,7 @@ export const ConfigSchema = z.object({
   availability,
   outreach,
   push,
+  user_mind: userMind,
   prompts,
 });
 

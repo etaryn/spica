@@ -89,6 +89,14 @@ export const factKind = pgEnum("fact_kind", [
   "opinion",
   "feeling",
   "promise",
+  "summary",
+]);
+export const userMindRunStatus = pgEnum("user_mind_run_status", [
+  "pending",
+  "running",
+  "done",
+  "failed",
+  "capped",
 ]);
 export const factStatus = pgEnum("fact_status", [
   "open",
@@ -266,6 +274,56 @@ export const fact = pgTable(
     check("fact_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
     check("fact_confidence_range", sql`${t.confidence} BETWEEN 0 AND 1`),
   ],
+);
+
+/**
+ * One batch of her thinking about one user, recorded when a big event happens in their
+ * relationship. The row makes the batch run exactly once: written with the exchange, claimed by
+ * the worker, re-queued by the sweep if its job was lost. `capped` rows record a trigger past the
+ * daily limit and never run.
+ */
+export const user_mind_run = pgTable(
+  "user_mind_run",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: userRef(),
+    source_ref: text("source_ref").notNull(),
+    triggers: jsonb("triggers").notNull(),
+    status: userMindRunStatus("status").notNull(),
+    local_date: date("local_date", { mode: "string" }).notNull(),
+    created_at: ts("created_at").notNull(),
+    finished_at: ts("finished_at"),
+  },
+  (t) => [
+    uniqueIndex("user_mind_run_source_idx").on(t.user_id, t.source_ref),
+    index("user_mind_run_status_idx").on(t.status, t.created_at),
+    index("user_mind_run_user_date_idx").on(t.user_id, t.local_date),
+  ],
+);
+
+/** One row per user loop run: what it read and wrote (by id), its spend and its outcome. */
+export const user_loop_trace = pgTable(
+  "user_loop_trace",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: userRef(),
+    run_id: uuid("run_id")
+      .notNull()
+      .references(() => user_mind_run.id, { onDelete: "cascade" }),
+    loop: text("loop").notNull(),
+    inputs: jsonb("inputs").notNull(),
+    outputs: jsonb("outputs").notNull(),
+    model: text("model"),
+    prompt_version: text("prompt_version"),
+    tokens_in: integer("tokens_in"),
+    tokens_out: integer("tokens_out"),
+    cost: real("cost"),
+    calls: integer("calls").notNull().default(0),
+    status: text("status").notNull(),
+    error: text("error"),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [index("user_loop_trace_user_created_idx").on(t.user_id, t.created_at)],
 );
 
 /** One row per user. Params live in relationship_param. */

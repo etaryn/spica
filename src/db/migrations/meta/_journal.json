@@ -169,6 +169,13 @@
       "when": 1791464652956,
       "tag": "0023_core_budget_day",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791494001910,
+      "tag": "0024_user_mind",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@
     "judge": "claude-haiku-4-5",
     "life": "claude-haiku-4-5",
     "core": "claude-haiku-4-5",
+    "user_mind": "claude-haiku-4-5",
     "judge_max_tokens": 2048,
     "judge_effort": null,
     "judge_thinking": "disabled",
@@ -193,7 +194,8 @@
     "core_drift": "v1",
     "core_consolidate": "v1",
     "core_resolve": "v1",
-    "reach_out": "v1"
+    "reach_out": "v1",
+    "user_summarise": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -449,5 +451,17 @@
     "ttl_seconds": 86400,
     "body_max_chars": 1000,
     "generic_body": "Spica sent you a message"
+  },
+  "user_mind": {
+    "max_triggers_per_day": 3,
+    "sweep_after_minutes": 10,
+    "triggers": { "param_jump": 0.15, "bands": [0.25, 0.5, 0.75], "fact_salience": 0.8 },
+    "summarise": {
+      "max_facts": 20,
+      "max_threads": 5,
+      "max_chars": 300,
+      "max_tokens": 512,
+      "salience": 0.6
+    }
   }
 }

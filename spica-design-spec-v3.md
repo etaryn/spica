@@ -1378,7 +1378,7 @@ two minds or at reply time.
 | 8a. Core foundation | Core appraisal, goals and needs, loop runner, traces and daily call budget |
 | 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
 | 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
-| 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close) |
+| 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phase 8 is built):**
 
@@ -1597,6 +1597,13 @@ and life tick) were dropped; the replacement is designed fresh.
   can each pass the check and overshoot `core.daily_call_budget` by a few
   calls. Serialise the budget with an advisory lock or a reservation row.
   *Before users.*
+- **B61.** First real-core fourteen-day run (`pnpm exit:core`, 2026-10-08,
+  `evals/results/review-2026-10-08T11-18-49-050Z.md`): `core_render_snapshot`
+  fails to parse its structured output on every night from night 4 (11 of
+  15), and `core_consolidate` from night 13, so only 4 snapshot versions and
+  short drift rows; real `core_reflect` drops every goal, seeds included, so
+  no goal is active by day 14. Traces keep only the error class, which hides
+  the cause. *Phase 8 follow-up, with Ethan.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

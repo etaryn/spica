@@ -54,6 +54,7 @@ export class AnthropicProvider implements LLMProvider {
     schema,
     timeoutMs,
     maxTokens,
+    maxRetries = 0,
     model = "cheap",
     onUsage,
   }: ClassifyRequest<T>): Promise<T> {
@@ -72,7 +73,7 @@ export class AnthropicProvider implements LLMProvider {
         output_config: { format: zodOutputFormat(schema as never), ...(effort ? { effort } : {}) },
         ...(isJudge ? { thinking: { type: this.models.judge_thinking } } : {}),
       },
-      { timeout: timeoutMs, maxRetries: 0 },
+      { timeout: timeoutMs, maxRetries },
     );
     this.report(purpose, modelId, response.usage, onUsage);
 

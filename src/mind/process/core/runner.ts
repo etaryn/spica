@@ -50,7 +50,7 @@ export function budgetDayStart(config: Config, now: Date): Date {
 /** Today's budget ran out between the loop's check and its call. */
 export class BudgetSpentError extends Error {}
 
-function meterLlm(llm: LLMProvider, reserve: () => Promise<boolean>) {
+function meterLlm(llm: LLMProvider, reserve: () => Promise<boolean>, maxRetries: number) {
   const usage: LlmUsage[] = [];
   let calls = 0;
   const metered: LLMProvider = {
@@ -60,7 +60,9 @@ function meterLlm(llm: LLMProvider, reserve: () => Promise<boolean>) {
     async classifyJson(request) {
       if (!(await reserve())) throw new BudgetSpentError(`${request.purpose}: budget spent`);
       calls += 1;
+      // A transient failure would otherwise cost a whole night: the night is claimed up front.
       return llm.classifyJson({
+        maxRetries,
         ...request,
         onUsage: (u) => {
           request.onUsage?.(u);
@@ -99,7 +101,11 @@ export async function runCoreLoop<T>(
   const limit = config.core.daily_call_budget - (optional ? config.core.budget_reserve : 0);
   const day = lifeDate(config.life, now);
   const spent = await core.traces.callsOn(day);
-  const meter = meterLlm(deps.llm, () => core.traces.reserveCall(day, limit));
+  const meter = meterLlm(
+    deps.llm,
+    () => core.traces.reserveCall(day, limit),
+    config.core.max_retries,
+  );
   const canCall = () => spent + meter.calls() < limit;
   const traceId = randomUUID();
   const trace = (fields: Partial<NewCoreLoopTrace> & Pick<NewCoreLoopTrace, "status">) =>

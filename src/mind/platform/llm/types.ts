@@ -27,6 +27,11 @@ export interface ClassifyRequest<T> {
   schema: z.ZodType<T>;
   timeoutMs: number;
   maxTokens: number;
+  /**
+   * SDK retries on timeouts, connection errors and overload; 0 by default, since hot-path callers
+   * have their own timeouts and fallbacks. Background loops ask for a few.
+   */
+  maxRetries?: number;
   /** Receives this call's usage once it completes; the core runner meters with it. */
   onUsage?: UsageSink;
 }

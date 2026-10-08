@@ -80,6 +80,20 @@ describe("AnthropicProvider.classifyJson", () => {
     expect(parse.mock.calls[0]![1]).toMatchObject({ timeout: 3000, maxRetries: 0 });
   });
 
+  test("a request may ask for SDK retries", async () => {
+    const { client, parse } = stubClient(undefined, { parsed_output: { flag: true } });
+    await new AnthropicProvider(client, models).classifyJson({
+      purpose: "x",
+      system: "s",
+      input: "x",
+      schema: z.object({ flag: z.boolean() }),
+      timeoutMs: 3000,
+      maxTokens: 256,
+      maxRetries: 2,
+    });
+    expect(parse.mock.calls[0]![1]).toMatchObject({ maxRetries: 2 });
+  });
+
   test("throws when nothing parsed", async () => {
     const { client } = stubClient(undefined, { parsed_output: null });
     await expect(

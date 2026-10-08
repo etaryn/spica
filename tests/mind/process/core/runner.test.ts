@@ -170,6 +170,21 @@ test("a failure is traced with its class and calls, then rethrown", async () => 
   expect(JSON.stringify(t)).not.toContain("secret content");
 });
 
+test("core loop calls ask the provider for core.max_retries retries", async () => {
+  const { all, deps } = setup({ ...cfg, core: { ...cfg.core, max_retries: 2 } });
+  const seen: (number | undefined)[] = [];
+  const classify = all.llm.classifyJson.bind(all.llm);
+  vi.spyOn(all.llm, "classifyJson").mockImplementation((request) => {
+    seen.push(request.maxRetries);
+    return classify(request);
+  });
+  await runCoreLoop(deps, "core_reflect", now, async (ctx) => {
+    await probe(ctx);
+    return { inputs: {}, outputs: {} };
+  });
+  expect(seen).toEqual([2]);
+});
+
 test("core loops can't call the reply model", async () => {
   const { deps } = setup();
   await expect(

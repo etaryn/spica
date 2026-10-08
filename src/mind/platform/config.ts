@@ -421,6 +421,7 @@ const core = z
       dedupe_similarity: unit,
     }),
     daily_call_budget: countFromZero,
+    max_retries: countFromZero,
     budget_reserve: countFromZero,
     loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),
     // US dollars per million tokens, by model id.

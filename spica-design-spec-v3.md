@@ -1198,7 +1198,11 @@ match.
   (one atomic upsert guarded by the loop's limit), so overlapping jobs can't
   overshoot; a call refused mid-run throws `BudgetSpentError`, which the event
   generator treats as over budget and any other loop records as
-  `skipped_budget`. Traces still record each run's `calls`.
+  `skipped_budget`. Traces still record each run's `calls`. Core calls ask
+  the SDK for `core.max_retries` (2) retries on timeouts, connection errors
+  and overload (a night is claimed before its loops run, so a transient
+  failure would otherwise lose it); one call with its retries reserves one
+  slot. Hot-path structured calls keep 0.
   `core.loop_priority` splits loops into `essential` and `optional`; an
   optional loop runs only while `budget_reserve` (8) calls remain beyond it.
   Over budget, loops with a code fallback (`life_plan`, `life_event`,
@@ -1614,8 +1618,14 @@ and life tick) were dropped; the replacement is designed fresh.
   fails to parse its structured output on every night from night 4 (11 of
   15), and `core_consolidate` from night 13, so only 4 snapshot versions and
   short drift rows; real `core_reflect` drops every goal, seeds included, so
-  no goal is active by day 14. Traces keep only the error class, which hides
-  the cause. *Phase 8 follow-up, with Ethan.*
+  no goal is active by day 14. **Done** (2026-10-08): the parse failures were
+  zod bounds the model can't see enforced (9 opinions, a 400-character gist);
+  output is now fitted to its bounds (§8.5), reflection keeps
+  `core.goals.min_active`, and core calls retry transient API errors. The
+  rerun (`review-2026-10-08T13-32-23-307Z.md`) passes: every core loop ran on
+  schedule, 16 snapshot versions, 3 active goals. Traces still keep only the
+  error class (B48). Output quality (e.g. a fell-through resolution that says
+  she went) is for the review runs.
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

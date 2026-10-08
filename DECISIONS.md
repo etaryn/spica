@@ -63,7 +63,7 @@ code itself.
 | 2026-10-02 | Appraisal's input prints the event's surface valence, and the fake appraisal echoes the event's words and valence | Fake mode keeps the generator's words and the mood maths, so earlier evals and tests hold. |
 | 2026-10-02 | Two placeholder seed goals ship in persona v5 | Ethan writes the real ones. |
 | 2026-10-02 | Migration `0018` nulls the old placeholder emotion (`label = neutral`) and backfills trace `calls` as 1 where a model was recorded | A placeholder would read as a feeling in the line; earlier rows made one call when they named a model. |
-| 2026-10-02 | `AGENTS.md` points coding agents at `CLAUDE.md` | Phase 8 is implemented with Codex as well as Claude; one source of project instructions avoids drift. |
+| 2026-10-02 | ~~`AGENTS.md` points coding agents at `CLAUDE.md`~~ Superseded 2026-10-08: development is Claude-only; `AGENTS.md` removed | One source of project instructions avoids drift. |
 | 2026-10-03 | A successful thinking run commits its trace with its thought, source marker and state writes | A retry or overlapping tick must see completion as one atomic fact. |
 | 2026-10-03 | Dropped anticipation/rumination thoughts apply no source or state effects; a valid all-deduped wander still uses a slot | Source completion follows accepted thoughts, while a completed wander invocation counts toward its daily cap. |
 | 2026-10-03 | Malformed legacy memory payloads are skipped during candidate selection; missing historical emotion stays absent | Corrupt JSON must neither abort selection nor invent a past feeling. |

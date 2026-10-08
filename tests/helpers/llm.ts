@@ -21,8 +21,8 @@ export const CANARY = /CANARY-[a-z0-9]+/;
 /**
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
  * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event and its
- * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot and a drift
- * finding), so a canary that reaches any input spreads to that step's output, including the
+ * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot, a user summary
+ * and a drift finding), so a canary that reaches any input spreads to that step's output, including the
  * user's relationship.
  */
 export class CapturingLLM extends FakeLLMProvider {
@@ -130,6 +130,10 @@ export class CapturingLLM extends FakeLLMProvider {
     if (canary && request.purpose === "core_render_snapshot" && handler) {
       const out = (await handler(request.input)) as { Lately: string[] };
       return request.schema.parse({ ...out, Lately: [`${out.Lately[0] ?? "Lately"} ${canary}`] });
+    }
+    if (canary && request.purpose === "user_summarise" && handler) {
+      const out = (await handler(request.input)) as { how_i_feel: string };
+      return request.schema.parse({ ...out, how_i_feel: `${out.how_i_feel} ${canary}` });
     }
     if (canary && request.purpose === "core_drift_watch") {
       return request.schema.parse({

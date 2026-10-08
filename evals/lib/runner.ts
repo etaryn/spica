@@ -40,7 +40,7 @@ import { makeLifeLoop } from "./life-loop";
 import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
 import { RecordingLLM, type CoreCall } from "./recording-llm";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
-import { runAllJobs, runDueJobs } from "./scheduler";
+import { drainUserMind, runAllJobs, runDueJobs } from "./scheduler";
 import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script";
 import { SignalLLM } from "./signal-llm";
 import { checkTurn } from "./turn-check";
@@ -569,6 +569,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         meta.decayPasses += 1;
         const tick = await relationshipDailyTick(deps, clock.now());
         meta.ticks += 1;
+        await drainUserMind(deps, queue);
         if (tick.failed > 0)
           throw new Error(`relationship tick failed for ${tick.failed} of ${tick.users} user(s)`);
       }

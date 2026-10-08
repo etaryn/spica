@@ -373,5 +373,10 @@
     "status": "pass",
     "runs": 3,
     "passedRuns": 3
+  },
+  "user-mind-week": {
+    "status": "pass",
+    "runs": 1,
+    "passedRuns": 1
   }
 }

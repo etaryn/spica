@@ -1,12 +1,14 @@
 import type { SimClock } from "@/mind/platform/clock";
 import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import type { Deps } from "@/mind/platform/deps";
+import { runUserMind } from "@/mind/process/user/run";
 import { runReachOutSend } from "@/mind/process/outreach/send";
 import {
   COLD_PATH_QUEUE,
   REACH_OUT_SEND_QUEUE,
   TURN_BACKCHANNEL_QUEUE,
   TURN_TIMER_QUEUE,
+  USER_MIND_RUN_QUEUE,
   type QueuedJob,
   type RecordingQueue,
 } from "@/mind/platform/jobs";
@@ -31,6 +33,14 @@ async function drainColdPath(deps: Deps, queue: RecordingQueue): Promise<void> {
         if (attempt >= deps.config.cold_path.retry_limit) throw e;
       }
     }
+  }
+  await drainUserMind(deps, queue);
+}
+
+/** User mind runs are enqueued by the cold path and the relationship tick; runs never enqueue more. */
+export async function drainUserMind(deps: Deps, queue: RecordingQueue): Promise<void> {
+  for (const job of queue.drain((j) => j.name === USER_MIND_RUN_QUEUE)) {
+    if (job.name === USER_MIND_RUN_QUEUE) await runUserMind(deps, job.data);
   }
 }
 

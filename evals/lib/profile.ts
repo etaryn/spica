@@ -18,6 +18,7 @@ export const ALL_PURPOSES = [
   "core_consolidate",
   "core_render_snapshot",
   "core_drift_watch",
+  "user_summarise",
   "embed",
 ];
 /** The annotation judges, made real by `--annotate`. */

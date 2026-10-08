@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import type { Logger } from "@/mind/platform/log";
 import { relationshipDailyTick, tickUser } from "@/mind/state/user/relationship/daily-tick";
@@ -159,4 +160,33 @@ test("DST fall-back date (America/New_York) gets exactly one tick across 24 hour
   const ticks = sequence.filter((v, i) => v !== (i === 0 ? "2026-10-31" : sequence[i - 1]));
   expect(ticks).toEqual(["2026-11-01"]);
   expect(sequence.at(-1)).toBe("2026-11-01");
+});
+
+test("a band crossing from fade records a tick run; a quiet tick records none", async () => {
+  const deps = makeTestDeps();
+  const db = getTestDb();
+  const seeded = new Date("2026-01-04T10:00:00Z");
+  const now = new Date("2026-01-06T10:00:00Z"); // 48 h later: one hurt half-life
+  async function withHurt(value: number) {
+    const u = await createTestUser();
+    await rel.ensureRelationship(db, u, seeded, deps.config.relationship);
+    const row = await rel.getRelationshipRow(db, u);
+    const params = await rel.getParams(db, u);
+    await rel.saveRelationship(db, u, {
+      state: rel.toRelationshipState(row!),
+      params: { ...params, hurt: { ...params.hurt, value, updated_at: seeded } },
+    });
+    return u;
+  }
+  const crossing = await withHurt(0.3); // fades to ~0.15, under the 0.25 band
+  const quiet = await withHurt(0.1); // fades to ~0.05, crosses nothing
+  await tickUser(deps, crossing, now);
+  await tickUser(deps, quiet, now);
+  const runs = await db.execute(sql`SELECT user_id, source_ref, triggers FROM user_mind_run`);
+  expect(runs.rows).toHaveLength(1);
+  expect(runs.rows[0]).toMatchObject({ user_id: crossing, source_ref: "tick:2026-01-06" });
+  expect(runs.rows[0]!.triggers).toEqual([
+    expect.objectContaining({ kind: "param_band", param: "hurt" }),
+  ]);
+  expect(deps.queue.jobs.filter((j) => j.name === "user_mind_run")).toHaveLength(1);
 });

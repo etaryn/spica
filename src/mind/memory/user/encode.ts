@@ -61,6 +61,8 @@ export type EncodeOutcome = {
   recalledUpdated: number;
   /** One entry per planned fact, in order: the inserted row's id, or the duplicate target's id. */
   factIds: (string | null)[];
+  /** Salience of each fact row inserted, for the big-event check. */
+  insertedSaliences: number[];
 };
 
 type EntitySubject = "user" | "self";
@@ -87,6 +89,7 @@ export async function encodeExtraction(
     threadsOpened: 0,
     recalledUpdated: 0,
     factIds: [],
+    insertedSaliences: [],
   };
 
   const entityIds = await encodeEntities(db, config, input, outcome);
@@ -300,6 +303,7 @@ async function encodeFacts(
       }
       const inserted = await insertFact(db, userId, { ...row, status: "resolved" });
       outcome.inserted += 1;
+      outcome.insertedSaliences.push(fact.salience);
       outcome.factIds.push(inserted.id);
       continue;
     }
@@ -319,11 +323,13 @@ async function encodeFacts(
       }
       outcome.superseded += 1;
       outcome.inserted += 1;
+      outcome.insertedSaliences.push(fact.salience);
       continue;
     }
 
     const inserted = await insertFact(db, userId, { ...row, status: "open" });
     outcome.inserted += 1;
+    outcome.insertedSaliences.push(fact.salience);
     outcome.factIds.push(inserted.id);
   }
 }

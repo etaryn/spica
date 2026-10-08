@@ -9,6 +9,7 @@ import type { Turn } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
 import type { Deps } from "@/mind/platform/deps";
 import { isValidTimeZone } from "@/mind/platform/timezone";
+import type { RelationshipSnapshot } from "@/mind/process/user/big-events";
 import { applyAffect } from "./affect";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
@@ -30,7 +31,7 @@ export async function updateRelationship(
   tx: Db,
   deps: Pick<Deps, "config" | "clock">,
   update: RelationshipUpdate,
-): Promise<void> {
+): Promise<{ before: RelationshipSnapshot; after: RelationshipSnapshot }> {
   const settings = deps.config.relationship;
   const now = deps.clock.now();
   const { userId } = update;
@@ -93,6 +94,11 @@ export async function updateRelationship(
       now,
     },
   );
+
+  return {
+    before: { params, makeUp: row.make_up_state },
+    after: { params: affect.params, makeUp: transition.state.make_up_state },
+  };
 }
 
 async function currentCadence(

@@ -16,6 +16,8 @@ import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/m
 import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
+import { detectBigEvents } from "@/mind/process/user/big-events";
+import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { exchangeTone } from "@/mind/state/user/relationship/affect";
@@ -24,14 +26,18 @@ import { updateRelationship } from "@/mind/state/user/relationship/update";
 
 export class LockBusyError extends Error {}
 
-export type ColdPathOutcome = { status: "done" | "skipped"; applied?: EncodeOutcome };
+export type ColdPathOutcome = {
+  status: "done" | "skipped";
+  applied?: EncodeOutcome;
+  userMindRunId?: string | null;
+};
 
 type CandidateFact = { fact: ExtractedFact; source: "turn" | "inferred" };
 
 export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
   const { db, config, clock, log } = deps;
 
-  return db.transaction(async (tx) => {
+  const outcome = await db.transaction(async (tx): Promise<ColdPathOutcome> => {
     const lockKey = `cold_path:${job.userId}`;
     const lock = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS ok`,
@@ -70,9 +76,10 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
 
+    let relationship: Awaited<ReturnType<typeof updateRelationshipSafely>> = null;
     if (hasUserTurn) {
       const hurtFactId = hurt ? (applied.factIds.at(-1) ?? null) : null;
-      await updateRelationshipSafely(deps, tx, {
+      relationship = await updateRelationshipSafely(deps, tx, {
         userId: job.userId,
         turns,
         signals,
@@ -84,8 +91,29 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
       });
     }
 
-    return { status: "done", applied };
+    // A big event makes her think about them; recorded with the exchange so it runs exactly once.
+    const triggers = crisis
+      ? []
+      : detectBigEvents({
+          before: relationship?.before ?? null,
+          after: relationship?.after ?? null,
+          newFactSaliences: applied.insertedSaliences,
+          settings: config.user_mind.triggers,
+          source: "exchange",
+        });
+    const userMindRunId = await recordBigEvents(
+      deps,
+      tx,
+      job.userId,
+      `exchange:${job.replyTurnId ?? turns.at(-1)!.id}`,
+      triggers,
+    );
+    return { status: "done", applied, userMindRunId };
   });
+
+  // Only after commit, so the worker never sees a run the transaction rolled back.
+  if (outcome.userMindRunId) await enqueueUserMindRun(deps, outcome.userMindRunId);
+  return outcome;
 }
 
 async function extractExchange(
@@ -202,17 +230,17 @@ async function updateRelationshipSafely(
   deps: Deps,
   tx: Db,
   update: Parameters<typeof updateRelationship>[2],
-): Promise<void> {
+): Promise<Awaited<ReturnType<typeof updateRelationship>> | null> {
   // Test seam: lets a test replace the relationship update.
   const runUpdate =
     (deps as { updateRelationship?: typeof updateRelationship }).updateRelationship ??
     updateRelationship;
 
   try {
-    await tx.transaction(async (savepoint) => {
-      await runUpdate(savepoint, deps, update);
-    });
+    // A seam that returns nothing counts as no relationship result.
+    return (await tx.transaction((savepoint) => runUpdate(savepoint, deps, update))) ?? null;
   } catch (e) {
     deps.log.error("relationship update failed", { userId: update.userId, error: errorName(e) });
+    return null;
   }
 }

@@ -435,3 +435,48 @@ test("a duplicate claim leaves the existing fact's grading alone", async () => {
   const rows = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(rows.filter((r) => r.claim_kind === "life").map((r) => r.grounded)).toEqual([true]);
 });
+
+test("a salient new fact records one user mind run and enqueues it after commit", async () => {
+  const deps = depsWith();
+  const userId = await createTestUser();
+  const { job, ct } = await exchange(userId, "my dog is called Biscuit", "cute!", 1);
+  const out = await runColdPath(deps, job);
+  expect(out.userMindRunId).toBeTruthy();
+  const runs = await getTestDb().execute(
+    sql`SELECT source_ref, status, triggers FROM user_mind_run`,
+  );
+  expect(runs.rows).toEqual([
+    expect.objectContaining({ source_ref: `exchange:${ct.id}`, status: "pending" }),
+  ]);
+  expect(deps.queue.jobs.filter((j) => j.name === "user_mind_run")).toHaveLength(1);
+});
+
+test("a retried cold path for the same exchange records no second run", async () => {
+  const deps = depsWith();
+  const userId = await createTestUser();
+  const { job } = await exchange(userId, "my dog is called Biscuit", "cute!", 1);
+  await runColdPath(deps, job);
+  await getTestDb().update(s.session_log).set({ extracted: false });
+  await runColdPath(deps, job);
+  const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
+  expect(runs.rows[0]!.n).toBe(1);
+  expect(deps.queue.jobs.filter((j) => j.name === "user_mind_run")).toHaveLength(1);
+});
+
+test("a crisis exchange records no run", async () => {
+  const deps = depsWith();
+  const userId = await createTestUser();
+  const { job } = await exchange(userId, "my dog is called Biscuit", "here for you", 1, true);
+  await runColdPath(deps, job);
+  const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
+  expect(runs.rows[0]!.n).toBe(0);
+});
+
+test("an ordinary exchange records no run", async () => {
+  const deps = depsWith();
+  const userId = await createTestUser();
+  const { job } = await exchange(userId, "hey", "hey you", 1);
+  await runColdPath(deps, job);
+  const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
+  expect(runs.rows[0]!.n).toBe(0);
+});

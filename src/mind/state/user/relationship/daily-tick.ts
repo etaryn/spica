@@ -15,6 +15,8 @@ import {
   localHour,
   previousLocalDate,
 } from "@/mind/platform/timezone";
+import { detectBigEvents } from "@/mind/process/user/big-events";
+import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { relationshipAfterDailyTick } from "./transitions";
 import { DAY } from "@/mind/platform/time";
 
@@ -28,7 +30,7 @@ function alreadyTicked(lastTick: string | null, localDate: string): boolean {
  * under the lock, because a concurrent run may have just ticked this user.
  */
 export async function tickUser(
-  deps: Pick<Deps, "db" | "config">,
+  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log">,
   userId: string,
   now: Date,
 ): Promise<void> {
@@ -42,9 +44,9 @@ export async function tickUser(
   const unlocked = await relationshipRepo.getRelationshipRow(deps.db, userId);
   if (!unlocked || alreadyTicked(unlocked.last_tick, localDate)) return;
 
-  await deps.db.transaction(async (tx) => {
+  const runId = await deps.db.transaction(async (tx) => {
     const row = await relationshipRepo.lockRelationship(tx, userId);
-    if (alreadyTicked(row.last_tick, localDate)) return;
+    if (alreadyTicked(row.last_tick, localDate)) return null;
 
     const params = await relationshipRepo.getParams(tx, userId);
     const cadence = row.cadence as Partial<relationshipRepo.Cadence>;
@@ -81,12 +83,27 @@ export async function tickUser(
       turnId: null,
       now,
     });
+
+    return recordBigEvents(
+      deps,
+      tx,
+      userId,
+      `tick:${localDate}`,
+      detectBigEvents({
+        before: { params, makeUp: row.make_up_state },
+        after: { params: transition.params, makeUp: transition.state.make_up_state },
+        newFactSaliences: [],
+        settings: deps.config.user_mind.triggers,
+        source: "tick",
+      }),
+    );
   });
+  if (runId) await enqueueUserMindRun(deps, runId);
 }
 
 /** Every user, each isolated so one failure doesn't stop the rest. Never retried. */
 export async function relationshipDailyTick(
-  deps: Pick<Deps, "db" | "config" | "log">,
+  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log">,
   now: Date,
 ): Promise<{ users: number; failed: number }> {
   const users = await adminListRelationshipUsers(deps.db);

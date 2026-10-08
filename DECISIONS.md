@@ -78,3 +78,6 @@ code itself.
 | 2026-10-04 | Schedule `core_nightly` at minute 55 each hour, after `core_mind_tick` at minute 50 | The date claim gates the once-nightly run while the hourly cron allows startup or delayed jobs to catch the local night. |
 | 2026-10-04 | ~~Reflection records the last consumed `(created_at, id)` pair in each successful trace; a zero-input run records `(now, null)`.~~ Superseded by per-memory `reflected_at` below | A timestamp cursor could skip a core memory committed after the read with an earlier `created_at`. |
 | 2026-10-04 | Migration `0021` adds nullable `core_memory.reflected_at`; successful reflection marks only selected IDs in its trace transaction | Bounded runs drain equal-time backlog, while late inserts and failed runs remain eligible regardless of creation time. |
+| 2026-10-08 | A `life` or `opinion` claim counts as grounded at core similarity ≥ 0.75 (`claims.grounded_similarity`) | Test-phase default for a diagnostic that blocks nothing; tune from review runs. |
+| 2026-10-08 | The inspector's Core tab lists the last 5 snapshot versions (`inspector.snapshot_versions`) | Enough nights to see a trend without a long page. |
+| 2026-10-08 | Core recall boost biases (`retrieval.core_mood_bias`, `retrieval.core_goal_bias`) are 0.3 each | A visible but modest lean; the boost stays positive for any bias ≤ 1. |

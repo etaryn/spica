@@ -206,8 +206,8 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 8 (core loops), slices 8a–8c built; next is 8d**
-(design in `docs/superpowers/specs/2026-10-02-phase-8-core-loops-design.md`).
+**Current phase: Phase 9 (user mind), not started; needs a design doc.**
+Phase 8 (core loops) is built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 

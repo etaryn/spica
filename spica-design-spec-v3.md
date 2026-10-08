@@ -328,6 +328,10 @@ Every table here references `user(id) ON DELETE CASCADE`.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
+  - **Claims (Built 8d):** a `self` fact carries `claim_kind`
+    (`claim_kind` enum: `life | opinion | reaction`; null for `user` and
+    `shared` facts) and `grounded` (nullable boolean): whether core backed a
+    `life` or `opinion` claim when she made it (§12.6). Null when unchecked.
 - **`entity`**: people, places and things, with `subject` (`user | self`),
   aliases, salience.
 - **`thread`**: ongoing storylines with `next_checkpoint` and `stakes`.
@@ -500,7 +504,7 @@ On every new snapshot version (`core_render_snapshot`, §8.5):
 The code-only diff and trend rows are written before the judge, including
 when its call is skipped for budget. `core.drift.max_tokens` is 512.
 
-Drift is logged for manual review; inspector display remains 8d. Nothing is
+Drift is logged for manual review and shown on the inspector's Core tab. Nothing is
 blocked automatically in the test phase. Whether a values contradiction
 should later block or roll back a snapshot is OPEN (§21).
 
@@ -916,8 +920,12 @@ when the guard is on.
       "From your own life" (her core memory, the top `retrieval.core_top_n`
       by the same score; future-dated items hidden). Core retrieval is
       read-only: replies write no recall reinforcement to core memory.
-      **PROPOSED, Phase 8:** retrieval biased by core mood (mood-congruent
-      recall) and active goals
+      **Built 8d:** each core candidate's score is multiplied by
+      `(1 + retrieval.core_mood_bias × valence × mood_valence) ×
+      (1 + retrieval.core_goal_bias × goal_sim)` (both biases 0.3), where
+      `goal_sim` is its best similarity to an active `core_goal` (0 with
+      none): mood-congruent memories and ones near a goal come to mind more
+      easily. User retrieval is unchanged
    7. due threads ("things you might naturally ask about"), open questions,
       things she wants to bring up (`user_ideate`); for a reach-out, "Why
       you're writing"
@@ -931,8 +939,15 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v10.md` (its rules about her own self sit under "Being
-yourself", so no heading repeats the persona's).
+`prompts/reply/v11.md` (its rules about her own self sit under "Being
+yourself", so no heading repeats the persona's). v11 adds the **claim line**
+under "What's yours to claim": her life comes only from the sections about
+her in front of her and she never promises anything about her own life; her
+opinions are hers at full strength, with first impressions held lightly on
+anything she has no view of yet ("favourite", "the best" and "I hate" only
+for what is hers); reactions to the user are hers to give freely; and if
+something she told them earlier no longer matches who she is now, who she is
+now is true and she may say she changed her mind.
 
 Crisis replies skip slots 3–7 except plain context; the crisis rubric
 applies.
@@ -962,7 +977,10 @@ positive tone adds to `afterglow` by `afterglow_gain × tone` (afterglow
 fades with half-life `afterglow_half_life_hours`). A reach-out exchange
 applies none of this.
 4. **Her own words** extracted as `subject = self` stay user-scoped as "what
-   she told this user" (V5).
+   she told this user" (V5). **Built 8d:** extraction (`prompts/extract/v5.md`)
+   labels each self fact's `claim_kind`; after reconcile, each `life` or
+   `opinion` claim is graded against core (§12.6) and the result is stored on
+   the new fact. A merge into an existing fact leaves its grading alone.
 5. **Big-event check (New):** after the update, evaluate the triggers (§9.4)
    and enqueue `user_mind_run` if one fires.
 6. **Failures** retry with backoff; unextracted turns are picked up by
@@ -1071,8 +1089,8 @@ exponential decay (half-life `retrieval.recency_half_life_days`). Take the
 top `retrieval.top_n`; force in due threads (checkpoint passed, untouched
 since) and the preoccupation. Sensitive facts are excluded from reach-out
 prompts. On an embedding or SQL failure, only the forced items are used.
-**New (PROPOSED):** a mood-congruence factor and a goal-relevance factor from
-core state.
+**Built 8d (core retrieval only):** a mood-congruence factor and a
+goal-relevance factor from core state multiply the score (§10.3 slot 6).
 
 ### 12.2 Weight
 
@@ -1102,6 +1120,21 @@ own facts, each hard-deletable (a thread left empty is deleted with it);
 account deletion removes everything.
 
 ---
+
+### 12.6 Claim grounding (Built 8d)
+
+`CoreMemory.groundingSimilarity(embedding)` returns her best match for a
+claim: the highest cosine similarity across recallable core memory (the same
+filter as retrieval: not superseded, stale or hypothetical, and no resolved
+intention) and `core_self_line` rows that are core values (`version` null) or
+belong to the latest snapshot. 0 when she has none. It takes no user and
+touches no user table. The cold path calls it for each `life` or `opinion`
+self fact with the embedding it already has; `grounded` is that similarity
+≥ `claims.grounded_similarity` (0.75). Reading core here is one-way (V2); the
+answer is written only to the user's fact. A query error is logged by class
+and leaves `grounded` null; it never fails the cold path. Eval review files
+report the count of ungrounded claims. Nothing blocks in the test phase
+(`invented_self`, §25.7, uses the same check in the guard phase).
 
 ## 13. Proactive outreach (Built; Changes in v3)
 
@@ -1194,9 +1227,15 @@ events (`turn.received`, `reply.sent`, `fact.written`,
 
 Admin-only, allowlisted, off in production. Built tabs: facts with retrieval
 breakdowns, entities and threads, relationship, turn-taking, judge log,
-reach-outs, life and Core's existing state, goals and recent memory view.
-**New:** expand Core with snapshot versions, diffs, drift log, core loop
-traces and spend; add **User mind** (triggers fired, summaries, reflections,
+reach-outs, life and Core. **Built 8d:** the Core tab shows today's budget
+(calls spent against `core.daily_call_budget` since her local midnight, then
+calls per loop × status), state (mood, energy, emotion, needs, preoccupation,
+last tick, event and nightly days), goals, core memory counts by kind and
+status, recent core memory with `superseded_by` and gist links, the last
+`inspector.snapshot_versions` (5) snapshots with the sections each changed
+(the latest in full), the drift log, and loop traces with status, calls,
+tokens, cost and error. The facts tab shows `claim_kind` and `grounded`.
+**New:** add **User mind** (triggers fired, summaries, reflections,
 disclosure ledger, user loop traces).
 
 ### 17.2 Eval harness (Built)
@@ -1212,14 +1251,21 @@ at a time, one time's energy lower than another's, preoccupation set,
 episode and world-event counts). A script's `seed_core_memory` lists
 episodes that happened before day 0, embedded with the run's embedder. The harness
   runs the production hourly jobs between sessions, in world → state →
-  mind → outreach order. Injected planned events accept explicit true/false
+  mind → nightly → outreach order. Injected planned events accept explicit true/false
   `fallthrough` overrides. Fake mode has deterministic `core_resolve`,
   `core_anticipate`, `core_ruminate` and `core_wander` purposes. Fake mode
   also has deterministic `core_reflect`, `core_consolidate`,
   `core_render_snapshot` and `core_drift_watch` outputs; the two-night 8c
-  exit lives in `tests/exit/phase-8c.test.ts`. **New:** a core loop runner (`core: {days, inject}`),
-`core` extended (memory kinds, snapshot versions, drift rows), `user_mind` (triggers, summaries, loop
-outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
+  exit lives in `tests/exit/phase-8c.test.ts`. **Built 8d:** `core` also
+  checks `snapshot_versions` (above v0), `drift_rows` per check, active
+  `goals`, `fell_through` (a planned event fell through and a resolution
+  replaced it) and `loops_done` (each listed loop has a `done` trace). The
+  fourteen-day script `evals/scripts/core-two-weeks.yaml` runs all-fake as
+  `tests/exit/core-loops.test.ts` (plus a budget-6 case) and with only the
+  nine core loops real as `pnpm exit:core`, whose review file logs every
+  core-loop prompt and output and the ungrounded-claims count. **New:**
+  `user_mind` (triggers, summaries, loop outputs) and `leak` (§17.3). Every v3
+  loop has a deterministic fake.
 
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
@@ -1233,20 +1279,22 @@ outputs) and `leak` (§17.3). Every v3 loop has a deterministic fake.
   The test's `CapturingLLM` echoes any canary found in its input into the
   `extract`, `life_event` (content and thought), `life_plan`,
   `core_appraise`, `core_resolve`, `core_anticipate`, `core_ruminate`,
-  `core_wander` and `reply`
-  outputs, so a leak through
+  `core_wander`, `core_reflect`, `core_consolidate`, `core_render_snapshot`,
+  `core_drift_watch` and `reply` outputs (Built 8d: the run includes her
+  nights, so every core loop is covered), so a leak through
   any path would surface in what the next stage stores or prompts. It scans
-  the core memory, state, world, goals, entities, snapshots and traces
-  (including trace inputs/outputs), every exercised core prompt and user B's
-  tables and prompts.
+  the core memory, state, world, goals, entities, snapshots, self lines,
+  drift log and traces (including trace inputs/outputs), every exercised core
+  prompt and user B's tables and prompts.
 - **Side channel** (Built, same test): paired runs with the same fixed world
   event ID and fallthrough seed compare semantic core results; only incidental
   memory and trace IDs are normalized. A strong emotional exchange with user
   A leaves core state unchanged (V4); her events happen once for both users;
-  every reply reads snapshot v0; the injected planned event leaves a
+  every reply logs the latest snapshot her nights had rendered by then; the
+  injected planned event leaves a
   resolved intention, and no episode exists before its event's time.
 - **Structural:** a unit test asserts the core data access layer exposes no
-  user-scoped query. The 8c exit also plants separate user A/B turns beside
+  user-scoped query (including `groundingSimilarity`). The 8c exit also plants separate user A/B turns beside
   nightly core input and checks core prompts and stored output for leakage;
   the existing canary and side-channel tests run at the 8c exit.
 
@@ -1329,13 +1377,13 @@ two minds or at reply time.
 | 7. Mind split | Core scope and the core-only data layer (`CoreDeps`, no `db`); `core_state` (ego moved to core, ticked hourly); world reads from the day plan (`life_tick` retired); core events made once by `core_world_tick`; user affect params; "what she told this user"; persona split into core values and seed self, `core_snapshot` v0; reply assembly order (§10.3); inspector Core tab; leak canary and side channel as `tests/exit/mind-split.test.ts` (`pnpm test` 99 files / 664 tests at close) |
 | 8a. Core foundation | Core appraisal, goals and needs, loop runner, traces and daily call budget |
 | 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
-| 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
+| 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
+| 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close) |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8c is built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8 is built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **8d. Core integration** | Remaining inspector/recall/claim work and full Phase 8 exit | Over a simulated two weeks every loop runs within budget, writes traces, and the snapshot advances with drift rows; canary passes |
 | **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
@@ -1353,9 +1401,9 @@ smallest budget; raise only with review-run evidence.
 2. **Core values split:** confirm §7.2.
 3. **Faces limit:** what counts as too drastic a difference between users'
    versions of her, and how it's measured.
-4. **Core vs what she told a user:** when core later contradicts something
-   she said to one user, does core win (she changed her mind), or does the
-   user-scoped claim bind her in that relationship?
+4. **Core vs what she told a user:** settled 2026-10-08 as the claim line
+   (§10.3): who she is now is true, and she may say she changed her mind;
+   her life claims come only from core, and claims are graded (§12.6).
 5. **Core memory storage:** settled, separate core tables (§6.2).
 6. **Drift response:** whether a values contradiction should eventually
    block or roll back a snapshot.
@@ -1532,10 +1580,10 @@ and life tick) were dropped; the replacement is designed fresh.
   is harmless.
 - **B52.** `recentEpisodes` returns the oldest N episodes in its window, not
   the newest; harmless at one event a day. *Later.*
-- **B53.** Mood-congruent and goal-biased core retrieval (§10.3 slot 6).
-  *Phase 8.*
-- **B54.** When core contradicts something she told a user (§21 #4). *Phase 8,
-  with Ethan.*
+- **B53.** ~~Mood-congruent and goal-biased core retrieval (§10.3 slot 6).~~
+  **Done in 8d.**
+- **B54.** ~~When core contradicts something she told a user (§21 #4).~~
+  **Done in 8d**: the claim line and claim grounding (§12.6).
 - **B55.** Core loops should run on a separate Postgres role with no grants on
   user tables, so the scope rule holds in the database as well as in code.
   *Before users.*
@@ -1602,6 +1650,9 @@ and life tick) were dropped; the replacement is designed fresh.
   sensitive-topic category.
 - **B39.** The crisis fallback line hard-codes 988 and Samaritans,
   duplicating `safety.resources`.
+- **B60.** `invented_self`: a guard check that a `life` or `opinion` claim in
+  a reply is grounded in core, using the same check as claim grounding
+  (§12.6).
 
 ### 25.8 Evals and tests
 - **B40.** Eval pass rate is strict per run while script status uses a

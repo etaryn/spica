@@ -158,6 +158,29 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
         : [meta.annotate ? "- (none)" : "- (not run; use --annotate)"]),
       "",
     );
+    out.push(
+      "### Her claims",
+      "",
+      `- ungrounded self claims (life/opinion): ${result.meta.ungroundedClaims}`,
+      "",
+    );
+    const calls = trace?.coreCalls ?? [];
+    if (calls.length) {
+      out.push("### Core loop calls", "");
+      for (const c of calls)
+        out.push(
+          `#### ${c.purpose}`,
+          "",
+          "```",
+          c.input,
+          "```",
+          "",
+          "```json",
+          JSON.stringify(c.output, null, 2),
+          "```",
+          "",
+        );
+    }
     out.push("### Checks", "");
     out.push(
       ...(result.assertions.length

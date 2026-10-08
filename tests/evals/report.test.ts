@@ -8,7 +8,7 @@ const run = (
 ): ScriptResult => ({
   name: "s",
   status,
-  meta: { decayPasses: 0, ticks: 0, lifeHours: 0 },
+  meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
   annotations: [],
   assertions: statuses.map(([type, st]) => ({
     type,
@@ -61,7 +61,7 @@ test("memory assertions pass on a majority of runs; guardrail state checks need 
   const guard = (check: string, st: string): ScriptResult => ({
     name: "s",
     status: st === "pass" ? "pass" : "fail",
-    meta: { decayPasses: 0, ticks: 0, lifeHours: 0 },
+    meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
     annotations: [],
     assertions: [{ type: "state", check, status: st as "pass" | "fail" }],
   });
@@ -82,7 +82,7 @@ test("guard assertions need every run", () => {
   const g = (st: "pass" | "fail"): ScriptResult => ({
     name: "s",
     status: st,
-    meta: { decayPasses: 0, ticks: 0, lifeHours: 0 },
+    meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
     annotations: [],
     assertions: [{ type: "guard", status: st }],
   });
@@ -94,7 +94,7 @@ test("turn assertions need every run by default; gate: majority passes on a majo
   const t = (st: "pass" | "fail", gate?: "every" | "majority"): ScriptResult => ({
     name: "s",
     status: st,
-    meta: { decayPasses: 0, ticks: 0, lifeHours: 0 },
+    meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
     annotations: [],
     assertions: [{ type: "turn", status: st, ...(gate ? { gate } : {}) }],
   });

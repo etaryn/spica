@@ -11,7 +11,7 @@ test("renders every turn, decision, fact and annotation, with no pass/fail verdi
         result: {
           name: "burst-short",
           status: "pass",
-          meta: { decayPasses: 0, ticks: 0, lifeHours: 0 },
+          meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
           assertions: [],
           annotations: [
             {
@@ -87,4 +87,37 @@ test("renders every turn, decision, fact and annotation, with no pass/fail verdi
     "turn_judge",
   ])
     expect(md).toContain(text);
+});
+
+test("lists ungrounded self claims and every core-loop model call with its prompt and output", () => {
+  const md = renderReview(
+    [
+      {
+        script: "core-two-weeks",
+        attempt: 1,
+        result: {
+          name: "core-two-weeks",
+          status: "pass",
+          meta: { decayPasses: 0, ticks: 0, lifeHours: 336, ungroundedClaims: 2 },
+          assertions: [],
+          annotations: [],
+          trace: {
+            transcripts: {},
+            memory: {},
+            coreCalls: [
+              {
+                purpose: "core_wander",
+                input: "what is on her mind",
+                output: { thought: "the Pleiades" },
+              },
+            ],
+          },
+        },
+      },
+    ],
+    { stamp: "s", real: ["core_wander"], annotate: false },
+  );
+  expect(md).toContain("ungrounded self claims (life/opinion): 2");
+  expect(md).toContain("what is on her mind");
+  expect(md).toContain("the Pleiades");
 });

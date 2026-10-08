@@ -3,7 +3,8 @@ import { afterEach, expect, test, vi } from "vitest";
 import { RecordingQueue } from "@/mind/platform/jobs";
 import { makeLifeLoop } from "../../evals/lib/life-loop";
 import { LifeScript, type OutreachScript } from "../../evals/lib/script";
-import { resolveProfile } from "../../evals/lib/profile";
+import { ALL_PURPOSES, resolveProfile } from "../../evals/lib/profile";
+import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { makeTestDeps } from "../helpers/deps";
 
 const calls = vi.hoisted(() => [] as string[]);
@@ -19,6 +20,9 @@ vi.mock("@/mind/state/core/tick", () => ({ coreStateTick: async () => calls.push
 vi.mock("@/mind/process/core/mind-tick", () => ({
   coreMindTick: async () => calls.push("mind"),
 }));
+vi.mock("@/mind/process/core/nightly", () => ({
+  coreNightly: async () => calls.push("nightly"),
+}));
 vi.mock("@/mind/process/outreach/tick", () => ({
   outreachTick: async () => {
     calls.push("outreach");
@@ -29,7 +33,7 @@ vi.mock("../../evals/lib/scheduler", () => ({ runDueJobs: async () => {} }));
 
 afterEach(() => calls.splice(0));
 
-test("each eval hour runs world, state, mind, then outreach and passes both fallthrough overrides", async () => {
+test("each eval hour runs world, state, mind, nightly, then outreach and passes both fallthrough overrides", async () => {
   const now = new Date("2026-01-05T09:00:00Z");
   const deps = makeTestDeps();
   const clock = deps.clock;
@@ -46,13 +50,21 @@ test("each eval hour runs world, state, mind, then outreach and passes both fall
     userIds: () => [],
   });
   await loop.start();
-  expect(calls).toEqual(["plan", "world", "state", "mind", "outreach"]);
+  expect(calls).toEqual(["plan", "world", "state", "mind", "nightly", "outreach"]);
   expect(loop.hours).toBe(1);
 });
 
 test("the new core purposes can be selected without enabling real reply scripts", () => {
-  const purposes = "core_resolve,core_appraise,core_anticipate,core_ruminate,core_wander";
+  const purposes =
+    "core_resolve,core_appraise,core_anticipate,core_ruminate,core_wander,core_reflect," +
+    "core_consolidate,core_render_snapshot,core_drift_watch";
   const profile = resolveProfile({ llm: "fake", real: purposes });
   expect([...profile.realPurposes]).toEqual(purposes.split(","));
   expect(profile.realScripts).toBe(false);
+});
+
+test("every core-loop purpose the fake model answers can be made real", () => {
+  const fake = new FakeLLMProvider();
+  for (const p of Object.keys(fake.handlers).filter((k) => k.startsWith("core_")))
+    expect(ALL_PURPOSES, p).toContain(p);
 });

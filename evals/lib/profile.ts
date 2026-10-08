@@ -14,6 +14,10 @@ export const ALL_PURPOSES = [
   "core_anticipate",
   "core_ruminate",
   "core_wander",
+  "core_reflect",
+  "core_consolidate",
+  "core_render_snapshot",
+  "core_drift_watch",
   "embed",
 ];
 /** The annotation judges, made real by `--annotate`. */

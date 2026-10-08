@@ -1,11 +1,22 @@
 /**
  * Eval checks on her world and her core mind. `life` reads the shared plans, her world events and
  * the generator's attempts; `core` reads her core state tick history, whether a strong event ever
- * took over her mind, and how many episodes and world events she has. Nothing here is per user.
+ * took over her mind, how many episodes and world events she has, how many snapshots and drift
+ * rows her nights wrote, her active goals, whether a plan fell through, and which loops finished.
+ * Nothing here is per user.
  */
-import { asc, count, eq, inArray } from "drizzle-orm";
+import { asc, count, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { core_loop_trace, core_memory, life_day, life_event_log, world_event } from "@/db/schema";
+import {
+  core_goal,
+  core_loop_trace,
+  core_memory,
+  core_snapshot,
+  drift_log,
+  life_day,
+  life_event_log,
+  world_event,
+} from "@/db/schema";
 import type { Config } from "@/mind/platform/config";
 import type { CoreAssertion, LifeAssertion } from "./script";
 
@@ -66,6 +77,14 @@ export type CoreHistory = {
   preoccupationEverSet: boolean;
   episodes: number;
   worldEvents: number;
+  /** Snapshot versions above the seed v0. */
+  snapshotVersions: number;
+  drift: Record<"values" | "diff" | "trend", number>;
+  activeGoals: number;
+  /** A planned event fell through and a resolution event replaced it. */
+  fellThrough: boolean;
+  /** Loops with at least one `done` trace. */
+  doneLoops: string[];
 };
 
 /**
@@ -89,6 +108,40 @@ export async function coreHistory(db: Db, config: Config): Promise<CoreHistory> 
     preoccupationEverSet: memories.some((m) => Math.abs(m.valence) >= min),
     episodes: episodes.length,
     worldEvents: await rows(db, world_event),
+    ...(await structural(db)),
+  };
+}
+
+const n = (r: { n: number }[]) => r[0]?.n ?? 0;
+
+async function structural(db: Db) {
+  const drift = { values: 0, diff: 0, trend: 0 };
+  for (const r of await db
+    .select({ check: drift_log.check, n: count() })
+    .from(drift_log)
+    .groupBy(drift_log.check))
+    drift[r.check] = r.n;
+  const fell = await db.execute(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM world_event p JOIN world_event r
+        ON r.kind = 'resolution' AND r.plan_ref = p.id::text
+      WHERE p.outcome = 'fell_through'
+    ) AS hit`);
+  const done = await db
+    .selectDistinct({ loop: core_loop_trace.loop })
+    .from(core_loop_trace)
+    .where(eq(core_loop_trace.status, "done"))
+    .orderBy(core_loop_trace.loop);
+  return {
+    snapshotVersions: n(
+      await db.select({ n: count() }).from(core_snapshot).where(gt(core_snapshot.version, 0)),
+    ),
+    drift,
+    activeGoals: n(
+      await db.select({ n: count() }).from(core_goal).where(eq(core_goal.status, "active")),
+    ),
+    fellThrough: Boolean(fell.rows[0]?.hit),
+    doneLoops: done.map((d) => d.loop),
   };
 }
 
@@ -127,5 +180,16 @@ export function checkCore(
     fails.push(`preoccupation set by an event: ${h.preoccupationEverSet}`);
   range(fails, "episodes", h.episodes, a.episodes);
   range(fails, "world events", h.worldEvents, a.world_events);
+  range(fails, "snapshot versions", h.snapshotVersions, a.snapshot_versions);
+  for (const check of ["values", "diff", "trend"] as const) {
+    const min = a.drift_rows?.[check];
+    if (min !== undefined && h.drift[check] < min)
+      fails.push(`${check} drift rows ${h.drift[check]} < ${min}`);
+  }
+  range(fails, "active goals", h.activeGoals, a.goals);
+  if (a.fell_through !== undefined && h.fellThrough !== a.fell_through)
+    fails.push(`a plan fell through with a resolution: ${h.fellThrough}`);
+  const missing = (a.loops_done ?? []).filter((l) => !h.doneLoops.includes(l));
+  if (missing.length) fails.push(`no done trace for ${missing.join(", ")}`);
   return fails.length ? { ok: false, detail: fails.join("; ") } : { ok: true };
 }

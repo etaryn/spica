@@ -285,7 +285,7 @@ export const LifeAssertion = z.object({
   known_failure: knownFailure,
 });
 export type LifeAssertion = z.infer<typeof LifeAssertion>;
-/** Her core mind, shared by every user: core state tick history and core memory. Times are "day N HH:MM". */
+/** Her core mind, shared by every user: core state history, core memory, snapshots, drift, goals and loop traces. Times are "day N HH:MM". */
 export const CoreAssertion = z.object({
   type: z.literal("core"),
   energy: z
@@ -297,6 +297,21 @@ export const CoreAssertion = z.object({
   preoccupation_set: z.boolean().optional(),
   episodes: MinMax.optional(),
   world_events: MinMax.optional(),
+  /** Snapshot versions above v0. */
+  snapshot_versions: MinMax.optional(),
+  /** Minimum drift rows per check. */
+  drift_rows: z
+    .object({
+      values: z.number().int().optional(),
+      diff: z.number().int().optional(),
+      trend: z.number().int().optional(),
+    })
+    .optional(),
+  /** Active goals. */
+  goals: MinMax.optional(),
+  fell_through: z.boolean().optional(),
+  /** Loops that must each have a `done` trace. */
+  loops_done: z.array(z.string()).optional(),
   known_failure: knownFailure,
 });
 export type CoreAssertion = z.infer<typeof CoreAssertion>;

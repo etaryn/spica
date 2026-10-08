@@ -7,6 +7,7 @@ import { lifeDate } from "@/mind/world/her-clock";
 import { ensurePlans } from "@/mind/world/day-plan";
 import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { coreMindTick } from "@/mind/process/core/mind-tick";
+import { coreNightly } from "@/mind/process/core/nightly";
 import { outreachTick } from "@/mind/process/outreach/tick";
 import type { RecordingQueue } from "@/mind/platform/jobs";
 import { nextLocalDate } from "@/mind/platform/timezone";
@@ -117,6 +118,7 @@ export function makeLifeLoop(
     await coreWorldTick(coreDepsOf(deps), now, { inject: (day) => inject(day) });
     await coreStateTick(coreDepsOf(deps), now);
     await coreMindTick(coreDepsOf(deps), now);
+    await coreNightly(coreDepsOf(deps), now);
     if (outreach) {
       const ot = await outreachTick(deps, now);
       if (ot.failed > 0)

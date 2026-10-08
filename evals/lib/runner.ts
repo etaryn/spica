@@ -1,7 +1,7 @@
 import { createCoreLayer } from "@/db/repos/core";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, notInArray } from "drizzle-orm";
 import { SimClock } from "@/mind/platform/clock";
 import { deepMerge, loadConfig, type Config } from "@/mind/platform/config";
 import { coreDepsOf, type Deps } from "@/mind/platform/deps";
@@ -25,7 +25,7 @@ import { guardOutcomes, listJudgeLogs } from "@/db/repos/user/judge-log";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { insertThread } from "@/db/repos/user/threads";
-import { entity, fact, relationship_param, thread } from "@/db/schema";
+import { core_loop_trace, entity, fact, relationship_param, thread } from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import {
   judgeConsistency,
@@ -38,7 +38,7 @@ import {
 import { checkCore, checkLife, coreHistory, lifeSnapshot, type LifeSnapshot } from "./core-check";
 import { makeLifeLoop } from "./life-loop";
 import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
-import { RecordingLLM } from "./recording-llm";
+import { RecordingLLM, type CoreCall } from "./recording-llm";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
 import { runAllJobs, runDueJobs } from "./scheduler";
 import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script";
@@ -68,7 +68,8 @@ export type ScriptResult = {
   assertions: AssertionResult[];
   error?: string;
   annotations: Annotation[];
-  meta: { decayPasses: number; ticks: number; lifeHours: number };
+  /** `ungroundedClaims`: her life and opinion claims core didn't back, across every user. */
+  meta: { decayPasses: number; ticks: number; lifeHours: number; ungroundedClaims: number };
   /** Debugging and review dump (transcripts, turns, decisions, final memory state, error causes). */
   trace?: RunTrace;
 };
@@ -104,7 +105,55 @@ export type RunTrace = {
   life?: LifeSnapshot;
   /** Per user: the outreach snapshot at the end of a script with an `outreach` key, for review. */
   outreach?: Record<string, OutreachSnapshot>;
+  /** Every core loop run, oldest first, for a script with a `life` key. */
+  coreTraces?: CoreTrace[];
+  /** Every core-loop model call (prompt input and parsed output), in order. */
+  coreCalls?: CoreCall[];
 };
+export type CoreTrace = Pick<
+  typeof core_loop_trace.$inferSelect,
+  | "loop"
+  | "status"
+  | "calls"
+  | "model"
+  | "prompt_version"
+  | "inputs"
+  | "outputs"
+  | "error"
+  | "created_at"
+>;
+
+async function coreTraceDump(db: Db): Promise<CoreTrace[]> {
+  const t = core_loop_trace;
+  return db
+    .select({
+      loop: t.loop,
+      status: t.status,
+      calls: t.calls,
+      model: t.model,
+      prompt_version: t.prompt_version,
+      inputs: t.inputs,
+      outputs: t.outputs,
+      error: t.error,
+      created_at: t.created_at,
+    })
+    .from(t)
+    .orderBy(asc(t.created_at));
+}
+
+async function ungroundedClaims(db: Db): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(fact)
+    .where(
+      and(
+        eq(fact.subject, "self"),
+        inArray(fact.claim_kind, ["life", "opinion"]),
+        eq(fact.grounded, false),
+      ),
+    );
+  return row?.n ?? 0;
+}
 
 function errorChain(e: unknown): string[] {
   const out: string[] = [];
@@ -286,7 +335,7 @@ async function turnsAndDecisions(db: Db, userIds: Record<string, string>, starts
 }
 
 export async function runScript(script: Script, opts: RunOptions): Promise<ScriptResult> {
-  const meta = { decayPasses: 0, ticks: 0, lifeHours: 0 };
+  const meta = { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 };
   if (script.mode === "real" && !opts.real) {
     return {
       name: script.name,
@@ -344,6 +393,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   };
   await seedCore(coreDepsOf(deps));
   const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);
+  const coreTraces = async () => (script.life ? await coreTraceDump(db) : undefined);
 
   const userIds: Record<string, string> = {};
   for (const key of userKeys(script)) {
@@ -594,6 +644,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     }
     if (script.life?.until) await lifeLoop!.advance(parseAt(script.life.until, prevStart));
     meta.lifeHours = lifeLoop?.hours ?? 0;
+    meta.ungroundedClaims = await ungroundedClaims(db);
   } catch (e) {
     meta.lifeHours = lifeLoop?.hours ?? 0;
     // Collect as much of the run as possible for the trace.
@@ -607,6 +658,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       relationship: relSnaps,
       life: await lifeSnaps().catch(() => undefined),
       outreach: await outreachSnaps().catch(() => undefined),
+      coreTraces: await coreTraces().catch(() => undefined),
+      coreCalls: llm.coreCalls,
     };
     return {
       name: script.name,
@@ -876,6 +929,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       relationship: relSnaps,
       life: await lifeSnaps(),
       outreach: await outreachSnaps(),
+      coreTraces: await coreTraces(),
+      coreCalls: llm.coreCalls,
     },
   };
 }

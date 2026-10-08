@@ -37,6 +37,7 @@
     "gap_line_min_hours": 24,
     "relationship_line": true
   },
+  "inspector": { "snapshot_versions": 5 },
   "claims": { "grounded_similarity": 0.75 },
   "retrieval": {
     "candidate_pool": 200,

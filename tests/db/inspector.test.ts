@@ -211,8 +211,74 @@ test("the core page shows state, snapshot, recent memories, traces and event att
   const deps = makeTestDeps();
   await seedSnapshot(coreDepsOf(deps));
   await coreStateTick(coreDepsOf(deps), deps.clock.now());
-  const view = await inspectCore(deps.db, 20);
+  const view = await inspectCore(deps.db, {
+    limit: 20,
+    snapshotVersions: 5,
+    dayStart: new Date(0),
+  });
   expect(view.state).not.toBeNull();
   expect(view.snapshot?.version).toBe(0);
   expect(view.traces.map((t) => t.loop)).toContain("core_state_tick");
+});
+
+test("the core page shows budget by loop, goals, memory counts, snapshot changes and drift", async () => {
+  const deps = makeTestDeps();
+  const at = new Date("2026-01-05T09:00:00Z");
+  // Two snapshots differing only in "Lately".
+  for (const [version, lately] of [
+    [0, "a"],
+    [1, "b"],
+  ] as const)
+    await deps.core.memory.insertSnapshot({
+      version,
+      content: lately,
+      sections: { Lately: lately, People: "Alcor" },
+      source_ids: [],
+      rendered_at: at,
+      model: "m",
+      prompt_version: "v1",
+      embedding: vec(),
+    });
+  await deps.db.insert(s.core_loop_trace).values([
+    { loop: "core_wander", inputs: {}, outputs: {}, calls: 1, status: "done", created_at: at },
+    {
+      loop: "core_wander",
+      inputs: {},
+      outputs: {},
+      calls: 0,
+      status: "skipped_budget",
+      created_at: at,
+    },
+    // Yesterday's spend doesn't count toward today's budget.
+    {
+      loop: "core_reflect",
+      inputs: {},
+      outputs: {},
+      calls: 3,
+      status: "done",
+      created_at: new Date(0),
+    },
+  ]);
+  await deps.db
+    .insert(s.drift_log)
+    .values({ version: 1, check: "diff", score: 0.1, created_at: at });
+  const v = await inspectCore(deps.db, {
+    limit: 20,
+    snapshotVersions: 5,
+    dayStart: new Date(at.getTime() - 3600_000),
+  });
+  expect(v.budget).toHaveLength(2);
+  expect(v.budget).toEqual(
+    expect.arrayContaining([
+      { loop: "core_wander", status: "done", calls: 1 },
+      { loop: "core_wander", status: "skipped_budget", calls: 0 },
+    ]),
+  );
+  expect(v.snapshots.map((x) => [x.version, x.changed])).toEqual([
+    [1, ["Lately"]],
+    [0, []],
+  ]);
+  expect(v.drift).toHaveLength(1);
+  expect(v.goals).toEqual([]);
+  expect(v.memoryCounts).toEqual([]);
 });

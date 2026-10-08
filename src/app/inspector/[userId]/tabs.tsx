@@ -105,6 +105,8 @@ export async function FactsTab({
               <th>conf</th>
               <th>created</th>
               <th>recalled</th>
+              <th>claim</th>
+              <th>grounded</th>
             </tr>
           </thead>
           <tbody>
@@ -119,6 +121,8 @@ export async function FactsTab({
                 <td>{x.confidence.toFixed(2)}</td>
                 <td>{iso(x.created_at)}</td>
                 <td>{iso(x.last_recalled_at)}</td>
+                <td>{x.claim_kind ?? "—"}</td>
+                <td>{x.grounded === null ? "—" : String(x.grounded)}</td>
               </tr>
             ))}
           </tbody>

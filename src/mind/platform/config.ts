@@ -153,6 +153,8 @@ const retrieval = z.object({
   core_goal_bias: unit,
 });
 
+const inspector = z.object({ snapshot_versions: positiveInt });
+
 const claims = z.object({ grounded_similarity: unit });
 
 const extraction = z.object({
@@ -528,6 +530,7 @@ export const ConfigSchema = z.object({
   turn,
   retrieval,
   claims,
+  inspector,
   extraction,
   reconcile,
   decay,

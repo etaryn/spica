@@ -4,6 +4,7 @@
  * and her latest self, and read in her next replies. A new summary supersedes the last; a failed
  * run writes nothing and the old one stays.
  */
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { insertFact, listFactsForSummary, setFactStatus } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
@@ -67,7 +68,9 @@ export async function userSummarise(
     const content = [out.where_things_stand, out.whats_live, out.how_i_feel].join(" ");
     const [embedding] = await deps.embedder.embed([content], "document");
     const summaryId = await db.transaction(async (tx) => {
-      // Re-read inside the write: a summary written meanwhile is the one to supersede.
+      // The lock serialises runs for one user, so two can't both leave a live summary; then
+      // re-read: a summary written meanwhile is the one to supersede.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user_mind:${userId}`}))`);
       const current = await liveSummary(tx, userId);
       const row = await insertFact(tx, userId, {
         subject: "shared",

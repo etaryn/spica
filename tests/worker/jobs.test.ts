@@ -10,6 +10,7 @@ import {
   LIFE_PLAN_QUEUE,
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
+  USER_MIND_RUN_QUEUE,
   TURN_SWEEP_QUEUE,
 } from "@/mind/platform/jobs";
 import { errorName } from "@/mind/platform/errors";
@@ -118,6 +119,7 @@ test("ensureSystemQueues creates outreach_tick without retries", async () => {
   started = true;
   await ensureSystemQueues(boss);
   expect(await boss.getQueue(OUTREACH_TICK_QUEUE)).toMatchObject({ retryLimit: 0 });
+  expect(await boss.getQueue(USER_MIND_RUN_QUEUE)).toMatchObject({ retryLimit: 0 });
 });
 
 test("ensureSystemQueues creates core_mind_tick with zero retries before updating it", async () => {

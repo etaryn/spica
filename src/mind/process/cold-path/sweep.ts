@@ -1,6 +1,7 @@
 /**
  * The `cold_path_sweep` job: re-queues exchanges whose cold path never finished, up to a cap on
- * attempts per exchange, so no exchange is silently left out of memory.
+ * attempts per exchange, so no exchange is silently left out of memory. It also re-queues user
+ * mind runs whose job was lost.
  */
 import {
   adminBumpExtractAttempts,
@@ -8,6 +9,7 @@ import {
 } from "@/db/repos/admin/cold-path";
 import type { Deps } from "@/mind/platform/deps";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
+import { sweepPendingUserMindRuns } from "@/mind/process/user/run";
 
 const MINUTE = 60_000;
 
@@ -40,5 +42,6 @@ export async function sweepUnfinishedColdPaths(
   }
 
   if (exchanges.length > 0) log.info("cold_path sweep enqueued", { count: exchanges.length });
+  await sweepPendingUserMindRuns(deps, now);
   return exchanges.length;
 }

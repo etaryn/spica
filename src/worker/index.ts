@@ -13,6 +13,7 @@ import { CORE_QUEUES, registerCoreMindJob, registerCoreNightlyJob } from "./core
 import { MEMORY_QUEUES, registerMemoryJobs } from "./memory-jobs";
 import { PROCESS_QUEUES, registerProcessJobs } from "./process-jobs";
 import { registerStateJobs, STATE_QUEUES } from "./state-jobs";
+import { registerUserMindJobs, USER_MIND_QUEUES } from "./user-mind-jobs";
 import { registerWorldJobs, WORLD_QUEUES } from "./world-jobs";
 
 const { deps, boss } = buildRuntime(readEnv());
@@ -25,6 +26,7 @@ await registerMemoryJobs(boss, deps);
 await registerProcessJobs(boss, deps);
 await registerStateJobs(boss, deps);
 await registerWorldJobs(boss, deps);
+await registerUserMindJobs(boss, deps);
 await registerCoreMindJob(boss, coreDepsOf(deps));
 await registerCoreNightlyJob(boss, coreDepsOf(deps));
 
@@ -32,7 +34,14 @@ await registerCoreNightlyJob(boss, coreDepsOf(deps));
 await sweepUnfinishedColdPaths(deps, deps.clock.now());
 
 deps.log.info("worker started", {
-  queues: [...MEMORY_QUEUES, ...PROCESS_QUEUES, ...STATE_QUEUES, ...WORLD_QUEUES, ...CORE_QUEUES],
+  queues: [
+    ...MEMORY_QUEUES,
+    ...PROCESS_QUEUES,
+    ...STATE_QUEUES,
+    ...WORLD_QUEUES,
+    ...CORE_QUEUES,
+    ...USER_MIND_QUEUES,
+  ],
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

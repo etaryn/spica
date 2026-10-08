@@ -18,6 +18,10 @@ export const CORE_MIND_TICK_QUEUE = "core_mind_tick";
 export const CORE_NIGHTLY_QUEUE = "core_nightly";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
+export const USER_MIND_RUN_QUEUE = "user_mind_run";
+
+/** One batch of her thinking about a user, recorded as `user_mind_run` row `runId`. */
+export type UserMindRunJob = { runId: string };
 
 /** Sends the reach-out scheduled in `reach_out_log` row `logId`. */
 export type ReachOutSendJob = { userId: string; logId: string };
@@ -55,6 +59,7 @@ export type JobMap = {
   [TURN_TIMER_QUEUE]: TurnTimerJob;
   [TURN_BACKCHANNEL_QUEUE]: BackchannelJob;
   [REACH_OUT_SEND_QUEUE]: ReachOutSendJob;
+  [USER_MIND_RUN_QUEUE]: UserMindRunJob;
 };
 export type JobName = keyof JobMap;
 export type EnqueueOptions = { startAfter?: Date };

@@ -1543,6 +1543,11 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B58.** ~~Appraise events at their `occurred_at`, not at the 00:10 world
   tick.~~ **Done** (planned vs spontaneous events, §8.3): events are
   appraised by the first hourly world tick after their time.
+- **B59.** `runCoreLoop` reads today's spent calls once, without a lock, so
+  overlapping core jobs (`core_mind_tick`, `core_nightly`, the world tick)
+  can each pass the check and overshoot `core.daily_call_budget` by a few
+  calls. Serialise the budget with an advisory lock or a reservation row.
+  *Before users.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

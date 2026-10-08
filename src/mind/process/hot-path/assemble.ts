@@ -1,7 +1,7 @@
 /**
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
- * empty: core values, who she is lately, how she is feeling, her day, you and them, what she
- * remembers (about them, between you, what she has told them, from her own life), things to ask
+ * empty: core values, who she is lately, how she is feeling, her day, you and them, where things
+ * stand with them (her latest summary), what she remembers (about them, between you, what she has told them, from her own life), things to ask
  * about, unanswered questions, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
@@ -16,6 +16,8 @@ export interface AssembleInput {
   snapshot: string | null;
   feelingLine: string | null;
   relationshipSummary: string | null;
+  /** Her latest summary of where things stand with them; null before one exists or in a crisis. */
+  summary?: { where_things_stand: string; whats_live: string; how_i_feel: string } | null;
   /** Her day: what she's doing now and next. */
   yourDay?: string | null;
   retrieval: RetrievalResult;
@@ -38,6 +40,14 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     section("How you're feeling", input.feelingLine),
     section("Your day", input.yourDay ?? null),
     section("You and them", input.relationshipSummary),
+    section(
+      "Where things stand with them",
+      input.summary
+        ? [input.summary.where_things_stand, input.summary.whats_live, input.summary.how_i_feel]
+            .map((line) => `- ${line}`)
+            .join("\n")
+        : null,
+    ),
     section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),

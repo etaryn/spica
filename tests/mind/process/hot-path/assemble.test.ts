@@ -95,6 +95,35 @@ describe("assemblePrompt", () => {
   });
 });
 
+describe("the summary section", () => {
+  test("sits between you-and-them and what you remember", () => {
+    const { system } = assemblePrompt({
+      ...base,
+      relationshipSummary: "You're close.",
+      summary: { where_things_stand: "Stand.", whats_live: "Live.", how_i_feel: "Feel." },
+      retrieval: {
+        facts: {
+          user: [{ id: "f1", content: "Likes tea.", when: new Date("2026-01-11T12:00:00Z") }],
+          self: [],
+          shared: [],
+        },
+        dueThreads: [],
+        recalled: [],
+      },
+      recentTurns: [{ role: "user", text: "hi" }],
+    });
+    const i = system.indexOf("## Where things stand with them\n- Stand.\n- Live.\n- Feel.");
+    expect(i).toBeGreaterThan(system.indexOf("## You and them"));
+    expect(i).toBeLessThan(system.indexOf("## What you remember"));
+  });
+
+  test("no summary, no section", () => {
+    expect(assemblePrompt({ ...base, summary: null, recentTurns: [] }).system).not.toContain(
+      "Where things stand",
+    );
+  });
+});
+
 describe("relativeDate", () => {
   test("buckets", () => {
     expect(relativeDate(new Date("2026-01-12T08:00:00Z"), now)).toBe("today");

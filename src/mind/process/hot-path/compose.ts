@@ -8,6 +8,7 @@
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
+import { liveSummary } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -26,9 +27,16 @@ import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import { assemblePrompt, gapLine, relationshipLine } from "./assemble";
+import { z } from "zod";
+import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
 import { loadYourDayLine } from "./your-day-line";
+
+const summaryPayload = z.object({
+  where_things_stand: z.string(),
+  whats_live: z.string(),
+  how_i_feel: z.string(),
+});
 
 export type Composed = {
   text: string;
@@ -215,6 +223,19 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   });
 
   const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
+  // A malformed payload renders nothing rather than failing the reply.
+  const summary = inCrisis
+    ? Promise.resolve(null)
+    : bounded(
+        deps,
+        "summary",
+        userId,
+        async (): Promise<AssembleInput["summary"]> => {
+          const parsed = summaryPayload.safeParse((await liveSummary(db, userId))?.payload);
+          return parsed.success ? parsed.data : null;
+        },
+        null,
+      );
   const coreMemories = inCrisis
     ? Promise.resolve({ memories: [] as RetrievedFact[] })
     : bounded(
@@ -251,6 +272,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     coreMemories: herMemories,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
+    summary: await summary,
     yourDay: await yourDay,
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,

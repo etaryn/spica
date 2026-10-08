@@ -4,7 +4,7 @@ import { composeReachOut, composeReply, renderReachOut } from "@/mind/process/ho
 import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
 import { messageToCheck } from "@/mind/process/guard/guard";
-import { insertFact } from "@/db/repos/user/facts";
+import { forgetFact, insertFact } from "@/db/repos/user/facts";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
@@ -388,6 +388,70 @@ describe("composeReply", () => {
     expect(system).toContain("## Who you are lately");
     expect(system).not.toContain("## How you're feeling");
     expect(system).not.toContain("### From your own life");
+  });
+
+  test("her summary of where things stand reaches the reply, goes when forgotten, and skips a crisis", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const summary = await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "summary",
+      content: "Stand. Live. Feel.",
+      payload: { where_things_stand: "Stand.", whats_live: "Live.", how_i_feel: "Feel." },
+      embedding: vec(),
+      created_at: deps.clock.now(),
+      status: "open",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+    const ask = async (flag: Parameters<typeof composeReply>[2]["flag"]) => {
+      await composeReply(deps, u, {
+        turns: [await userTurn(deps, u, "hi")],
+        openQuestions: [],
+        flag,
+      });
+      return deps.llm.calls.at(-1)!.system;
+    };
+
+    expect(await ask(null)).toContain(
+      "## Where things stand with them\n- Stand.\n- Live.\n- Feel.",
+    );
+
+    await forgetFact(getTestDb(), u, summary.id);
+    expect(await ask(null)).not.toContain("Where things stand");
+
+    await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "summary",
+      content: "bad",
+      payload: { where_things_stand: 7 },
+      embedding: vec(),
+      created_at: new Date(deps.clock.now().getTime() + 1),
+      status: "open",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+    expect(await ask(null)).not.toContain("Where things stand");
+
+    await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "summary",
+      content: "Stand. Live. Feel.",
+      payload: { where_things_stand: "Stand.", whats_live: "Live.", how_i_feel: "Feel." },
+      embedding: vec(),
+      created_at: new Date(deps.clock.now().getTime() + 2),
+      status: "open",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    expect(await ask(flag)).not.toContain("Where things stand");
   });
 });
 

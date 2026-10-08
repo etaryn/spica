@@ -167,3 +167,19 @@ test("extract calls the extract model with the extraction prompt and returns nor
     },
   ]);
 });
+
+test("normalizeExtraction: claim_kind is kept only on her own facts", () => {
+  const out = normalizeExtraction(
+    {
+      facts: [
+        rawFact({ subject: "self", content: "Spica went stargazing.", claim_kind: "life" }),
+        rawFact({ subject: "user", claim_kind: "opinion" }),
+        rawFact({ subject: "self", content: "Spica loves Solaris." }),
+      ],
+      entities: [],
+      threads: [],
+    },
+    12,
+  );
+  expect(out.facts.map((f) => f.claim_kind)).toEqual(["life", null, null]);
+});

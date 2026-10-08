@@ -153,6 +153,8 @@ const retrieval = z.object({
   core_goal_bias: unit,
 });
 
+const claims = z.object({ grounded_similarity: unit });
+
 const extraction = z.object({
   context_turns: countFromZero,
   max_candidates: positiveInt,
@@ -525,6 +527,7 @@ export const ConfigSchema = z.object({
   events,
   turn,
   retrieval,
+  claims,
   extraction,
   reconcile,
   decay,

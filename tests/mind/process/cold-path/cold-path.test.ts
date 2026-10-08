@@ -369,3 +369,69 @@ test("her own reaction to what they did isn't counted on top of it", async () =>
   expect(withHerReaction).toBe(one);
   expect(one).toBeLessThan(0.5);
 });
+
+/** Her three claim kinds in one exchange, with core grounding scripted to `sim` (or failing). */
+function selfClaimDeps(sim: number | Error) {
+  const deps = { ...makeTestDeps(), embedder: new ScriptedEmbedder(1024) };
+  deps.llm.handlers.extract = (input: string) => ({
+    facts: input.includes("New exchange")
+      ? (["life", "opinion", "reaction"] as const).map((claim_kind) => ({
+          subject: "self",
+          kind: "event",
+          content: `Spica claim ${claim_kind}.`,
+          occurred_at: null,
+          salience: 0.5,
+          valence: 0,
+          confidence: 0.9,
+          entity_names: [],
+          thread_title: null,
+          claim_kind,
+        }))
+      : [],
+    entities: [],
+    threads: [],
+    relationship: null,
+  });
+  deps.core.memory.groundingSimilarity = async () => {
+    if (sim instanceof Error) throw sim;
+    return sim;
+  };
+  return deps;
+}
+
+test("life and opinion claims are graded against core; reactions aren't", async () => {
+  const u = await createTestUser();
+  await runColdPath(selfClaimDeps(0.9), (await exchange(u, "what did you do?", "stars", 0)).job);
+  const rows = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
+  const by = Object.fromEntries(rows.map((r) => [r.claim_kind, r.grounded]));
+  expect(by).toEqual({ life: true, opinion: true, reaction: null });
+});
+
+test("an ungrounded claim is marked false; a grounding error leaves null and still writes", async () => {
+  const u1 = await createTestUser();
+  await runColdPath(selfClaimDeps(0.1), (await exchange(u1, "a", "b", 0)).job);
+  const r1 = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u1));
+  expect(r1.find((r) => r.claim_kind === "life")?.grounded).toBe(false);
+
+  const u2 = await createTestUser();
+  const broken = selfClaimDeps(new Error("db down"));
+  const out = await runColdPath(broken, (await exchange(u2, "a", "b", 1)).job);
+  expect(out.status).toBe("done");
+  const r2 = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u2));
+  expect(r2).toHaveLength(3);
+  expect(r2.every((r) => r.grounded === null)).toBe(true);
+});
+
+test("a duplicate claim leaves the existing fact's grading alone", async () => {
+  const deps = selfClaimDeps(0.9);
+  const u = await createTestUser();
+  await runColdPath(deps, (await exchange(u, "a", "b", 0)).job);
+  deps.core.memory.groundingSimilarity = async () => 0.1;
+  deps.llm.handlers.reconcile = (input: string) => ({
+    relation: "duplicate",
+    target_fact_id: /id=([0-9a-f-]{36})/.exec(input)?.[1] ?? null,
+  });
+  await runColdPath(deps, (await exchange(u, "c", "d", 5)).job);
+  const rows = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
+  expect(rows.filter((r) => r.claim_kind === "life").map((r) => r.grounded)).toEqual([true]);
+});

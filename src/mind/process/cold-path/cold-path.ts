@@ -1,6 +1,7 @@
 /**
  * The cold path: after she has replied, it turns the exchange into memory and relationship state.
- * The steps are extract, embed, reconcile against near memories, encode, then update the
+ * The steps are extract, embed, reconcile against near memories, grade her own claims against
+ * core, encode, then update the
  * relationship, including her feelings toward them. It all runs in one transaction holding a
  * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
  * reconcile at once. It throws on failure so pg-boss retries, and it never delays a reply.
@@ -165,9 +166,35 @@ async function reconcileCandidates(
       { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
       neighbors,
     );
-    planned.push({ fact, embedding, decision, source });
+    planned.push({
+      fact,
+      embedding,
+      decision,
+      source,
+      grounded: await groundClaim(deps, fact, embedding),
+    });
   }
   return planned;
+}
+
+/**
+ * Whether her own life or opinion claim is backed by core (her memory, values or latest self).
+ * Reading core here is one-way; the answer is stored only on this user's fact. A failure leaves
+ * it unknown rather than losing the exchange.
+ */
+async function groundClaim(
+  deps: Deps,
+  fact: ExtractedFact,
+  embedding: number[],
+): Promise<boolean | null> {
+  if (fact.claim_kind !== "life" && fact.claim_kind !== "opinion") return null;
+  try {
+    const sim = await deps.core.memory.groundingSimilarity(embedding);
+    return sim >= deps.config.claims.grounded_similarity;
+  } catch (e) {
+    deps.log.error("claim grounding failed", { error: errorName(e) });
+    return null;
+  }
 }
 
 /** In its own savepoint, so a relationship failure never loses the memory writes. */

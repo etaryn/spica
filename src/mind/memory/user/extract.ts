@@ -6,7 +6,7 @@
 import { z } from "zod";
 import type { EntityMention } from "@/db/repos/user/entities";
 import type { Turn } from "@/db/repos/user/session-log";
-import { entityType, factKind } from "@/db/schema";
+import { claimKind, entityType, factKind } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
@@ -35,6 +35,7 @@ export const ExtractionSchema = z.object({
       confidence: z.number(),
       entity_names: z.array(z.string()),
       thread_title: z.string().nullable(),
+      claim_kind: z.enum(claimKind.enumValues).nullish(),
     }),
   ),
   entities: z.array(
@@ -138,6 +139,8 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       confidence: clamp(fact.confidence, 0, 1),
       entity_names: fact.entity_names.map(tidy).filter(Boolean),
       thread_title: fact.thread_title && tidy(fact.thread_title) ? tidy(fact.thread_title) : null,
+      // Only her own statements are claims; a mislabelled user or shared fact carries none.
+      claim_kind: fact.subject === "self" ? (fact.claim_kind ?? null) : null,
     }))
     .filter((fact) => fact.content.length > 0)
     .slice(0, maxCandidates);

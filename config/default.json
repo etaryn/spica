@@ -37,6 +37,7 @@
     "gap_line_min_hours": 24,
     "relationship_line": true
   },
+  "claims": { "grounded_similarity": 0.75 },
   "retrieval": {
     "candidate_pool": 200,
     "top_n": 12,
@@ -163,10 +164,10 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v10",
+    "reply": "v11",
     "crisis_classifier": "v2",
     "persona": "v5",
-    "extract": "v4",
+    "extract": "v5",
     "reconcile": "v1",
     "judge_recall": "v3",
     "judge_false_recall": "v8",

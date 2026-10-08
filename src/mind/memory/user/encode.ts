@@ -31,6 +31,8 @@ export type PlannedFact = {
   embedding: number[];
   decision: Decision;
   source?: "turn" | "inferred";
+  /** Whether core backed this claim; null when it isn't a life or opinion claim. */
+  grounded?: boolean | null;
 };
 
 export type EncodeInput = {
@@ -264,6 +266,8 @@ async function encodeFacts(
       confidence: fact.confidence,
       source: planned.source ?? "turn",
       source_ref: input.sourceRef,
+      claim_kind: fact.claim_kind ?? null,
+      grounded: planned.grounded ?? null,
     };
 
     const target = planned.decision.targetId

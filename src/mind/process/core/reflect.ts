@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { CoreMemoryItem, NewCoreMemory } from "@/mind/memory/core/types";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
+import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
@@ -39,38 +40,31 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     ]);
     const persona = loadPersona(config);
     const maxChars = config.core.loops.max_chars;
-    const line = z.string().trim().min(1).max(maxChars);
+    const line = fitText(maxChars);
     const Output = z.object({
-      insights: z.array(line).max(bounds.max_insights),
-      opinions: z
-        .array(
-          z.object({
-            subject: line,
-            stance: line,
-            confidence: z.enum(["low", "medium", "high"]),
-            supersedes: z.uuid().nullable().optional(),
-          }),
-        )
-        .max(bounds.max_opinions),
-      interests: z
-        .array(
-          z.discriminatedUnion("status", [
-            z.object({ status: z.literal("new"), content: line }),
-            z.object({ status: z.literal("fading"), target_id: z.uuid() }),
-          ]),
-        )
-        .max(bounds.max_interests),
+      insights: fitList(line, bounds.max_insights),
+      opinions: fitList(
+        z.object({
+          subject: line,
+          stance: line,
+          confidence: z.enum(["low", "medium", "high"]),
+          supersedes: z.uuid().nullable().optional(),
+        }),
+        bounds.max_opinions,
+      ),
+      interests: fitList(
+        z.discriminatedUnion("status", [
+          z.object({ status: z.literal("new"), content: line }),
+          z.object({ status: z.literal("fading"), target_id: z.uuid() }),
+        ]),
+        bounds.max_interests,
+      ),
       goals: z.object({
-        add: z.array(z.object({ title: line, why: line })).max(bounds.max_inputs),
-        drop: z.array(z.uuid()).max(bounds.max_inputs),
+        add: fitList(z.object({ title: line, why: line }), bounds.max_inputs),
+        drop: fitList(z.uuid(), bounds.max_inputs),
       }),
-      narrative: z
-        .string()
-        .trim()
-        .min(1)
-        .max(maxChars * bounds.max_inputs)
-        .refine((text) => !/\n\s*\n/.test(text), "narrative must be one paragraph")
-        .nullable(),
+      // One paragraph: fitting collapses any blank lines.
+      narrative: fitText(maxChars * bounds.max_inputs).nullable(),
     });
     const result = await ctx.deps.llm.classifyJson({
       purpose: "core_reflect",
@@ -175,9 +169,18 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
             fadedInterestIds.push(interest.target_id);
         }
       }
-      for (const id of result.goals.drop)
+      // Drops stop at the floor unless replacements come in: with no goal, nothing pulls her
+      // events or recall toward anything.
+      let droppable =
+        (await tx.goals.active()).length + goalAdds.length - config.core.goals.min_active;
+      for (const id of result.goals.drop) {
+        if (droppable <= 0) break;
         if ((await tx.goals.get(id))?.status === "active")
-          if (await tx.goals.setStatus(id, "dropped", now)) droppedGoalIds.push(id);
+          if (await tx.goals.setStatus(id, "dropped", now)) {
+            droppedGoalIds.push(id);
+            droppable--;
+          }
+      }
       let available = config.core.goals.max_active - (await tx.goals.active()).length;
       for (const [index, goal] of goalAdds.entries()) {
         if (available <= 0) break;

@@ -150,3 +150,13 @@ test("a malformed embedding rejects the batch before the first write", async () 
   ).rejects.toThrow();
   expect(await all.db.select().from(core_memory)).toHaveLength(0);
 });
+
+test("overlong content is shortened to the line limit instead of rejecting the batch", async () => {
+  const deps = coreDepsOf(makeTestDeps());
+  const max = deps.config.core.loops.max_chars;
+  const [prepared] = await prepareThoughts(deps, [
+    { kind: "thought", content: "x".repeat(max + 50), salience: "low" },
+  ]);
+  expect(prepared!.item.content).toHaveLength(max);
+  expect(prepared!.item.content.endsWith("…")).toBe(true);
+});

@@ -129,8 +129,10 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });
-    if (raw.items.length > config.core.wander.max_items) throw new Error("too many wander items");
-    const prepared = await prepareThoughts(ctx.deps, raw.items);
+    const prepared = await prepareThoughts(
+      ctx.deps,
+      raw.items.slice(0, config.core.wander.max_items),
+    );
     return ctx.commit<ApplyOutput>(async (tx) => {
       await tx.lock(WORLD_LOCK);
       if (!(await eligibility({ ...ctx.deps, core: tx }, now))) {

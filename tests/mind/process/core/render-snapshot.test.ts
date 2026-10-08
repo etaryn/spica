@@ -156,3 +156,22 @@ test("failure while writing self lines rolls back the snapshot and success trace
   expect(await deps.core.memory.selfLines(1)).toHaveLength(0);
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "failed" }]);
 });
+
+test("an overfilled section is trimmed to its bounds instead of failing the night", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  const { max_items } = all.config.core.snapshot;
+  const maxChars = all.config.core.loops.max_chars;
+  const handler = all.llm.handlers.core_render_snapshot!;
+  all.llm.handlers.core_render_snapshot = (input) => ({
+    ...(handler(input) as object),
+    Opinions: Array.from({ length: max_items + 2 }, (_, i) => `Opinion ${i}.`),
+    Lately: [`${"long ".repeat(maxChars)}\nsecond line`],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const snapshot = (await deps.core.memory.latestSnapshot())!;
+  expect(snapshot.sections.Opinions!.split("\n")).toHaveLength(max_items);
+  expect(snapshot.sections.Lately!.length).toBeLessThanOrEqual(maxChars + 2);
+  expect(snapshot.sections.Lately).not.toContain("\nsecond");
+});

@@ -4,6 +4,7 @@ import { z, ZodError } from "zod";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
 import { errorName } from "@/mind/platform/errors";
+import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { runCoreLoop } from "./runner";
@@ -56,7 +57,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
       );
       if (!group) return { inputs: { week: null }, outputs: { gist_id: null, source_ids: [] } };
       const ids = group.sources.map((source) => source.id);
-      const Output = z.object({ gist: z.string().trim().min(1).max(config.core.loops.max_chars) });
+      const Output = z.object({ gist: fitText(config.core.loops.max_chars) });
       let gist: string;
       try {
         ({ gist } = await ctx.deps.llm.classifyJson({

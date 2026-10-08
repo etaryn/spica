@@ -153,3 +153,16 @@ test("does not run without a new version or duplicate checks on repeated calls",
   expect(await deps.core.drift.forVersion(1)).toHaveLength(3);
   expect(all.llm.structuredCalls).toHaveLength(1);
 });
+
+test("an overlong finding is shortened instead of failing the drift watch", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await pair(all);
+  const max = all.config.core.loops.max_chars;
+  all.llm.handlers.core_drift_watch = () => ({
+    findings: [{ value: "honesty", excerpt: "y".repeat(max + 10), verdict: "strains" }],
+  });
+  expect(await coreDriftWatch(deps, now, 1)).toBe("done");
+  const row = (await deps.core.drift.forVersion(1)).find((r) => r.check === "values");
+  expect(row?.excerpt).toHaveLength(max);
+});

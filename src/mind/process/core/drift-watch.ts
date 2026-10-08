@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
+import { fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
@@ -63,7 +64,7 @@ export async function coreDriftWatch(
   });
 
   if ((await core.drift.forVersion(version)).some((row) => row.check === "values")) return "done";
-  const text = z.string().trim().min(1).max(config.core.loops.max_chars);
+  const text = fitText(config.core.loops.max_chars);
   const Output = z.object({
     findings: z.array(
       z.object({

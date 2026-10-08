@@ -281,42 +281,7 @@ test("stale and unknown targets are ignored and active goal additions stop at th
 });
 
 test("invalid output and model failure trace failure without writes", async () => {
-  for (const bad of [
-    { insights: ["", "", ""] },
-    {
-      insights: ["one", "two", "three"],
-      opinions: [],
-      interests: [],
-      goals: { add: [], drop: [] },
-      narrative: null,
-    },
-    {
-      insights: [],
-      opinions: [],
-      interests: [],
-      goals: { add: [], drop: [] },
-      narrative: "First paragraph.\n\nSecond paragraph.",
-    },
-    {
-      insights: [],
-      opinions: Array.from({ length: 4 }, () => ({
-        subject: "films",
-        stance: "good",
-        confidence: "medium",
-      })),
-      interests: [],
-      goals: { add: [], drop: [] },
-      narrative: null,
-    },
-    {
-      insights: [],
-      opinions: [],
-      interests: Array.from({ length: 3 }, () => ({ status: "new", content: "films" })),
-      goals: { add: [], drop: [] },
-      narrative: null,
-    },
-    new Error("model unavailable"),
-  ]) {
+  for (const bad of [{ insights: ["", "", ""] }, new Error("model unavailable")]) {
     await resetDb();
     const { all, deps } = setup();
     await memory(deps, "episode", "An experience.");
@@ -328,6 +293,35 @@ test("invalid output and model failure trace failure without writes", async () =
     expect(await all.db.select().from(core_memory)).toHaveLength(1);
     expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "failed" }]);
   }
+});
+
+test("overfilled output is trimmed to its bounds instead of failing the night", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "An experience.");
+  const bounds = all.config.core.reflect;
+  all.llm.handlers.core_reflect = () => ({
+    insights: ["one", "two", "three"],
+    opinions: Array.from({ length: bounds.max_opinions + 1 }, (_, i) => ({
+      subject: `films ${i}`,
+      stance: "good",
+      confidence: "medium",
+    })),
+    interests: Array.from({ length: bounds.max_interests + 1 }, (_, i) => ({
+      status: "new",
+      content: `interest ${i}`,
+    })),
+    goals: { add: [], drop: [] },
+    narrative: "First paragraph.\n\nSecond paragraph.",
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const rows = await all.db.select().from(core_memory);
+  const count = (kind: string) => rows.filter((row) => row.kind === kind).length;
+  expect(count("insight")).toBe(bounds.max_insights);
+  expect(count("opinion")).toBe(bounds.max_opinions);
+  expect(count("interest")).toBe(bounds.max_interests);
+  expect(rows.find((row) => row.kind === "narrative")?.content).toBe(
+    "First paragraph. Second paragraph.",
+  );
 });
 
 test("a target becoming stale during generation cannot be superseded", async () => {
@@ -352,7 +346,7 @@ test("a target becoming stale during generation cannot be superseded", async () 
 });
 
 test("fade and drop only needs no document embeddings and traces both accepted IDs", async () => {
-  const { all, deps } = setup();
+  const { all, deps } = setup({ core: { goals: { min_active: 0 } } });
   await memory(deps, "episode", "A day.");
   const interest = await memory(deps, "interest", "Films.");
   const goal = await deps.core.goals.insert({
@@ -387,4 +381,43 @@ test("fade and drop only needs no document embeddings and traces both accepted I
     faded_interest_ids: [interest],
     dropped_goal_ids: [goal],
   });
+});
+
+test("drops never leave her fewer active goals than the floor unless she adds replacements", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "A day.");
+  const goal = (title: string) =>
+    deps.core.goals.insert({
+      title,
+      why: "Curiosity",
+      status: "active",
+      progress: 0,
+      source: "seed",
+      source_ref: null,
+      started_at: now,
+      target_at: null,
+      embedding: vec(),
+    });
+  const first = await goal("Learn the constellations");
+  const second = await goal("Finish the film list");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: { add: [], drop: [first, second] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect((await deps.core.goals.active()).map((g) => g.id)).toEqual([second]);
+
+  await memory(deps, "episode", "Another day.", new Date(now.getTime() + 1000));
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: { add: [{ title: "Read more", why: "Books" }], drop: [second] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, new Date(now.getTime() + 2000))).toBe("done");
+  expect((await deps.core.goals.active()).map((g) => g.title)).toEqual(["Read more"]);
 });

@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
+import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
@@ -23,16 +24,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
     const persona = loadPersona(config);
     const people = entities.slice(0, bounds.max_items);
     const activeGoals = goals.slice(0, bounds.max_items);
-    const section = z
-      .array(
-        z
-          .string()
-          .trim()
-          .min(1)
-          .max(config.core.loops.max_chars)
-          .refine((s) => !/[\r\n]/.test(s)),
-      )
-      .max(bounds.max_items);
+    const section = fitList(fitText(config.core.loops.max_chars), bounds.max_items);
     const Output = z
       .object({
         Lately: section,

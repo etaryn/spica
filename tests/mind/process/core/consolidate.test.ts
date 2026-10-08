@@ -210,3 +210,13 @@ test("a loop failure after source damping rolls back gist and markers but retain
     { loop: "core_consolidate", status: "failed", calls: 1 },
   ]);
 });
+
+test("an overlong gist is shortened instead of failing consolidation", async () => {
+  const { all, deps } = setup();
+  for (let i = 0; i < 3; i++) await item(deps, `Episode ${i}`);
+  all.llm.handlers.core_consolidate = () => ({ gist: "word ".repeat(200) });
+  expect(await coreConsolidate(deps, now)).toBe("done");
+  const [gist] = (await all.db.select().from(core_memory)).filter((row) => row.payload !== null);
+  expect(gist!.content.length).toBe(all.config.core.loops.max_chars);
+  expect(gist!.content.endsWith("…")).toBe(true);
+});

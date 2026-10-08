@@ -427,6 +427,7 @@ const core = z
     prices: z.record(z.string(), z.object({ input: nonNegative, output: nonNegative })),
     goals: z.object({
       max_active: positiveInt,
+      min_active: z.number().int().min(0),
       step: z.object({ small: unit, medium: unit, large: unit }),
     }),
     state: coreState,

@@ -3,6 +3,7 @@ import type { CoreLoopName } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
 import type { LoopStatus } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
+import { fitChars } from "@/mind/platform/llm/fit";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreStateRow } from "@/mind/state/core/types";
 import { z } from "zod";
@@ -51,8 +52,8 @@ function validItem(item: ThoughtInput, maxChars: number): ThoughtInput {
   ) {
     throw new Error("invalid thought item");
   }
-  const content = item.content.trim();
-  if (!content || content.length > maxChars) throw new Error("invalid thought content");
+  const content = fitChars(item.content.trim(), maxChars);
+  if (!content) throw new Error("invalid thought content");
   return { kind: item.kind, content, salience: item.salience };
 }
 

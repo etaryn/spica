@@ -331,3 +331,19 @@ test("invalid batch or failed embedding writes nothing and traces failure", asyn
     expect(await traces(all)).toMatchObject([{ status: "failed" }]);
   }
 });
+
+test("extra wander items beyond the limit are dropped, not a failed run", async () => {
+  const { all, deps } = setup();
+  await plan(deps);
+  await seed(deps);
+  const max = deps.config.core.wander.max_items;
+  all.llm.handlers.core_wander = () => ({
+    items: Array.from({ length: max + 1 }, (_, i) => ({
+      ...item,
+      content: `Thought number ${i}.`,
+    })),
+  });
+  const result = await coreWander(deps, now);
+  expect(result.applied).toBe(true);
+  expect(result.ids).toHaveLength(max);
+});

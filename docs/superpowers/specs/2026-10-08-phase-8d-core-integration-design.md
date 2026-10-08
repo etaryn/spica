@@ -63,14 +63,14 @@ The per-user facts tab shows `claim_kind` and `grounded` for self facts. The acc
 ### 5.1 Eval plumbing
 
 - `evals/lib/life-loop.ts` calls `coreNightly` after `coreMindTick` every simulated hour, matching the worker's order.
-- `ALL_PURPOSES` gains `core_reflect`, `core_consolidate`, `core_snapshot` and `core_drift`.
+- `ALL_PURPOSES` gains `core_reflect`, `core_consolidate`, `core_render_snapshot` and `core_drift_watch`.
 - The YAML `core` assertion gains structural checks:
   - `snapshot_versions` (min/max), counting versions above v0;
   - `drift_rows` per check (`values | diff | trend`, min);
   - `goals` (active min/max);
   - `fell_through` (a planned event with `outcome = fell_through` and a `resolution` event pointing at it);
   - `loops_done` (a list of loop names, each needing at least one `done` trace).
-- `package.json` gains `exit:core`, an alias for `pnpm eval --script core-two-weeks` with `--real` set to `core_resolve, core_appraise, core_anticipate, core_ruminate, core_wander, core_reflect, core_consolidate, core_snapshot, core_drift`. Reply, extract, `life_plan`, `life_event`, reconcile, the guard and embeddings stay faked.
+- `package.json` gains `exit:core`, an alias for `pnpm eval --only core-two-weeks` with `--real` set to `core_resolve, core_appraise, core_anticipate, core_ruminate, core_wander, core_reflect, core_consolidate, core_render_snapshot, core_drift_watch`. Reply, extract, `life_plan`, `life_event`, reconcile, the guard and embeddings stay faked.
 
 ### 5.2 Script (`evals/scripts/core-two-weeks.yaml`)
 

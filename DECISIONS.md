@@ -81,3 +81,6 @@ code itself.
 | 2026-10-08 | A `life` or `opinion` claim counts as grounded at core similarity ≥ 0.75 (`claims.grounded_similarity`) | Test-phase default for a diagnostic that blocks nothing; tune from review runs. |
 | 2026-10-08 | The inspector's Core tab lists the last 5 snapshot versions (`inspector.snapshot_versions`) | Enough nights to see a trend without a long page. |
 | 2026-10-08 | Core recall boost biases (`retrieval.core_mood_bias`, `retrieval.core_goal_bias`) are 0.3 each | A visible but modest lean; the boost stays positive for any bias ≤ 1. |
+| 2026-10-08 | Core loop schemas fit overfilled model output (extra list items dropped, overlong text cut with "…") instead of failing the run | Strict structured output can't enforce bounds; one extra line was failing whole nights. Code still owns the numbers. |
+| 2026-10-08 | Reflection keeps at least one active goal (`core.goals.min_active` 1): drops stop at the floor unless additions replace them | With no goal, goal-driven events and goal-biased recall go idle. |
+| 2026-10-08 | The core budget gate is a per-day reservation row (`core_budget_day`), not the summed traces | Calls in flight were invisible to overlapping jobs; one atomic upsert per call closes that without holding a lock across a model call. |

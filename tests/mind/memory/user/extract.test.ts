@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
-import { buildExtractionInput, extract, normalizeExtraction } from "@/mind/memory/user/extract";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import {
+  buildExtractionInput,
+  extract,
+  ExtractionSchema,
+  normalizeExtraction,
+} from "@/mind/memory/user/extract";
 import type { Turn } from "@/db/repos/user/session-log";
 
 const turn = (role: "user" | "companion", text: string, at: string): Turn => ({
@@ -182,4 +188,11 @@ test("normalizeExtraction: claim_kind is kept only on her own facts", () => {
     12,
   );
   expect(out.facts.map((f) => f.claim_kind)).toEqual(["life", null, null]);
+});
+
+test("the model must answer claim_kind on every fact (null when it isn't hers)", () => {
+  const { schema } = zodOutputFormat(ExtractionSchema as never) as unknown as {
+    schema: { properties: { facts: { items: { required: string[] } } } };
+  };
+  expect(schema.properties.facts.items.required).toContain("claim_kind");
 });

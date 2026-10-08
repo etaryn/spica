@@ -426,9 +426,9 @@ export function coreMemoryRepo(db: Db): CoreMemory {
             lte(core_memory.occurred_at, to),
           ),
         )
-        .orderBy(core_memory.occurred_at)
+        .orderBy(desc(core_memory.occurred_at))
         .limit(limit);
-      return rows.map(toItem);
+      return rows.map(toItem).reverse();
     },
 
     async openIntentions(from, to, limit) {

@@ -1,9 +1,11 @@
 /**
  * How a core loop calls a model: within her daily call budget, metered, and traced once per run.
- * The budget is summed from today's traces (her local day), so it holds across jobs and restarts.
- * Optional loops stop while a reserve is left for the essential ones; essential loops that can
- * fall back always run and are told whether they may still call; the rest are skipped. A failure
- * is traced with its class and rethrown.
+ * Each call first reserves a slot in her local day's budget row, so the budget holds across jobs,
+ * restarts and overlapping runs. Optional loops stop while a reserve is left for the essential
+ * ones; essential loops that can fall back always run and are told whether they may still call;
+ * the rest are skipped. A call refused mid-run (another job spent the last slot) throws
+ * `BudgetSpentError`, which the loop may catch to fall back; uncaught, the run is traced as
+ * skipped. Any other failure is traced with its class and rethrown.
  */
 import { randomUUID } from "node:crypto";
 import type { Config, CoreLoopName } from "@/mind/platform/config";
@@ -45,14 +47,18 @@ export function budgetDayStart(config: Config, now: Date): Date {
   return localMidnight(lifeDate(config.life, now), lifeTimezone(config.life, now));
 }
 
-function meterLlm(llm: LLMProvider) {
+/** Today's budget ran out between the loop's check and its call. */
+export class BudgetSpentError extends Error {}
+
+function meterLlm(llm: LLMProvider, reserve: () => Promise<boolean>) {
   const usage: LlmUsage[] = [];
   let calls = 0;
   const metered: LLMProvider = {
     async generateReply() {
       throw new Error("core loops never call the reply model");
     },
-    classifyJson(request) {
+    async classifyJson(request) {
+      if (!(await reserve())) throw new BudgetSpentError(`${request.purpose}: budget spent`);
       calls += 1;
       return llm.classifyJson({
         ...request,
@@ -91,8 +97,9 @@ export async function runCoreLoop<T>(
   const { config, core } = deps;
   const optional = config.core.loop_priority.optional.includes(name);
   const limit = config.core.daily_call_budget - (optional ? config.core.budget_reserve : 0);
-  const spent = await core.traces.callsSince(budgetDayStart(config, now));
-  const meter = meterLlm(deps.llm);
+  const day = lifeDate(config.life, now);
+  const spent = await core.traces.callsOn(day);
+  const meter = meterLlm(deps.llm, () => core.traces.reserveCall(day, limit));
   const canCall = () => spent + meter.calls() < limit;
   const traceId = randomUUID();
   const trace = (fields: Partial<NewCoreLoopTrace> & Pick<NewCoreLoopTrace, "status">) =>
@@ -142,7 +149,12 @@ export async function runCoreLoop<T>(
   try {
     result = await fn({ deps: { ...deps, llm: meter.llm }, traceId, canCall, commit });
   } catch (error) {
-    if (!committed) await trace({ status: "failed", error: errorName(error) });
+    if (committed) throw error;
+    if (error instanceof BudgetSpentError) {
+      await trace({ status: "skipped_budget", inputs: { spent, limit } });
+      return { status: "skipped_budget", outputs: null };
+    }
+    await trace({ status: "failed", error: errorName(error) });
     throw error;
   }
   const status = result.status ?? "done";

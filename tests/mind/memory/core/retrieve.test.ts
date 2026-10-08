@@ -77,6 +77,14 @@ async function addIntention(deps: ReturnType<typeof makeTestDeps>, status: "open
   });
 }
 
+test("a failed state read still ranks her memories, as if her mood were neutral", async () => {
+  const deps = makeTestDeps();
+  await addEpisode(deps, "a");
+  vi.spyOn(deps.core.state, "get").mockRejectedValueOnce(new Error("down"));
+  const r = await retrieveCore(deps, { queryText: "hi", now });
+  expect(r.memories.map((m) => m.content)).toEqual(["a"]);
+});
+
 test("an open intention is recalled: a plan is on her mind before it happens", async () => {
   const deps = makeTestDeps();
   const open = await addIntention(deps, "open");

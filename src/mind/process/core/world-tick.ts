@@ -36,7 +36,7 @@ import {
 import type { WorldEventRow } from "@/mind/world/types";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { proposeResolution, type ResolutionProposal } from "./resolve";
-import { runCoreLoop } from "./runner";
+import { BudgetSpentError, runCoreLoop } from "./runner";
 import { WORLD_LOCK } from "./thoughts";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
@@ -78,17 +78,19 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
 
   const run = await runCoreLoop(deps, "life_event", now, async (ctx) => {
     // Over budget the day still counts as done, so later runs don't spend past the budget.
-    if (!ctx.canCall()) {
+    const overBudget = async () => {
       const out = await applyDay(ctx.deps, day, now, [], []);
-      return { status: "fallback", inputs: { day }, outputs: out };
+      return { status: "fallback" as const, inputs: { day }, outputs: out };
+    };
+    if (!ctx.canCall()) return overBudget();
+    let generated;
+    try {
+      generated = await generateCoreEvents(ctx.deps, day, now, ctx.canCall, opts.inject);
+    } catch (error) {
+      if (error instanceof BudgetSpentError) return overBudget();
+      throw error;
     }
-    const { accepted, attempts, budgetExhausted } = await generateCoreEvents(
-      ctx.deps,
-      day,
-      now,
-      ctx.canCall,
-      opts.inject,
-    );
+    const { accepted, attempts, budgetExhausted } = generated;
     const out = await applyDay(ctx.deps, day, now, accepted, attempts);
     return {
       ...(budgetExhausted ? { status: "fallback" as const } : {}),

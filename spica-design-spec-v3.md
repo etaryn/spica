@@ -432,7 +432,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   model, prompt version, tokens, cost, `calls` (model calls made, retries
   included), `status` (`done | fallback | skipped_budget | failed`), `error`
   (class only), created_at; one row per run of every core loop, written by
-  the runner (§15), plus the code-only state tick), `life_event_log` (Built; every event-generator attempt:
+  the runner (§15), plus the code-only state tick), `core_budget_day` (Built:
+  `day` (her local date) → `calls` reserved that day; the budget gate, §15),
+  `life_event_log` (Built; every event-generator attempt:
   `life_day`, `attempt`, `candidate`, `decision`, `target_memory_id` (the core
   memory a reconcile verdict pointed at), `world_event_id` (the event an
   accepted attempt became), model, prompt version; no `user_id`), and
@@ -704,7 +706,11 @@ times closeness (user).
 
 All scheduled, all within `core.daily_call_budget`; each reads only core
 memory, core state and the world (V3), and writes a `core_loop_trace` row.
-Prompts under `prompts/core/<loop>/v<N>.md`. Core loops live in
+Prompts under `prompts/core/<loop>/v<N>.md`. Strict structured output can't
+enforce lengths or item counts, so core loop schemas **fit** the model's
+output to the bounds code owns (`fitList` keeps the first items,
+`fitText` collapses whitespace and cuts overlong text with "…") instead of
+failing the run; empty or wrongly shaped output still fails. Core loops live in
 `src/mind/process/core/` and take `CoreDeps` (no `db`); the ESLint one-way
 rule bans `@/mind/process/*` imports from core code except
 `@/mind/process/core`.
@@ -769,7 +775,9 @@ budget and a versioned prompt:
   marks exactly its selected IDs in the success transaction; later inserts
   remain due even when their `created_at` precedes the run.
   It may write up to `max_insights` (2), `max_opinions` (3) and
-  `max_interests` (2); goal additions respect `core.goals.max_active`.
+  `max_interests` (2); goal additions respect `core.goals.max_active`, and
+  drops stop at `core.goals.min_active` (1) unless additions replace them, so
+  she always has something to pull her events and recall.
   Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
   interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
@@ -1183,8 +1191,12 @@ match.
   reconcile calls), appraisals, a handful of wander and anticipate runs,
   nightly reflect, consolidate and render, and one drift judge. Every core model
   call goes through `runCoreLoop`, which meters calls, tokens and cost
-  (`core.prices`, dollars per million tokens) and writes one trace per run;
-  spend is the summed trace `calls` since her local midnight.
+  (`core.prices`, dollars per million tokens) and writes one trace per run.
+  Each call first reserves a slot in `core_budget_day` for her local date
+  (one atomic upsert guarded by the loop's limit), so overlapping jobs can't
+  overshoot; a call refused mid-run throws `BudgetSpentError`, which the event
+  generator treats as over budget and any other loop records as
+  `skipped_budget`. Traces still record each run's `calls`.
   `core.loop_priority` splits loops into `essential` and `optional`; an
   optional loop runs only while `budget_reserve` (8) calls remain beyond it.
   Over budget, loops with a code fallback (`life_plan`, `life_event`,
@@ -1578,8 +1590,8 @@ and life tick) were dropped; the replacement is designed fresh.
   episode.~~ **Done in 8b**: `resolves_memory_id` persists the target and
   landing closes it; a replacement carries the target, and a deleted target
   is harmless.
-- **B52.** `recentEpisodes` returns the oldest N episodes in its window, not
-  the newest; harmless at one event a day. *Later.*
+- **B52.** ~~`recentEpisodes` returns the oldest N episodes in its window.~~
+  **Done** (2026-10-08): it returns the newest N, oldest first.
 - **B53.** ~~Mood-congruent and goal-biased core retrieval (§10.3 slot 6).~~
   **Done in 8d.**
 - **B54.** ~~When core contradicts something she told a user (§21 #4).~~
@@ -1592,11 +1604,9 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B58.** ~~Appraise events at their `occurred_at`, not at the 00:10 world
   tick.~~ **Done** (planned vs spontaneous events, §8.3): events are
   appraised by the first hourly world tick after their time.
-- **B59.** `runCoreLoop` reads today's spent calls once, without a lock, so
-  overlapping core jobs (`core_mind_tick`, `core_nightly`, the world tick)
-  can each pass the check and overshoot `core.daily_call_budget` by a few
-  calls. Serialise the budget with an advisory lock or a reservation row.
-  *Before users.*
+- **B59.** ~~Overlapping core jobs could each pass the budget check and
+  overshoot `core.daily_call_budget`.~~ **Done** (2026-10-08): every call
+  reserves a slot in `core_budget_day` first (§15).
 - **B61.** First real-core fourteen-day run (`pnpm exit:core`, 2026-10-08,
   `evals/results/review-2026-10-08T11-18-49-050Z.md`): `core_render_snapshot`
   fails to parse its structured output on every night from night 4 (11 of

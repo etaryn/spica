@@ -62,6 +62,7 @@ const CORE_TABLES = [
   "world_event",
   "life_event_log",
   "core_loop_trace",
+  "core_budget_day",
   "life_day",
   "drift_log",
   "core_self_line",

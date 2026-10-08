@@ -694,6 +694,15 @@ export const core_loop_trace = pgTable(
   (t) => [index("core_loop_trace_loop_created_idx").on(t.loop, t.created_at)],
 );
 
+/**
+ * Model calls her core loops reserved on each of her local days. A call reserves its slot before it
+ * is made, so overlapping jobs can't both pass the budget check; traces still record the spend.
+ */
+export const core_budget_day = pgTable("core_budget_day", {
+  day: date("day", { mode: "string" }).primaryKey(),
+  calls: integer("calls").notNull(),
+});
+
 /** Every core-event attempt. Diagnostic only, never read by the chat loop. */
 export const life_event_log = pgTable(
   "life_event_log",

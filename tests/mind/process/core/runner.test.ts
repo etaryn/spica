@@ -122,6 +122,25 @@ test("canCall counts calls made inside the run", async () => {
   expect(seen).toEqual([true, false]);
 });
 
+test("overlapping runs can't spend past the budget between them", async () => {
+  const { all, deps } = setup({ core: { daily_call_budget: 2, budget_reserve: 0 } });
+  let release!: () => void;
+  const bothStarted = new Promise<void>((resolve) => (release = resolve));
+  let started = 0;
+  const run = () =>
+    runCoreLoop(deps, "core_reflect", now, async (ctx) => {
+      if (++started === 2) release();
+      await bothStarted;
+      await probe(ctx);
+      await probe(ctx);
+      return { inputs: {}, outputs: {} };
+    });
+  const results = await Promise.all([run(), run()]);
+  expect(results.map((r) => r.status)).toContain("skipped_budget");
+  expect((await traces(all)).reduce((sum, t) => sum + t.calls, 0)).toBe(2);
+  expect(all.llm.structuredCalls).toHaveLength(2);
+});
+
 test("the budget resets at her local midnight", async () => {
   const { deps } = setup({ core: { daily_call_budget: 1, budget_reserve: 0 } });
   await runCoreLoop(deps, "core_reflect", now, async (ctx) => {

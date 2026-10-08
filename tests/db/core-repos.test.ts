@@ -72,13 +72,15 @@ test("near skips superseded memories and respects the threshold", async () => {
   expect(near.map((n) => n.id)).toEqual([live]);
 });
 
-test("recentEpisodes is a half-open window, oldest first", async () => {
+test("recentEpisodes is a half-open window, the newest few, oldest first", async () => {
   const h = 3_600_000;
   const a = await core().memory.insert(episode("a", 0.01, new Date(now.getTime() - 2 * h)));
   const b = await core().memory.insert(episode("b", 0.01, new Date(now.getTime() - h)));
   await core().memory.insert(episode("future", 0.01, new Date(now.getTime() + h)));
   const got = await core().memory.recentEpisodes(new Date(now.getTime() - 3 * h), now, 10);
   expect(got.map((e) => e.id)).toEqual([a, b]);
+  const newest = await core().memory.recentEpisodes(new Date(now.getTime() - 3 * h), now, 1);
+  expect(newest.map((e) => e.id)).toEqual([b]);
 });
 
 test("entities are added once and keep their first_seen", async () => {

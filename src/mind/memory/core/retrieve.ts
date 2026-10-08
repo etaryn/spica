@@ -49,7 +49,11 @@ export async function retrieveCore(
   let state: Awaited<ReturnType<typeof core.state.get>> = null;
 
   try {
-    state = await core.state.get();
+    // Without her state, rank as if her mood were neutral rather than recall nothing.
+    state = await core.state.get().catch((e: unknown) => {
+      log.error("core state unread for recall", { error: errorName(e) });
+      return null;
+    });
     const vector = await (input.queryVector ?? embedQuery({ embedder, config }, input.queryText));
     if (vector) {
       const candidates = await core.memory.candidates(vector, config.retrieval.candidate_pool);

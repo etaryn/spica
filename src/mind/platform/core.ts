@@ -29,8 +29,10 @@ export type NewCoreLoopTrace = {
 
 export interface CoreTraces {
   insert(trace: NewCoreLoopTrace): Promise<void>;
-  /** Model calls traced at or after `from`: what today's budget has spent. */
-  callsSince(from: Date): Promise<number>;
+  /** Model calls reserved on her local `day` ("YYYY-MM-DD"): what that day's budget has spent. */
+  callsOn(day: string): Promise<number>;
+  /** Reserve one call on `day` if fewer than `limit` are reserved; false when the budget is spent. */
+  reserveCall(day: string, limit: number): Promise<boolean>;
   /** Successful applied runs in [from, to); use all history separately for cross-day gaps. */
   appliedSummary(
     loop: string,

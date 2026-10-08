@@ -35,7 +35,8 @@ export const ExtractionSchema = z.object({
       confidence: z.number(),
       entity_names: z.array(z.string()),
       thread_title: z.string().nullable(),
-      claim_kind: z.enum(claimKind.enumValues).nullish(),
+      // Required for the model, so it never skips the label; fixtures without it read as null.
+      claim_kind: z.enum(claimKind.enumValues).nullable().default(null),
     }),
   ),
   entities: z.array(
@@ -62,8 +63,10 @@ export const ExtractionSchema = z.object({
 
 type RawExtraction = z.infer<typeof ExtractionSchema>;
 
-export type ExtractedFact = Omit<RawExtraction["facts"][number], "occurred_at"> & {
+export type ExtractedFact = Omit<RawExtraction["facts"][number], "occurred_at" | "claim_kind"> & {
   occurred_at: Date | null;
+  /** Only her own facts carry one; facts code writes (her hurt) leave it out. */
+  claim_kind?: RawExtraction["facts"][number]["claim_kind"];
 };
 export type ExtractedEntity = EntityMention;
 export type ExtractedThread = Omit<RawExtraction["threads"][number], "next_checkpoint"> & {

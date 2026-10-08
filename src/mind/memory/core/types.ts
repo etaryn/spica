@@ -158,7 +158,7 @@ export interface CoreMemory {
    * and her latest self. 0 when she has none.
    */
   groundingSimilarity(embedding: number[]): Promise<number>;
-  /** Episodes whose time falls in (from, to], oldest first, at most `limit`. */
+  /** The newest `limit` episodes whose time falls in (from, to], oldest first. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** Open intentions created in (from, to], oldest first, at most `limit`. */
   openIntentions(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;

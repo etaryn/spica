@@ -78,6 +78,8 @@ const BOB_TABLES = [
   "relationship_param",
   "relationship_event",
   "reach_out_log",
+  "user_mind_run",
+  "user_loop_trace",
 ];
 
 function script(aText: string) {
@@ -118,6 +120,27 @@ function script(aText: string) {
 async function run(aText: string) {
   const llm = new CapturingLLM({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
+  });
+  // Bob's first session is a big event too, so he gets a user mind run of his own.
+  llm.handlers.extract = (input: string) => ({
+    facts: (input.split("New exchange").at(-1) ?? "").includes("BOB-SAYS hey")
+      ? [
+          {
+            subject: "user",
+            kind: "event",
+            content: "Bob had a long week.",
+            occurred_at: null,
+            salience: 0.9,
+            valence: 0.2,
+            confidence: 0.9,
+            entity_names: [],
+            thread_title: null,
+          },
+        ]
+      : [],
+    entities: [],
+    threads: [],
+    relationship: null,
   });
   llm.handlers.core_resolve = () => ({
     content: "Spica still got the telescope images, though the observatory closed early.",
@@ -205,6 +228,7 @@ describe("leak canary", () => {
       core_consolidate: json,
       core_render_snapshot: json,
       core_drift_watch: plain,
+      user_summarise: JSON.stringify({ new_memories: [{ content: TOKEN }], what_happened: [] }),
     };
     const outputs = await Promise.all(
       Object.entries(purposes).map(([purpose, input]) =>
@@ -219,7 +243,7 @@ describe("leak canary", () => {
         }),
       ),
     );
-    const [resolve, anticipate, ruminate, wander, reflect, consolidate, render, drift] =
+    const [resolve, anticipate, ruminate, wander, reflect, consolidate, render, drift, summary] =
       outputs as [
         { content: string },
         { thought: { content: string } },
@@ -229,6 +253,7 @@ describe("leak canary", () => {
         { gist: string },
         { Lately: string[] },
         { findings: { excerpt: string }[] },
+        { how_i_feel: string },
       ];
     expect(resolve.content).toContain(TOKEN);
     expect(anticipate.thought.content).toContain(TOKEN);
@@ -238,6 +263,24 @@ describe("leak canary", () => {
     expect(consolidate.gist).toContain(TOKEN);
     expect(render.Lately[0]).toContain(TOKEN);
     expect(drift.findings[0]!.excerpt).toContain(TOKEN);
+    expect(summary.how_i_feel).toContain(TOKEN);
+  });
+
+  test("user mind runs stay in their own user's scope", async () => {
+    const summarise = llm.seen.filter((c) => c.purpose === "user_summarise");
+    const alice = summarise.filter((c) => c.text.includes(TOKEN));
+    const bob = summarise.filter((c) => !c.text.includes(TOKEN));
+    expect(alice.length).toBeGreaterThan(0);
+    expect(bob.length).toBeGreaterThan(0);
+    for (const c of bob) expect(c.text).not.toMatch(CANARY);
+    // Alice's summary carries the canary (the echo works), and it is hers alone.
+    const aliceId = await userIdByName("alice");
+    const res = await getTestDb().execute(
+      sql`SELECT user_id, content FROM fact WHERE kind = 'summary'`,
+    );
+    const leaked = res.rows.filter((r) => String(r.content).includes(TOKEN));
+    expect(leaked.length).toBeGreaterThan(0);
+    for (const r of leaked) expect(String(r.user_id)).toBe(aliceId);
   });
 
   test("no core prompt saw it", () => {

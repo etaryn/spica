@@ -90,6 +90,7 @@ export class AnthropicProvider implements LLMProvider {
       turn_judge: this.models.turn_judge,
       life: this.models.life,
       core: this.models.core,
+      user_mind: this.models.user_mind,
     };
     return ids[model];
   }

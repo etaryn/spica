@@ -13,7 +13,7 @@ import type { LoopStatus, NewCoreLoopTrace } from "@/mind/platform/core";
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
-import type { LLMProvider, LlmUsage } from "@/mind/platform/llm/types";
+import { meterLlm, spend } from "@/mind/platform/llm/meter";
 import { localMidnight } from "@/mind/platform/timezone";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 
@@ -50,46 +50,6 @@ export function budgetDayStart(config: Config, now: Date): Date {
 /** Today's budget ran out between the loop's check and its call. */
 export class BudgetSpentError extends Error {}
 
-function meterLlm(llm: LLMProvider, reserve: () => Promise<boolean>, maxRetries: number) {
-  const usage: LlmUsage[] = [];
-  let calls = 0;
-  const metered: LLMProvider = {
-    async generateReply() {
-      throw new Error("core loops never call the reply model");
-    },
-    async classifyJson(request) {
-      if (!(await reserve())) throw new BudgetSpentError(`${request.purpose}: budget spent`);
-      calls += 1;
-      // A transient failure would otherwise cost a whole night: the night is claimed up front.
-      return llm.classifyJson({
-        maxRetries,
-        ...request,
-        onUsage: (u) => {
-          request.onUsage?.(u);
-          usage.push(u);
-        },
-      });
-    },
-  };
-  return { llm: metered, usage, calls: () => calls };
-}
-
-function spend(usage: LlmUsage[], config: Config) {
-  if (!usage.length) return { model: null, tokens_in: null, tokens_out: null, cost: null };
-  const tokensIn = usage.reduce((sum, u) => sum + u.input_tokens, 0);
-  const tokensOut = usage.reduce((sum, u) => sum + u.output_tokens, 0);
-  let cost: number | null = 0;
-  for (const u of usage) {
-    const price = config.core.prices[u.model];
-    if (!price || cost === null) {
-      cost = null;
-      continue;
-    }
-    cost += (u.input_tokens * price.input + u.output_tokens * price.output) / 1_000_000;
-  }
-  return { model: usage.at(-1)!.model, tokens_in: tokensIn, tokens_out: tokensOut, cost };
-}
-
 export async function runCoreLoop<T>(
   deps: CoreDeps,
   name: CoreLoopName,
@@ -101,11 +61,12 @@ export async function runCoreLoop<T>(
   const limit = config.core.daily_call_budget - (optional ? config.core.budget_reserve : 0);
   const day = lifeDate(config.life, now);
   const spent = await core.traces.callsOn(day);
-  const meter = meterLlm(
-    deps.llm,
-    () => core.traces.reserveCall(day, limit),
-    config.core.max_retries,
-  );
+  // maxRetries: a transient failure would otherwise cost a whole night, which is claimed up front.
+  const meter = meterLlm(deps.llm, {
+    reserve: () => core.traces.reserveCall(day, limit),
+    onRefused: (purpose) => new BudgetSpentError(`${purpose}: budget spent`),
+    maxRetries: config.core.max_retries,
+  });
   const canCall = () => spent + meter.calls() < limit;
   const traceId = randomUUID();
   const trace = (fields: Partial<NewCoreLoopTrace> & Pick<NewCoreLoopTrace, "status">) =>
@@ -118,7 +79,7 @@ export async function runCoreLoop<T>(
       error: null,
       created_at: now,
       calls: meter.calls(),
-      ...spend(meter.usage, config),
+      ...spend(meter.usage, config.core.prices),
       ...fields,
     });
 
@@ -145,7 +106,7 @@ export async function runCoreLoop<T>(
         error: null,
         created_at: now,
         calls: meter.calls(),
-        ...spend(meter.usage, config),
+        ...spend(meter.usage, config.core.prices),
       });
       return value;
     });

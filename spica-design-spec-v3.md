@@ -361,7 +361,8 @@ Every table here references `user(id) ON DELETE CASCADE`.
   `created_at`. Which parts of her self she has revealed to this user
   (§11.3).
 - **`user_mind_run`** (Built 9a): one row per big-event batch: `user_id`,
-  `trigger` (what fired, in words), `source_ref` (`exchange:<replyTurnId>` or
+  `triggers` (jsonb: the structured triggers that fired, e.g.
+  `{kind: "param_band", param, from, to}`), `source_ref` (`exchange:<replyTurnId>` or
   `tick:<localDate>`; unique with `user_id`, so a retried cold path or tick
   records the event once), `local_date` (the user's local date, used for the
   daily cap), `status` (`pending | running | done | failed | capped`), and
@@ -874,8 +875,9 @@ is backlog (B63). Candidates (thresholds in
   existing fact doesn't count.
 - `make_up_done`: a make-up flow completes. Exchange only.
 
-Afterglow and `msgs_per_day` never fire a trigger. A crisis exchange records
-nothing. A trigger is recorded inside the cold path's transaction (or the
+Exchange triggers fire only for an exchange with a user turn: a reach-out
+on its own is her words, not an event in the relationship. Afterglow and
+`msgs_per_day` never fire a trigger. A crisis exchange records nothing. A trigger is recorded inside the cold path's transaction (or the
 tick's), so it exists exactly when the state change that caused it does; the
 job is enqueued after commit. Deferred triggers: B63.
 
@@ -900,13 +902,18 @@ cost from `core.prices`, retries `core.max_retries`, model role
 core text a user loop sees is the latest snapshot. The `user_mind_run` queue
 has retry limit zero, and a pending run older than
 `user_mind.sweep_after_minutes` (10) is re-enqueued by `cold_path_sweep`. A
-run left `running` by a crash is not retried (B64), and the cap's
+run whose batch throws is finished `failed`; only a process death leaves one
+`running`, and it is not retried (B64), and the cap's
 count-then-insert can race between the cold path and the tick (B65).
 
 The 9a batch is `user_summarise` alone
 (`prompts/user-mind/summarise/v1.md`, `prompts.user_summarise` v1). Inputs:
 the live summary, facts since it (at most 20 by salience, non-sensitive, no
-summaries), up to 5 open threads, the phrased relationship line, the
+summaries; the cutoff looks back `user_mind.summarise.since_slack_minutes`
+(120) before the summary, because facts are dated by when their exchange
+began, and leaves out the facts the previous summary already read, from its
+`user_loop_trace.inputs.fact_ids`), up to 5 open threads (none whose latest
+fact is sensitive), the phrased relationship line, the
 triggers in words, and the snapshot. Output `{where_things_stand,
 whats_live, how_i_feel}`, each fitted to 300 characters, capped at 512
 tokens. It is stored as the `summary` fact (salience 0.6, confidence
@@ -1182,7 +1189,8 @@ once weights are proven reliable.
 
 At most one or two memories per reply, only when natural; never claiming to
 remember something not said. The "what I remember" page lists the user's
-own facts, each hard-deletable (a thread left empty is deleted with it);
+own facts and her live summary of where things stand, each hard-deletable
+(a thread left empty is deleted with it);
 account deletion removes everything.
 
 ---
@@ -1398,8 +1406,8 @@ v3 changes:
   the cold path or the relationship tick when a big event is recorded. Retry
   limit zero; a failed run is `failed` and not retried. Stuck `pending` rows
   are re-enqueued by `cold_path_sweep` after `user_mind.sweep_after_minutes`
-  (10); there is no separate sweep job. A run left `running` by a crash is
-  not retried (B64).
+  (10); there is no separate sweep job. Only a process death leaves a run
+  `running`, and it is not retried (B64).
 
 Every job logs failures with ids and error class only, never content.
 
@@ -1697,12 +1705,17 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B63.** User-mind triggers deferred from 9a: a long conversation ends, a
   crisis has passed, and the latest summary is stale before a reach-out
   (§9.4). *Tuning.*
-- **B64.** A `user_mind_run` left `running` by a crash is never retried (the
-  queue has retry limit zero and the sweep only re-enqueues `pending`). Add a
+- **B64.** A `user_mind_run` left `running` by a process death (a throw
+  finishes it `failed`) is never retried (the queue has retry limit zero and
+  the sweep only re-enqueues `pending`). Add a
   stale-`running` reset if it happens. *Later.*
 - **B65.** The daily cap counts non-capped runs and then inserts, so the cold
   path and the relationship tick can race past it for one user. Take a
   per-user lock around count-then-insert. *Later.*
+- **B66.** Forgetting a fact leaves its content in the live summary (and
+  carried through `previous`); retire or regenerate the summary when a
+  forgotten fact was among its inputs (`user_loop_trace.inputs.fact_ids`).
+  *Phase 9c.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

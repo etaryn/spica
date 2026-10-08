@@ -18,6 +18,8 @@ import {
 import { clamp } from "@/mind/platform/math";
 
 const subject = z.enum(["user", "self", "shared"]);
+// A summary is hers to write after a big event, never something read off one exchange.
+const extractableKind = z.enum(factKind.enumValues).exclude(["summary"]);
 
 /**
  * The output format sent to the model. It carries no numeric or length bounds (the model API
@@ -27,7 +29,7 @@ export const ExtractionSchema = z.object({
   facts: z.array(
     z.object({
       subject,
-      kind: z.enum(factKind.enumValues),
+      kind: extractableKind,
       content: z.string(),
       occurred_at: z.string().nullable(),
       salience: z.number(),

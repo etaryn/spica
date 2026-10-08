@@ -60,9 +60,12 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
     CORE_MIND_TICK_QUEUE,
     CORE_NIGHTLY_QUEUE,
     OUTREACH_TICK_QUEUE,
-    USER_MIND_RUN_QUEUE,
   ]) {
     await boss.createQueue(q, { retryLimit: 0 });
     await boss.updateQueue(q, { retryLimit: 0 });
   }
+  // A retry would re-run a batch the sweep doesn't own and spend the user's daily cap twice;
+  // a failed run stays failed.
+  await boss.createQueue(USER_MIND_RUN_QUEUE, { retryLimit: 0 });
+  await boss.updateQueue(USER_MIND_RUN_QUEUE, { retryLimit: 0 });
 }

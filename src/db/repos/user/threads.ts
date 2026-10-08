@@ -1,7 +1,7 @@
 /**
  * One user's threads: ongoing storylines with checkpoints and stakes, and which ones are due.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { thread, threadStakes } from "@/db/schema";
@@ -11,13 +11,32 @@ import { one, toDate } from "@/db/repos/util";
 export type ThreadRow = typeof thread.$inferSelect;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 
-export async function listOpenThreads(db: Db, userId: string, limit: number) {
-  return db
-    .select({ id: thread.id, title: thread.title })
-    .from(thread)
-    .where(and(eq(thread.user_id, userId), eq(thread.status, "open")))
-    .orderBy(desc(thread.last_touched))
-    .limit(limit);
+/**
+ * A thread's latest active fact, for a LATERAL join on `t`. A thread is as sensitive as its
+ * latest fact.
+ */
+const latestFact = sql`
+  SELECT f.id, f.content, f.salience, COALESCE((f.payload->>'sensitive')::boolean, false) AS sensitive
+  FROM fact f
+  WHERE f.user_id = t.user_id AND f.thread_id = t.id AND f.scope = 'private'
+    AND f.status NOT IN ('superseded', 'stale')
+  ORDER BY f.created_at DESC LIMIT 1`;
+
+/** `excludeSensitive` drops threads whose latest fact is sensitive. */
+export async function listOpenThreads(
+  db: Db,
+  userId: string,
+  limit: number,
+  opts: { excludeSensitive?: boolean } = {},
+): Promise<{ id: string; title: string }[]> {
+  const res = await db.execute(sql`
+    SELECT t.id, t.title FROM thread t
+    LEFT JOIN LATERAL (${latestFact}) lf ON true
+    WHERE t.user_id = ${userId} AND t.status = 'open'
+      ${opts.excludeSensitive ? sql`AND COALESCE(lf.sensitive, false) = false` : sql``}
+    ORDER BY t.last_touched DESC
+    LIMIT ${limit}`);
+  return res.rows.map((r) => ({ id: String(r.id), title: String(r.title) }));
 }
 
 export async function findOpenThreadByTitle(
@@ -127,12 +146,7 @@ export async function dueThreads(
   const res = await db.execute(sql`
     SELECT t.id, t.title, t.next_checkpoint, t.stakes, lf.id AS fact_id, lf.content, lf.salience, lf.sensitive
     FROM thread t
-    LEFT JOIN LATERAL (
-      SELECT f.id, f.content, f.salience, COALESCE((f.payload->>'sensitive')::boolean, false) AS sensitive FROM fact f
-      WHERE f.user_id = t.user_id AND f.thread_id = t.id AND f.scope = 'private'
-        AND f.status NOT IN ('superseded', 'stale')
-      ORDER BY f.created_at DESC LIMIT 1
-    ) lf ON true
+    LEFT JOIN LATERAL (${latestFact}) lf ON true
     WHERE t.user_id = ${userId} AND t.status = 'open' AND t.next_checkpoint IS NOT NULL AND t.next_checkpoint <= ${now}
       AND t.last_touched < t.next_checkpoint
     ORDER BY t.next_checkpoint ASC

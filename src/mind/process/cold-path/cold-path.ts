@@ -92,15 +92,17 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     }
 
     // A big event makes her think about them; recorded with the exchange so it runs exactly once.
-    const triggers = crisis
-      ? []
-      : detectBigEvents({
-          before: relationship?.before ?? null,
-          after: relationship?.after ?? null,
-          newFactSaliences: applied.insertedSaliences,
-          settings: config.user_mind.triggers,
-          source: "exchange",
-        });
+    // Her words alone (a reach-out nobody answered yet) are no event in the relationship.
+    const triggers =
+      crisis || !hasUserTurn
+        ? []
+        : detectBigEvents({
+            before: relationship?.before ?? null,
+            after: relationship?.after ?? null,
+            newFactSaliences: applied.insertedSaliences,
+            settings: config.user_mind.triggers,
+            source: "exchange",
+          });
     const userMindRunId = await recordBigEvents(
       deps,
       tx,

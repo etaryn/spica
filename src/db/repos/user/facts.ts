@@ -2,7 +2,7 @@
  * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
  * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
  */
-import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
 import type { Db } from "@/db/client";
@@ -149,11 +149,15 @@ export async function setFactStatus(
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
 }
 
-/** What she has learned about a user since her last summary of them, most salient first. */
+/**
+ * What she has learned about a user since `since`, most salient first, leaving out `excludeIds`
+ * (what the last summary already read).
+ */
 export async function listFactsForSummary(
   db: Db,
   userId: string,
   since: Date | null,
+  excludeIds: string[],
   limit: number,
 ) {
   return db
@@ -173,6 +177,7 @@ export async function listFactsForSummary(
         sql`${fact.kind} <> 'summary'`,
         sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
         since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
+        excludeIds.length > 0 ? notInArray(fact.id, excludeIds) : undefined,
       ),
     )
     .orderBy(desc(fact.salience))
@@ -235,7 +240,7 @@ export async function applyRecall(
   });
 }
 
-/** The "what I remember" list. */
+/** The "what I remember" list: what she knows about them, and her live summary of the two of them. */
 export async function listRememberedFacts(db: Db, userId: string) {
   return db
     .select({ id: fact.id, kind: fact.kind, content: fact.content, created_at: fact.created_at })
@@ -243,7 +248,7 @@ export async function listRememberedFacts(db: Db, userId: string) {
     .where(
       and(
         eq(fact.user_id, userId),
-        eq(fact.subject, "user"),
+        or(eq(fact.subject, "user"), eq(fact.kind, "summary")),
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
       ),

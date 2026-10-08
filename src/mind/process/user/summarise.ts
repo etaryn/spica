@@ -8,9 +8,10 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { insertFact, listFactsForSummary, setFactStatus } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
-import { liveSummary, type Trigger } from "@/db/repos/user/user-mind";
+import { liveSummary, summaryInputFactIds, type Trigger } from "@/db/repos/user/user-mind";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { MINUTE } from "@/mind/platform/time";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -36,13 +37,19 @@ export async function userSummarise(
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_summarise", async (ctx) => {
     const previous = await liveSummary(db, userId);
-    const facts = await listFactsForSummary(
-      db,
-      userId,
-      previous?.created_at ?? null,
-      settings.max_facts,
-    );
-    const threads = await listOpenThreads(db, userId, settings.max_threads);
+    // Memories are dated by when their exchange began, so one whose cold path committed after
+    // the last summary can be dated before it: look back a little, minus what it already read.
+    // ponytail: a cold path the daily sweep recovers can commit later than the slack; widen it if
+    // those memories matter
+    const since = previous
+      ? new Date(previous.created_at.getTime() - settings.since_slack_minutes * MINUTE)
+      : null;
+    const consumed = previous ? await summaryInputFactIds(db, userId, previous.id) : [];
+    const facts = await listFactsForSummary(db, userId, since, consumed, settings.max_facts);
+    // A sensitive storyline's title can carry what the sensitive fact says.
+    const threads = await listOpenThreads(db, userId, settings.max_threads, {
+      excludeSensitive: true,
+    });
     const now = deps.clock.now();
     const Output = z.object({
       where_things_stand: fitText(settings.max_chars),

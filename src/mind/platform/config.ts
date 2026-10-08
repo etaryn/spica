@@ -529,6 +529,7 @@ const userMind = z.object({
   summarise: z.object({
     max_facts: positiveInt,
     max_threads: countFromZero,
+    since_slack_minutes: countFromZero,
     max_chars: positiveInt,
     max_tokens: positiveInt,
     salience: unit,

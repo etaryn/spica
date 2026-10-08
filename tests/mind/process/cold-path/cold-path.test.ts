@@ -451,6 +451,29 @@ test("a salient new fact records one user mind run and enqueues it after commit"
   expect(deps.queue.jobs.filter((j) => j.name === "user_mind_run")).toHaveLength(1);
 });
 
+test("a reach-out on its own records no run, even with a salient fact of hers", async () => {
+  const deps = depsWith();
+  const userId = await createTestUser();
+  const c = await insertTurn(getTestDb(), userId, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "my dog Biscuit did a trick",
+    created_at: at(0),
+    trigger: "reach_out",
+  });
+  const out = await runColdPath(deps, {
+    userId,
+    turnIds: [c.id],
+    replyTurnId: c.id,
+    recalled: [],
+  });
+  expect(out.applied?.insertedSaliences.length).toBeGreaterThan(0);
+  expect(out.userMindRunId).toBeNull();
+  const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
+  expect(runs.rows[0]!.n).toBe(0);
+});
+
 test("a retried cold path for the same exchange records no second run", async () => {
   const deps = depsWith();
   const userId = await createTestUser();

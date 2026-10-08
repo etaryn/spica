@@ -459,6 +459,7 @@
     "summarise": {
       "max_facts": 20,
       "max_threads": 5,
+      "since_slack_minutes": 120,
       "max_chars": 300,
       "max_tokens": 512,
       "salience": 0.6,

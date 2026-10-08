@@ -6,6 +6,7 @@ import { ForgetButton } from "./forget-button";
 import styles from "./memory.module.css";
 
 const LABELS: Record<string, string> = {
+  summary: "Where things stand",
   event: "Things that happened",
   trait: "About you",
   preference: "What you like",

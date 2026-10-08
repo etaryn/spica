@@ -92,6 +92,25 @@ export async function liveSummary(db: Db, userId: string): Promise<FactRow | nul
   return rows[0] ?? null;
 }
 
+/** The memory ids the loop that wrote this summary read; empty when its trace is gone. */
+export async function summaryInputFactIds(
+  db: Db,
+  userId: string,
+  summaryId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ inputs: user_loop_trace.inputs })
+    .from(user_loop_trace)
+    .where(
+      and(
+        eq(user_loop_trace.user_id, userId),
+        sql`${user_loop_trace.outputs}->>'summary_id' = ${summaryId}`,
+      ),
+    )
+    .limit(1);
+  return (rows[0]?.inputs as { fact_ids?: string[] } | undefined)?.fact_ids ?? [];
+}
+
 /** The user's local date; UTC when their zone is unset or invalid. */
 export async function userLocalDate(db: Db, userId: string, now: Date): Promise<string> {
   const raw = await getTimezone(db, userId);

@@ -217,6 +217,20 @@ describe("facts", () => {
     ]);
   });
 
+  test("listRememberedFacts: also the live summary, so the user can see and delete it", async () => {
+    const u = await createTestUser();
+    await fact(u, "old summary", ax(1), {
+      subject: "shared",
+      kind: "summary",
+      status: "superseded",
+    });
+    await fact(u, "live summary", ax(2), { subject: "shared", kind: "summary" });
+    await fact(u, "shared other", ax(3), { subject: "shared" });
+    expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual([
+      "live summary",
+    ]);
+  });
+
   test("listOnboardingFacts: only this user's live onboarding facts", async () => {
     const u = await createTestUser();
     const other = await createTestUser();

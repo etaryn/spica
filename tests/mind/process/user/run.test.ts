@@ -74,3 +74,16 @@ test("two runs for one user leave exactly one live summary", async () => {
   );
   expect(live.rows[0]).toMatchObject({ n: 1 });
 });
+
+test("a throw after the claim finishes the run failed, never left running", async () => {
+  const deps = makeTestDeps();
+  deps.core.memory.latestSnapshot = async () => {
+    throw new Error("db down");
+  };
+  const u = await createTestUser();
+  const runId = (await recordBigEvents(deps, deps.db, u, "exchange:a", trig))!;
+  expect(await runUserMind(deps, { runId })).toBe("failed");
+  const run = await getTestDb().execute(sql`SELECT status, finished_at FROM user_mind_run`);
+  expect(run.rows[0]).toMatchObject({ status: "failed" });
+  expect(run.rows[0]!.finished_at).not.toBeNull();
+});

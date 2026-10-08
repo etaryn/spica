@@ -196,3 +196,9 @@ test("the model must answer claim_kind on every fact (null when it isn't hers)",
   };
   expect(schema.properties.facts.items.required).toContain("claim_kind");
 });
+
+test("extraction can't write a summary: that kind is hers to write after a big event", () => {
+  const kinds = ExtractionSchema.shape.facts.element.shape.kind.options as string[];
+  expect(kinds).toContain("event");
+  expect(kinds).not.toContain("summary");
+});

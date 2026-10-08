@@ -269,7 +269,8 @@ describe("leak canary", () => {
   test("user mind runs stay in their own user's scope", async () => {
     const summarise = llm.seen.filter((c) => c.purpose === "user_summarise");
     const alice = summarise.filter((c) => c.text.includes(TOKEN));
-    const bob = summarise.filter((c) => !c.text.includes(TOKEN));
+    // Bob's calls are picked by his own memory, so a leak into them can't hide in Alice's group.
+    const bob = summarise.filter((c) => c.text.includes("Bob had a long week."));
     expect(alice.length).toBeGreaterThan(0);
     expect(bob.length).toBeGreaterThan(0);
     for (const c of bob) expect(c.text).not.toMatch(CANARY);

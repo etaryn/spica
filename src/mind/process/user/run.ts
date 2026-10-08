@@ -53,12 +53,20 @@ export async function runUserMind(
   deps: Deps,
   job: UserMindRunJob,
 ): Promise<"done" | "failed" | "skipped"> {
-  // ponytail: a run left 'running' by a crash is never retried; reclaim stale running rows if crashes matter
+  // ponytail: only a process death leaves a run 'running', and it is never retried; reclaim stale
+  // running rows if crashes matter
   const run = await claimRun(deps.db, job.runId);
   if (!run) return "skipped";
-  const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
   const { db, embedder, config, clock, log, llm } = deps;
-  const status = await userSummarise({ db, embedder, config, clock, log, llm, snapshot }, run);
+  let status: "done" | "failed";
+  try {
+    const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
+    status = await userSummarise({ db, embedder, config, clock, log, llm, snapshot }, run);
+  } catch (e) {
+    // Failed, not thrown: a retry would spend the run again, and the job never retries.
+    log.error("user_mind_run failed", { runId: run.id, error: errorName(e) });
+    status = "failed";
+  }
   await finishRun(deps.db, run.id, status, clock.now());
   return status;
 }

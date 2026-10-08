@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
 import { forgetFact, insertFact } from "@/db/repos/user/facts";
+import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
@@ -13,7 +14,12 @@ async function setup() {
   const base = makeTestDeps();
   const userId = await createTestUser();
   const deps = { ...base, snapshot: "She loves old films." };
-  const fact = (content: string, salience: number, payload: object | null = null) =>
+  const fact = (
+    content: string,
+    salience: number,
+    payload: object | null = null,
+    extra: { thread_id?: string; created_at?: Date } = {},
+  ) =>
     insertFact(base.db, userId, {
       subject: "user",
       kind: "event",
@@ -26,6 +32,7 @@ async function setup() {
       valence: 0.2,
       confidence: 0.9,
       source: "turn",
+      ...extra,
     });
   const run = async (ref: string) =>
     (await insertRun(base.db, userId, {
@@ -103,4 +110,41 @@ test("overlong parts are fitted; empty output fails and keeps the old summary", 
   });
   expect(await userSummarise(deps, await run("exchange:b"))).toBe("failed");
   expect((await liveSummary(deps.db, userId))!.id).toBe(kept.id);
+});
+
+test("a thread whose latest memory is sensitive stays out of the summary", async () => {
+  const { deps, userId, fact, run } = await setup();
+  const now = deps.clock.now();
+  const thread = (title: string) =>
+    insertThread(
+      deps.db,
+      userId,
+      { title, subject: "user", stakes: "med", next_checkpoint: null },
+      now,
+    );
+  const open = await thread("The Osaka move");
+  const hidden = await thread("The hospital stay");
+  await fact("Packing for Osaka.", 0.5, null, { thread_id: open.id });
+  await fact("Back in hospital.", 0.5, { sensitive: true }, { thread_id: hidden.id });
+  await userSummarise(deps, await run("exchange:a"));
+  const input = JSON.parse(
+    deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!.input,
+  );
+  expect(input.open_threads).toEqual(["The Osaka move"]);
+});
+
+test("a memory committed after a summary but dated before it is still summarised, once", async () => {
+  const { deps, fact, run } = await setup();
+  await fact("They got the job in Osaka.", 0.9);
+  deps.clock.advance(60_000);
+  await userSummarise(deps, await run("exchange:a"));
+  deps.clock.advance(60_000);
+  // A late cold path: the exchange began before the summary, so its fact is dated then.
+  await fact("They adopted a cat.", 0.8, null, {
+    created_at: new Date(deps.clock.now().getTime() - 90_000),
+  });
+  await userSummarise(deps, await run("exchange:b"));
+  const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise")[1]!;
+  const contents = JSON.parse(second.input).new_memories.map((m: { content: string }) => m.content);
+  expect(contents).toEqual(["They adopted a cat."]);
 });

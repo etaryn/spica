@@ -10,8 +10,7 @@ import {
 import type { Deps } from "@/mind/platform/deps";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
 import { sweepPendingUserMindRuns } from "@/mind/process/user/run";
-
-const MINUTE = 60_000;
+import { MINUTE } from "@/mind/platform/time";
 
 export async function sweepUnfinishedColdPaths(
   deps: Pick<Deps, "db" | "queue" | "config" | "log">,

@@ -710,7 +710,9 @@ Prompts under `prompts/core/<loop>/v<N>.md`. Strict structured output can't
 enforce lengths or item counts, so core loop schemas **fit** the model's
 output to the bounds code owns (`fitList` keeps the first items,
 `fitText` collapses whitespace and cuts overlong text with "…") instead of
-failing the run; empty or wrongly shaped output still fails. Core loops live in
+failing the run; an appraisal's episode and a resolution's text are shortened
+the same way rather than falling back. Empty or wrongly shaped output still
+fails. Core loops live in
 `src/mind/process/core/` and take `CoreDeps` (no `db`); the ESLint one-way
 rule bans `@/mind/process/*` imports from core code except
 `@/mind/process/core`.

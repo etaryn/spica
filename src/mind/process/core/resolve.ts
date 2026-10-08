@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { WorldEventRow } from "@/mind/world/types";
 import { errorName } from "@/mind/platform/errors";
+import { fitChars } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { LoopContext } from "./runner";
@@ -46,12 +47,11 @@ export async function proposeResolution(
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: config.core.resolve.max_tokens,
     });
-    const content = raw.content.trim().replace(/\s+/g, " ");
-    if (
-      content &&
-      content.length <= config.core.world.event_max_chars &&
-      Number.isFinite(raw.valence)
-    ) {
+    const content = fitChars(
+      raw.content.trim().replace(/\s+/g, " "),
+      config.core.world.event_max_chars,
+    );
+    if (content && Number.isFinite(raw.valence)) {
       return { content, valence: Math.max(-1, Math.min(1, raw.valence)), stakes: raw.stakes };
     }
     log.error("core resolution unusable", { worldEventId: event.id });

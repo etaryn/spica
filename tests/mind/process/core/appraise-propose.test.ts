@@ -69,15 +69,17 @@ test("bounds every number and maps words to config values", () => {
   });
 });
 
-test("an empty or overlong episode, or a NaN valence, is unusable", () => {
+test("an overlong episode is shortened to its limit", () => {
+  const bounded = boundAppraisal(
+    raw({ episode: "x".repeat(cfg.appraise.episode_max_chars + 1) }),
+    new Set(),
+    cfg,
+  );
+  expect(bounded?.episode).toHaveLength(cfg.appraise.episode_max_chars);
+});
+
+test("an empty episode or a NaN valence is unusable", () => {
   expect(boundAppraisal(raw({ episode: "  " }), new Set(), cfg)).toBeNull();
-  expect(
-    boundAppraisal(
-      raw({ episode: "x".repeat(cfg.appraise.episode_max_chars + 1) }),
-      new Set(),
-      cfg,
-    ),
-  ).toBeNull();
   expect(
     boundAppraisal(
       raw({ emotion: { label: "x", valence: Number.NaN, arousal: 0.5, about: "" } }),

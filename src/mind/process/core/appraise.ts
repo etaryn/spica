@@ -11,6 +11,7 @@ import type { Config } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
+import { fitChars } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { applyEvent, moodOf } from "@/mind/state/core/core-state";
@@ -68,16 +69,10 @@ export function boundAppraisal(
   cfg: Config["core"],
 ): Appraisal | null {
   const a = cfg.appraise;
-  const episode = tidy(raw.episode);
+  const episode = fitChars(tidy(raw.episode), a.episode_max_chars);
   const label = tidy(raw.emotion.label).toLowerCase();
   const phrase = tidy(raw.emotion.about);
-  if (
-    !episode ||
-    episode.length > a.episode_max_chars ||
-    !label ||
-    label.length > a.label_max_chars
-  )
-    return null;
+  if (!episode || !label || label.length > a.label_max_chars) return null;
   if (!Number.isFinite(raw.emotion.valence) || !Number.isFinite(raw.emotion.arousal)) return null;
   const seen = new Set<string>();
   const goalEffects: Appraisal["goalEffects"] = [];

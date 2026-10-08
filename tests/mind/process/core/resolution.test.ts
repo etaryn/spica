@@ -179,6 +179,21 @@ test("a valid resolution clamps surface valence before landing", async () => {
   });
 });
 
+test("an overlong resolution is shortened, not thrown away for the plan to happen", async () => {
+  const deps = makeTestDeps(quietGeneration);
+  const { id } = await plan(deps, true);
+  const max = deps.config.core.world.event_max_chars;
+  deps.llm.handlers.core_resolve = () => ({
+    content: "Spica stayed home instead. ".repeat(20),
+    valence: -0.2,
+    stakes: "low",
+  });
+  await coreWorldTick(coreDepsOf(deps), now);
+  const replacement = (await deps.db.select().from(world_event)).find((e) => e.plan_ref === id)!;
+  expect(replacement.content).toHaveLength(max);
+  expect(replacement.content.startsWith("Spica stayed home instead.")).toBe(true);
+});
+
 test("forced no-fallthrough records happened and does not request a resolution", async () => {
   const deps = makeTestDeps(quietGeneration);
   const { id } = await plan(deps, false);
@@ -257,7 +272,6 @@ test.each([
     },
   ],
   ["empty output", () => ({ content: " ", valence: 0, stakes: "low" })],
-  ["overlong output", () => ({ content: "x".repeat(301), valence: 0, stakes: "low" })],
   [
     "nonfinite valence",
     () => ({ content: "A different night.", valence: Infinity, stakes: "low" }),

@@ -324,7 +324,10 @@ Every table here references `user(id) ON DELETE CASCADE`.
   - **New kinds (PROPOSED):** `episode` (a shared moment with time, feeling
     and the facts it links), `reflection`, `thought`, `idea`, `summary`
     (big-event summary), `idiolect` (inside joke, nickname, ritual, running
-    reference).
+    reference). **Built 9a:** `summary` (migration 0024). A summary is a
+    `shared`, `generated` fact that supersedes the previous one; user
+    retrieval, reconcile neighbours and the decay pass leave summaries out, so
+    only the reply's own slot reads them (§10.3).
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
@@ -357,8 +360,15 @@ Every table here references `user(id) ON DELETE CASCADE`.
   item or snapshot section revealed), `depth` (tier), `turn_id`,
   `created_at`. Which parts of her self she has revealed to this user
   (§11.3).
+- **`user_mind_run`** (Built 9a): one row per big-event batch: `user_id`,
+  `trigger` (what fired, in words), `source_ref` (`exchange:<replyTurnId>` or
+  `tick:<localDate>`; unique with `user_id`, so a retried cold path or tick
+  records the event once), `local_date` (the user's local date, used for the
+  daily cap), `status` (`pending | running | done | failed | capped`), and
+  timestamps (§9.5).
 - **Trace tables**: `retrieval_trace`, `reach_out_log`, `judge_log`,
-  `relationship_event`, and **new (PROPOSED)** `user_loop_trace` (§9.5).
+  `relationship_event`, and `user_loop_trace` (Built 9a: one row per user
+  loop run with calls, tokens, cost and error class; §9.5).
   `ego_tick` is gone with the per-user ego.
 
 ### 6.2 Core scope (Built through 8c where marked; the rest New)
@@ -838,7 +848,9 @@ current state of the user (§11.3).
 
 ### 9.4 Big events (DECIDED: trigger-only; PROPOSED: the list)
 
-User loops fire only on a big event. Candidates (thresholds in
+User loops fire only on a big event. **Built 9a:** four triggers, recorded by
+`src/mind/process/user/big-events.ts` (below the list); the rest of the list
+is backlog (B63). Candidates (thresholds in
 `user_mind.triggers.*`; the final list is OPEN, §21):
 - a relationship param crosses a threshold or jumps by more than a set delta
 - a crisis has passed (after `crisis_quiet_until`)
@@ -850,6 +862,23 @@ User loops fire only on a big event. Candidates (thresholds in
 - a reach-out is about to be composed and the latest summary is older than a
   set age
 
+**Built 9a triggers** (test-phase defaults, thresholds in config):
+- `param_jump`: trust, warmth, hurt, tension or `affect_valence` moves by at
+  least `user_mind.triggers.param_jump` (0.15) in one exchange. Exchange only.
+- `param_band`: one of those five, or closeness, crosses a band edge in
+  `user_mind.triggers.bands` (0.25, 0.5, 0.75). Exchange and the daily
+  relationship tick, so slow absence drift can fire it too. Closeness fires
+  only on bands.
+- `salient_fact`: a newly inserted fact with salience at least
+  `user_mind.triggers.fact_salience` (0.8). Exchange only; a merge into an
+  existing fact doesn't count.
+- `make_up_done`: a make-up flow completes. Exchange only.
+
+Afterglow and `msgs_per_day` never fire a trigger. A crisis exchange records
+nothing. A trigger is recorded inside the cold path's transaction (or the
+tick's), so it exists exactly when the state change that caused it does; the
+job is enqueued after commit. Deferred triggers: B63.
+
 **V9. Short-term context leads (DECIDED).** In a live conversation the
 conversation itself is the main context; deep memory (summaries included) is
 background. A summary that lags a fast conversation is a minor risk.
@@ -860,6 +889,29 @@ Run at trigger time, scoped to one user, reading that user's memory and
 state plus the core snapshot (read-only). One triggered batch per big event,
 at most `user_mind.max_triggers_per_day` per user. Each writes a
 `user_loop_trace` row. Prompts under `prompts/user-mind/<loop>/v<N>.md`.
+
+**Built 9a:** `runUserLoop` (`src/mind/process/user/runner.ts`) meters and
+traces like the core runner (they share `src/mind/platform/llm/meter.ts`):
+cost from `core.prices`, retries `core.max_retries`, model role
+`models.user_mind`. There is no per-call budget: the cap is on runs. At most
+`user_mind.max_triggers_per_day` (3) non-capped runs per user per local date
+(UTC when the user has no timezone); a trigger over the cap is stored as a
+`capped` row and runs nothing. `UserLoopDeps` has no core layer; the only
+core text a user loop sees is the latest snapshot. The `user_mind_run` queue
+has retry limit zero, and a pending run older than
+`user_mind.sweep_after_minutes` (10) is re-enqueued by `cold_path_sweep`. A
+run left `running` by a crash is not retried (B64), and the cap's
+count-then-insert can race between the cold path and the tick (B65).
+
+The 9a batch is `user_summarise` alone
+(`prompts/user-mind/summarise/v1.md`, `prompts.user_summarise` v1). Inputs:
+the live summary, facts since it (at most 20 by salience, non-sensitive, no
+summaries), up to 5 open threads, the phrased relationship line, the
+triggers in words, and the snapshot. Output `{where_things_stand,
+whats_live, how_i_feel}`, each fitted to 300 characters, capped at 512
+tokens. It is stored as the `summary` fact (salience 0.6, confidence
+`user_mind.summarise.confidence` 0.7) and supersedes the previous one under a
+per-user advisory lock. The other loops in the table are 9b and later.
 
 | Loop | Writes |
 |---|---|
@@ -924,7 +976,10 @@ when the guard is on.
    4. user state line ("You and them": the relationship summary from
       parameter deviations, including her affect toward this user, make-up
       line, status lines)
-   5. latest big-event summary for this user
+   5. latest big-event summary for this user (**Built 9a:** "Where things
+      stand with them", between "You and them" and "What you remember": her
+      own three lines, `where_things_stand`, `whats_live` and `how_i_feel`;
+      the crisis path skips it, and a malformed payload renders nothing)
    6. retrieved memory under "What you remember": "About them", "Between
       you", "What you've told them" (user-scope `subject = self`, V5), and
       "From your own life" (her core memory, the top `retrieval.core_top_n`
@@ -991,8 +1046,9 @@ applies none of this.
    labels each self fact's `claim_kind`; after reconcile, each `life` or
    `opinion` claim is graded against core (§12.6) and the result is stored on
    the new fact. A merge into an existing fact leaves its grading alone.
-5. **Big-event check (New):** after the update, evaluate the triggers (§9.4)
-   and enqueue `user_mind_run` if one fires.
+5. **Big-event check (Built 9a):** inside the same transaction, evaluate the
+   triggers (§9.4) and record a `user_mind_run` row (`exchange:<replyTurnId>`);
+   the job is enqueued after commit.
 6. **Failures** retry with backoff; unextracted turns are picked up by
    `cold_path_sweep`.
 
@@ -1214,8 +1270,10 @@ match.
   share `core.loops.max_tokens` (512). Nightly reflect and render each cap
   output at 1024 tokens; consolidation and drift each cap at 512. A no-input
   reflection or no-gist consolidation records a zero-call `done` trace.
-- **User:** one triggered batch per big event, at most
-  `user_mind.max_triggers_per_day` per user. Idle users cost nothing beyond
+- **User (Built 9a):** one triggered batch per big event, at most
+  `user_mind.max_triggers_per_day` (3) per user per local date, so cost scales
+  with what happens, not with users or time. Each user loop run writes a
+  `user_loop_trace` with tokens and cost from `core.prices`. Idle users cost nothing beyond
   the built per-user ticks (relationship, outreach), which are code-only
   except a reach-out's composition.
 - **Reply:** one reply-model call per reply (one more and a guard check
@@ -1298,7 +1356,8 @@ episodes that happened before day 0, embedded with the run's embedder. The harne
   `extract`, `life_event` (content and thought), `life_plan`,
   `core_appraise`, `core_resolve`, `core_anticipate`, `core_ruminate`,
   `core_wander`, `core_reflect`, `core_consolidate`, `core_render_snapshot`,
-  `core_drift_watch` and `reply` outputs (Built 8d: the run includes her
+  `core_drift_watch`, `user_summarise` (Built 9a: user A's summary is checked
+  for leakage into core and into user B's prompts) and `reply` outputs (Built 8d: the run includes her
   nights, so every core loop is covered), so a leak through
   any path would surface in what the next stage stores or prompts. It scans
   the core memory, state, world, goals, entities, snapshots, self lines,
@@ -1335,8 +1394,12 @@ v3 changes:
 - **Core nightly built:** `core_nightly` (`core.nightly.tick_cron`,
   `55 * * * *`; local hour 3). It claims her local date once and runs reflect,
   consolidate, render snapshot and, after a successful render, drift watch.
-- **New user job:** `user_mind_run {userId, trigger}`, enqueued by the cold
-  path or the relationship tick on a big event.
+- **User job built (9a):** `user_mind_run {runId}`, enqueued after commit by
+  the cold path or the relationship tick when a big event is recorded. Retry
+  limit zero; a failed run is `failed` and not retried. Stuck `pending` rows
+  are re-enqueued by `cold_path_sweep` after `user_mind.sweep_after_minutes`
+  (10); there is no separate sweep job. A run left `running` by a crash is
+  not retried (B64).
 
 Every job logs failures with ids and error class only, never content.
 
@@ -1397,12 +1460,13 @@ two minds or at reply time.
 | 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
 | 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
 | 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
+| 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 967 tests at close |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phase 8 is built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9a are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **9. User mind** | Big-event triggers, `user_mind_run`, summarise / reflect / ideate / consolidate / model, summary slot, outreach `core_thought` and `user_idea` candidates, inspector User mind tab | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
+| **9. User mind** (9a built) | Sliced: **9a** (built) foundation and summarise; **9b** reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** consolidate, model, the remaining triggers, inspector User mind tab (B2) | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
@@ -1517,7 +1581,7 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B2.** Stale and deleted facts stay reachable through the recent-turns
   window (after 90 days she asked about something straight from the old
   transcript). Decide whether turns older than the gap marker are summarised
-  or trimmed. *Phase 9* (fits the user mind's short-term vs deep split).
+  or trimmed. *Phase 9c* (fits the user mind's short-term vs deep split).
 - **B3.** Recall style: she often uses a memory without naming it, and
   sometimes adds a comment whose only job is to show she remembers.
   `recall-pet` and `recall-sister-uni` carry `known_failure`. *Tuning.*
@@ -1574,6 +1638,10 @@ and life tick) were dropped; the replacement is designed fresh.
   time, and her own news no longer colours her feelings toward the user.
   Separate hurts each stay their own facts; how strongly several hurts add
   up is the `hurt` param's job, since tone is an average.
+- **B62.** Afterglow accumulates per exchange, so a run of short warm
+  exchanges piles up more than one long warm session. Average the tone over
+  the session instead, and add a sustained-deep-conversation signal that
+  deepens params per param (Ethan, 2026-10-09). *Phase 10.*
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts
@@ -1626,6 +1694,15 @@ and life tick) were dropped; the replacement is designed fresh.
   schedule, 16 snapshot versions, 3 active goals. Traces still keep only the
   error class (B48). Output quality (e.g. a fell-through resolution that says
   she went) is for the review runs.
+- **B63.** User-mind triggers deferred from 9a: a long conversation ends, a
+  crisis has passed, and the latest summary is stale before a reach-out
+  (§9.4). *Tuning.*
+- **B64.** A `user_mind_run` left `running` by a crash is never retried (the
+  queue has retry limit zero and the sweep only re-enqueues `pending`). Add a
+  stale-`running` reset if it happens. *Later.*
+- **B65.** The daily cap counts non-capped runs and then inserts, so the cold
+  path and the relationship tick can race past it for one user. Take a
+  per-user lock around count-then-insert. *Later.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
@@ -1636,7 +1713,7 @@ and life tick) were dropped; the replacement is designed fresh.
   silently turns it off. Tune weights, threshold and salience together.
   *Tuning.*
 - **B26.** A make-up reach-out doesn't move `make_up_state` to `offered`, so
-  the make-up may be offered again in a reply. *Phase 9.*
+  the make-up may be offered again in a reply. *Phase 9b.*
 - **B27.** Stale `scheduled` rows are never closed (close them in the tick or
   a sweep). *Later.*
 - **B28.** Sensitive text in the recent turns can still reach a reach-out

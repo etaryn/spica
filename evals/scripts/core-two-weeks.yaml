@@ -1,0 +1,26 @@
+name: core-two-weeks
+description: >
+  Fourteen of her days with every core loop: daily events, a planned event she looks forward to,
+  a strong event she dwells on, a plan that falls through, and a nightly snapshot each night.
+  Real processes in the exit run: the nine core loops (pnpm exit:core).
+profile: none
+relationship_seed: {}
+config:
+  core: { world: { event_probability: 1 } }
+life:
+  plan: model
+  inject:
+    - { day: 1, content: "Spica's telescope booking for tonight came through.", valence: 0.6, kind: planned, thought: "Spica is looking forward to the telescope session tonight." }
+    - { day: 3, content: "Spica learned the observatory is closing for good.", valence: -0.8 }
+    - { day: 5, content: "Spica went to the film club screening of Stalker.", valence: 0.4, kind: planned, thought: "Spica plans to see Stalker at the film club.", fallthrough: true }
+  until: "day 14 12:00"
+sessions:
+  - at: "day 0 10:00"
+    turns: ["hey, how's your week going?"]
+assertions:
+  - { type: core, snapshot_versions: { min: 14 } }
+  - { type: core, drift_rows: { values: 14, diff: 14, trend: 14 } }
+  - { type: core, goals: { min: 1 } }
+  - { type: core, fell_through: true }
+  - type: core
+    loops_done: [life_plan, life_event, core_appraise, core_resolve, core_anticipate, core_ruminate, core_wander, core_reflect, core_consolidate, core_render_snapshot, core_drift_watch]

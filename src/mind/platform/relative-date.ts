@@ -1,9 +1,8 @@
+import { DAY } from "./time";
 /**
  * Dates as she would say them: "today", "yesterday", "3 days ago", "in 2 days". Counted in whole
  * UTC calendar days.
  */
-
-const DAY = 86_400_000;
 
 export function relativeDate(when: Date, now: Date): string {
   const days = Math.round((startOfDay(now) - startOfDay(when)) / DAY);

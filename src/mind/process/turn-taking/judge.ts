@@ -29,14 +29,14 @@ export type TurnVerdict = {
 };
 
 /** `reasoning` comes first, so the model says what the user is doing before it labels it. */
-export const TurnVerdictSchema = z.object({
+const TurnVerdictSchema = z.object({
   reasoning: z.string(),
   complete: z.boolean(),
   open_questions: z.array(z.string()),
   backchannel: z.string().nullable(),
 });
 
-export const BUFFER_MARKER = "NEW MESSAGES (not yet replied to), oldest first:\n";
+const BUFFER_MARKER = "NEW MESSAGES (not yet replied to), oldest first:\n";
 const OPEN_MARKER = "OPEN QUESTIONS (asked, not yet answered by Spica):\n";
 
 const SECONDS_SHOWN_AS_SECONDS = 90;

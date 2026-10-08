@@ -265,6 +265,8 @@ const life = z.object({
   plan_cron: cron,
   plan_context_days: countFromZero,
   plan_max_tokens: positiveInt,
+  plan_label_max_chars: positiveInt,
+  plan_attempts: positiveInt,
   max_busy_blocks: positiveInt,
   min_quiet_hours: z.number().min(0).max(24),
   quiet_busy: unit,

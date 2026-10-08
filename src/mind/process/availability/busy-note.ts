@@ -16,7 +16,7 @@ import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
 import { parseSummaryPhrases, type Phrases } from "@/mind/platform/phrases";
 
-export function pickNote(phrases: Phrases, kind: "busy" | "quiet", seed: string): string | null {
+function pickNote(phrases: Phrases, kind: "busy" | "quiet", seed: string): string | null {
   const options = phrases[kind] ?? [];
   if (!options.length) return null;
   return options[Math.floor(seededUnit(seed) * options.length)]!;

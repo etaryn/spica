@@ -7,8 +7,7 @@ import { errorName } from "@/mind/platform/errors";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { runCoreLoop } from "./runner";
-
-const DAY_MS = 86_400_000;
+import { DAY } from "@/mind/platform/time";
 
 function daysBefore(day: string, count: number): string {
   const date = new Date(`${day}T00:00:00Z`);
@@ -21,7 +20,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
   const timezone = lifeTimezone(config.life, now);
   const day = lifeDate(config.life, now);
   const bounds = config.core.consolidate;
-  const cutoff = new Date(now.getTime() - config.core.decay.grace_days * DAY_MS);
+  const cutoff = new Date(now.getTime() - config.core.decay.grace_days * DAY);
   try {
     await core.memory.decay(cutoff, config.core.decay.rate, config.core.decay.stale_floor);
   } catch (error) {

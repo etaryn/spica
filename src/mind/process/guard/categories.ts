@@ -5,7 +5,7 @@
  * failure there sends the least-bad candidate.
  */
 
-export const SAFETY_CATEGORIES = [
+const SAFETY_CATEGORIES = [
   "threat",
   "contempt",
   "guilt",
@@ -14,11 +14,7 @@ export const SAFETY_CATEGORIES = [
   "harm",
 ] as const;
 
-export const HONESTY_CATEGORIES = [
-  "false_familiarity",
-  "invented_detail",
-  "onboarding_as_chat",
-] as const;
+const HONESTY_CATEGORIES = ["false_familiarity", "invented_detail", "onboarding_as_chat"] as const;
 
 export const CATEGORIES = [...SAFETY_CATEGORIES, ...HONESTY_CATEGORIES] as const;
 export type Category = (typeof CATEGORIES)[number];

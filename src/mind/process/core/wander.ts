@@ -9,12 +9,10 @@ import { seededUnit } from "@/mind/platform/seeded-random";
 import { blockAt, blocksForDay, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate } from "@/mind/world/her-clock";
 import { budgetDayStart, runCoreLoop } from "./runner";
-import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
-import type { ThinkingResult } from "./thoughts";
+import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
+import type { ApplyOutput, ThinkingResult } from "./thoughts";
+import { DAY, HOUR } from "@/mind/platform/time";
 
-const HOUR_MS = 3_600_000;
-const DAY_MS = 24 * HOUR_MS;
-const WORLD_LOCK = "core_world_tick";
 const Output = z.object({
   items: z
     .array(
@@ -26,12 +24,6 @@ const Output = z.object({
     )
     .min(1),
 });
-type ApplyOutput = {
-  applied: boolean;
-  ids: string[];
-  dropped: ReturnType<typeof traceDrops>;
-  reason?: string;
-};
 
 async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope }, now: Date) {
   const day = lifeDate(deps.config.life, now);
@@ -47,7 +39,7 @@ async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope },
   const history = await deps.core.traces.appliedSummary("core_wander", new Date(0), to);
   if (
     history.latest &&
-    now.getTime() - history.latest.getTime() < deps.config.core.wander.min_gap_hours * HOUR_MS
+    now.getTime() - history.latest.getTime() < deps.config.core.wander.min_gap_hours * HOUR
   )
     return null;
   return { day, completedToday: today.count };
@@ -96,7 +88,7 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
   const due = await eligibility(deps, now);
   if (!due) return { status: "not_due", applied: false, ids: [] };
   const pool = await core.memory.recallable(
-    new Date(now.getTime() - config.core.wander.seed_days * DAY_MS),
+    new Date(now.getTime() - config.core.wander.seed_days * DAY),
     now,
     config.core.wander.seed_limit,
   );

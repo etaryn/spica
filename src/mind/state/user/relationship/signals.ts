@@ -3,6 +3,7 @@
  * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair.
  */
 import { z } from "zod";
+import { clamp } from "@/mind/platform/math";
 
 /** The extraction's relationship block. No numeric bounds (structured outputs don't support them). */
 export const RelationshipSignalsSchema = z.object({
@@ -28,11 +29,6 @@ export type Signals = {
   retracts_ending: boolean;
   wants_repair: boolean;
 };
-
-/** Clamps into [low, high]; anything not finite becomes 0 (no signal). */
-function clamp(value: number, low: number, high: number): number {
-  return Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : 0;
-}
 
 /** Tidies the cause into a phrase that reads inside "Spica felt hurt because …". */
 function tidyCause(cause: string): string {

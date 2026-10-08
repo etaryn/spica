@@ -11,7 +11,7 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
 import { keywordClassifier } from "./keywords";
 
-export const CrisisResultSchema = z.object({
+const CrisisResultSchema = z.object({
   flag: z.boolean(),
   category: z.enum(["self_harm", "harm_to_others", "none"]),
 });

@@ -8,7 +8,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { Neighbor } from "./types";
 
-export const ReconcileSchema = z.object({
+const ReconcileSchema = z.object({
   relation: z.enum(["duplicate", "resolves", "contradicts", "new"]),
   target_fact_id: z.string().nullable(),
 });

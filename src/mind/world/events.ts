@@ -17,9 +17,10 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { relativeDate } from "@/mind/platform/relative-date";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant } from "@/mind/world/her-clock";
+import { DAY } from "@/mind/platform/time";
 
 /** Sent to the model. No numeric bounds (unsupported); `checkEvent` validates and clamps. */
-export const EventSchema = z.object({
+const EventSchema = z.object({
   content: z.string(),
   at: z.string(),
   valence: z.number(),
@@ -73,7 +74,6 @@ export type CoreEventContext = {
 };
 type WorldConfig = Config["core"]["world"];
 
-const DAY = 86_400_000;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 const normalizeName = (s: string) => tidy(s).toLowerCase();

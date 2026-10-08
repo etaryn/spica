@@ -37,11 +37,11 @@ import type { WorldEventRow } from "@/mind/world/types";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { proposeResolution, type ResolutionProposal } from "./resolve";
 import { runCoreLoop } from "./runner";
+import { WORLD_LOCK } from "./thoughts";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
 export type WorldTickResult = { generated: boolean; appraised: number };
 
-const LOCK = "core_world_tick";
 const due = (lastDay: string | null, day: string) => !lastDay || lastDay < day;
 
 export async function coreWorldTick(
@@ -111,7 +111,7 @@ async function applyDay(
 ): Promise<DayApplied> {
   const { core, config } = deps;
   return core.transaction(async (tx) => {
-    await tx.lock(LOCK);
+    await tx.lock(WORLD_LOCK);
     const row = await tx.state.lock();
     if (!due(row.last_event_day, day)) return { applied: false, world_events: [], intentions: [] };
 
@@ -224,7 +224,7 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       "document",
     );
     const out = await core.transaction(async (tx) => {
-      await tx.lock(LOCK);
+      await tx.lock(WORLD_LOCK);
       const landed: string[] = [];
       const episodes: string[] = [];
       const resolved: string[] = [];

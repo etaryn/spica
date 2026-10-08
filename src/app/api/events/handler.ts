@@ -8,7 +8,7 @@ import { getTurn } from "@/db/repos/user/session-log";
 type Send = (event: string, data: unknown) => void;
 
 /** Resolves a `message` event to its bubble text (user-scoped read); other events pass through. */
-export async function forward(deps: Deps, userId: string, e: ChatEvent, send: Send): Promise<void> {
+async function forward(deps: Deps, userId: string, e: ChatEvent, send: Send): Promise<void> {
   if (e.type !== "message") return send(e.type, e);
   const t = await getTurn(deps.db, userId, e.turnId);
   if (!t || t.role !== "companion") return;

@@ -16,8 +16,7 @@ import {
   previousLocalDate,
 } from "@/mind/platform/timezone";
 import { relationshipAfterDailyTick } from "./transitions";
-
-const DAY = 86_400_000;
+import { DAY } from "@/mind/platform/time";
 
 /** Already ticked on `localDate` or later. */
 function alreadyTicked(lastTick: string | null, localDate: string): boolean {

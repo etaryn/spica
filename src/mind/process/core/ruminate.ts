@@ -6,11 +6,18 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { baselineNeeds } from "@/mind/state/core/core-state";
 import { runCoreLoop } from "./runner";
-import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
-import type { ThinkingResult } from "./thoughts";
+import {
+  moodLine,
+  prepareThoughts,
+  storeThoughts,
+  traceDrops,
+  WORLD_LOCK,
+  worldEventId,
+} from "./thoughts";
+import type { ApplyOutput, ThinkingResult } from "./thoughts";
+import { HOUR } from "@/mind/platform/time";
+import { clamp } from "@/mind/platform/math";
 
-const HOUR_MS = 3_600_000;
-const WORLD_LOCK = "core_world_tick";
 const Output = z.object({
   thought: z.object({
     kind: z.literal("thought"),
@@ -24,12 +31,6 @@ const HistoricalEmotion = z.object({
   arousal: z.number().min(0).max(1),
   phrase: z.string().nullable(),
 });
-type ApplyOutput = {
-  applied: boolean;
-  ids: string[];
-  dropped: ReturnType<typeof traceDrops>;
-  reason?: string;
-};
 
 function payloadOf(item: CoreMemoryItem): Record<string, unknown> | null {
   const value = item.payload;
@@ -59,18 +60,11 @@ function eligible(item: CoreMemoryItem | null, from: Date, to: Date, min: number
   );
 }
 
-function eventId(item: CoreMemoryItem): string | null {
-  const match = /^world_event:(.+)$/.exec(item.source_ref ?? "");
-  return match && z.uuid().safeParse(match[1]).success ? match[1]! : null;
-}
-
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
 export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingResult> {
   const { core, config } = deps;
   const { delay_hours, window_hours, min_valence, max_per_episode, gain } = config.core.ruminate;
-  const from = new Date(now.getTime() - window_hours * HOUR_MS);
-  const to = new Date(now.getTime() - delay_hours * HOUR_MS);
+  const from = new Date(now.getTime() - window_hours * HOUR);
+  const to = new Date(now.getTime() - delay_hours * HOUR);
   const episode = await core.memory.ruminationCandidate(from, to, min_valence, max_per_episode);
   if (!episode) return { status: "not_due", applied: false, ids: [] };
 
@@ -81,7 +75,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
     const people = (await core.memory.entities()).filter((person) =>
       episode.entity_refs.includes(person.id),
     );
-    const sourceEventId = eventId(episode);
+    const sourceEventId = worldEventId(episode);
     const event = sourceEventId ? await core.world.getEvent(sourceEventId) : null;
     const goal = event?.goal_ref ? await core.goals.get(event.goal_ref) : null;
     const state = await core.state.get();
@@ -91,9 +85,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
       `Historical emotion: ${historical.success ? `${historical.data.label} (valence ${historical.data.valence.toFixed(2)}, arousal ${historical.data.arousal.toFixed(2)}${historical.data.phrase ? `, about ${historical.data.phrase}` : ""})` : "absent"}`,
       `People: ${people.length ? people.map((person) => person.name).join(", ") : "none named"}`,
       goal ? `Related goal: ${goal.title} (${goal.why})` : "Related goal: none",
-      state
-        ? `How she is now: mood valence ${state.mood_valence.toFixed(2)}, arousal ${state.mood_arousal.toFixed(2)}${state.emotion ? `, feeling ${state.emotion.label}` : ""}`
-        : "How she is now: unknown",
+      moodLine(state),
     ].join("\n\n");
     const raw = await ctx.deps.llm.classifyJson({
       purpose: "core_ruminate",

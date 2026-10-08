@@ -41,7 +41,7 @@ export const GuardResultSchema = z.object({
   violations: z.array(z.object({ category: z.enum(CATEGORIES), claim: z.string() })),
 });
 
-export const MESSAGE_MARKER = "MESSAGE TO CHECK (Spica's next message):\n";
+const MESSAGE_MARKER = "MESSAGE TO CHECK (Spica's next message):\n";
 
 /** The candidate inside a rendered guard input, for fake handlers in tests and evals. */
 export function messageToCheck(input: string): string {

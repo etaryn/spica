@@ -7,8 +7,8 @@ import type { CoreStateConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
 import type { WorldBlock } from "@/mind/world/blocks";
 import type { CoreEmotion, CoreMood, CoreNeeds } from "./types";
+import { clamp } from "@/mind/platform/math";
 
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const clampMood = (s: CoreMood): CoreMood => ({
   mood_valence: clamp(s.mood_valence, -1, 1),
   mood_arousal: clamp(s.mood_arousal, 0, 1),

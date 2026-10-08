@@ -15,7 +15,7 @@ import { runCoreLoop } from "@/mind/process/core/runner";
 import { lifeDate, minutesOf, weekday } from "./her-clock";
 
 /** The output format sent to the model. No numeric bounds (unsupported); `validatePlan` enforces them. */
-export const PlanSchema = z.object({
+const PlanSchema = z.object({
   blocks: z.array(
     z.object({
       start: z.string(),
@@ -31,8 +31,6 @@ export type RawPlan = z.infer<typeof PlanSchema>;
 export type PlanCheck = { ok: true; plan: LifePlan } | { ok: false; violations: string[] };
 
 const BLOCK_TIME = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
-const MAX_LABEL_CHARS = 80;
-const GENERATION_ATTEMPTS = 2;
 
 /** Normalises busy levels and labels, then checks times, overlaps, the busy count and total quiet. */
 export function validatePlan(raw: RawPlan, settings: LifeConfig): PlanCheck {
@@ -40,7 +38,7 @@ export function validatePlan(raw: RawPlan, settings: LifeConfig): PlanCheck {
   const blocks: LifeBlock[] = [];
 
   for (const [i, block] of raw.blocks.entries()) {
-    const problem = blockProblem(block);
+    const problem = blockProblem(block, settings.plan_label_max_chars);
     if (problem) {
       violations.push(`block ${i + 1}: ${problem}`);
       continue;
@@ -78,15 +76,15 @@ function tidyLabel(label: string): string {
   return label.trim().replace(/\s+/g, " ");
 }
 
-function blockProblem(block: RawPlan["blocks"][number]): string | null {
+function blockProblem(block: RawPlan["blocks"][number], maxLabel: number): string | null {
   if (!BLOCK_TIME.test(block.start) || !BLOCK_TIME.test(block.end)) {
     return `bad time ${block.start}-${block.end}`;
   }
   if (minutesOf(block.start) >= minutesOf(block.end)) return "start must be before end";
 
   const label = tidyLabel(block.label);
-  if (!label || label.length > MAX_LABEL_CHARS) {
-    return `label must be 1-${MAX_LABEL_CHARS} characters`;
+  if (!label || label.length > maxLabel) {
+    return `label must be 1-${maxLabel} characters`;
   }
   return null;
 }
@@ -127,7 +125,7 @@ function describePlan(plan: LifePlan): string {
   return plan.blocks.map((b) => `${b.start}-${b.end} ${b.kind} (${b.label})`).join("; ");
 }
 
-export function buildPlanInput(date: string, previous: { date: string; plan: LifePlan }[]): string {
+function buildPlanInput(date: string, previous: { date: string; plan: LifePlan }[]): string {
   const history = previous.length
     ? `Her previous days (oldest first):\n${previous.map((d) => `- ${d.date}: ${describePlan(d.plan)}`).join("\n")}`
     : "Her previous days: none yet.";
@@ -150,7 +148,7 @@ async function generatePlan(
 
   let input = buildPlanInput(date, previous);
 
-  for (let attempt = 1; attempt <= GENERATION_ATTEMPTS && canCall(); attempt++) {
+  for (let attempt = 1; attempt <= config.life.plan_attempts && canCall(); attempt++) {
     try {
       const raw = await llm.classifyJson({
         purpose: "life_plan",

@@ -45,7 +45,7 @@ export function budgetDayStart(config: Config, now: Date): Date {
   return localMidnight(lifeDate(config.life, now), lifeTimezone(config.life, now));
 }
 
-export function meterLlm(llm: LLMProvider) {
+function meterLlm(llm: LLMProvider) {
   const usage: LlmUsage[] = [];
   let calls = 0;
   const metered: LLMProvider = {

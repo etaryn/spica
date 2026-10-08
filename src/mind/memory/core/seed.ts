@@ -59,7 +59,7 @@ export async function seedSnapshot(deps: SeedDeps): Promise<boolean> {
 }
 
 /** Known names keep their first_seen, so a re-seed changes nothing. */
-export async function seedCanon(deps: SeedDeps): Promise<void> {
+async function seedCanon(deps: SeedDeps): Promise<void> {
   const world = deps.config.core.world;
   await deps.core.memory.addEntities(world.canon_entities, world.entity_salience, deps.clock.now());
 }

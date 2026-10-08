@@ -15,6 +15,7 @@ import {
   RelationshipSignalsSchema,
   type Signals,
 } from "@/mind/state/user/relationship/signals";
+import { clamp } from "@/mind/platform/math";
 
 const subject = z.enum(["user", "self", "shared"]);
 
@@ -83,10 +84,6 @@ export type ExtractArgs = {
 };
 
 /** Clamps into [low, high]; anything not finite becomes `low`. */
-function clamp(value: number, low: number, high: number): number {
-  return Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : low;
-}
-
 function tidy(text: string): string {
   return text.trim().replace(/\s+/g, " ");
 }

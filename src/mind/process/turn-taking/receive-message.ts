@@ -346,7 +346,7 @@ async function maybeEnqueueBusyNote(
  * buffered turns, bumps the epoch so any paced reply in progress is abandoned, replies inside
  * the request, and returns the resources card.
  */
-export async function sendCrisisReply(
+async function sendCrisisReply(
   deps: Deps,
   userId: string,
   userTurn: Turn,

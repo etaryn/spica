@@ -5,10 +5,7 @@
  */
 import { HOUR } from "@/mind/platform/time";
 import type { HomeostaticParam, Params, RelationshipConfig } from "./types";
-
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
+import { clamp } from "@/mind/platform/math";
 
 /** How far the value sits from this user's baseline, in units of its variance, within (-1, 1). */
 export function deviationOf(param: HomeostaticParam, epsilon: number): number {
@@ -32,7 +29,7 @@ export function sampleBaseline(
 /** A saturating move: each step closes that fraction of the gap to 1 (or to 0, going down). */
 export function nudge(value: number, delta: number): number {
   const moved = delta >= 0 ? value + delta * (1 - value) : value + delta * value;
-  return clamp01(moved);
+  return clamp(moved, 0, 1);
 }
 
 export function faded(value: number, from: Date, to: Date, halfLifeHours: number): number {

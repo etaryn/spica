@@ -1,8 +1,8 @@
+import { DAY } from "@/mind/platform/time";
 /**
  * Memory ranking: scores each candidate memory by similarity × weight × entity weight × recency
  * and keeps the best few. Pure maths with no data access, so both minds can share it.
  */
-const DAY_MS = 86_400_000;
 
 /** What ranking needs from a candidate memory, from either mind. */
 export type RankableMemory = {
@@ -37,7 +37,7 @@ export function rankMemories<M extends RankableMemory>(
       candidate.created_at.getTime(),
       candidate.last_recalled_at?.getTime() ?? 0,
     );
-    const ageDays = (now.getTime() - lastTouched) / DAY_MS;
+    const ageDays = (now.getTime() - lastTouched) / DAY;
     const recency = recencyFactor(ageDays, settings.recency_half_life_days);
 
     const similarity = Math.max(0, candidate.sim);

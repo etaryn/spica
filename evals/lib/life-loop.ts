@@ -9,15 +9,13 @@ import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { coreMindTick } from "@/mind/process/core/mind-tick";
 import { outreachTick } from "@/mind/process/outreach/tick";
 import type { RecordingQueue } from "@/mind/platform/jobs";
-import { HOUR } from "@/mind/platform/time";
 import { nextLocalDate } from "@/mind/platform/timezone";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertLifeDay } from "@/db/repos/world/life-day";
 import { session_log } from "@/db/schema";
 import { runDueJobs } from "./scheduler";
 import { BASE, type LifeScript, type OutreachScript } from "./script";
-
-const DAY = 86_400_000;
+import { DAY, HOUR } from "@/mind/platform/time";
 
 /** Run the outreach tick and due reach-out sends in the loop, and answer reach-outs per the script. */
 export type LoopOutreach = {

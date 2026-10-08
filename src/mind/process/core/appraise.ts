@@ -16,6 +16,7 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { applyEvent, moodOf } from "@/mind/state/core/core-state";
 import type { CoreNeeds, CoreStatePatch } from "@/mind/state/core/types";
 import type { LoopContext } from "./runner";
+import { clamp } from "@/mind/platform/math";
 
 /** Sent to the model. No numeric bounds (unsupported); `boundAppraisal` clamps. */
 export const AppraisalSchema = z.object({
@@ -58,7 +59,6 @@ export type LandingEvent = {
   resolvesMemoryId?: string | null;
 };
 export const eventRef = (worldEventId: string) => `world_event:${worldEventId}`;
-const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 const NO_NEEDS: CoreNeeds = { autonomy: 0, competence: 0 };
 

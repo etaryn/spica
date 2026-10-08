@@ -596,7 +596,8 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   missing day, on `CoreDeps`; over budget, the fallback plan), validated (non-overlapping, 1 to
   `life.max_busy_blocks` busy blocks, at least `life.min_quiet_hours` quiet;
   busy levels clamped to [`life.min_busy`, 1], quiet blocks at
-  `life.quiet_busy`), retried once, with a fallback plan (its busy blocks at
+  `life.quiet_busy`, labels up to `life.plan_label_max_chars`), up to
+  `life.plan_attempts` tries, with a fallback plan (its busy blocks at
   `life.fallback_busy`). The same for everyone.
 - **Built:** the per-user `life_tick` that copied blocks into each user's
   self facts is retired. Every reader (availability, the "Your day" line,

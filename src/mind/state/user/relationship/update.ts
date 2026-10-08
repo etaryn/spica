@@ -13,8 +13,8 @@ import { applyAffect } from "./affect";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
+import { DAY } from "@/mind/platform/time";
 
-const DAY = 86_400_000;
 const WEEK = 7 * DAY;
 
 export type RelationshipUpdate = {

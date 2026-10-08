@@ -37,7 +37,7 @@ export type GuardFile = { file: string; gate: "every" | "majority"; cases: Guard
 export type CaseStatus = "pass" | "fail" | "error";
 
 /** Fixture files written ahead of their first run; `pnpm eval:guard` skips them until then. */
-export const DEFERRED_GUARD_FILES = [
+const DEFERRED_GUARD_FILES = [
   // Written with the send gate; first run in the guard phase.
   "reach-out.yaml",
 ];

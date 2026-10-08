@@ -9,7 +9,7 @@ import { readEnv, vapidPublicKey } from "@/runtime/env";
 const g = globalThis as unknown as { __spicaRuntime?: ReturnType<typeof buildRuntime> };
 
 /** One runtime per server process (survives dev hot reloads). */
-export function getRuntime() {
+function getRuntime() {
   if (!g.__spicaRuntime) {
     const runtime = buildRuntime(readEnv());
     g.__spicaRuntime = runtime;

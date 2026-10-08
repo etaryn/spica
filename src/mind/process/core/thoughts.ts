@@ -3,6 +3,31 @@ import type { CoreLoopName } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
 import type { LoopStatus } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
+import type { CoreMemoryItem } from "@/mind/memory/core/types";
+import type { CoreStateRow } from "@/mind/state/core/types";
+import { z } from "zod";
+
+/** Thinking takes the world tick's lock, so a thought never lands beside a half-applied event. */
+export const WORLD_LOCK = "core_world_tick";
+
+export type ApplyOutput = {
+  applied: boolean;
+  ids: string[];
+  dropped: ReturnType<typeof traceDrops>;
+  reason?: string;
+};
+
+/** The world event a memory came from, or null when its source isn't a valid event reference. */
+export function worldEventId(item: CoreMemoryItem): string | null {
+  const match = /^world_event:(.+)$/.exec(item.source_ref ?? "");
+  return match && z.uuid().safeParse(match[1]).success ? match[1]! : null;
+}
+
+export function moodLine(state: CoreStateRow | null): string {
+  if (!state) return "How she is now: unknown";
+  const feeling = state.emotion ? `, feeling ${state.emotion.label}` : "";
+  return `How she is now: mood valence ${state.mood_valence.toFixed(2)}, arousal ${state.mood_arousal.toFixed(2)}${feeling}`;
+}
 
 export type ThinkingResult = { status: LoopStatus | "not_due"; applied: boolean; ids: string[] };
 

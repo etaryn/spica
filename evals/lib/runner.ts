@@ -44,9 +44,7 @@ import { runAllJobs, runDueJobs } from "./scheduler";
 import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script";
 import { SignalLLM } from "./signal-llm";
 import { checkTurn } from "./turn-check";
-
-const DAY = 86_400_000;
-const HOUR = 3_600_000;
+import { DAY, HOUR } from "@/mind/platform/time";
 
 export type AssertionResult = {
   type: string;
@@ -221,7 +219,7 @@ async function retrying<T>(retries: number, fn: () => Promise<T>): Promise<T> {
 }
 
 function elapsedLabel(ms: number): string {
-  const hours = ms / 3_600_000;
+  const hours = ms / HOUR;
   const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"} later`;
   if (hours >= 20) return plural(Math.round(hours / 24), "day");
   if (hours >= 1) return plural(Math.round(hours), "hour");

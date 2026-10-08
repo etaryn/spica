@@ -5,12 +5,19 @@ import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { baselineNeeds } from "@/mind/state/core/core-state";
-import { prepareThoughts, storeThoughts, traceDrops } from "./thoughts";
+import {
+  moodLine,
+  prepareThoughts,
+  storeThoughts,
+  traceDrops,
+  WORLD_LOCK,
+  worldEventId,
+} from "./thoughts";
 import { runCoreLoop } from "./runner";
-import type { ThinkingResult } from "./thoughts";
+import type { ApplyOutput, ThinkingResult } from "./thoughts";
+import { HOUR } from "@/mind/platform/time";
+import { clamp } from "@/mind/platform/math";
 
-const HOUR_MS = 3_600_000;
-const WORLD_LOCK = "core_world_tick";
 const Output = z.object({
   thought: z.object({
     kind: z.literal("thought"),
@@ -25,11 +32,6 @@ const Output = z.object({
   }),
 });
 
-function eventId(item: CoreMemoryItem): string | null {
-  const match = /^world_event:(.+)$/.exec(item.source_ref ?? "");
-  return match && z.uuid().safeParse(match[1]).success ? match[1]! : null;
-}
-
 function eligible(item: CoreMemoryItem | null, now: Date, until: Date): item is CoreMemoryItem {
   if (!item || item.kind !== "intention" || item.status !== "open") return false;
   const payload = item.payload;
@@ -40,21 +42,14 @@ function eligible(item: CoreMemoryItem | null, now: Date, until: Date): item is 
   return Number.isFinite(at) && at > now.getTime() && at <= until.getTime();
 }
 
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const tidy = (text: string) => text.trim().replace(/\s+/g, " ");
-type ApplyOutput = {
-  applied: boolean;
-  ids: string[];
-  dropped: ReturnType<typeof traceDrops>;
-  reason?: string;
-};
 
 export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<ThinkingResult> {
   const { config, core } = deps;
-  const until = new Date(now.getTime() + config.core.anticipate.lead_hours * HOUR_MS);
+  const until = new Date(now.getTime() + config.core.anticipate.lead_hours * HOUR);
   const intention = await core.memory.anticipationCandidate(now, until);
   if (!intention) return { status: "not_due", applied: false, ids: [] };
-  const sourceEventId = eventId(intention);
+  const sourceEventId = worldEventId(intention);
   const event = sourceEventId ? await core.world.getEvent(sourceEventId) : null;
   if (
     !event ||
@@ -76,9 +71,7 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
       `Her intention: ${intention.content}`,
       `People: ${event.agent_names.length ? event.agent_names.join(", ") : "none named"}`,
       goal ? `Related goal: ${goal.title} (${goal.why})` : "Related goal: none",
-      state
-        ? `How she is now: mood valence ${state.mood_valence.toFixed(2)}, arousal ${state.mood_arousal.toFixed(2)}${state.emotion ? `, feeling ${state.emotion.label}` : ""}`
-        : "How she is now: unknown",
+      moodLine(state),
     ].join("\n\n");
     const raw = await ctx.deps.llm.classifyJson({
       purpose: "core_anticipate",

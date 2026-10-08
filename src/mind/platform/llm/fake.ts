@@ -50,6 +50,22 @@ export class FakeLLMProvider implements LLMProvider {
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
     // Goal identity comes from code; fake content stays stable across fresh goal row IDs.
     life_event: () => ({ ...structuredClone(FAKE_DAY_EVENT), goal_ref: "model-id-ignored" }),
+    // Reflects its input so the leak canary can see what reached the prompt.
+    user_summarise: (input: string) => {
+      const ctx = JSON.parse(input) as {
+        new_memories: { content: string }[];
+        what_happened: string[];
+      };
+      return {
+        where_things_stand: `Things moved: ${ctx.what_happened.join("; ") || "nothing new"}.`,
+        whats_live:
+          ctx.new_memories
+            .map((m) => m.content)
+            .join(" ")
+            .slice(0, 280) || "Nothing open.",
+        how_i_feel: "I feel the same about them.",
+      };
+    },
     core_resolve: (input: string) => ({
       content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
       valence: 0,

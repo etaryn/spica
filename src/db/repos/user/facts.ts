@@ -149,6 +149,36 @@ export async function setFactStatus(
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
 }
 
+/** What she has learned about a user since her last summary of them, most salient first. */
+export async function listFactsForSummary(
+  db: Db,
+  userId: string,
+  since: Date | null,
+  limit: number,
+) {
+  return db
+    .select({
+      id: fact.id,
+      subject: fact.subject,
+      kind: fact.kind,
+      content: fact.content,
+      salience: fact.salience,
+    })
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
+        notInArray(fact.status, [...INACTIVE]),
+        sql`${fact.kind} <> 'summary'`,
+        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
+        since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
+      ),
+    )
+    .orderBy(desc(fact.salience))
+    .limit(limit);
+}
+
 /**
  * Cold-path recall write-back. Every recalled fact that still exists gets a retrieval_trace row;
  * only unforced recalls with sim >= minSim are reinforced (salience, recall_count, last_recalled_at).

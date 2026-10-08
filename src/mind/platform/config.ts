@@ -532,6 +532,7 @@ const userMind = z.object({
     max_chars: positiveInt,
     max_tokens: positiveInt,
     salience: unit,
+    confidence: unit,
   }),
 });
 

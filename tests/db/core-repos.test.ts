@@ -808,3 +808,44 @@ test("candidates carry valence and goal_sim (0 without active goals)", async () 
   const [c] = await core().memory.candidates(vec(0.01), 5);
   expect(c).toMatchObject({ valence: -0.4, goal_sim: 0 });
 });
+
+const axis = (i: number) => Array.from({ length: 1024 }, (_, j) => (j === i ? 1 : 0));
+const snapshot = (version: number) => ({
+  version,
+  content: `v${version}`,
+  sections: {},
+  source_ids: [],
+  rendered_at: now,
+  model: "m",
+  prompt_version: "v1",
+  embedding: axis(1),
+});
+
+test("groundingSimilarity: 0 with nothing; counts core values and only the latest snapshot's lines", async () => {
+  const [a, b] = [axis(0), axis(1)];
+  expect(await core().memory.groundingSimilarity(a)).toBe(0);
+
+  await core().memory.insertSnapshot(snapshot(0));
+  await core().memory.insertSelfLines([{ version: 0, text: "old line", embedding: a }]);
+  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(1);
+
+  await core().memory.insertSnapshot(snapshot(1));
+  await core().memory.insertSelfLines([{ version: 1, text: "new line", embedding: b }]);
+  // v0's line no longer counts once v1 exists.
+  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(0);
+
+  await core().memory.insertSelfLines([{ version: null, text: "a value", embedding: a }]);
+  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(1);
+});
+
+test("groundingSimilarity ignores stale, superseded and hypothetical memory", async () => {
+  const kinds = [
+    ["episode", "stale"],
+    ["episode", "superseded"],
+    ["hypothetical", "open"],
+    ["intention", "resolved"],
+  ] as const;
+  for (const [kind, status] of kinds)
+    await core().memory.insert({ ...episode("x", 0, now), kind, status, embedding: axis(0) });
+  expect(await core().memory.groundingSimilarity(axis(0))).toBe(0);
+});

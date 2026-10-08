@@ -97,6 +97,8 @@ export const factStatus = pgEnum("fact_status", [
   "stale",
   "superseded",
 ]);
+/** What kind of claim she made about herself: her life, her opinion, or a reaction to them. */
+export const claimKind = pgEnum("claim_kind", ["life", "opinion", "reaction"]);
 export const factSource = pgEnum("fact_source", ["turn", "generated", "onboarding", "inferred"]);
 export const factScope = pgEnum("fact_scope", ["private", "group"]);
 export const entityType = pgEnum("entity_type", [
@@ -246,6 +248,9 @@ export const fact = pgTable(
     confidence: real("confidence").notNull(),
     source: factSource("source").notNull(),
     source_ref: text("source_ref"),
+    claim_kind: claimKind("claim_kind"),
+    // Whether core backed a life or opinion claim when she made it; null when not checked.
+    grounded: boolean("grounded"),
     recall_count: integer("recall_count").notNull().default(0),
     scope: factScope("scope").notNull().default("private"), // post-MVP group hook; MVP reads only 'private'
     space_id: uuid("space_id"), // post-MVP group hook; never read in MVP

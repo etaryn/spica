@@ -153,6 +153,11 @@ export interface CoreMemory {
    * intention is left out: once the plan has happened, the episode speaks for it.
    */
   candidates(embedding: number[], limit: number): Promise<CoreCandidate[]>;
+  /**
+   * Her best match for a claim: the highest similarity to her recallable memory, her core values
+   * and her latest self. 0 when she has none.
+   */
+  groundingSimilarity(embedding: number[]): Promise<number>;
   /** Episodes whose time falls in (from, to], oldest first, at most `limit`. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** Open intentions created in (from, to], oldest first, at most `limit`. */

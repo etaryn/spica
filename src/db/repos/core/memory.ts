@@ -398,6 +398,22 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       }));
     },
 
+    async groundingSimilarity(embedding) {
+      const q = vecLiteral(embedding);
+      // GREATEST skips nulls; with neither memory nor self lines it is null, read as 0.
+      const res = await db.execute(sql`
+        SELECT GREATEST(
+          (SELECT 1 - (m.embedding <=> ${q}::vector) FROM core_memory m
+           WHERE m.status NOT IN ('superseded', 'stale') AND m.kind <> 'hypothetical'
+             AND NOT (m.kind = 'intention' AND m.status = 'resolved')
+           ORDER BY m.embedding <=> ${q}::vector LIMIT 1),
+          (SELECT 1 - (l.embedding <=> ${q}::vector) FROM core_self_line l
+           WHERE l.version IS NULL OR l.version = (SELECT max(version) FROM core_snapshot)
+           ORDER BY l.embedding <=> ${q}::vector LIMIT 1)
+        )::float8 AS sim`);
+      return Number(res.rows[0]?.sim ?? 0);
+    },
+
     async recentEpisodes(from, to, limit) {
       const rows = await db
         .select()

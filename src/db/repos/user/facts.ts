@@ -48,6 +48,8 @@ export async function candidateFacts(
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
+        -- The summary has its own slot in the reply.
+        AND f.kind <> 'summary'
         ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
@@ -84,6 +86,8 @@ export async function nearFacts(
       FROM fact
       WHERE user_id = ${userId} AND scope = 'private' AND subject = ${subject}
         AND status NOT IN ('superseded', 'stale')
+        -- A summary is never a reconcile neighbour.
+        AND kind <> 'summary'
         AND (1 - (embedding <=> ${q}::vector)) >= ${minSim}
       ORDER BY embedding <=> ${q}::vector
       LIMIT ${k}`);

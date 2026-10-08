@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { findEntityByName, upsertEntityMention } from "@/db/repos/user/entities";
 import * as facts from "@/db/repos/user/facts";
+import { adminDecayFacts } from "@/db/repos/admin/decay";
 import * as threads from "@/db/repos/user/threads";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
@@ -356,5 +357,33 @@ describe("threads", () => {
     expect(
       (await threads.dueThreads(db(), u, new Date("2026-01-21T09:00:00Z"), 5)).map((d) => d.id),
     ).toEqual([t.id]);
+  });
+});
+
+describe("summary facts", () => {
+  test("summary facts are invisible to retrieval, reconcile and decay", async () => {
+    const u = await createTestUser();
+    const summary = await facts.insertFact(db(), u, {
+      subject: "shared",
+      kind: "summary",
+      content: "Where things stand.",
+      embedding: vec(0.02),
+      created_at: new Date("2025-01-01T00:00:00Z"),
+      status: "open",
+      salience: 0.01,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+    expect(await facts.candidateFacts(db(), u, vec(0.02), 10)).toEqual([]);
+    expect(await facts.nearFacts(db(), u, "shared", vec(0.02), 5, 0)).toEqual([]);
+    await adminDecayFacts(db(), new Date("2026-01-05T00:00:00Z"), {
+      grace_days: 0,
+      rate: 0.5,
+      stale_floor: 0.5,
+      dormant_after_days: 30,
+    });
+    const after = await facts.getFact(db(), u, summary.id);
+    expect(after).toMatchObject({ status: "open", salience: 0.01 });
   });
 });

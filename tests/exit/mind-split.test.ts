@@ -3,14 +3,21 @@
  * job, replies, the cold path and a reach-out. A canary in user A's data (a fact, and the cause of
  * a hurt in A's relationship) must never reach the core or user B; A's emotional exchange must
  * leave core state and her core loops' traces untouched; her events happen once for both; every
- * reply reads snapshot v0. Her telescope event is planned: the plan is on her mind from the day's
+ * reply reads her latest snapshot, which her nights advance past v0. Her telescope event is planned: the plan is on her mind from the day's
  * generation, and the episode exists only once its time has come.
  */
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { core_loop_trace, core_memory, core_state, session_log, world_event } from "@/db/schema";
+import {
+  core_loop_trace,
+  core_memory,
+  core_snapshot,
+  core_state,
+  session_log,
+  world_event,
+} from "@/db/schema";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { ensureRelationship, getParams } from "@/db/repos/user/relationship";
 import { loadConfig } from "@/mind/platform/config";
@@ -38,7 +45,14 @@ const CORE_PURPOSES = new Set([
   "core_anticipate",
   "core_ruminate",
   "core_wander",
+  "core_reflect",
+  "core_consolidate",
+  "core_render_snapshot",
+  "core_drift_watch",
 ]);
+// Three nights give no week of episodes to gist, so consolidation makes no call here; it stays in
+// the probe so a future call is still covered.
+const MAY_NOT_RUN = new Set(["core_consolidate"]);
 const CORE_TABLES = [
   "core_memory",
   "core_entity",
@@ -49,6 +63,8 @@ const CORE_TABLES = [
   "life_event_log",
   "core_loop_trace",
   "life_day",
+  "drift_log",
+  "core_self_line",
 ];
 const BOB_TABLES = [
   "fact",
@@ -176,23 +192,51 @@ describe("leak canary", () => {
 
   test("the capturing model echoes a planted token from each new core input into its text output", async () => {
     const probe = new CapturingLLM();
+    const plain = `Upcoming plan: ${TOKEN}\nLanded episode: ${TOKEN}\nSeed memory: ${TOKEN}`;
+    // Consolidation and snapshot rendering read JSON input.
+    const json = JSON.stringify({ previous: TOKEN, sources: [{ content: TOKEN }] });
+    const purposes = {
+      core_resolve: plain,
+      core_anticipate: plain,
+      core_ruminate: plain,
+      core_wander: plain,
+      core_reflect: plain,
+      core_consolidate: json,
+      core_render_snapshot: json,
+      core_drift_watch: plain,
+    };
     const outputs = await Promise.all(
-      ["core_resolve", "core_anticipate", "core_ruminate", "core_wander"].map((purpose) =>
+      Object.entries(purposes).map(([purpose, input]) =>
         probe.classifyJson({
           purpose,
           model: "core",
           system: "probe",
-          input: `Upcoming plan: ${TOKEN}\nLanded episode: ${TOKEN}\nSeed memory: ${TOKEN}`,
+          input,
           schema: z.unknown(),
           timeoutMs: 1000,
           maxTokens: 512,
         }),
       ),
     );
-    expect((outputs[0] as { content: string }).content).toContain(TOKEN);
-    expect((outputs[1] as { thought: { content: string } }).thought.content).toContain(TOKEN);
-    expect((outputs[2] as { thought: { content: string } }).thought.content).toContain(TOKEN);
-    expect((outputs[3] as { items: { content: string }[] }).items[0]!.content).toContain(TOKEN);
+    const [resolve, anticipate, ruminate, wander, reflect, consolidate, render, drift] =
+      outputs as [
+        { content: string },
+        { thought: { content: string } },
+        { thought: { content: string } },
+        { items: { content: string }[] },
+        { narrative: string | null },
+        { gist: string },
+        { Lately: string[] },
+        { findings: { excerpt: string }[] },
+      ];
+    expect(resolve.content).toContain(TOKEN);
+    expect(anticipate.thought.content).toContain(TOKEN);
+    expect(ruminate.thought.content).toContain(TOKEN);
+    expect(wander.items[0]!.content).toContain(TOKEN);
+    expect(reflect.narrative).toContain(TOKEN);
+    expect(consolidate.gist).toContain(TOKEN);
+    expect(render.Lately[0]).toContain(TOKEN);
+    expect(drift.findings[0]!.excerpt).toContain(TOKEN);
   });
 
   test("no core prompt saw it", () => {
@@ -202,7 +246,7 @@ describe("leak canary", () => {
     );
     expect(corePrompts.length).toBeGreaterThan(0);
     // Each core generator ran, so none of these checks passes vacuously.
-    for (const purpose of CORE_PURPOSES)
+    for (const purpose of [...CORE_PURPOSES].filter((p) => !MAY_NOT_RUN.has(p)))
       expect(
         corePrompts.some((c) => c.purpose === purpose),
         purpose,
@@ -262,17 +306,28 @@ describe("leak canary", () => {
       );
   });
 
-  test("every reply read snapshot v0 and logged it", async () => {
+  test("every reply read the snapshot her nights had rendered by then, and logged it", async () => {
     const replies = llm.seen.filter((c) => c.kind === "reply");
     expect(replies.length).toBeGreaterThan(0);
     for (const r of replies) expect(r.text).toContain("## Who you are lately");
     const rows = await getTestDb()
-      .select({ v: session_log.snapshot_version, trigger: session_log.trigger })
+      .select({
+        v: session_log.snapshot_version,
+        trigger: session_log.trigger,
+        at: session_log.created_at,
+      })
       .from(session_log)
       .where(eq(session_log.role, "companion"));
+    const snaps = await getTestDb()
+      .select({ v: core_snapshot.version, at: core_snapshot.rendered_at })
+      .from(core_snapshot);
+    const latestAt = (at: Date) =>
+      Math.max(...snaps.filter((x) => x.at.getTime() <= at.getTime()).map((x) => x.v));
     const composed = rows.filter((r) => r.trigger === null || r.trigger === "reach_out");
     expect(composed.length).toBeGreaterThan(0);
-    for (const r of composed) expect(r.v).toBe(0);
+    for (const r of composed) expect(r.v).toBe(latestAt(r.at));
+    // Her nights moved the self on, so this isn't only v0.
+    expect(Math.max(...composed.map((r) => r.v ?? 0))).toBeGreaterThan(0);
   });
 });
 

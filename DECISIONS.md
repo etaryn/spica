@@ -112,3 +112,7 @@ code itself.
 | 2026-10-09 | For a reach-out the window trim also counts the gap from the last turn to now, keeping her unanswered reach-outs | A reach-out answers no turn; a reply always keeps the turns it answers. |
 | 2026-10-09 | Tests that need a vanished fact delete the row directly | Per-fact forget is gone; account deletion is the only remaining erasure. |
 | 2026-10-09 | The inspector orders a run's loop traces by time, then batch order | A fixed clock gives a run's loops one timestamp. |
+| 2026-10-09 | A user gist takes memories that are old enough and not on an open storyline, not only `resolved` ones | User facts reach `resolved` only when a later fact resolves them, so gists would almost never form. |
+| 2026-10-09 | `user_consolidate` runs only in a triggered batch, never nightly | Cost scales with big events; an idle user's memories just decay. |
+| 2026-10-09 | Invalid `user_consolidate` output fails the loop, like every other user loop | One failure rule across user loops; the run is marked failed and the next big event tries again. |
+| 2026-10-09 | The eval life loop runs `user_mind_tick` every simulated hour | It mirrors the production hourly jobs, so long-conversation and crisis-passed triggers fire in scripts. |

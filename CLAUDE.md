@@ -206,11 +206,9 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 9 (user mind), sliced 9a/9b/9c/9d. Phases 9a (user
-mind foundation), 9b (reflect, ideate, ideas slot, new outreach candidates,
-B26) and 9c (remaining triggers, crisis-aware user mind, window trim, memory
-view removed, inspector User mind tab) are built; 9d (consolidate, model,
-full Phase 9 exit) is next and needs a design doc.**
+**Current phase: Phase 9 (user mind) is built (9a foundation, 9b reflect and ideate, 9c triggers
+and crisis-aware user mind, 9d consolidate, model and the full exit). The next phase is OPEN
+(v3 §21 #9); Phase 10 (relationship psychology) is the proposed next, and needs a design doc.**
 Phase 8 (core loops) is built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).

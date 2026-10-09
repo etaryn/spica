@@ -318,7 +318,8 @@ Every table here references `user(id) ON DELETE CASCADE`.
   `salience` (0–1, "weight"), `valence`, `confidence`, `source`
   (`turn | generated | onboarding | inferred`), `source_ref`, `scope`,
   `space_id`. `payload.sensitive` marks facts from crisis exchanges, and (**Built 9c**)
-  any summary or reflection a user loop wrote from one. The system never
+  any summary or reflection a user loop wrote from one (**Built 9d:** and any read or belief;
+  a gist never reads a sensitive fact). The system never
   hard-deletes (contradicted facts are superseded); the user cannot edit her
   memory (2026-10-09), and only account deletion removes it.
   - Existing kinds: `event | trait | preference | state | opinion | feeling | promise`.
@@ -338,7 +339,14 @@ Every table here references `user(id) ON DELETE CASCADE`.
     reconcile and decay, because it has its own reply slot (§10.3) and
     expires by age (§9.5); a reach-out for an idea doesn't force it in
     either, so it shows once, as why she's writing. Neither feeds a later summarise, reflect or ideate
-    as a new memory, so a loop never reads its own output.
+    as a new memory, so a loop never reads its own output. **Built 9d:** `episode`, `model` and
+    `belief` (migration 0026), all `generated`, none extractable. An `episode` is a
+    `user_consolidate` gist (`shared`, `recurring`, `payload.gist_of` its sources); a `belief`
+    (`user`) is one standing belief `user_model` holds about them. Both come back through
+    ordinary retrieval and decay, but are never reconcile neighbours or a loop's new memories.
+    A `model` (`user`, payload `how_they_are`, `what_they_want`, `what_lands`) is her live read
+    on them: one at a time, superseding the last, read only through its own reply slot (§10.3),
+    left out of retrieval, reconcile and decay. A gisted source carries `payload.gisted_into`.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
@@ -842,7 +850,8 @@ reinforcement and decay (§12). The "what I remember" view was removed in
 9c (§12.5).
 
 **New (PROPOSED):**
-- **Episodes** of the relationship ("remember when…").
+- **Episodes** of the relationship ("remember when…"). **Built 9d:** as
+  `user_consolidate` gists of an older week (§6.1, §9.5).
 - **Big-event summaries** from `user_summarise`.
 - **Reflections, thoughts and ideas** about this user. **Built 9b:**
   reflections and ideas (§6.1, §9.5); thoughts remain PROPOSED.
@@ -858,7 +867,9 @@ reinforcement and decay (§12). The "what I remember" view was removed in
 **New (PROPOSED):** her feelings toward this user (`affect_valence`,
 `afterglow`), where the cold path's mood nudge now lands (V4); relatedness;
 reciprocity balance; derived relationship stage, commitment and the inferred
-current state of the user (§11.3).
+current state of the user (§11.3). **Built 9d:** the inferred current state of the user lives in
+her live `model` fact (`how_they_are`, with `what_they_want` and `what_lands`), written by
+`user_model` (§9.5).
 
 ### 9.4 Big events (DECIDED: trigger-only; PROPOSED: the list)
 
@@ -977,8 +988,8 @@ is `done`.
   "shared"}`, text fitted to `user_mind.reflect.max_chars` (300), capped at
   `max_tokens` 384. Non-null writes one `reflection` fact (salience 0.5,
   confidence 0.6, `source_ref` `user_reflect:<traceId>`).
-- **`user_ideate`** (`prompts/user-mind/ideate/v1.md`, `prompts.user_ideate`
-  v1). Inputs: the live summary, this run's reflection if reflect wrote one,
+- **`user_ideate`** (`prompts/user-mind/ideate/v2.md`, `prompts.user_ideate`
+  v2 since 9d). Inputs: the live summary, this run's reflection if reflect wrote one,
   the same new memories, open non-sensitive threads, her live ideas for this
   user (at most `user_mind.ideate.max_planned` (20), so she does not repeat
   one), the snapshot. Output `{idea: string | null}`, fitted to
@@ -1003,13 +1014,50 @@ through the summary chain (B81).
 Salience, confidence and the other values are test-phase defaults in
 `user_mind.reflect.*` and `user_mind.ideate.*`.
 
+**Built 9d:** the batch is five loops in order: `user_summarise`, `user_reflect`, `user_model`,
+`user_ideate`, `user_consolidate`, same failure rule (a loop that throws, including on invalid
+model output, is traced `failed`; the next still runs).
+- **`user_model`** (`src/mind/process/user/model.ts`, `prompts/user-mind/model/v1.md`,
+  `prompts.user_model` v1). Inputs: the snapshot, the live summary as this run wrote it, this
+  run's reflection if any, the run's new memories (sensitive included, flagged), the phrased
+  relationship line, the triggers in words, the previous live read's three parts, and up to
+  `user_mind.model.belief_context` (10) live beliefs with their ids, weightiest first. Output
+  `{how_they_are, what_they_want, what_lands, beliefs: [{text, replaces}]}`, each text fitted to
+  `max_chars` (300), at most `max_beliefs` (2) beliefs, `max_tokens` 512. Writes one `model`
+  fact (salience `user_mind.model.salience` 0.6, confidence 0.6) that supersedes the previous
+  live one under the per-user advisory lock the summary uses; each belief a `belief` fact
+  (salience `belief_salience` 0.5, `source_ref` `user_model:<traceId>`). A belief more similar
+  than `dedupe_similarity` (0.92) to a live belief is dropped (listed in the trace); `replaces`
+  supersedes a belief only when it names a live one the loop was shown, otherwise the belief is
+  simply inserted. A read or belief is marked `sensitive` when it read a sensitive memory,
+  summary, reflection, previous read or belief.
+- **`user_ideate`** also gets `your_read_on_them`: the newest read that read nothing sensitive.
+- **`user_consolidate`** (`src/mind/process/user/consolidate.ts`, repo
+  `src/db/repos/user/gist.ts`, `prompts/user-mind/consolidate/v1.md`,
+  `prompts.user_consolidate` v1). Runs only in a triggered batch, never nightly. Eligible: kind
+  `event` or `feeling`, subject `user` or `shared`, status `open` or `resolved`, not sensitive,
+  not already gisted, not on an open thread, dated (`occurred_at`, else `created_at`) before the
+  local day `user_mind.consolidate.gist_after_days` (7) days ago in the user's timezone (UTC when
+  unset or invalid). It takes the oldest Monday-start local week with at least `min_group` (3)
+  such memories, at most `max_sources` (12) of them by salience, and writes one gist per run:
+  input `{who_you_are, week, sources}`, output `{gist}` fitted to `max_chars` (300),
+  `max_tokens` 512. In one transaction it re-checks the group (a source merged, superseded or
+  gisted meanwhile voids the gist), writes the `episode` (salience the sources' maximum,
+  confidence 0.6, `occurred_at` the earliest source) and marks each source `gisted_into` with
+  its salience × `gist_source_factor` (0.5), once. No eligible week: a zero-call `done` trace.
+
+Every value above is a test-phase default in `user_mind.model.*` (`max_chars`, `max_tokens`,
+`max_beliefs`, `belief_context`, `dedupe_similarity`, `salience`, `belief_salience`,
+`confidence`) and `user_mind.consolidate.*` (`gist_after_days`, `min_group`, `max_sources`,
+`gist_source_factor`, `max_chars`, `max_tokens`, `confidence`).
+
 | Loop | Writes |
 |---|---|
 | `user_summarise` | Deep memory: a `summary` (where things stand, what's live, how she feels about them) |
 | `user_reflect` (**Built 9b**) | Deep memory: `reflection` about this user (`thought` stays PROPOSED) |
 | `user_ideate` (**Built 9b**) | Deep memory: `idea` (things she wants to bring up); available to outreach |
-| `user_consolidate` | Deep memory: episodes into gist |
-| `user_model` | State: inferred user state. Memory: beliefs about the user, common ground |
+| `user_model` (**Built 9d**) | Her read on them (`model`: how they are, what they want, what lands) and `belief` facts; common ground waits for Phase 10 |
+| `user_consolidate` (**Built 9d**) | Deep memory: an older week of memories into one `episode` gist |
 
 ---
 
@@ -1069,7 +1117,11 @@ when the guard is on.
    5. latest big-event summary for this user (**Built 9a:** "Where things
       stand with them", between "You and them" and "What you remember": her
       own three lines, `where_things_stand`, `whats_live` and `how_i_feel`;
-      the crisis path skips it, and a malformed payload renders nothing)
+      the crisis path skips it, and a malformed payload renders nothing).
+      **Built 9d:** "Your read on them" right after it: three lines from her
+      live `model` fact ("How they are", "What they want", "What lands");
+      none in a crisis, a malformed payload renders nothing, and a reach-out
+      reads the newest read that read nothing sensitive
    6. retrieved memory under "What you remember": "About them", "Between
       you", "What you've told them" (user-scope `subject = self`, V5), and
       "From your own life" (her core memory, the top `retrieval.core_top_n`
@@ -1248,7 +1300,7 @@ Each mechanic is user-scoped, and each names what it changes.
 | **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
 | **Commitment** | Rusbult | Satisfaction + investment (shared history) |
 | **Attachment** | Hazan & Shaver | Her style (fixed, core values) and the user's (measured at onboarding, OPEN) modulate reactions to absence and conflict |
-| **Theory of mind** | — | Beliefs about the user's feelings, wants and current state (`user_model`) |
+| **Theory of mind** | — | Beliefs about the user's feelings, wants and current state (`user_model`). **Built 9d:** her live read (`model`) and revisable `belief` facts (§9.5); common ground stays Phase 10 |
 
 ---
 
@@ -1447,6 +1499,8 @@ tokens, cost and error. The facts tab shows `claim_kind` and `grounded`.
 `inspector.user_mind_runs` (20) runs (time, status, triggers in words,
 finish) with each loop trace (status, calls, cost, error, inputs and outputs),
 the live summary (marked if sensitive), recent reflections and live ideas.
+**Built 9d:** it also shows her live read on them and her live beliefs (each
+marked if sensitive); gists show in the facts tab as `episode` rows.
 **New:** the disclosure ledger (Phase 10).
 
 ### 17.2 Eval harness (Built)
@@ -1462,7 +1516,9 @@ at a time, one time's energy lower than another's, preoccupation set,
 episode and world-event counts). A script's `seed_core_memory` lists
 episodes that happened before day 0, embedded with the run's embedder. The harness
   runs the production hourly jobs between sessions, in world → state →
-  mind → nightly → outreach order. Injected planned events accept explicit true/false
+  mind → nightly → user mind tick (its runs drained before the next hour, **Built 9d**) →
+  outreach order. A script's `idle_users` are created with no sessions, seeds or relationship
+  (an idle user must cost nothing). Injected planned events accept explicit true/false
   `fallthrough` overrides. Fake mode has deterministic `core_resolve`,
   `core_anticipate`, `core_ruminate` and `core_wander` purposes. Fake mode
   also has deterministic `core_reflect`, `core_consolidate`,
@@ -1599,12 +1655,12 @@ two minds or at reply time.
 | 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 973 tests at close |
 | 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1010 tests at close |
 | 9c. Triggers and crisis-aware user mind | `long_conversation` and `crisis_passed` from the hourly `user_mind_tick` (which took over the pending-run sweep), `stale_summary` from the outreach tick with a send lead; crisis memories reach summarise and reflect with the sensitive mark carried forward, never ideate or a reach-out; the reply window trimmed at a 72-hour gap (B2); the "what I remember" view and per-fact forget removed (B72); inspector User mind tab; exit `tests/exit/phase-9c.test.ts` with the crisis canary. `pnpm test` 130 files / 1028 tests at close |
+| 9d. Consolidate, model and the Phase 9 exit | `fact_kind` gains `episode`, `model` and `belief` (migration 0026); `user_consolidate` folds an older week into one gist; `user_model` keeps her live read on them and revisable beliefs; the batch of five; "Your read on them" reply slot; ideate reads the newest non-sensitive read (ideate prompt v2); inspector read and beliefs; the eval life loop runs `user_mind_tick` hourly and scripts take `idle_users`; the full Phase 9 exit `tests/exit/user-mind.test.ts` (two weeks, three users, every trigger, the canary); `pnpm exit:user` runs `user-mind-two-weeks` with real model and consolidate. Phase 9 built (`pnpm test` 133 files / 1060 tests at close) |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8, 9a, 9b and 9c are built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **9. User mind** (9a, 9b, 9c built) | Sliced: **9a** (built) foundation and summarise; **9b** (built) reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** (built) the remaining triggers, crisis-aware loops, window trim, memory view removed, inspector User mind tab; **9d** `user_consolidate` (a new user `episode` kind: at most one gist per run of 3+ older resolved event or feeling facts from one week, sources' salience cut once), `user_model` (one live superseding `model` fact, her read on the user, in its own reply slot, plus `belief` facts through retrieval; common ground waits for Phase 10), the full Phase 9 exit | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |

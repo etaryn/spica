@@ -296,10 +296,12 @@ describe("leak canary", () => {
     // Alice's user mind writing carries the canary (the echo works), and it is hers alone.
     const aliceId = await userIdByName("alice");
     const res = await getTestDb().execute(
-      sql`SELECT user_id, content FROM fact WHERE kind IN ('summary', 'reflection', 'idea')`,
+      sql`SELECT user_id, kind, content FROM fact WHERE kind IN ('summary', 'reflection', 'idea')`,
     );
     const leaked = res.rows.filter((r) => String(r.content).includes(TOKEN));
-    expect(leaked.length).toBeGreaterThan(0);
+    expect(new Set(leaked.map((r) => String(r.kind)))).toEqual(
+      new Set(["summary", "reflection", "idea"]),
+    );
     for (const r of leaked) expect(String(r.user_id)).toBe(aliceId);
   });
 

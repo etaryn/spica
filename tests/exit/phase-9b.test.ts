@@ -318,7 +318,7 @@ test("her own thought reaches each user once", async () => {
   expect(await coreDump()).toBe(before);
 });
 
-test("B26", async () => {
+test("a make-up reach-out marks the make-up offered", async () => {
   const d = outreachDeps();
   const u = await outreachUser(d);
   await d.db.execute(sql`UPDATE relationship SET make_up_state = 'due' WHERE user_id = ${u}`);

@@ -23,7 +23,13 @@ export interface AssembleInput {
   retrieval: RetrievalResult;
   /** Her own memories that fit the conversation. */
   coreMemories: RetrievedFact[];
-  recentTurns: { role: "user" | "companion"; text: string; created_at?: Date }[];
+  recentTurns: {
+    role: "user" | "companion";
+    text: string;
+    created_at?: Date;
+    /** `reach_out` marks a message she wrote first. */
+    trigger?: string | null;
+  }[];
   now: Date;
   /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
@@ -113,15 +119,19 @@ function questionList(questions: string[] | undefined): string | null {
 }
 
 /**
- * The recent turns, starting at the first user turn. The window can span days, so a user turn
- * after a long gap is marked; without the marker the model carries on from the old moment.
+ * The recent turns, starting at the first user turn, or at her reach-outs when she wrote first
+ * (behind a user-role line, since the model needs a user turn first). The window can span days,
+ * so a user turn after a long gap is marked; without the marker the model carries on from the
+ * old moment.
  */
 function conversationMessages(input: AssembleInput): ChatMessage[] {
   const window = sinceLongGap(input);
+  const leadingReachOuts = window.findIndex((t) => t.trigger !== "reach_out");
+  const wroteFirst = leadingReachOuts !== 0 && window.length > 0;
   const firstUser = window.findIndex((t) => t.role === "user");
-  const turns = firstUser === -1 ? [] : window.slice(firstUser);
+  const turns = wroteFirst ? window : firstUser === -1 ? [] : window.slice(firstUser);
 
-  return turns.map((turn, i) => {
+  const messages: ChatMessage[] = turns.map((turn, i) => {
     const previous = turns[i - 1];
     const gapHours =
       previous?.created_at && turn.created_at
@@ -137,15 +147,24 @@ function conversationMessages(input: AssembleInput): ChatMessage[] {
       content: marked ? `[${elapsed(gapHours)} later] ${turn.text}` : turn.text,
     };
   });
+  return wroteFirst ? [{ role: "user", content: WROTE_FIRST }, ...messages] : messages;
 }
 
-/** The turns after the latest gap of at least `windowGapHours`, counting the gap up to now. */
+const WROTE_FIRST = "[You wrote to them first]";
+
+/**
+ * The turns after the latest gap of at least `windowGapHours`. A reach-out answers no turn, so for
+ * one the gap up to now counts too, keeping only her unanswered reach-outs since they last wrote.
+ */
 function sinceLongGap(input: AssembleInput): AssembleInput["recentTurns"] {
   const turns = input.recentTurns;
   if (input.windowGapHours === undefined) return turns;
   const minGap = input.windowGapHours * HOUR;
   const last = turns.at(-1)?.created_at;
-  if (last && input.now.getTime() - last.getTime() >= minGap) return [];
+  if (input.reachOut && last && input.now.getTime() - last.getTime() >= minGap) {
+    const lastUser = turns.findLastIndex((t) => t.role === "user");
+    return turns.slice(lastUser + 1).filter((t) => t.trigger === "reach_out");
+  }
   for (let i = turns.length - 1; i > 0; i--) {
     const at = turns[i]!.created_at;
     const before = turns[i - 1]!.created_at;

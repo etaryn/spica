@@ -92,20 +92,28 @@ test("an ended relationship fires nothing", async () => {
   expect((await userMindTick(deps, now)).recorded).toBe(0);
 });
 
-test("a long conversation inside a crisis window waits; once it ends, the talk and the crisis each fire once", async () => {
+test("a long conversation the crisis window covers is left to crisis_passed: one run", async () => {
   const { deps, u } = await setup();
-  const sid = await session(u, 3, 45);
+  await session(u, 3, 45);
   const quietUntil = new Date(now.getTime() + 60 * MIN);
   await setQuietUntil(u, quietUntil);
   expect((await userMindTick(deps, now)).recorded).toBe(0);
 
   const later = new Date(quietUntil.getTime() + 10 * MIN);
   deps.clock.set(later);
-  expect(await userMindTick(deps, later)).toEqual({ recorded: 2, failed: 0 });
+  expect(await userMindTick(deps, later)).toEqual({ recorded: 1, failed: 0 });
   expect(await userMindTick(deps, later)).toEqual({ recorded: 0, failed: 0 });
-  expect((await runs()).map((r) => r.source_ref).sort()).toEqual(
-    [`crisis_passed:${quietUntil.toISOString()}`, `long_conversation:${sid}`].sort(),
-  );
+  expect((await runs()).map((r) => r.source_ref)).toEqual([
+    `crisis_passed:${quietUntil.toISOString()}`,
+  ]);
+});
+
+test("a long conversation after a crisis window ended fires on its own", async () => {
+  const { deps, u } = await setup();
+  await setQuietUntil(u, new Date(now.getTime() - 25 * 60 * MIN));
+  const sid = await session(u, 3, 45);
+  expect((await userMindTick(deps, now)).recorded).toBe(1);
+  expect((await runs()).map((r) => r.source_ref)).toEqual([`long_conversation:${sid}`]);
 });
 
 test("a crisis that ended before the lookback fires nothing", async () => {

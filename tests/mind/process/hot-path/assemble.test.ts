@@ -236,6 +236,62 @@ describe("time-gap markers in the message window", () => {
     });
     expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "[2 days later] c"]);
   });
+  test("a reply to her reach-out after a silence keeps the reach-out it answers", () => {
+    const p = assemblePrompt({
+      ...base,
+      now: at("2026-01-06T10:00:30Z"),
+      gapMarkerMinHours: 24,
+      windowGapHours: 72,
+      recentTurns: [
+        { role: "user", text: "old", created_at: at("2026-01-01T09:00:00Z") },
+        { role: "companion", text: "old reply", created_at: at("2026-01-01T09:00:05Z") },
+        {
+          role: "companion",
+          text: "how did the interview go?",
+          created_at: at("2026-01-06T09:00:00Z"),
+          trigger: "reach_out",
+        },
+        { role: "user", text: "yeah it went ok!", created_at: at("2026-01-06T10:00:00Z") },
+      ],
+    });
+    expect(p.messages).toEqual([
+      { role: "user", content: "[You wrote to them first]" },
+      { role: "assistant", content: "how did the interview go?" },
+      { role: "user", content: "yeah it went ok!" },
+    ]);
+  });
+  test("a reply whose buffer is days old still carries its user turn", () => {
+    const p = assemblePrompt({
+      ...base,
+      now: at("2026-01-10T09:00:00Z"),
+      windowGapHours: 72,
+      recentTurns: [{ role: "user", text: "late", created_at: at("2026-01-07T08:00:00Z") }],
+    });
+    expect(p.messages).toEqual([{ role: "user", content: "late" }]);
+  });
+  test("a reach-out after an unanswered one keeps the first, even days later", () => {
+    const p = assemblePrompt({
+      ...base,
+      windowGapHours: 72,
+      now: at("2026-01-12T09:00:00Z"),
+      recentTurns: [
+        { role: "user", text: "old", created_at: at("2026-01-01T09:00:00Z") },
+        { role: "companion", text: "old reply", created_at: at("2026-01-01T09:00:05Z") },
+        {
+          role: "companion",
+          text: "thinking of you",
+          created_at: at("2026-01-06T09:00:00Z"),
+          trigger: "reach_out",
+        },
+      ],
+      reachOut: { slot: "why", cue: "CUE" },
+    });
+    expect(p.messages).toEqual([
+      { role: "user", content: "[You wrote to them first]" },
+      { role: "assistant", content: "thinking of you" },
+      { role: "user", content: "CUE" },
+    ]);
+  });
   test("a reach-out after a long gap has no old turns and still ends on its cue", () => {
     const p = assemblePrompt({
       ...base,

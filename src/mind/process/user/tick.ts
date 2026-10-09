@@ -41,14 +41,15 @@ export async function userMindTick(
     await each(s.user_id, async () => {
       const rel = await getRelationshipRow(db, s.user_id);
       if (!rel || rel.status === "ended_by_user") return false;
-      // Inside a crisis every mechanism waits; the talk gets its run once the window ends.
+      // A talk the crisis window covers waits for `crisis_passed`, which runs once for both:
+      // inside a crisis every mechanism waits, and two runs would spend the day's cap twice.
       const quietUntil = await effectiveCrisisQuietUntil(
         deps,
         s.user_id,
         rel.crisis_quiet_until,
         now,
       );
-      if (quietUntil && quietUntil > now) return false;
+      if (quietUntil && quietUntil >= s.ended_at) return false;
       return record(deps, s.user_id, `long_conversation:${s.session_id}`, [
         { kind: "long_conversation", session_id: s.session_id, user_turns: s.user_turns },
       ]);

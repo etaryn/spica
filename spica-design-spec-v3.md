@@ -902,7 +902,8 @@ job is enqueued after commit.
   turns, whose last turn is older than `quiet_minutes` (30) and newer than
   `user_mind.tick.lookback_hours` (24). `source_ref`
   `long_conversation:<session_id>`. Skipped for an ended relationship and
-  while a crisis window holds; the talk gets its run once the window ends.
+  when the crisis window reaches past the talk's end: `crisis_passed` runs
+  once for both.
 - `crisis_passed`: the stored `relationship.crisis_quiet_until` ended within
   the lookback. `source_ref` `crisis_passed:<its ISO time>`, so each crisis
   fires once. The run reads the crisis memories (§9.5).
@@ -1094,10 +1095,12 @@ when the guard is on.
       path, so its idea stays live
    8. recent turns (short-term; leads per V9). **Built 9c:** the
       `chat.recent_turns` (20) window drops every turn before the latest gap of
-      at least `chat.window_gap_hours` (72), counting the gap from the last turn
-      up to now, so a reach-out after days of silence carries no old turns.
+      at least `chat.window_gap_hours` (72); for a reach-out the gap from the
+      last turn up to now counts too.
       Gaps from `chat.gap_line_min_hours` (24) up to 72 hours keep the "[N
-      later]" marker. A reach-out's "Where things stand with them" reads the
+      later]" marker. A window that opens on her reach-outs keeps them behind a
+      "[You wrote to them first]" user line; a reach-out after days of silence
+      keeps only her unanswered reach-outs. A reach-out's "Where things stand with them" reads the
       newest non-sensitive summary (§9.5)
 3. **Generate** with the reply model. She uses at most one or two memories
    per reply, only when natural.

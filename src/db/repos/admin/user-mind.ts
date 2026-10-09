@@ -23,11 +23,12 @@ export async function adminStalePendingRuns(
 export async function adminEndedLongSessions(
   db: Db,
   opts: { endedAfter: Date; endedBefore: Date; minUserTurns: number; limit: number },
-): Promise<{ user_id: string; session_id: string; user_turns: number }[]> {
+): Promise<{ user_id: string; session_id: string; user_turns: number; ended_at: Date }[]> {
   const after = opts.endedAfter.toISOString();
   const before = opts.endedBefore.toISOString();
   const res = await db.execute(sql`
-    SELECT user_id, session_id, count(*) FILTER (WHERE role = 'user')::int AS user_turns
+    SELECT user_id, session_id, count(*) FILTER (WHERE role = 'user')::int AS user_turns,
+      max(created_at) AS ended_at
     FROM session_log
     WHERE session_id IN (
       SELECT DISTINCT session_id FROM session_log WHERE created_at > ${after}::timestamptz
@@ -38,7 +39,12 @@ export async function adminEndedLongSessions(
       AND count(*) FILTER (WHERE role = 'user') >= ${opts.minUserTurns}
     ORDER BY max(created_at)
     LIMIT ${opts.limit}`);
-  return res.rows as { user_id: string; session_id: string; user_turns: number }[];
+  return res.rows.map((r) => ({
+    user_id: String(r.user_id),
+    session_id: String(r.session_id),
+    user_turns: Number(r.user_turns),
+    ended_at: new Date(r.ended_at as string | Date),
+  }));
 }
 
 /** Users whose stored crisis window ended in `(after, until]`. */

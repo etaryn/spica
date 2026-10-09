@@ -19,6 +19,8 @@ export const ALL_PURPOSES = [
   "core_render_snapshot",
   "core_drift_watch",
   "user_summarise",
+  "user_reflect",
+  "user_ideate",
   "embed",
 ];
 /** The annotation judges, made real by `--annotate`. */

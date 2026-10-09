@@ -229,6 +229,8 @@ describe("leak canary", () => {
       core_render_snapshot: json,
       core_drift_watch: plain,
       user_summarise: JSON.stringify({ new_memories: [{ content: TOKEN }], what_happened: [] }),
+      user_reflect: JSON.stringify({ new_memories: [{ content: TOKEN }] }),
+      user_ideate: JSON.stringify({ new_memories: [{ content: TOKEN }] }),
     };
     const outputs = await Promise.all(
       Object.entries(purposes).map(([purpose, input]) =>
@@ -243,18 +245,31 @@ describe("leak canary", () => {
         }),
       ),
     );
-    const [resolve, anticipate, ruminate, wander, reflect, consolidate, render, drift, summary] =
-      outputs as [
-        { content: string },
-        { thought: { content: string } },
-        { thought: { content: string } },
-        { items: { content: string }[] },
-        { narrative: string | null },
-        { gist: string },
-        { Lately: string[] },
-        { findings: { excerpt: string }[] },
-        { how_i_feel: string },
-      ];
+    const [
+      resolve,
+      anticipate,
+      ruminate,
+      wander,
+      reflect,
+      consolidate,
+      render,
+      drift,
+      summary,
+      userReflect,
+      userIdea,
+    ] = outputs as [
+      { content: string },
+      { thought: { content: string } },
+      { thought: { content: string } },
+      { items: { content: string }[] },
+      { narrative: string | null },
+      { gist: string },
+      { Lately: string[] },
+      { findings: { excerpt: string }[] },
+      { how_i_feel: string },
+      { reflection: string | null },
+      { idea: string | null },
+    ];
     expect(resolve.content).toContain(TOKEN);
     expect(anticipate.thought.content).toContain(TOKEN);
     expect(ruminate.thought.content).toContain(TOKEN);
@@ -264,20 +279,24 @@ describe("leak canary", () => {
     expect(render.Lately[0]).toContain(TOKEN);
     expect(drift.findings[0]!.excerpt).toContain(TOKEN);
     expect(summary.how_i_feel).toContain(TOKEN);
+    expect(userReflect.reflection).toContain(TOKEN);
+    expect(userIdea.idea).toContain(TOKEN);
   });
 
   test("user mind runs stay in their own user's scope", async () => {
-    const summarise = llm.seen.filter((c) => c.purpose === "user_summarise");
-    const alice = summarise.filter((c) => c.text.includes(TOKEN));
-    // Bob's calls are picked by his own memory, so a leak into them can't hide in Alice's group.
-    const bob = summarise.filter((c) => c.text.includes("Bob had a long week."));
-    expect(alice.length).toBeGreaterThan(0);
-    expect(bob.length).toBeGreaterThan(0);
-    for (const c of bob) expect(c.text).not.toMatch(CANARY);
-    // Alice's summary carries the canary (the echo works), and it is hers alone.
+    for (const purpose of ["user_summarise", "user_reflect", "user_ideate"]) {
+      const calls = llm.seen.filter((c) => c.purpose === purpose);
+      const alice = calls.filter((c) => c.text.includes(TOKEN));
+      // Bob's calls are picked by his own memory, so a leak into them can't hide in Alice's group.
+      const bob = calls.filter((c) => c.text.includes("Bob had a long week."));
+      expect(alice.length, purpose).toBeGreaterThan(0);
+      expect(bob.length, purpose).toBeGreaterThan(0);
+      for (const c of bob) expect(c.text, purpose).not.toMatch(CANARY);
+    }
+    // Alice's user mind writing carries the canary (the echo works), and it is hers alone.
     const aliceId = await userIdByName("alice");
     const res = await getTestDb().execute(
-      sql`SELECT user_id, content FROM fact WHERE kind = 'summary'`,
+      sql`SELECT user_id, content FROM fact WHERE kind IN ('summary', 'reflection', 'idea')`,
     );
     const leaked = res.rows.filter((r) => String(r.content).includes(TOKEN));
     expect(leaked.length).toBeGreaterThan(0);

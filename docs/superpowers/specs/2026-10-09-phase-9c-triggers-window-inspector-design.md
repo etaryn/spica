@@ -51,17 +51,20 @@ from the existing unique index on `(user_id, source_ref)`.
 | Trigger | Detected by | `source_ref` | Skipped when |
 |---|---|---|---|
 | `long_conversation` | `user_mind_tick` | `long_conversation:<session_id>` | relationship `ended_by_user`; effective crisis window active |
-| `crisis_passed` | `user_mind_tick` | `crisis_passed:<effective quiet-until, ISO>` | relationship `ended_by_user` |
-| `stale_summary` | `outreachTickUser`, only when it schedules a send | `stale_summary:<reach_out_log id>` | live summary younger than `max_age_hours` |
+| `crisis_passed` | `user_mind_tick` | `crisis_passed:<crisis_quiet_until, ISO>` | relationship `ended_by_user` |
+| `stale_summary` | `outreachTickUser`, only when it schedules a send | `stale_summary:<tick time, ISO>` | live summary younger than `max_age_hours` |
 
 - **`long_conversation`**: a `session_log.session_id` (sessions already split at
   `session.idle_gap_minutes`) with at least `user_mind.triggers.long_conversation.min_user_turns`
   (20) user turns, whose last turn is older than `quiet_minutes` (30) and newer than
   `user_mind.tick.lookback_hours` (24). Skipped inside a crisis window: rule 7 suspends every v3
   mechanism there, and `crisis_passed` covers the period after.
-- **`crisis_passed`**: the effective crisis window (`effectiveCrisisQuietUntil`, the one outreach
-  uses) ended within `lookback_hours`. The ISO end time in the `source_ref` makes each crisis fire
-  once; a later crisis has a later end and fires again.
+- **`crisis_passed`**: the stored `relationship.crisis_quiet_until` (set by the crisis
+  exchange's cold path) is in `(now - lookback_hours, now]`. By then the cold path has committed
+  (or the cold-path sweep gave up), and the stored value is stable, so its ISO time in the
+  `source_ref` makes each crisis fire once; a later crisis has a later end and fires again. The
+  `long_conversation` skip uses `effectiveCrisisQuietUntil` (the one outreach uses), which also
+  holds before the cold path commits.
 - **`stale_summary`**: the live summary is missing or older than
   `user_mind.triggers.stale_summary.max_age_hours` (72). When the run is recorded `pending`, the
   send time becomes `max(jittered, now + lead_minutes)` (`lead_minutes` 5) so the run usually
@@ -77,10 +80,8 @@ from the existing unique index on `(user_id, source_ref)`.
 New hourly job, cron `user_mind.tick.cron` (`25 * * * *`), registered in the worker alongside the
 user mind run. One pass:
 1. Long-conversation candidates: one admin query over `session_log` (cross-user, admin repo).
-2. Crisis-passed candidates: users whose stored `crisis_quiet_until` is after `now - lookback`,
-   or who have a flagged turn (`session_log.safety_flag` set) after
-   `now - lookback - relationship.crisis_quiet_hours`. Per user, `effectiveCrisisQuietUntil`
-   gives the window's end; it fires when that end is in `(now - lookback, now]`.
+2. Crisis-passed candidates: relationships whose `crisis_quiet_until` is in
+   `(now - lookback, now]`.
 3. The pending-run sweep (`sweepPendingUserMindRuns`) moves here from the daily
    `cold_path_sweep`, so a lost run waits an hour, not a day.
 
@@ -115,8 +116,9 @@ memory (summary, retrieval) carries the rest. No LLM call. B2 closed.
 
 Delete `src/app/memory/` (page, actions, forget button, CSS), `forgetFact` in
 `src/db/repos/user/facts.ts`, the links in `src/app/chat/page.tsx` and `src/app/settings/page.tsx`,
-their tests, and the inspector's "(deleted)" handling for hard-deleted facts (only account deletion
-removes facts now, and it removes everything). Account deletion in settings stays. Update v3 §12.5
+the eval `forget` step (`evals/scripts/forget.yaml`, the script field, the runner block, its
+baseline entry) and their tests. Tests that need a vanished fact delete the row directly. Account
+deletion in settings stays. Update v3 §12.5
 and §18; one `DECISIONS.md` line. B66 closed as moot.
 
 ## 5. Inspector User mind tab

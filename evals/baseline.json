@@ -159,11 +159,6 @@
     "runs": 3,
     "passedRuns": 3
   },
-  "forget": {
-    "status": "pass",
-    "runs": 3,
-    "passedRuns": 3
-  },
   "insane-day-promotion": {
     "status": "pass",
     "runs": 1,

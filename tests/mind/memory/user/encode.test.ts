@@ -278,11 +278,11 @@ describe("encodeExtraction", () => {
     expect(await threads.listOpenThreads(db(), u, 5)).toEqual([]);
   });
 
-  test("case/alias variants link one entity; sensitive flag; recall write-back skips forgotten facts", async () => {
+  test("case/alias variants link one entity; sensitive flag; recall write-back skips deleted facts", async () => {
     const { u, ct, input } = await setup();
     const kept = await seed(u, "Kept memory.");
     const gone = await seed(u, "Forgotten memory.");
-    await facts.forgetFact(db(), u, gone.id);
+    await db().delete(s.fact).where(eq(s.fact.id, gone.id));
     const rec = (id: string) => ({
       factId: id,
       sim: 0.9,

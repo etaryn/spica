@@ -4,7 +4,9 @@ import { composeReachOut, composeReply, renderReachOut } from "@/mind/process/ho
 import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
 import { messageToCheck } from "@/mind/process/guard/guard";
-import { forgetFact, insertFact } from "@/db/repos/user/facts";
+import { insertFact } from "@/db/repos/user/facts";
+import { fact as factTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
@@ -390,7 +392,7 @@ describe("composeReply", () => {
     expect(system).not.toContain("### From your own life");
   });
 
-  test("her summary of where things stand reaches the reply, goes when forgotten, and skips a crisis", async () => {
+  test("her summary of where things stand reaches the reply, goes when deleted, and skips a crisis", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
     const summary = await insertFact(getTestDb(), u, {
@@ -419,7 +421,7 @@ describe("composeReply", () => {
       "## Where things stand with them\n- Stand.\n- Live.\n- Feel.",
     );
 
-    await forgetFact(getTestDb(), u, summary.id);
+    await getTestDb().delete(factTable).where(eq(factTable.id, summary.id));
     expect(await ask(null)).not.toContain("Where things stand");
 
     await insertFact(getTestDb(), u, {

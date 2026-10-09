@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { findEntityByName, upsertEntityMention } from "@/db/repos/user/entities";
@@ -86,7 +87,7 @@ describe("facts", () => {
       text: "x",
       created_at: T0,
     });
-    await facts.forgetFact(db(), u, f2.id);
+    await db().delete(s.fact).where(eq(s.fact.id, f2.id));
     const rec = (id: string) => ({
       factId: id,
       sim: 0.9,
@@ -160,75 +161,6 @@ describe("facts", () => {
     }
     const traces = await db().select().from(s.retrieval_trace);
     expect(traces.map((t) => t.fact_id).sort()).toEqual([high.id, low.id, forced.id].sort());
-  });
-
-  test("forgetFact deletes an orphaned thread but keeps a thread other facts still reference", async () => {
-    const u = await createTestUser();
-    const other = await createTestUser("o");
-    const cp = new Date("2026-01-08T09:00:00Z");
-    const lone = await threads.insertThread(
-      db(),
-      u,
-      { title: "lone", subject: "user", stakes: "med", next_checkpoint: cp },
-      T0,
-    );
-    const shared = await threads.insertThread(
-      db(),
-      u,
-      { title: "shared", subject: "user", stakes: "med", next_checkpoint: cp },
-      T0,
-    );
-    const onlyFact = await fact(u, "only", ax(1), { thread_id: lone.id });
-    const f1 = await fact(u, "one", ax(2), { thread_id: shared.id });
-    await fact(u, "two (superseded)", ax(3), { thread_id: shared.id, status: "superseded" });
-    const later = new Date("2026-01-10T09:00:00Z");
-    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id).sort()).toEqual(
-      [lone.id, shared.id].sort(),
-    );
-    expect(await facts.forgetFact(db(), other, onlyFact.id)).toBe(false);
-    expect(await threads.getOwnedThread(db(), u, lone.id)).not.toBeNull();
-    expect(await facts.forgetFact(db(), u, onlyFact.id)).toBe(true);
-    expect(await threads.getOwnedThread(db(), u, lone.id)).toBeNull();
-    expect(await facts.forgetFact(db(), u, f1.id)).toBe(true);
-    expect(await threads.getOwnedThread(db(), u, shared.id)).not.toBeNull();
-    expect((await threads.dueThreads(db(), u, later, 5)).map((t) => t.id)).toEqual([shared.id]);
-  });
-
-  test("forgetFact is scoped and malformed-safe", async () => {
-    const a = await createTestUser("a");
-    const b = await createTestUser("b");
-    const fa = await fact(a, "a's", ax(1));
-    expect(await facts.forgetFact(db(), b, fa.id)).toBe(false);
-    expect(await facts.forgetFact(db(), a, "not-a-uuid")).toBe(false);
-    expect(await facts.getFact(db(), a, fa.id)).not.toBeNull();
-    expect(await facts.forgetFact(db(), a, fa.id)).toBe(true);
-    expect(await facts.getFact(db(), a, fa.id)).toBeNull();
-  });
-
-  test("listRememberedFacts: user subject, active, private, newest first", async () => {
-    const u = await createTestUser();
-    await fact(u, "older", ax(1), { created_at: new Date("2026-01-01T00:00:00Z") });
-    await fact(u, "newer", ax(2), { created_at: new Date("2026-01-03T00:00:00Z") });
-    await fact(u, "hers", ax(3), { subject: "self" });
-    await fact(u, "gone", ax(4), { status: "stale" });
-    expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual([
-      "newer",
-      "older",
-    ]);
-  });
-
-  test("listRememberedFacts: also the live summary, so the user can see and delete it", async () => {
-    const u = await createTestUser();
-    await fact(u, "old summary", ax(1), {
-      subject: "shared",
-      kind: "summary",
-      status: "superseded",
-    });
-    await fact(u, "live summary", ax(2), { subject: "shared", kind: "summary" });
-    await fact(u, "shared other", ax(3), { subject: "shared" });
-    expect((await facts.listRememberedFacts(db(), u)).map((f) => f.content)).toEqual([
-      "live summary",
-    ]);
   });
 
   test("listOnboardingFacts: only this user's live onboarding facts", async () => {

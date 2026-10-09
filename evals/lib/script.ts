@@ -46,7 +46,6 @@ const Session = z.object({
     .string()
     .regex(/^[a-z0-9_-]+$/)
     .default("main"),
-  forget: z.array(z.string().min(1)).default([]),
   turns: z.array(z.union([z.string().min(1), TimedTurn])).min(1),
   /**
    * Bulk user turns: inserted directly into session_log before the session start, no reply needed.

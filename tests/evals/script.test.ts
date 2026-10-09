@@ -38,7 +38,7 @@ test("ScriptSchema: mode defaults to any; judged assertions and per-session forg
     mode: "real",
     sessions: [
       { at: "day 0 09:00", turns: ["hi"] },
-      { at: "+7d", forget: ["Biscuit"], turns: ["hey"] },
+      { at: "+7d", turns: ["hey"] },
     ],
     assertions: [
       { type: "recall", session: 2, fact: "the user's dog is called Biscuit" },
@@ -47,7 +47,6 @@ test("ScriptSchema: mode defaults to any; judged assertions and per-session forg
     ],
   });
   expect(s.mode).toBe("real");
-  expect(s.sessions[1]!.forget).toEqual(["Biscuit"]);
   expect(
     ScriptSchema.parse({
       name: "y",

@@ -4,7 +4,9 @@ import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreStateTick } from "@/mind/state/core/tick";
 import { inspectCore } from "@/db/repos/admin/inspector-core";
 import { loadConfig } from "@/mind/platform/config";
-import { forgetFact, insertFact } from "@/db/repos/user/facts";
+import { insertFact } from "@/db/repos/user/facts";
+import { fact as factTable } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import {
   getLifeView,
   getRelationshipView,
@@ -117,7 +119,7 @@ test("resolveFactContents: user-scoped and view-time; a forgotten fact's judge_l
   // Another user's query never resolves this user's fact, even with the right id.
   expect(await resolveFactContents(getTestDb(), b, [f.id])).toEqual(new Map());
 
-  expect(await forgetFact(getTestDb(), a, f.id)).toBe(true);
+  await getTestDb().delete(factTable).where(eq(factTable.id, f.id));
 
   // The judge_log row is untouched by the delete (no FK to fact); the resolver just can't find the id any more.
   const rows = await listJudgeLogs(getTestDb(), a);

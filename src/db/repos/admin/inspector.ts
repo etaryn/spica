@@ -116,7 +116,7 @@ export const getConversationState = async (db: Db, userId: string) =>
 /**
  * View-time resolution of the ids `judge_log.input` holds (the log never stores memory content): fact
  * ids resolve to their content, due-thread ids to the thread's title. User-scoped, so a deleted or
- * foreign id never resolves. A missing id was hard-deleted since (`forgetFact`) — the caller shows "(deleted)".
+ * foreign id never resolves. A missing id was deleted since (the account went mid-read) — the caller shows "(deleted)".
  */
 export async function resolveFactContents(
   db: Db,

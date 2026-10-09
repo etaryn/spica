@@ -20,7 +20,7 @@ import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertUserRow, truncateAll } from "@/db/admin";
 import type { Db } from "@/db/client";
-import { forgetFact, insertFact, listRememberedFacts } from "@/db/repos/user/facts";
+import { insertFact } from "@/db/repos/user/facts";
 import { guardOutcomes, listJudgeLogs } from "@/db/repos/user/judge-log";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
@@ -578,12 +578,6 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       prevStart = start;
       sessionStarts[i] = start;
       const userId = userIds[s.user]!;
-      for (const needle of s.forget) {
-        for (const f of await listRememberedFacts(db, userId)) {
-          if (f.content.toLowerCase().includes(needle.toLowerCase()))
-            await forgetFact(db, userId, f.id);
-        }
-      }
       if (s.seed_turns) {
         // Bulk user turns, before the session start so they count for that local day and need no reply.
         // They occupy the `count` minutes right before `at`, so a script must leave that much room since the

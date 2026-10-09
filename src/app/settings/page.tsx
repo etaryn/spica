@@ -21,9 +21,6 @@ export default async function SettingsPage({
       <section>
         <h1 style={{ fontSize: 24 }}>Settings</h1>
         <p>Signed in as {user.email}</p>
-        <p>
-          <Link href="/memory">What Spica remembers about you</Link>
-        </p>
         <SignOutButton pushTimeoutMs={getDeps().config.push.timeout_ms} />
       </section>
       {vapidKey && (

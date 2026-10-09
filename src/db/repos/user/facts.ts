@@ -2,11 +2,11 @@
  * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
  * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
  */
-import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
 import type { Db } from "@/db/client";
-import { fact, factStatus, retrieval_trace, thread } from "@/db/schema";
+import { fact, factStatus, retrieval_trace } from "@/db/schema";
 import { one, toDate, toDateOrNull, vecLiteral } from "@/db/repos/util";
 
 export type FactRow = typeof fact.$inferSelect;
@@ -241,22 +241,6 @@ export async function applyRecall(
   });
 }
 
-/** The "what I remember" list: what she knows about them, and what she wrote herself about the two of them. */
-export async function listRememberedFacts(db: Db, userId: string) {
-  return db
-    .select({ id: fact.id, kind: fact.kind, content: fact.content, created_at: fact.created_at })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        or(eq(fact.subject, "user"), inArray(fact.kind, ["summary", "reflection", "idea"])),
-        eq(fact.scope, "private"),
-        notInArray(fact.status, [...INACTIVE]),
-      ),
-    )
-    .orderBy(desc(fact.created_at));
-}
-
 /** Onboarding facts the guard may treat as known. Superseded and stale ones are excluded. */
 export async function listOnboardingFacts(
   db: Db,
@@ -274,33 +258,6 @@ export async function listOnboardingFacts(
       ),
     )
     .orderBy(asc(fact.created_at));
-}
-
-/**
- * User-initiated hard delete. False for malformed or foreign ids. A thread left with no
- * facts (any status) is deleted too, so a forgotten storyline isn't asked about again.
- */
-export async function forgetFact(db: Db, userId: string, factId: string): Promise<boolean> {
-  if (!z.uuid().safeParse(factId).success) return false;
-  return db.transaction(async (tx) => {
-    const rows = await tx
-      .delete(fact)
-      .where(and(eq(fact.user_id, userId), eq(fact.id, factId)))
-      .returning({ id: fact.id, thread_id: fact.thread_id });
-    const threadId = rows[0]?.thread_id;
-    if (threadId) {
-      await tx
-        .delete(thread)
-        .where(
-          and(
-            eq(thread.user_id, userId),
-            eq(thread.id, threadId),
-            sql`NOT EXISTS (SELECT 1 FROM fact f WHERE f.user_id = ${userId} AND f.thread_id = ${threadId})`,
-          ),
-        );
-    }
-    return rows.length > 0;
-  });
 }
 
 export type OutreachFact = { id: string; content: string; salience: number; sensitive: boolean };

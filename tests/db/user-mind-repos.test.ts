@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
-import { candidateFacts, insertFact, listRememberedFacts, nearFacts } from "@/db/repos/user/facts";
+import { candidateFacts, insertFact, nearFacts } from "@/db/repos/user/facts";
 import { setTimezone } from "@/db/repos/user/users";
 import {
   claimRun,
@@ -186,12 +186,4 @@ test("group-scoped reflections, ideas and summaries are never read as hers", asy
   expect(await recentReflections(getTestDb(), u, 5)).toEqual([]);
   expect(await liveIdeas(getTestDb(), u, new Date(0), 5)).toEqual([]);
   expect(await liveSummary(getTestDb(), u)).toBeNull();
-});
-
-test("the memory view lists reflections and ideas", async () => {
-  const u = await createTestUser();
-  await put(u, "reflection", T0);
-  await put(u, "idea", T0);
-  const kinds = (await listRememberedFacts(getTestDb(), u)).map((f) => f.kind);
-  expect(kinds).toEqual(expect.arrayContaining(["reflection", "idea"]));
 });

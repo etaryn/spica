@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
-import { forgetFact, insertFact } from "@/db/repos/user/facts";
+import { insertFact } from "@/db/repos/user/facts";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
@@ -81,18 +81,6 @@ test("a second run supersedes the first; one stays live", async () => {
   expect(second.input).toContain("They moved to Osaka.");
   expect(second.input).not.toContain('"content":"They got the job in Osaka."');
   expect(JSON.parse(second.input).previous).not.toBeNull();
-});
-
-test("after the user deletes the summary, the next run writes a fresh one", async () => {
-  const { deps, userId, fact, run } = await setup();
-  await fact("They got the job in Osaka.", 0.9);
-  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
-  await forgetFact(deps.db, userId, (await liveSummary(deps.db, userId))!.id);
-  expect(await liveSummary(deps.db, userId)).toBeNull();
-  expect(
-    await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId)),
-  ).toBe("done");
-  expect(await liveSummary(deps.db, userId)).not.toBeNull();
 });
 
 test("overlong parts are fitted; empty output fails and keeps the old summary", async () => {

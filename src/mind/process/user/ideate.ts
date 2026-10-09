@@ -32,7 +32,12 @@ export async function userIdeate(
     // This run's reflection, if reflect wrote one: an older one isn't news.
     const [latest] = await recentReflections(db, userId, 1);
     const noticed = latest && latest.created_at >= run.created_at ? latest : null;
-    const planned = await liveIdeas(db, userId, ideaCutoff(now, settings.ttl_days), 20);
+    const planned = await liveIdeas(
+      db,
+      userId,
+      ideaCutoff(now, settings.ttl_days),
+      settings.max_planned,
+    );
     // A sensitive storyline's title can carry what the sensitive fact says.
     const threads = await listOpenThreads(db, userId, config.user_mind.summarise.max_threads, {
       excludeSensitive: true,

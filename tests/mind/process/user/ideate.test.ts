@@ -59,3 +59,31 @@ test("ideaCutoff is ttl days back", () => {
   const now = new Date("2026-01-10T00:00:00Z");
   expect(ideaCutoff(now, 3).toISOString()).toBe("2026-01-07T00:00:00.000Z");
 });
+
+test("only a reflection from this run counts as noticed", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_ideate = () => ({ idea: null });
+  const reflect = (content: string, createdAt: Date) =>
+    insertFact(deps.db, userId, {
+      subject: "user",
+      kind: "reflection",
+      content,
+      embedding: vec(),
+      created_at: createdAt,
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+    });
+  const inputs = await loadRunInputs(deps, userId);
+  const noticed = () =>
+    JSON.parse(deps.llm.structuredCalls.filter((c) => c.purpose === "user_ideate").at(-1)!.input)
+      .noticed;
+  await reflect("An old thought.", new Date(run.created_at.getTime() - 3_600_000));
+  await userIdeate(deps, run, inputs);
+  expect(noticed()).toBeNull();
+  await reflect("A fresh thought.", run.created_at);
+  await userIdeate(deps, run, inputs);
+  expect(noticed()).toBe("A fresh thought.");
+});

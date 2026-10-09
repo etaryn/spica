@@ -480,6 +480,7 @@
       "salience": 0.5,
       "confidence": 0.6,
       "ttl_days": 3,
+      "max_planned": 20,
       "slot_max": 1
     }
   }

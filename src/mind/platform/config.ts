@@ -550,6 +550,7 @@ const userMind = z.object({
     salience: unit,
     confidence: unit,
     ttl_days: z.number().positive(),
+    max_planned: positiveInt,
     slot_max: countFromZero,
   }),
 });

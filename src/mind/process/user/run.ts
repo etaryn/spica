@@ -1,7 +1,8 @@
 /**
  * Her user mind, run on a big event: recording the run with the exchange that caused it, running
- * its batch of loops (summarise, reflect, ideate) once, and re-queueing runs whose job was lost. The batch reads this user's
- * memory and state and her latest snapshot, and writes this user's memory only.
+ * its batch of loops (summarise, reflect, ideate) once, and re-queueing runs whose job was lost.
+ * The batch reads this user's memory and state and her latest snapshot, and writes this user's
+ * memory only.
  */
 import type { Db } from "@/db/client";
 import { adminStalePendingRuns } from "@/db/repos/admin/user-mind";

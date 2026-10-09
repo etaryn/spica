@@ -11,6 +11,8 @@ const empty = (): CandidateInputs => ({
   makeUp: { due: false, hurt: 0, causeFactId: null, causeText: null, lastHurtAt: null },
   userEvents: [],
   herDay: [],
+  coreThoughts: [],
+  userIdeas: [],
   checkIn: { lastContact: null, medianGapHours: 24 },
   usedTopics: [],
 });
@@ -139,4 +141,36 @@ test("her day is her own core memory: topic core:<id>, coreMemoryId set, never a
     factId: "m1",
     coreMemoryId: null,
   });
+});
+
+test("user_idea: topic idea:<id>, weighted, fact id set", () => {
+  const i = empty();
+  i.userIdeas = [{ id: "i1", content: "Ask about the audition.", salience: 0.5 }];
+  const [c] = buildCandidates(i, cfg, now);
+  expect(c).toMatchObject({
+    kind: "user_idea",
+    topic: "idea:i1",
+    factId: "i1",
+    coreMemoryId: null,
+    filtered: null,
+  });
+  expect(c!.score).toBeCloseTo(cfg.weights.user_idea * 0.5);
+});
+
+test("core_thought shares her_day's topic, so one memory is offered once", () => {
+  const i = empty();
+  i.herDay = [{ id: "m1", content: "Watched Stalker again.", salience: 0.5, sensitive: false }];
+  i.coreThoughts = [{ id: "m1", content: "Watched Stalker again.", salience: 0.5 }];
+  i.usedTopics = ["core:m1"];
+  const cands = buildCandidates(i, cfg, now);
+  expect(cands.map((c) => c.kind).sort()).toEqual(["core_thought", "her_day"]);
+  expect(cands.every((c) => c.filtered === "topic_used")).toBe(true);
+});
+
+test("a medium core thought sits at the threshold; her_day outranks it on ties", () => {
+  const i = empty();
+  i.coreThoughts = [{ id: "m2", content: "Thinking about tides.", salience: 0.4 }];
+  const [c] = buildCandidates(i, cfg, now);
+  expect(c).toMatchObject({ kind: "core_thought", topic: "core:m2", coreMemoryId: "m2" });
+  expect(c!.score).toBeCloseTo(0.2);
 });

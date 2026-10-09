@@ -115,7 +115,7 @@ test("outreach, push and reach_out prompt defaults", () => {
     body_max_chars: 1000,
     generic_body: "Spica sent you a message",
   });
-  expect(c.prompts.reach_out).toBe("v1");
+  expect(c.prompts.reach_out).toBe("v2");
 });
 
 test("rejects the removed backchannel style keys", () => {

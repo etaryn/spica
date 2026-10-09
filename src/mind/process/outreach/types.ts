@@ -1,10 +1,19 @@
 /**
  * The shapes of outreach: the candidate reasons she might write first (a thread, making up, the
- * user's event, her own day, a check-in), what the candidates are built from, and the send gate.
+ * user's event, her own day, a thought of her own, an idea she
+ * had about them, a check-in), what the candidates are built from, and the send gate.
  */
 
 /** Also the tie-break order between equal scores. */
-export const KIND_ORDER = ["thread", "make_up", "user_event", "her_day", "check_in"] as const;
+export const KIND_ORDER = [
+  "thread",
+  "make_up",
+  "user_event",
+  "her_day",
+  "core_thought",
+  "user_idea",
+  "check_in",
+] as const;
 export type CandidateKind = (typeof KIND_ORDER)[number];
 
 export type FilterReason = "topic_used" | "sensitive" | "below_threshold";
@@ -43,6 +52,10 @@ export type CandidateInputs = {
   };
   userEvents: { id: string; content: string; salience: number; sensitive: boolean }[];
   herDay: { id: string; content: string; salience: number; sensitive: boolean }[];
+  /** Her own recent thoughts and ideas (core memory, never sensitive). */
+  coreThoughts: { id: string; content: string; salience: number }[];
+  /** Her live ideas about this user, from her user mind; never from sensitive memories. */
+  userIdeas: { id: string; content: string; salience: number }[];
   checkIn: { lastContact: Date | null; medianGapHours: number };
   usedTopics: string[];
 };

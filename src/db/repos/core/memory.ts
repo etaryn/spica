@@ -431,6 +431,23 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       return rows.map(toItem).reverse();
     },
 
+    async recentThoughts(from, to, limit) {
+      const rows = await db
+        .select()
+        .from(core_memory)
+        .where(
+          and(
+            inArray(core_memory.kind, ["thought", "idea"]),
+            ACTIVE,
+            gt(core_memory.created_at, from),
+            lte(core_memory.created_at, to),
+          ),
+        )
+        .orderBy(desc(core_memory.created_at))
+        .limit(limit);
+      return rows.map(toItem);
+    },
+
     async openIntentions(from, to, limit) {
       const rows = await db
         .select()

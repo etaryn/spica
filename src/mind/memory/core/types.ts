@@ -160,6 +160,8 @@ export interface CoreMemory {
   groundingSimilarity(embedding: number[]): Promise<number>;
   /** The newest `limit` episodes whose time falls in (from, to], oldest first. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
+  /** Her thoughts and ideas created in (from, to], newest first; hypotheticals are their own kind. */
+  recentThoughts(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** Open intentions created in (from, to], oldest first, at most `limit`. */
   openIntentions(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** The memory of this kind written from `sourceRef` (e.g. `world_event:<id>`), if any. */

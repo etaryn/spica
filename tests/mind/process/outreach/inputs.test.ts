@@ -162,6 +162,32 @@ test("her day: open intentions within the lookback are news; resolved or old one
   expect(herDay.map((f) => f.id)).toEqual([open]);
 });
 
+test("core thoughts and live user ideas feed the candidates; a stale idea is absent", async () => {
+  const { deps, u } = await setup();
+  const idea = await insertFact(
+    deps.db,
+    u,
+    fact({ kind: "idea", content: "Ask about the audition.", created_at: ago(2) }),
+  );
+  await insertFact(deps.db, u, fact({ kind: "idea", content: "stale", created_at: ago(24 * 30) }));
+  const thought = await deps.core.memory.insert({
+    kind: "thought",
+    content: "Spica keeps thinking about tides.",
+    embedding: vec(),
+    occurred_at: ago(3),
+    created_at: ago(3),
+    status: "open",
+    salience: 0.4,
+    valence: 0,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  const got = await loadCandidateInputs(deps, u, now);
+  expect(got.userIdeas.map((x) => x.id)).toEqual([idea.id]);
+  expect(got.coreThoughts.map((x) => x.id)).toEqual([thought]);
+});
+
 test("due threads carry stakes and the latest fact's sensitivity; make-up carries faded hurt and cause", async () => {
   const { deps, u } = await setup();
   const t = await insertThread(

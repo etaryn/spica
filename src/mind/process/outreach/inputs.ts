@@ -1,6 +1,7 @@
 /**
  * Reads everything outreach decides from: the candidate inputs (due threads, a pending make-up,
- * the user's recent events, her own day and preoccupation, check-in timing, topics already used)
+ * the user's recent events, her own day and preoccupation, her recent thoughts, her live ideas
+ * about them, check-in timing, topics already used)
  * and the send gate's inputs. Read-only.
  */
 import type { Db } from "@/db/client";
@@ -9,7 +10,9 @@ import { getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
 import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
+import { liveIdeas } from "@/db/repos/user/user-mind";
 import { dueThreads } from "@/db/repos/user/threads";
+import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
@@ -61,6 +64,21 @@ export async function loadCandidateInputs(
     now,
   );
 
+  const thoughtsFrom = new Date(now.getTime() - settings.core_thought_lookback_hours * HOUR);
+  const coreThoughts = (
+    await deps.core.memory.recentThoughts(thoughtsFrom, now, settings.core_thought_limit)
+  )
+    .filter(recallable)
+    .map((m) => ({ id: m.id, content: m.content, salience: m.salience }));
+  const userIdeas = (
+    await liveIdeas(
+      db,
+      userId,
+      ideaCutoff(now, config.user_mind.ideate.ttl_days),
+      settings.user_idea_limit,
+    )
+  ).map((f) => ({ id: f.id, content: f.content, salience: f.salience }));
+
   return {
     dueThreads: due.map((thread) => ({
       id: thread.id,
@@ -80,6 +98,8 @@ export async function loadCandidateInputs(
     },
     userEvents,
     herDay,
+    coreThoughts,
+    userIdeas,
     checkIn: {
       lastContact: relationship?.last_contact ?? null,
       medianGapHours: cadence.median_gap_hours ?? config.relationship.default_median_gap_hours,

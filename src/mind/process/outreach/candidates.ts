@@ -64,6 +64,31 @@ export function buildCandidates(
       sensitive: memory.sensitive,
     });
   }
+  for (const memory of inputs.coreThoughts) {
+    raw.push({
+      kind: "core_thought",
+      // Her day's namespace: one memory of hers reaches a user once, whichever kind carries it.
+      topic: `core:${memory.id}`,
+      text: memory.content,
+      strength: memory.salience,
+      factId: null,
+      coreMemoryId: memory.id,
+      threadId: null,
+      sensitive: false,
+    });
+  }
+  for (const idea of inputs.userIdeas) {
+    raw.push({
+      kind: "user_idea",
+      topic: `idea:${idea.id}`,
+      text: idea.content,
+      strength: idea.salience,
+      factId: idea.id,
+      coreMemoryId: null,
+      threadId: null,
+      sensitive: false,
+    });
+  }
 
   const checkIn = checkInCandidate(inputs.checkIn, settings, now);
   if (checkIn) raw.push(checkIn);

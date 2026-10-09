@@ -525,7 +525,7 @@ describe("composeReachOut", () => {
   });
 
   test("renderReachOut: check-in has no topic text", () => {
-    const r = renderReachOut(loadPrompt("reach-out", "v1"), {
+    const r = renderReachOut(loadPrompt("reach-out", "v2"), {
       kind: "check_in",
       text: "",
       factId: null,

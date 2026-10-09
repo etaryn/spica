@@ -83,6 +83,20 @@ test("recentEpisodes is a half-open window, the newest few, oldest first", async
   expect(newest.map((e) => e.id)).toEqual([b]);
 });
 
+test("recentThoughts returns thoughts and ideas in the window, newest first", async () => {
+  const h = 3_600_000;
+  const at = (n: number) => new Date(now.getTime() - n * h);
+  const m = (kind: "thought" | "idea" | "hypothetical" | "episode", n: number) =>
+    core().memory.insert({ ...episode(`${kind}${n}`, 0.01, at(n)), kind });
+  await m("thought", 5);
+  const t = await m("thought", 2);
+  const i = await m("idea", 1);
+  await m("hypothetical", 1);
+  await m("episode", 1);
+  const got = await core().memory.recentThoughts(at(3), now, 10);
+  expect(got.map((x) => x.id)).toEqual([i, t]);
+});
+
 test("entities are added once and keep their first_seen", async () => {
   const [alcor] = await core().memory.addEntities(["Alcor"], 0.8, now);
   const later = new Date(now.getTime() + 1000);

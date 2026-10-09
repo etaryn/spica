@@ -2,7 +2,7 @@
  * One user's mind runs: the durable row behind each batch of her thinking about them, the trace
  * of every loop in it, and the live summary she keeps of where things stand.
  */
-import { and, desc, eq, ne, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { fact, user_loop_trace, user_mind_run } from "@/db/schema";
 import { getTimezone } from "@/db/repos/user/users";
@@ -115,4 +115,59 @@ export async function summaryInputFactIds(
 export async function userLocalDate(db: Db, userId: string, now: Date): Promise<string> {
   const raw = await getTimezone(db, userId);
   return localDateString(now, raw && isValidTimeZone(raw) ? raw : "UTC");
+}
+
+export async function recentReflections(db: Db, userId: string, limit: number): Promise<FactRow[]> {
+  return db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.kind, "reflection"),
+        notInArray(fact.status, ["superseded", "stale"]),
+      ),
+    )
+    .orderBy(desc(fact.created_at))
+    .limit(limit);
+}
+
+/** Ideas she hasn't had her chance with yet: open, and not older than `since`. */
+export async function liveIdeas(
+  db: Db,
+  userId: string,
+  since: Date,
+  limit: number,
+): Promise<FactRow[]> {
+  return db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.kind, "idea"),
+        eq(fact.status, "open"),
+        gt(fact.created_at, since),
+      ),
+    )
+    .orderBy(desc(fact.created_at))
+    .limit(limit);
+}
+
+/** An idea gets one chance: once offered, it is resolved. Only open ideas move. */
+export async function retireIdeas(db: Db, userId: string, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await db
+    .update(fact)
+    .set({ status: "resolved" })
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.kind, "idea"),
+        eq(fact.status, "open"),
+        inArray(fact.id, ids),
+      ),
+    )
+    .returning({ id: fact.id });
+  return rows.length;
 }

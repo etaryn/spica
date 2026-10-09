@@ -48,8 +48,8 @@ export async function candidateFacts(
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
-        -- The summary has its own slot in the reply.
-        AND f.kind <> 'summary'
+        -- The summary and her ideas have their own slots in the reply.
+        AND f.kind NOT IN ('summary', 'idea')
         ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
@@ -86,8 +86,8 @@ export async function nearFacts(
       FROM fact
       WHERE user_id = ${userId} AND scope = 'private' AND subject = ${subject}
         AND status NOT IN ('superseded', 'stale')
-        -- A summary is never a reconcile neighbour.
-        AND kind <> 'summary'
+        -- What she wrote herself after a big event is never a reconcile neighbour.
+        AND kind NOT IN ('summary', 'reflection', 'idea')
         AND (1 - (embedding <=> ${q}::vector)) >= ${minSim}
       ORDER BY embedding <=> ${q}::vector
       LIMIT ${k}`);
@@ -151,7 +151,8 @@ export async function setFactStatus(
 
 /**
  * What she has learned about a user since `since`, most salient first, leaving out `excludeIds`
- * (what the last summary already read).
+ * (what the last summary already read). Her own summaries, reflections and ideas are left out: a
+ * loop never feeds on its own output.
  */
 export async function listFactsForSummary(
   db: Db,
@@ -174,7 +175,7 @@ export async function listFactsForSummary(
         eq(fact.user_id, userId),
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
-        sql`${fact.kind} <> 'summary'`,
+        notInArray(fact.kind, ["summary", "reflection", "idea"]),
         sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
         since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
         excludeIds.length > 0 ? notInArray(fact.id, excludeIds) : undefined,
@@ -240,7 +241,7 @@ export async function applyRecall(
   });
 }
 
-/** The "what I remember" list: what she knows about them, and her live summary of the two of them. */
+/** The "what I remember" list: what she knows about them, and what she wrote herself about the two of them. */
 export async function listRememberedFacts(db: Db, userId: string) {
   return db
     .select({ id: fact.id, kind: fact.kind, content: fact.content, created_at: fact.created_at })
@@ -248,7 +249,7 @@ export async function listRememberedFacts(db: Db, userId: string) {
     .where(
       and(
         eq(fact.user_id, userId),
-        or(eq(fact.subject, "user"), eq(fact.kind, "summary")),
+        or(eq(fact.subject, "user"), inArray(fact.kind, ["summary", "reflection", "idea"])),
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
       ),

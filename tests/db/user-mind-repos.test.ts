@@ -1,12 +1,15 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
-import { insertFact } from "@/db/repos/user/facts";
+import { candidateFacts, insertFact, listRememberedFacts, nearFacts } from "@/db/repos/user/facts";
 import { setTimezone } from "@/db/repos/user/users";
 import {
   claimRun,
   finishRun,
   insertRun,
+  liveIdeas,
   liveSummary,
+  recentReflections,
+  retireIdeas,
   userLocalDate,
 } from "@/db/repos/user/user-mind";
 import { adminStalePendingRuns } from "@/db/repos/admin/user-mind";
@@ -86,4 +89,74 @@ test("a missing or invalid timezone falls back to UTC for the local date", async
   expect(await userLocalDate(getTestDb(), u, new Date("2026-01-05T23:30:00Z"))).toBe("2026-01-05");
   await setTimezone(getTestDb(), u, "Asia/Singapore");
   expect(await userLocalDate(getTestDb(), u, new Date("2026-01-05T23:30:00Z"))).toBe("2026-01-06");
+});
+
+const T0 = new Date("2026-01-05T12:00:00Z");
+const DAY = 86_400_000;
+
+async function put(
+  userId: string,
+  kind: "reflection" | "idea" | "event",
+  at: Date,
+  content: string = kind,
+) {
+  return insertFact(getTestDb(), userId, {
+    subject: kind === "event" ? "user" : "shared",
+    kind,
+    content,
+    embedding: vec(),
+    created_at: at,
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: kind === "event" ? "turn" : "generated",
+  });
+}
+
+test("live ideas are open and newer than the cut-off, newest first", async () => {
+  const u = await createTestUser();
+  const old = await put(u, "idea", new Date(T0.getTime() - 4 * DAY), "old");
+  const a = await put(u, "idea", new Date(T0.getTime() - DAY), "a");
+  const b = await put(u, "idea", T0, "b");
+  const ideas = await liveIdeas(getTestDb(), u, new Date(T0.getTime() - 3 * DAY), 5);
+  expect(ideas.map((i) => i.id)).toEqual([b.id, a.id]);
+  expect(ideas.some((i) => i.id === old.id)).toBe(false);
+});
+
+test("retiring is idempotent and touches only open ideas of this user", async () => {
+  const u = await createTestUser();
+  const other = await createTestUser();
+  const idea = await put(u, "idea", T0);
+  const event = await put(u, "event", T0);
+  const foreign = await put(other, "idea", T0);
+  expect(await retireIdeas(getTestDb(), u, [idea.id, event.id, foreign.id])).toBe(1);
+  expect(await retireIdeas(getTestDb(), u, [idea.id])).toBe(0);
+  expect(await retireIdeas(getTestDb(), u, [])).toBe(0);
+  expect(await liveIdeas(getTestDb(), other, new Date(0), 5)).toHaveLength(1);
+});
+
+test("recent reflections, newest first", async () => {
+  const u = await createTestUser();
+  const r1 = await put(u, "reflection", T0);
+  const r2 = await put(u, "reflection", new Date(T0.getTime() + 1000));
+  expect((await recentReflections(getTestDb(), u, 5)).map((r) => r.id)).toEqual([r2.id, r1.id]);
+});
+
+test("retrieval reads reflections but not ideas; reconcile reads neither", async () => {
+  const u = await createTestUser();
+  const r = await put(u, "reflection", T0);
+  const i = await put(u, "idea", T0);
+  const ranked = await candidateFacts(getTestDb(), u, vec(), 10);
+  expect(ranked.map((c) => c.id)).toContain(r.id);
+  expect(ranked.map((c) => c.id)).not.toContain(i.id);
+  expect(await nearFacts(getTestDb(), u, "shared", vec(), 10, -1)).toEqual([]);
+});
+
+test("the memory view lists reflections and ideas", async () => {
+  const u = await createTestUser();
+  await put(u, "reflection", T0);
+  await put(u, "idea", T0);
+  const kinds = (await listRememberedFacts(getTestDb(), u)).map((f) => f.kind);
+  expect(kinds).toEqual(expect.arrayContaining(["reflection", "idea"]));
 });

@@ -7,6 +7,8 @@ import styles from "./memory.module.css";
 
 const LABELS: Record<string, string> = {
   summary: "Where things stand",
+  reflection: "What she's noticed",
+  idea: "Things she wants to bring up",
   event: "Things that happened",
   trait: "About you",
   preference: "What you like",

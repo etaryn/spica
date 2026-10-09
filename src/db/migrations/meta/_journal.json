@@ -176,6 +176,13 @@
       "when": 1791494001910,
       "tag": "0024_user_mind",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791525325316,
+      "tag": "0025_wise_bullseye",
+      "breakpoints": true
     }
   ]
 }

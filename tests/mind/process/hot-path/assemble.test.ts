@@ -330,3 +330,24 @@ test("sections come in the two-mind order", () => {
   expect(system).toContain("### From your own life");
   expect(system).toContain("HERLIFE (today) (on your mind lately)");
 });
+
+describe("ideas slot", () => {
+  test("ideas render under their own heading after unanswered questions", () => {
+    const { system } = assemblePrompt({
+      ...base,
+      recentTurns: [],
+      openQuestions: ["where?"],
+      ideas: ["Ask about the audition."],
+    });
+    expect(system).toContain("## Things you want to bring up\n- Ask about the audition.");
+    expect(system.indexOf("## Things you want to bring up")).toBeGreaterThan(
+      system.indexOf("## They asked and you haven't answered yet"),
+    );
+  });
+
+  test("no ideas, no heading", () => {
+    expect(assemblePrompt({ ...base, recentTurns: [], ideas: [] }).system).not.toContain(
+      "bring up",
+    );
+  });
+});

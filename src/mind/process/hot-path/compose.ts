@@ -8,7 +8,8 @@
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
-import { liveSummary } from "@/db/repos/user/user-mind";
+import { ideaCutoff } from "@/mind/process/user/ideate";
+import { liveIdeas, liveSummary } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -45,6 +46,8 @@ export type Composed = {
   recalled: RecalledFact[];
   /** The self snapshot this reply was written from; null when none exists yet. */
   snapshotVersion: number | null;
+  /** Her ideas shown in this reply: each gets one chance, so the cold path retires them. */
+  offeredIdeas: string[];
   writeGuardLog: () => Promise<void>;
 };
 
@@ -236,6 +239,23 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         },
         null,
       );
+  // An idea gets one chance in a reply; a reach-out has its own reason, and a crisis has none.
+  const ideas =
+    inCrisis || input.reachOut
+      ? Promise.resolve([] as { id: string; content: string }[])
+      : bounded(
+          deps,
+          "ideas",
+          userId,
+          () =>
+            liveIdeas(
+              db,
+              userId,
+              ideaCutoff(clock.now(), config.user_mind.ideate.ttl_days),
+              config.user_mind.ideate.slot_max,
+            ),
+          [] as { id: string; content: string }[],
+        );
   const coreMemories = inCrisis
     ? Promise.resolve({ memories: [] as RetrievedFact[] })
     : bounded(
@@ -255,6 +275,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const retrieval = await retrieveFor(deps, userId, input, queryText, queryVector);
   const latestSnapshot = await snapshot;
   const herMemories = (await coreMemories).memories;
+  const shownIdeas = await ideas;
   const factualLine = await relationshipLinePromise;
   const gap = gapLine(
     earlier.at(-1)?.created_at ?? null,
@@ -276,6 +297,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     yourDay: await yourDay,
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,
+    ideas: shownIdeas.map((i) => i.content),
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     now: clock.now(),
@@ -313,6 +335,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     parts: splitParts(guarded.text, config.chat.max_parts),
     recalled: retrieval.recalled,
     snapshotVersion: latestSnapshot?.version ?? null,
+    offeredIdeas: shownIdeas.map((i) => i.id),
     writeGuardLog: guarded.writeLog,
   };
 }

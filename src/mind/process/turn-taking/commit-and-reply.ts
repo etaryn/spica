@@ -216,6 +216,7 @@ async function sendWhileTyping(
           turnIds: [...committed.turnIds, replyId],
           replyTurnId: replyId,
           recalled: reply.recalled,
+          offeredIdeas: reply.offeredIdeas,
         }),
       "cold_path",
     );

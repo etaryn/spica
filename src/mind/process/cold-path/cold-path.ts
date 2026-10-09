@@ -11,6 +11,7 @@ import type { Db } from "@/db/client";
 import { nearFacts } from "@/db/repos/user/facts";
 import { getTurnsByIds, turnsUpTo, type Turn } from "@/db/repos/user/session-log";
 import { listOpenThreads } from "@/db/repos/user/threads";
+import { retireIdeas } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
 import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
@@ -48,6 +49,10 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     if (turns.length === 0 || turns.every((t) => t.extracted)) return { status: "skipped" };
 
     const extraction = await extractExchange(deps, tx, job.userId, turns);
+
+    // Each idea she was shown gets one chance; idempotent, so a retried job changes nothing.
+    // ponytail: a cold path re-enqueued by the sweep carries no offered ideas, so they stay live until they expire
+    await retireIdeas(tx, job.userId, job.offeredIdeas ?? []);
 
     const crisis = turns.some((t) => t.safety_flag?.flagged);
     // A reach-out on its own is only her words: no user behaviour to score, no exchange tone.

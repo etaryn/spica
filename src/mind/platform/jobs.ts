@@ -35,6 +35,8 @@ export type ColdPathJob = {
   turnIds: string[];
   replyTurnId?: string;
   recalled?: RecalledFact[];
+  /** Her ideas the reply showed; the cold path retires them. */
+  offeredIdeas?: string[];
 };
 
 /** Stale unless `version` still equals `conversation_state.buffer_version` when it runs. */

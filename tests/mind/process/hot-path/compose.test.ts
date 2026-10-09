@@ -455,6 +455,43 @@ describe("composeReply", () => {
   });
 });
 
+describe("ideas slot", () => {
+  test("a reply shows the newest live idea and reports it offered; crisis and reach-outs don't", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "hey");
+    const idea = await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "idea",
+      content: "Ask how the audition went.",
+      embedding: vec(),
+      created_at: deps.clock.now(),
+      status: "open",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+
+    const reply = await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).toContain("## Things you want to bring up");
+    expect(reply.offeredIdeas).toEqual([idea.id]);
+
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    const crisis = await composeReply(deps, u, { turns: [turn], openQuestions: [], flag });
+    expect(crisis.offeredIdeas).toEqual([]);
+
+    const ro = await composeReachOut(
+      deps,
+      u,
+      { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
+      [turn],
+    );
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## Things you want to bring up");
+    expect(ro.offeredIdeas).toEqual([]);
+  });
+});
+
 describe("composeReachOut", () => {
   test("slot 7b with the candidate, candidate text as the query, guard kind reach_out", async () => {
     const deps = makeTestDeps();

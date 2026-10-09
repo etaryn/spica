@@ -2,7 +2,7 @@
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
  * empty: core values, who she is lately, how she is feeling, her day, you and them, where things
  * stand with them (her latest summary), what she remembers (about them, between you, what she has told them, from her own life), things to ask
- * about, unanswered questions, and why she is writing (for a reach-out). The live conversation
+ * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -29,6 +29,8 @@ export interface AssembleInput {
   gapMarkerMinHours?: number;
   /** The user's unanswered questions. */
   openQuestions?: string[];
+  /** Things she wants to bring up with them (her ideas); none in a crisis or a reach-out. */
+  ideas?: string[];
   /** Why she's writing first, and the trailing user-role cue the model answers. */
   reachOut?: { slot: string; cue: string } | null;
 }
@@ -51,6 +53,7 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),
+    section("Things you want to bring up", questionList(input.ideas)),
     // A reach-out always gets its heading, even when the slot text is empty.
     input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
   ].filter((s): s is string => s !== null);
@@ -98,6 +101,7 @@ function dueThreadList(retrieval: RetrievalResult): string | null {
     .join("\n");
 }
 
+/** A bullet per line, or nothing when there are none. */
 function questionList(questions: string[] | undefined): string | null {
   if (!questions?.length) return null;
   return questions.map((q) => `- ${q}`).join("\n");

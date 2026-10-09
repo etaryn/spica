@@ -4,6 +4,7 @@ import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
+import { getFact, insertFact } from "@/db/repos/user/facts";
 import { getParams } from "@/db/repos/user/relationship";
 import { getTurn, insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
@@ -502,4 +503,27 @@ test("an ordinary exchange records no run", async () => {
   await runColdPath(deps, job);
   const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
   expect(runs.rows[0]!.n).toBe(0);
+});
+
+test("ideas the reply offered are resolved, once, even when the job is retried", async () => {
+  const deps = depsWith();
+  const u = await createTestUser();
+  const idea = await insertFact(getTestDb(), u, {
+    subject: "shared",
+    kind: "idea",
+    content: "Ask how the audition went.",
+    embedding: vec(),
+    created_at: at(0),
+    status: "open",
+    salience: 0.6,
+    valence: 0,
+    confidence: 0.7,
+    source: "generated",
+  });
+  const { job } = await exchange(u, "hi", "hey", 1);
+  const withIdeas = { ...job, offeredIdeas: [idea.id] };
+  await runColdPath(deps, withIdeas);
+  await getTestDb().execute(sql`UPDATE session_log SET extracted = false`);
+  await runColdPath(deps, withIdeas);
+  expect((await getFact(getTestDb(), u, idea.id))!.status).toBe("resolved");
 });

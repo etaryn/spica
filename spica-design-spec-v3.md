@@ -1901,6 +1901,49 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B49.** `pnpm db:reset-self` checks the URL hostname only and skips
   `pool.end` on a throw (dev tool).
 
+### 25.10 Stakes (thesis review, 2026-10-09)
+Features that let the user escape consequences or make her over-forgiving
+(§1 thesis). Looked into once the prototype is built, or earlier when a phase
+touches the module. Items marked DECIDED or settled elsewhere are raised with
+Ethan, not changed.
+- **B72.** The memory view and per-fact forget. Decided by Ethan
+  (2026-10-09): users cannot edit her mind; only account deletion stays.
+  Still in the code (`src/app/memory/`, the Settings link) and the spec
+  (§6.1 user hard-delete of facts, reflections and ideas; §9.2; §12.5; §18
+  per-fact deletion; §19; §20 Phase 1). The view also exposes her private
+  summary, including how she feels about the user. Removing it makes B45 and
+  B66 moot.
+- **B73.** A crisis sets tension to 0 (§11.1), so one crisis-sounding message
+  permanently wipes a conflict. Rule 7 asks for friction to be suspended, not
+  erased: hold tension through `crisis_quiet_until` and restore it after (or
+  apply a large decay instead of a reset). Crisis support itself is unchanged.
+- **B74.** Habituation to mistreatment: `HomeostaticParam` judges values
+  against this user's slow baseline, so chronic hurt, tension or low trust
+  becomes "normal" and drops out of the relationship summary. Keep
+  baseline-relative effects for neutral params (`msgs_per_day`, maybe
+  warmth); judge hurt, tension and trust against fixed anchors.
+- **B75.** She starts a make-up (and may reach out for it) after hurt the
+  user caused, against her value "doesn't chase or beg". Rule 2 is DECIDED;
+  ask whether the make-up should depend on who caused the hurt (her fault:
+  she makes up; theirs: she waits for an apology).
+- **B76.** At or above `availability.override_closeness` she always drops
+  her day to reply, against "she prioritises herself". Consider a cap on the
+  override or a residual delay.
+- **B77.** `interest_alignment: adjacent` shades her interests toward the
+  user's at reply time: mild mirroring against "not a mirror". Settled
+  (§7.5); raise only if review runs show her agreeing her way into the
+  user's tastes.
+- **B78.** An ending is retractable and continued contact clears it (§11.1).
+  Check that an attempted ending still leaves hurt behind, so ending and
+  taking it back isn't free.
+- **B79.** Reconcile supersedes on contradiction, so a denial ("I never said
+  that") could overwrite a shared moment or the cause of her hurt. Facts
+  about the user should stay replaceable; what she remembers happening
+  between them should not be superseded by the user's say-so. Check the
+  current behaviour.
+- **B80.** Deleting the account and signing up again resets the relationship.
+  Accepted: account deletion is a data right.
+
 ---
 
 ## 26. Decision log

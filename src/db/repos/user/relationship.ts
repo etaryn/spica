@@ -244,3 +244,11 @@ export async function resetUnanswered(db: Db, userId: string): Promise<void> {
     .set({ unanswered_reach_outs: 0 })
     .where(eq(relationship.user_id, userId));
 }
+
+/** She reached out to make up: the make-up has been offered, so a reply won't offer it again. */
+export async function markMakeUpOffered(db: Db, userId: string): Promise<void> {
+  await db
+    .update(relationship)
+    .set({ make_up_state: "offered" })
+    .where(and(eq(relationship.user_id, userId), eq(relationship.make_up_state, "due")));
+}

@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { runReachOutSend } from "@/mind/process/outreach/send";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
+import { getFact, insertFact } from "@/db/repos/user/facts";
+import { usedTopics } from "@/db/repos/user/reach-out";
 import { getState } from "@/db/repos/user/conversation-state";
 import { getReachOutLog, insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, getRelationshipRow } from "@/db/repos/user/relationship";
@@ -10,7 +12,7 @@ import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { conversation_state, reach_out_log, relationship } from "@/db/schema";
 import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
-import { closeTestDb, createTestUser, resetDb } from "../../../helpers/db";
+import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -28,7 +30,9 @@ const winner = {
   filtered: null,
 };
 
-async function setup(opts: { history?: boolean; sendAt?: Date } = {}) {
+async function setup(
+  opts: { history?: boolean; sendAt?: Date; winner?: Record<string, unknown> } = {},
+) {
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
   deps.clock.set(now);
   const u = await createTestUser();
@@ -43,11 +47,11 @@ async function setup(opts: { history?: boolean; sendAt?: Date } = {}) {
     });
   }
   const logId = await insertReachOutLog(deps.db, u, {
-    candidates: [winner],
-    winner,
+    candidates: [opts.winner ?? winner],
+    winner: opts.winner ?? winner,
     gate_results: [],
     status: "scheduled",
-    topic: winner.topic,
+    topic: (opts.winner ?? winner).topic as string,
     send_at: opts.sendAt ?? now,
     created_at: now,
   });
@@ -327,4 +331,84 @@ test("compose failure → dropped compose_failed, nothing sent", async () => {
   expect((await getReachOutLog(deps.db, u, logId))?.gate_results).toMatchObject({
     dropped: "compose_failed",
   });
+});
+
+async function ideaWinner(deps: ReturnType<typeof makeTestDeps>, u: string) {
+  const idea = await insertFact(deps.db, u, {
+    subject: "shared",
+    kind: "idea",
+    content: "send her that old film",
+    embedding: vec(),
+    created_at: now,
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  return {
+    idea,
+    w: {
+      ...winner,
+      kind: "user_idea",
+      topic: `idea:${idea.id}`,
+      text: idea.content,
+      factId: idea.id,
+    },
+  };
+}
+
+test("a winning idea is resolved with the send, and its topic is used", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  deps.clock.set(now);
+  const u = await createTestUser();
+  const { idea, w } = await ideaWinner(deps, u);
+  await ensureRelationship(deps.db, u, now, deps.config.relationship);
+  const logId = await insertReachOutLog(deps.db, u, {
+    candidates: [w],
+    winner: w,
+    gate_results: [],
+    status: "scheduled",
+    topic: w.topic,
+    send_at: now,
+    created_at: now,
+  });
+  await insertTurn(deps.db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "user",
+    text: "hi",
+    created_at: new Date(now.getTime() - 86_400_000),
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("sent");
+  expect((await getFact(deps.db, u, idea.id))!.status).toBe("resolved");
+  expect(await usedTopics(deps.db, u)).toContain(w.topic);
+});
+
+test("a dropped reach-out leaves the idea live", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  deps.clock.set(now);
+  const u = await createTestUser();
+  const { idea, w } = await ideaWinner(deps, u);
+  await ensureRelationship(deps.db, u, now, deps.config.relationship);
+  const logId = await insertReachOutLog(deps.db, u, {
+    candidates: [w],
+    winner: w,
+    gate_results: [],
+    status: "scheduled",
+    topic: w.topic,
+    send_at: now,
+    created_at: now,
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped"); // no history
+  expect((await getFact(deps.db, u, idea.id))!.status).toBe("open");
+});
+
+test("a make-up reach-out moves the make-up from due to offered", async () => {
+  const { deps, u, logId } = await setup({
+    winner: { ...winner, kind: "make_up", topic: "make_up:x", text: "sorry", threadId: null },
+  });
+  await deps.db.execute(sql`UPDATE relationship SET make_up_state = 'due' WHERE user_id = ${u}`);
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("sent");
+  expect((await getRelationshipRow(deps.db, u))!.make_up_state).toBe("offered");
 });

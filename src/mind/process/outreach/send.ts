@@ -14,7 +14,8 @@ import {
   updateReachOutLog,
   usedTopics,
 } from "@/db/repos/user/reach-out";
-import { incrementUnanswered } from "@/db/repos/user/relationship";
+import { incrementUnanswered, markMakeUpOffered } from "@/db/repos/user/relationship";
+import { retireIdeas } from "@/db/repos/user/user-mind";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
 import type { Db } from "@/db/client";
@@ -142,6 +143,12 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
           send_at: insertAt,
         });
         await incrementUnanswered(tx, userId);
+        // Same transaction as the turn: an idea has had its chance, a make-up is offered
+        // (so a later reply doesn't offer it again).
+        if (winner.kind === "user_idea" && winner.factId) {
+          await retireIdeas(tx, userId, [winner.factId]);
+        }
+        if (winner.kind === "make_up") await markMakeUpOffered(tx, userId);
 
         // `sending_since` makes a user message arriving mid-bubbles buffer behind them.
         return {

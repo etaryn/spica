@@ -1027,7 +1027,8 @@ model output, is traced `failed`; the next still runs).
   fact (salience `user_mind.model.salience` 0.6, confidence 0.6) that supersedes the previous
   live one under the per-user advisory lock the summary uses; each belief a `belief` fact
   (salience `belief_salience` 0.5, `source_ref` `user_model:<traceId>`). A belief more similar
-  than `dedupe_similarity` (0.92) to a live belief is dropped (listed in the trace); `replaces`
+  than `dedupe_similarity` (0.92) to a live belief is dropped (listed in the trace), except
+  the belief it replaces (a correction can embed close to what it corrects); `replaces`
   supersedes a belief only when it names a live one the loop was shown, otherwise the belief is
   simply inserted. A read or belief is marked `sensitive` when it read a sensitive memory,
   summary, reflection, previous read or belief.

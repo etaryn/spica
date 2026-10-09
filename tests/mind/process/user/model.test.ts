@@ -124,20 +124,28 @@ test("a new model supersedes the old; a belief replaces only one it was shown an
   expect(shown).toEqual([{ id: old!.id, text: "They avoid conflict." }]);
 });
 
-test("a belief that repeats a live one is dropped, even when it says it replaces it", async () => {
+test("a belief that repeats a live one is dropped, unless it names the belief it corrects", async () => {
   const { deps, userId, run } = await setup();
   const inputs = await loadRunInputs(deps, userId);
   deps.llm.handlers.user_model = sequence(read([{ text: "They avoid conflict.", replaces: null }]));
   await userModel(deps, run, inputs);
   const [old] = await liveBeliefs(deps.db, userId, 10);
+
+  // A correction can embed close to what it corrects ("They don't avoid conflict."); the same
+  // text stands in for that here. Naming the old belief makes it a revision, not a repeat.
   deps.llm.handlers.user_model = sequence(
     read([{ text: "They avoid conflict.", replaces: old!.id }]),
   );
   await userModel(deps, run, inputs);
-  const live = await liveBeliefs(deps.db, userId, 10);
-  expect(live.map((b) => b.id)).toEqual([old!.id]);
+  const [revised] = await liveBeliefs(deps.db, userId, 10);
+  expect(revised!.id).not.toBe(old!.id);
+  expect((await liveBeliefs(deps.db, userId, 10)).map((b) => b.id)).toEqual([revised!.id]);
+
+  deps.llm.handlers.user_model = sequence(read([{ text: "They avoid conflict.", replaces: null }]));
+  await userModel(deps, run, inputs);
+  expect((await liveBeliefs(deps.db, userId, 10)).map((b) => b.id)).toEqual([revised!.id]);
   const trace = await getTestDb().execute(
-    sql`SELECT outputs FROM user_loop_trace WHERE loop = 'user_model' ORDER BY created_at DESC, id LIMIT 2`,
+    sql`SELECT outputs FROM user_loop_trace WHERE loop = 'user_model' ORDER BY created_at DESC, id`,
   );
   expect(
     trace.rows.map((r) => r.outputs as { dropped: string[] }).some((o) => o.dropped.length === 1),

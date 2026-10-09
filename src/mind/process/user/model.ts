@@ -116,7 +116,10 @@ export async function userModel(
       };
       for (const [i, belief] of out.beliefs.entries()) {
         const embedding = beliefVecs[i]!;
-        const near = await nearestBeliefSimilarity(tx, userId, embedding);
+        // Only a belief she was shown, and still holds, can be replaced. A correction can embed
+        // close to what it corrects, so that belief is no duplicate of it.
+        const replaces = belief.replaces && shown.has(belief.replaces) ? belief.replaces : null;
+        const near = await nearestBeliefSimilarity(tx, userId, embedding, replaces);
         if (near !== null && near > settings.dedupe_similarity) {
           written.dropped.push(belief.text);
           continue;
@@ -136,13 +139,8 @@ export async function userModel(
           source_ref: `user_model:${ctx.traceId}`,
         });
         written.belief_ids.push(row.id);
-        // Only a belief she was shown, and still holds, can be replaced.
-        if (
-          belief.replaces &&
-          shown.has(belief.replaces) &&
-          (await supersedeBelief(tx, userId, belief.replaces, row.id))
-        )
-          written.superseded_ids.push(belief.replaces);
+        if (replaces && (await supersedeBelief(tx, userId, replaces, row.id)))
+          written.superseded_ids.push(replaces);
       }
       return written;
     });

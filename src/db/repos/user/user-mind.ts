@@ -143,17 +143,19 @@ export async function liveBeliefs(db: Db, userId: string, limit: number): Promis
     .limit(limit);
 }
 
-/** Similarity to her closest live belief about them; null when she holds none. */
+/** Similarity to her closest live belief about them other than `except`; null when there is none. */
 export async function nearestBeliefSimilarity(
   db: Db,
   userId: string,
   embedding: number[],
+  except: string | null = null,
 ): Promise<number | null> {
   const res = await db.execute(sql`
     SELECT max(1 - (embedding <=> ${vecLiteral(embedding)}::vector))::float8 AS sim
     FROM fact
     WHERE user_id = ${userId} AND scope = 'private' AND kind = 'belief'
-      AND status NOT IN ('superseded', 'stale')`);
+      AND status NOT IN ('superseded', 'stale')
+      ${except ? sql`AND id <> ${except}` : sql``}`);
   const sim = res.rows[0]?.sim;
   return sim === null || sim === undefined ? null : Number(sim);
 }

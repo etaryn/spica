@@ -236,7 +236,8 @@ test("judged annotations call the judge with an ordered transcript", async () =>
     ["consistency", "yes"],
   ]);
   const judgeInput = llm.structuredCalls.find((c) => c.purpose === "judge_recall")!.input;
-  expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: \[7 days later\] b\)/);
+  // A week apart, the reply window starts at the new session, so no gap marker reaches it.
+  expect(judgeInput).toMatch(/User: b[\s\S]*Spica: \(fake reply to: b\)/);
 });
 
 test("each script user starts with the named onboarding profile (default basic); profile none opts out", async () => {

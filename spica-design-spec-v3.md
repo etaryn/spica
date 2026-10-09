@@ -1358,9 +1358,9 @@ match.
 - **User (Built 9a, 9b):** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` (3) per user per local date, so cost scales
   with what happens, not with users or time. **Built 9b:** a batch is three
-  calls (summarise, reflect, ideate), so at most 9 per user per day. Each user loop run writes a
-  `user_loop_trace` with tokens and cost from `core.prices`. Idle users cost nothing beyond
-  the built per-user ticks (relationship, outreach), which are code-only
+  calls (summarise, reflect, ideate), so at most 9 per user per day. Each
+  user loop run writes a `user_loop_trace` with tokens and cost from
+  `core.prices`. Idle users cost nothing beyond the built per-user ticks (relationship, outreach), which are code-only
   except a reach-out's composition.
 - **Reply:** one reply-model call per reply (one more and a guard check
   when the guard is on).

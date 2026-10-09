@@ -8,7 +8,6 @@
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
-import { ideaCutoff } from "@/mind/process/user/ideate";
 import { liveIdeas, liveSummary } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
@@ -26,6 +25,7 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
+import { ideaCutoff } from "@/mind/process/user/ideate";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { z } from "zod";

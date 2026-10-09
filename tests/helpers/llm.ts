@@ -22,8 +22,8 @@ export const CANARY = /CANARY-[a-z0-9]+/;
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
  * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event and its
  * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot, a user summary,
- * a reflection and an idea about a user, and a drift finding), so a canary that reaches any input spreads to that step's output, including the
- * user's relationship.
+ * a reflection and an idea about a user, and a drift finding), so a canary that reaches any input
+ * spreads to that step's output, including the user's relationship.
  */
 export class CapturingLLM extends FakeLLMProvider {
   seen: { kind: "reply" | "structured"; purpose: string; text: string }[] = [];

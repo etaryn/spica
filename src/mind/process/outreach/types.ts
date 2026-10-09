@@ -1,7 +1,7 @@
 /**
  * The shapes of outreach: the candidate reasons she might write first (a thread, making up, the
- * user's event, her own day, a thought of her own, an idea she
- * had about them, a check-in), what the candidates are built from, and the send gate.
+ * user's event, her own day, a thought of her own, an idea she had about them, a check-in), what
+ * the candidates are built from, and the send gate.
  */
 
 /** Also the tie-break order between equal scores. */

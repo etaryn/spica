@@ -320,10 +320,11 @@ async function encodeFacts(
         const inserted = await insertFact(db, userId, { ...row, status: "open" });
         await setFactStatus(db, userId, target.id, "superseded", inserted.id);
         outcome.factIds.push(inserted.id);
+        // Only news that stands counts as salient: an already-overridden fact is no big event.
+        outcome.insertedSaliences.push(fact.salience);
       }
       outcome.superseded += 1;
       outcome.inserted += 1;
-      outcome.insertedSaliences.push(fact.salience);
       continue;
     }
 

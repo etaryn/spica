@@ -162,26 +162,29 @@ test("DST fall-back date (America/New_York) gets exactly one tick across 24 hour
   expect(sequence.at(-1)).toBe("2026-11-01");
 });
 
-test("a band crossing from fade records a tick run; a quiet tick records none", async () => {
+test("a band crossing from fade records a tick run; a quiet or ended relationship records none", async () => {
   const deps = makeTestDeps();
   const db = getTestDb();
   const seeded = new Date("2026-01-04T10:00:00Z");
   const now = new Date("2026-01-06T10:00:00Z"); // 48 h later: one hurt half-life
-  async function withHurt(value: number) {
+  async function withHurt(value: number, ended = false) {
     const u = await createTestUser();
     await rel.ensureRelationship(db, u, seeded, deps.config.relationship);
     const row = await rel.getRelationshipRow(db, u);
     const params = await rel.getParams(db, u);
+    const state = rel.toRelationshipState(row!);
     await rel.saveRelationship(db, u, {
-      state: rel.toRelationshipState(row!),
+      state: ended ? { ...state, status: "ended_by_user", ended_at: seeded } : state,
       params: { ...params, hurt: { ...params.hurt, value, updated_at: seeded } },
     });
     return u;
   }
   const crossing = await withHurt(0.3); // fades to ~0.15, under the 0.25 band
   const quiet = await withHurt(0.1); // fades to ~0.05, crosses nothing
+  const ended = await withHurt(0.3, true); // crosses the band, but nobody is talking to her
   await tickUser(deps, crossing, now);
   await tickUser(deps, quiet, now);
+  await tickUser(deps, ended, now);
   const runs = await db.execute(sql`SELECT user_id, source_ref, triggers FROM user_mind_run`);
   expect(runs.rows).toHaveLength(1);
   expect(runs.rows[0]).toMatchObject({ user_id: crossing, source_ref: "tick:2026-01-06" });

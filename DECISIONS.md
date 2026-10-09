@@ -95,3 +95,5 @@ code itself.
 | 2026-10-09 | The `user_mind_run` sweep rides on `cold_path_sweep` | It already scans per-user pending work on a schedule; a new job would add a schedule for one query. |
 | 2026-10-09 | The `user_mind_run` sweep reuses `cold_path.sweep_batch` | Same sweep job, same batch bound; a key of its own would bound the same pass twice. |
 | 2026-10-09 | The memory view lists the live summary under "Where things stand" | It is about them, so they can see and hard-delete it like any other memory. |
+| 2026-10-09 | The daily tick records no big event for a relationship the user ended | Params still drift after an ending, but nothing is happening between them; a run would spend calls on a relationship only the user can reopen. |
+| 2026-10-09 | A fact stored already superseded (a late contradiction of a newer fact) fires no `salient_fact` | It was overridden before it was written, so it isn't news worth a summary. |

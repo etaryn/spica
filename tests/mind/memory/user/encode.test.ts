@@ -193,6 +193,8 @@ describe("encodeExtraction", () => {
       }),
     );
     expect(out).toMatchObject({ inserted: 2, superseded: 1 });
+    // The outdated fact is not news: only the tea fact can fire a salient-fact trigger.
+    expect(out.insertedSaliences).toHaveLength(1);
     expect((await facts.getFact(db(), u, newer.id))!).toMatchObject({
       status: "open",
       superseded_by: null,

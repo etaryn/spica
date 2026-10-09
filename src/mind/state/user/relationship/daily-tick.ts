@@ -84,6 +84,8 @@ export async function tickUser(
       now,
     });
 
+    // Params drifting after the user ended it are no event: nothing is happening between them.
+    if (transition.state.status === "ended_by_user") return null;
     return recordBigEvents(
       deps,
       tx,

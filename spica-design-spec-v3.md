@@ -868,11 +868,12 @@ is backlog (B63). Candidates (thresholds in
   least `user_mind.triggers.param_jump` (0.15) in one exchange. Exchange only.
 - `param_band`: one of those five, or closeness, crosses a band edge in
   `user_mind.triggers.bands` (0.25, 0.5, 0.75). Exchange and the daily
-  relationship tick, so slow absence drift can fire it too. Closeness fires
-  only on bands.
+  relationship tick, so slow absence drift can fire it too, except after the
+  user has ended the relationship. Closeness fires only on bands.
 - `salient_fact`: a newly inserted fact with salience at least
   `user_mind.triggers.fact_salience` (0.8). Exchange only; a merge into an
-  existing fact doesn't count.
+  existing fact doesn't count, nor does a fact stored already superseded by a
+  newer one.
 - `make_up_done`: a make-up flow completes. Exchange only.
 
 Exchange triggers fire only for an exchange with a user turn: a reach-out
@@ -1468,7 +1469,7 @@ two minds or at reply time.
 | 8b. World and hourly thinking | Goal-selected events, same-tick plan resolution, B51 target closure, anticipation, rumination, downtime wandering and hourly `core_mind_tick`; deterministic exit and canary (`tests/exit/phase-8b.test.ts`, `tests/exit/mind-split.test.ts`). Full fourteen-day Phase 8 exit remains 8d. |
 | 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
 | 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
-| 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 967 tests at close |
+| 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 973 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9a are built):**
 
@@ -1716,6 +1717,10 @@ and life tick) were dropped; the replacement is designed fresh.
   carried through `previous`); retire or regenerate the summary when a
   forgotten fact was among its inputs (`user_loop_trace.inputs.fact_ids`).
   *Phase 9c.*
+- **B67.** `user_summarise` reads at most `max_facts` (20) facts by salience;
+  a lower-salience fact left out of a busy run is older than the next run's
+  cutoff and never reaches a summary. Carry unread facts forward (cutoff from
+  the oldest fact not yet read) if summaries miss things. *Tuning.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

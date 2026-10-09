@@ -13,6 +13,7 @@ import {
   CORE_WORLD_TICK_QUEUE,
   OUTREACH_TICK_QUEUE,
   USER_MIND_RUN_QUEUE,
+  USER_MIND_TICK_QUEUE,
   RELATIONSHIP_TICK_QUEUE,
   SWEEP_QUEUE,
   TURN_SWEEP_QUEUE,
@@ -60,6 +61,7 @@ export async function ensureSystemQueues(boss: PgBoss): Promise<void> {
     CORE_MIND_TICK_QUEUE,
     CORE_NIGHTLY_QUEUE,
     OUTREACH_TICK_QUEUE,
+    USER_MIND_TICK_QUEUE,
   ]) {
     await boss.createQueue(q, { retryLimit: 0 });
     await boss.updateQueue(q, { retryLimit: 0 });

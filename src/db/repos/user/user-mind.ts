@@ -14,7 +14,10 @@ export type NewUserLoopTrace = typeof user_loop_trace.$inferInsert;
 export type Trigger =
   | { kind: "param_jump" | "param_band"; param: string; from: number; to: number }
   | { kind: "salient_fact"; salience: number }
-  | { kind: "make_up_done" };
+  | { kind: "make_up_done" }
+  | { kind: "long_conversation"; session_id: string; user_turns: number }
+  | { kind: "crisis_passed" }
+  | { kind: "stale_summary"; age_hours: number | null };
 
 /**
  * Null when this source already recorded a run (a retried exchange). Runs past `cap` on the

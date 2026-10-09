@@ -529,10 +529,13 @@ const prompts = z.object({
 const userMind = z.object({
   max_triggers_per_day: positiveInt,
   sweep_after_minutes: countFromZero,
+  tick: z.object({ cron, lookback_hours: z.number().positive() }),
   triggers: z.object({
     param_jump: unit,
     bands: z.array(unit).min(1),
     fact_salience: unit,
+    long_conversation: z.object({ min_user_turns: positiveInt, quiet_minutes: countFromZero }),
+    stale_summary: z.object({ max_age_hours: z.number().positive(), lead_minutes: countFromZero }),
   }),
   summarise: z.object({
     max_facts: positiveInt,

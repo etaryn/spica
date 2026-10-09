@@ -43,6 +43,12 @@ export function triggerText(t: Trigger): string {
       return "they told you something important";
     case "make_up_done":
       return "you two made up after a hurt";
+    case "long_conversation":
+      return "you two just had a long conversation";
+    case "crisis_passed":
+      return "they went through something hard, and it has eased";
+    case "stale_summary":
+      return "you're about to write to them and haven't taken stock in a while";
   }
 }
 

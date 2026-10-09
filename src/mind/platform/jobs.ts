@@ -19,6 +19,7 @@ export const CORE_NIGHTLY_QUEUE = "core_nightly";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 export const USER_MIND_RUN_QUEUE = "user_mind_run";
+export const USER_MIND_TICK_QUEUE = "user_mind_tick";
 
 /** One batch of her thinking about a user, recorded as `user_mind_run` row `runId`. */
 export type UserMindRunJob = { runId: string };

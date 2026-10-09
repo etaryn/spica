@@ -463,7 +463,14 @@
   "user_mind": {
     "max_triggers_per_day": 3,
     "sweep_after_minutes": 10,
-    "triggers": { "param_jump": 0.15, "bands": [0.25, 0.5, 0.75], "fact_salience": 0.8 },
+    "tick": { "cron": "25 * * * *", "lookback_hours": 24 },
+    "triggers": {
+      "param_jump": 0.15,
+      "bands": [0.25, 0.5, 0.75],
+      "fact_salience": 0.8,
+      "long_conversation": { "min_user_turns": 20, "quiet_minutes": 30 },
+      "stale_summary": { "max_age_hours": 72, "lead_minutes": 5 }
+    },
     "summarise": {
       "max_facts": 20,
       "max_threads": 5,

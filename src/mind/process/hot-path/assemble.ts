@@ -1,7 +1,7 @@
 /**
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
  * empty: core values, who she is lately, how she is feeling, her day, you and them, where things
- * stand with them (her latest summary), what she remembers (about them, between you, what she has told them, from her own life), things to ask
+ * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life), things to ask
  * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
@@ -18,6 +18,8 @@ export interface AssembleInput {
   relationshipSummary: string | null;
   /** Her latest summary of where things stand with them; null before one exists or in a crisis. */
   summary?: { where_things_stand: string; whats_live: string; how_i_feel: string } | null;
+  /** Her latest read on them; null before one exists or in a crisis. */
+  read?: { how_they_are: string; what_they_want: string; what_lands: string } | null;
   /** Her day: what she's doing now and next. */
   yourDay?: string | null;
   retrieval: RetrievalResult;
@@ -57,6 +59,18 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
       "Where things stand with them",
       input.summary
         ? [input.summary.where_things_stand, input.summary.whats_live, input.summary.how_i_feel]
+            .map((line) => `- ${line}`)
+            .join("\n")
+        : null,
+    ),
+    section(
+      "Your read on them",
+      input.read
+        ? [
+            `How they are: ${input.read.how_they_are}`,
+            `What they want: ${input.read.what_they_want}`,
+            `What lands: ${input.read.what_lands}`,
+          ]
             .map((line) => `- ${line}`)
             .join("\n")
         : null,

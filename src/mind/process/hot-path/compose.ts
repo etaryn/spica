@@ -8,7 +8,13 @@
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
-import { latestNonSensitiveSummary, liveIdeas, liveSummary } from "@/db/repos/user/user-mind";
+import {
+  latestNonSensitiveModel,
+  latestNonSensitiveSummary,
+  liveIdeas,
+  liveModel,
+  liveSummary,
+} from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -26,6 +32,7 @@ import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
 import { ideaCutoff } from "@/mind/process/user/ideate";
+import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { z } from "zod";
@@ -243,6 +250,22 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         },
         null,
       );
+  const read = inCrisis
+    ? Promise.resolve(null)
+    : bounded(
+        deps,
+        "read",
+        userId,
+        async (): Promise<AssembleInput["read"]> => {
+          // A reach-out can surface as a push notification, so it never reads a crisis.
+          const row = input.reachOut
+            ? await latestNonSensitiveModel(db, userId)
+            : await liveModel(db, userId);
+          const parsed = modelPayload.safeParse(row?.payload);
+          return parsed.success ? parsed.data : null;
+        },
+        null,
+      );
   // An idea gets one chance in a reply; a reach-out has its own reason, and a crisis has none.
   const ideas =
     inCrisis || input.reachOut
@@ -298,6 +321,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
     summary: await summary,
+    read: await read,
     yourDay: await yourDay,
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,

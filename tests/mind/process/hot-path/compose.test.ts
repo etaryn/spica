@@ -6,7 +6,7 @@ import { ReplyFailedError } from "@/mind/platform/errors";
 import { messageToCheck } from "@/mind/process/guard/guard";
 import { insertFact } from "@/db/repos/user/facts";
 import { fact as factTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
@@ -496,6 +496,56 @@ describe("ideas slot", () => {
 });
 
 describe("composeReachOut", () => {
+  test("her read on them: a reply reads the live one, a reach-out the newest plain one, a crisis none, a bad payload nothing", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "evening");
+    const model = (how: string, sensitive: boolean, at: Date, payload?: unknown) =>
+      insertFact(getTestDb(), u, {
+        subject: "user",
+        kind: "model",
+        content: how,
+        payload: payload ?? {
+          how_they_are: how,
+          what_they_want: "W.",
+          what_lands: "L.",
+          ...(sensitive ? { sensitive: true } : {}),
+        },
+        embedding: vec(),
+        created_at: at,
+        status: sensitive ? "open" : "superseded",
+        salience: 0.6,
+        valence: 0,
+        confidence: 0.6,
+        source: "generated",
+      });
+    await model("Plain read.", false, new Date(deps.clock.now().getTime() - 60_000));
+    await model("Crisis read.", true, deps.clock.now());
+
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).toContain("- How they are: Crisis read.");
+
+    await composeReachOut(
+      deps,
+      u,
+      { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
+      [turn],
+    );
+    expect(deps.llm.calls.at(-1)!.system).toContain("- How they are: Plain read.");
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("Crisis read.");
+
+    const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag });
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("Your read on them");
+
+    await model("bad", false, new Date(deps.clock.now().getTime() + 1), { how_they_are: 7 });
+    await getTestDb().execute(sql`UPDATE fact SET status = 'open' WHERE content = 'bad'`);
+    await getTestDb().execute(
+      sql`UPDATE fact SET status = 'superseded' WHERE content = 'Crisis read.'`,
+    );
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("Your read on them");
+  });
   test("a reach-out reads the newest summary that isn't sensitive; a reply reads the live one", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();

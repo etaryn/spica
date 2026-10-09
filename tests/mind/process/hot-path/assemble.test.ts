@@ -96,6 +96,21 @@ describe("assemblePrompt", () => {
 });
 
 describe("the summary section", () => {
+  test("her read on them follows the summary, three lines", () => {
+    const { system } = assemblePrompt({
+      ...base,
+      summary: { where_things_stand: "Stand.", whats_live: "Live.", how_i_feel: "Feel." },
+      read: { how_they_are: "Tired.", what_they_want: "Space.", what_lands: "Jokes." },
+      recentTurns: [{ role: "user", text: "hi" }],
+    });
+    const i = system.indexOf(
+      "## Your read on them\n- How they are: Tired.\n- What they want: Space.\n- What lands: Jokes.",
+    );
+    expect(i).toBeGreaterThan(system.indexOf("## Where things stand with them"));
+    expect(assemblePrompt({ ...base, read: null, recentTurns: [] }).system).not.toContain(
+      "Your read on them",
+    );
+  });
   test("sits between you-and-them and what you remember", () => {
     const { system } = assemblePrompt({
       ...base,

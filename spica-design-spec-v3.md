@@ -335,7 +335,8 @@ Every table here references `user(id) ON DELETE CASCADE`.
     inference, and a turn fact must not merge into or supersede it. An idea
     (`shared`, `open` until used, then `resolved`) is left out of retrieval,
     reconcile and decay, because it has its own reply slot (§10.3) and
-    expires by age (§9.5). Neither feeds a later summarise, reflect or ideate
+    expires by age (§9.5); a reach-out for an idea doesn't force it in
+    either, so it shows once, as why she's writing. Neither feeds a later summarise, reflect or ideate
     as a new memory, so a loop never reads its own output. The memory view
     lists both and the user can hard-delete them.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
@@ -1052,8 +1053,10 @@ when the guard is on.
       cramming). **One chance:** `Composed.offeredIdeas` carries the ids shown;
       the cold path of the sent reply moves each one still `open` to
       `resolved` in its transaction, and a reach-out that wins with an idea
-      resolves it in the send transaction. A reply composed but never sent
-      enqueues no cold path, so its idea stays live
+      resolves it in the send transaction (§13). Ideas stay out of retrieval
+      for reach-outs too: a `user_idea` reach-out shows its idea only under
+      "Why you're writing". A reply composed but never sent enqueues no cold
+      path, so its idea stays live
    8. recent turns (short-term; leads per V9)
 3. **Generate** with the reply model. She uses at most one or two memories
    per reply, only when natural.
@@ -1296,6 +1299,14 @@ Code: `src/mind/process/outreach/`.
   under the `conversation_state` lock (a crisis or new message wins), paces
   like a reply, delivers with push, and enqueues the cold path. Any user
   message answers the last reach-out and resets the unanswered count.
+  **Built 9b:** the precheck and the locked recheck count a winner that is no
+  longer live as a used topic and drop the reach-out: a `user_idea` whose
+  idea is no longer `open` (a reply offered it), was deleted, or is older
+  than `user_mind.ideate.ttl_days`; a `make_up` no longer `due`. Under the
+  lock, once every other check has passed, the send resolves the idea or
+  marks the make-up `offered` in the transaction that inserts the turn, and
+  drops if a concurrent write got there first; a reach-out dropped for any
+  other reason leaves the idea open and the make-up due.
 
 ---
 
@@ -1536,7 +1547,7 @@ two minds or at reply time.
 | 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
 | 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
 | 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 973 tests at close |
-| 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1003 tests at close |
+| 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1010 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8, 9a and 9b are built):**
 
@@ -1781,19 +1792,26 @@ and life tick) were dropped; the replacement is designed fresh.
   path and the relationship tick can race past it for one user. Take a
   per-user lock around count-then-insert. *Later.*
 - **B66.** Forgetting a fact leaves its content in the live summary (and
-  carried through `previous`); retire or regenerate the summary when a
-  forgotten fact was among its inputs (`user_loop_trace.inputs.fact_ids`).
+  carried through `previous`), and in any reflection or idea written from it;
+  retire or regenerate what a forgotten fact was among the inputs of
+  (`user_loop_trace.inputs.fact_ids`).
   *Phase 9c.*
 - **B67.** `user_summarise` reads at most `max_facts` (20) facts by salience;
   a lower-salience fact left out of a busy run is older than the next run's
   cutoff and never reaches a summary. Carry unread facts forward (cutoff from
   the oldest fact not yet read) if summaries miss things. *Tuning.*
-- **B68.** An idea offered in a reply whose cold path is later re-enqueued by
-  the sweep stays live until it expires (retirement rides on the cold path job
-  that carried the ids). *Later.*
+- **B68.** An idea offered in a reply whose cold path is lost (the enqueue
+  failed, the retries ran out, or the sweep re-enqueued it without the ids)
+  stays live until it expires: retirement rides on the cold path job that
+  carried the ids. *Later.*
 - **B69.** A run recorded while an earlier run for the same user is still
   running could take that run's late reflection as its own in ideate (the
   "this run's reflection" test is by creation time). *Later.*
+- **B70.** Ideate may re-propose an idea she already brought up:
+  `already_planned` lists only live ideas. Pass recently resolved ideas too.
+  *Tuning.*
+- **B71.** Reflect and ideate call the model even with no new memories (a
+  param-only trigger); skip them when there's nothing new. *Tuning.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
@@ -1802,7 +1820,7 @@ and life tick) were dropped; the replacement is designed fresh.
   *Tuning.*
 - **B25.** `her_day` scores 0.24 against threshold 0.2; changing either
   silently turns it off. Tune weights, threshold and salience together.
-  *Tuning.* The same holds for `core_thought`: weight 0.5 × medium salience
+  The same holds for `core_thought`: weight 0.5 × medium salience
   (0.4) is 0.20, on the threshold, so her own musings rarely send anything.
   *Tuning.*
 - **B27.** Stale `scheduled` rows are never closed (close them in the tick or

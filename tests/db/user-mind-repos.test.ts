@@ -1,7 +1,14 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { fact } from "@/db/schema";
-import { candidateFacts, insertFact, nearFacts } from "@/db/repos/user/facts";
+import {
+  candidateFacts,
+  getFact,
+  insertFact,
+  listFactsForSummary,
+  nearFacts,
+} from "@/db/repos/user/facts";
+import { adminDecayFacts } from "@/db/repos/admin/decay";
 import { setTimezone } from "@/db/repos/user/users";
 import {
   latestNonSensitiveSummary,
@@ -199,4 +206,44 @@ test("latestNonSensitiveSummary skips sensitive summaries, live or not", async (
   await put(u, "summary", new Date(T0.getTime() + 60_000), "crisis", { sensitive: true });
   expect((await latestNonSensitiveSummary(getTestDb(), u))?.id).toBe(plain.id);
   expect(await latestNonSensitiveSummary(getTestDb(), await createTestUser("other"))).toBeNull();
+});
+
+test("her model stays out of retrieval and decay; gists, models and beliefs are never reconcile neighbours or new memories", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const old = new Date("2025-12-01T09:00:00Z");
+  const add = (kind: "episode" | "model" | "belief") =>
+    insertFact(db, u, {
+      subject: kind === "episode" ? "shared" : "user",
+      kind,
+      content: `A ${kind}.`,
+      embedding: vec(),
+      created_at: old,
+      status: kind === "episode" ? "recurring" : "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+    });
+  const episode = await add("episode");
+  const model = await add("model");
+  const belief = await add("belief");
+
+  const retrieved = (await candidateFacts(db, u, vec(), 10)).map((f) => f.id);
+  expect(retrieved).toContain(episode.id);
+  expect(retrieved).toContain(belief.id);
+  expect(retrieved).not.toContain(model.id);
+  expect(await nearFacts(db, u, "user", vec(), 10, 0)).toEqual([]);
+  expect(await nearFacts(db, u, "shared", vec(), 10, 0)).toEqual([]);
+  expect(await listFactsForSummary(db, u, null, [], 10)).toEqual([]);
+
+  await adminDecayFacts(db, new Date("2026-01-05T09:00:00Z"), {
+    grace_days: 3,
+    rate: 0.5,
+    stale_floor: 0.05,
+    dormant_after_days: 30,
+  });
+  expect((await getFact(db, u, model.id))!.salience).toBe(0.5);
+  expect((await getFact(db, u, belief.id))!.salience).toBeLessThan(0.5);
+  expect((await getFact(db, u, episode.id))!.salience).toBeLessThan(0.5);
 });

@@ -19,7 +19,9 @@ import { clamp } from "@/mind/platform/math";
 
 const subject = z.enum(["user", "self", "shared"]);
 // Summaries, reflections and ideas are hers to write after a big event, never read off one exchange.
-const extractableKind = z.enum(factKind.enumValues).exclude(["summary", "reflection", "idea"]);
+const extractableKind = z
+  .enum(factKind.enumValues)
+  .exclude(["summary", "reflection", "idea", "episode", "model", "belief"]);
 
 /**
  * The output format sent to the model. It carries no numeric or length bounds (the model API

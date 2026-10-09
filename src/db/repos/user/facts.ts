@@ -48,8 +48,8 @@ export async function candidateFacts(
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
-        -- The summary and her ideas have their own slots in the reply.
-        AND f.kind NOT IN ('summary', 'idea')
+        -- The summary, her ideas and her read on them have their own slots in the reply.
+        AND f.kind NOT IN ('summary', 'idea', 'model')
         ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);
@@ -87,7 +87,7 @@ export async function nearFacts(
       WHERE user_id = ${userId} AND scope = 'private' AND subject = ${subject}
         AND status NOT IN ('superseded', 'stale')
         -- What she wrote herself after a big event is never a reconcile neighbour.
-        AND kind NOT IN ('summary', 'reflection', 'idea')
+        AND kind NOT IN ('summary', 'reflection', 'idea', 'episode', 'model', 'belief')
         AND (1 - (embedding <=> ${q}::vector)) >= ${minSim}
       ORDER BY embedding <=> ${q}::vector
       LIMIT ${k}`);
@@ -151,8 +151,8 @@ export async function setFactStatus(
 
 /**
  * What she has learned about a user since `since`, most salient first, leaving out `excludeIds`
- * (what the last summary already read). Her own summaries, reflections and ideas are left out: a
- * loop never feeds on its own output. Sensitive memories are included and flagged; each loop
+ * (what the last summary already read). Her own summaries, reflections, ideas, gists, reads and
+ * beliefs are left out: a loop never feeds on its own output. Sensitive memories are included and flagged; each loop
  * decides what it may read.
  */
 export async function listFactsForSummary(
@@ -177,7 +177,7 @@ export async function listFactsForSummary(
         eq(fact.user_id, userId),
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
-        notInArray(fact.kind, ["summary", "reflection", "idea"]),
+        notInArray(fact.kind, ["summary", "reflection", "idea", "episode", "model", "belief"]),
         since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
         excludeIds.length > 0 ? notInArray(fact.id, excludeIds) : undefined,
       ),

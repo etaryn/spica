@@ -13,11 +13,11 @@ export async function adminDecayFacts(
 ): Promise<{ decayed: number; staled: number; dormant: number }> {
   const decayed = await db.execute(sql`
     UPDATE fact SET salience = salience * (1 - ${cfg.rate}::real * (1 - salience))
-    WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea')
+    WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea', 'model')
       AND GREATEST(created_at, COALESCE(last_recalled_at, created_at)) < ${now}::timestamptz - make_interval(days => ${cfg.grace_days})`);
   const staled = await db.execute(sql`
     UPDATE fact SET status = 'stale'
-    WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea')
+    WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea', 'model')
       AND salience < ${cfg.stale_floor}::real`);
   const dormant = await db.execute(sql`
     UPDATE thread SET status = 'dormant'

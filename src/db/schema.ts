@@ -92,6 +92,9 @@ export const factKind = pgEnum("fact_kind", [
   "summary",
   "reflection",
   "idea",
+  "episode",
+  "model",
+  "belief",
 ]);
 export const userMindRunStatus = pgEnum("user_mind_run_status", [
   "pending",

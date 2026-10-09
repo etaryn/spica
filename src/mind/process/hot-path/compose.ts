@@ -8,7 +8,7 @@
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
-import { liveIdeas, liveSummary } from "@/db/repos/user/user-mind";
+import { latestNonSensitiveSummary, liveIdeas, liveSummary } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
 import type { SafetyFlag } from "@/db/schema";
 import type { RecalledFact, RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -234,7 +234,11 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         "summary",
         userId,
         async (): Promise<AssembleInput["summary"]> => {
-          const parsed = summaryPayload.safeParse((await liveSummary(db, userId))?.payload);
+          // A reach-out can surface as a push notification, so it never reads a crisis.
+          const row = input.reachOut
+            ? await latestNonSensitiveSummary(db, userId)
+            : await liveSummary(db, userId);
+          const parsed = summaryPayload.safeParse(row?.payload);
           return parsed.success ? parsed.data : null;
         },
         null,

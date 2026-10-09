@@ -496,6 +496,46 @@ describe("ideas slot", () => {
 });
 
 describe("composeReachOut", () => {
+  test("a reach-out reads the newest summary that isn't sensitive; a reply reads the live one", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "night!");
+    const summary = (stand: string, sensitive: boolean, at: Date) =>
+      insertFact(getTestDb(), u, {
+        subject: "shared",
+        kind: "summary",
+        content: stand,
+        payload: {
+          where_things_stand: stand,
+          whats_live: "L.",
+          how_i_feel: "F.",
+          ...(sensitive ? { sensitive: true } : {}),
+        },
+        embedding: vec(),
+        created_at: at,
+        status: sensitive ? "open" : "superseded",
+        salience: 0.6,
+        valence: 0,
+        confidence: 0.7,
+        source: "generated",
+      });
+    await summary("Plain stand.", false, new Date(deps.clock.now().getTime() - 60_000));
+    await summary("Crisis stand.", true, deps.clock.now());
+
+    await composeReachOut(
+      deps,
+      u,
+      { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
+      [turn],
+    );
+    const reachOut = deps.llm.calls.at(-1)!.system;
+    expect(reachOut).toContain("Plain stand.");
+    expect(reachOut).not.toContain("Crisis stand.");
+
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    expect(deps.llm.calls.at(-1)!.system).toContain("Crisis stand.");
+  });
+
   test("slot 7b with the candidate, candidate text as the query, guard kind reach_out", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();

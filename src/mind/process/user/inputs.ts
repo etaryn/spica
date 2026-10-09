@@ -1,7 +1,8 @@
 /**
  * What every loop in one user mind run reads: her live summary and what she has learned since
  * it, read once before the loops so each sees the same memories even if an earlier loop fails;
- * and the run's triggers in plain words.
+ * and the run's triggers in plain words. Sensitive memories (from a crisis) are included and
+ * flagged; ideate and reach-outs never read them.
  */
 import { listFactsForSummary, type FactRow } from "@/db/repos/user/facts";
 import { liveSummary, summaryInputFactIds, type Trigger } from "@/db/repos/user/user-mind";
@@ -46,6 +47,6 @@ export function triggerText(t: Trigger): string {
 }
 
 /** The memories as a loop's prompt shows them. */
-export function memoryLines(inputs: RunInputs) {
-  return inputs.facts.map(({ subject, kind, content }) => ({ subject, kind, content }));
+export function memoryLines(facts: RunInputs["facts"]) {
+  return facts.map(({ subject, kind, content }) => ({ subject, kind, content }));
 }

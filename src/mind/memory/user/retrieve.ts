@@ -45,7 +45,7 @@ function forcedRecall(factId: string, salience: number): RecalledFact {
   };
 }
 
-function isSensitive(fact: { payload: unknown }): boolean {
+export function isSensitive(fact: { payload: unknown }): boolean {
   return (fact.payload as { sensitive?: unknown } | null)?.sensitive === true;
 }
 

@@ -1,12 +1,14 @@
 /**
  * Her idea for one user after a big event: one thing she wants to bring up with them next time,
  * or nothing. An idea gets one chance, in her next reply or as a reason to write first, and
- * expires unused after a few days.
+ * expires unused after a few days. Ideas can become reach-outs and push notifications, so ideate
+ * never reads anything a crisis touched.
  */
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
-import { liveIdeas, liveSummary, recentReflections } from "@/db/repos/user/user-mind";
+import { latestNonSensitiveSummary, liveIdeas, recentReflections } from "@/db/repos/user/user-mind";
+import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
@@ -28,10 +30,12 @@ export async function userIdeate(
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_ideate", async (ctx) => {
     const now = deps.clock.now();
-    const summary = await liveSummary(db, userId);
+    const facts = inputs.facts.filter((f) => !f.sensitive);
+    const summary = await latestNonSensitiveSummary(db, userId);
     // This run's reflection, if reflect wrote one: an older one isn't news.
     const [latest] = await recentReflections(db, userId, 1);
-    const noticed = latest && latest.created_at >= run.created_at ? latest : null;
+    const noticed =
+      latest && latest.created_at >= run.created_at && !isSensitive(latest) ? latest : null;
     const planned = await liveIdeas(
       db,
       userId,
@@ -51,7 +55,7 @@ export async function userIdeate(
         who_you_are: deps.snapshot,
         summary: summary?.payload ?? null,
         noticed: noticed?.content ?? null,
-        new_memories: memoryLines(inputs),
+        new_memories: memoryLines(facts),
         open_threads: threads.map((t) => t.title),
         already_planned: planned.map((i) => i.content),
       }),
@@ -81,7 +85,7 @@ export async function userIdeate(
       inputs: {
         summary_id: summary?.id ?? null,
         reflection_id: noticed?.id ?? null,
-        fact_ids: inputs.facts.map((f) => f.id),
+        fact_ids: facts.map((f) => f.id),
         planned_ids: planned.map((i) => i.id),
       },
       outputs: { idea_id: ideaId },

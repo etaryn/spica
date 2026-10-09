@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { fact } from "@/db/schema";
 import { candidateFacts, insertFact, nearFacts } from "@/db/repos/user/facts";
 import { setTimezone } from "@/db/repos/user/users";
 import {
+  latestNonSensitiveSummary,
   claimRun,
   finishRun,
   insertRun,
@@ -96,11 +98,13 @@ const DAY = 86_400_000;
 
 async function put(
   userId: string,
-  kind: "reflection" | "idea" | "event",
+  kind: "reflection" | "idea" | "event" | "summary",
   at: Date,
   content: string = kind,
+  payload: object | null = null,
 ) {
   return insertFact(getTestDb(), userId, {
+    payload,
     subject: kind === "event" ? "user" : "shared",
     kind,
     content,
@@ -186,4 +190,13 @@ test("group-scoped reflections, ideas and summaries are never read as hers", asy
   expect(await recentReflections(getTestDb(), u, 5)).toEqual([]);
   expect(await liveIdeas(getTestDb(), u, new Date(0), 5)).toEqual([]);
   expect(await liveSummary(getTestDb(), u)).toBeNull();
+});
+
+test("latestNonSensitiveSummary skips sensitive summaries, live or not", async () => {
+  const u = await createTestUser();
+  const plain = await put(u, "summary", T0, "plain");
+  await getTestDb().update(fact).set({ status: "superseded" }).where(eq(fact.id, plain.id));
+  await put(u, "summary", new Date(T0.getTime() + 60_000), "crisis", { sensitive: true });
+  expect((await latestNonSensitiveSummary(getTestDb(), u))?.id).toBe(plain.id);
+  expect(await latestNonSensitiveSummary(getTestDb(), await createTestUser("other"))).toBeNull();
 });

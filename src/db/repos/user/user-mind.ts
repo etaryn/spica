@@ -93,6 +93,24 @@ export async function liveSummary(db: Db, userId: string): Promise<FactRow | nul
   return rows[0] ?? null;
 }
 
+/** The newest summary that read nothing sensitive, live or superseded: what a reach-out may use. */
+export async function latestNonSensitiveSummary(db: Db, userId: string): Promise<FactRow | null> {
+  const rows = await db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
+        eq(fact.kind, "summary"),
+        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
+      ),
+    )
+    .orderBy(desc(fact.created_at))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** The memory ids the loop that wrote this summary read; empty when its trace is gone. */
 export async function summaryInputFactIds(
   db: Db,

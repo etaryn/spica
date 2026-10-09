@@ -152,7 +152,8 @@ export async function setFactStatus(
 /**
  * What she has learned about a user since `since`, most salient first, leaving out `excludeIds`
  * (what the last summary already read). Her own summaries, reflections and ideas are left out: a
- * loop never feeds on its own output.
+ * loop never feeds on its own output. Sensitive memories are included and flagged; each loop
+ * decides what it may read.
  */
 export async function listFactsForSummary(
   db: Db,
@@ -168,6 +169,7 @@ export async function listFactsForSummary(
       kind: fact.kind,
       content: fact.content,
       salience: fact.salience,
+      sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
     })
     .from(fact)
     .where(
@@ -176,7 +178,6 @@ export async function listFactsForSummary(
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
         notInArray(fact.kind, ["summary", "reflection", "idea"]),
-        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
         since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
         excludeIds.length > 0 ? notInArray(fact.id, excludeIds) : undefined,
       ),

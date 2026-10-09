@@ -9,6 +9,7 @@ import { z } from "zod";
 import { insertFact, setFactStatus } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
 import { liveSummary, type Trigger } from "@/db/repos/user/user-mind";
+import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
@@ -44,7 +45,7 @@ export async function userSummarise(
         previous: previous?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs),
+        new_memories: memoryLines(facts),
         open_threads: threads.map((t) => t.title),
       }),
       schema: Output,
@@ -53,6 +54,9 @@ export async function userSummarise(
     });
     const content = [out.where_things_stand, out.whats_live, out.how_i_feel].join(" ");
     const [embedding] = await deps.embedder.embed([content], "document");
+    // What a crisis told her stays out of anything a reach-out reads; a summary carries its
+    // previous one forward, so it inherits the mark.
+    const sensitive = facts.some((f) => f.sensitive) || (!!previous && isSensitive(previous));
     const summaryId = await db.transaction(async (tx) => {
       // The lock serialises runs for one user, so two can't both leave a live summary; then
       // re-read: a summary written meanwhile is the one to supersede.
@@ -62,7 +66,7 @@ export async function userSummarise(
         subject: "shared",
         kind: "summary",
         content,
-        payload: out,
+        payload: sensitive ? { ...out, sensitive: true } : out,
         embedding: embedding!,
         created_at: now,
         status: "open",

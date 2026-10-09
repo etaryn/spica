@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, liveIdeas } from "@/db/repos/user/user-mind";
+import { userReflect } from "@/mind/process/user/reflect";
+import { userSummarise } from "@/mind/process/user/summarise";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { ideaCutoff, userIdeate } from "@/mind/process/user/ideate";
 import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
@@ -86,4 +88,40 @@ test("only a reflection from this run counts as noticed", async () => {
   await reflect("A fresh thought.", run.created_at);
   await userIdeate(deps, run, inputs);
   expect(noticed()).toBe("A fresh thought.");
+});
+
+async function sensitiveFact(
+  deps: ReturnType<typeof makeTestDeps>,
+  userId: string,
+  content: string,
+) {
+  return insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "feeling",
+    content,
+    payload: { sensitive: true },
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.95,
+    valence: -0.9,
+    confidence: 0.9,
+    source: "turn",
+  });
+}
+
+test("ideate never sees a sensitive memory, summary or reflection", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_reflect = sequence({ reflection: "SECRET-REFLECTION", subject: "user" });
+  await sensitiveFact(deps, userId, "SECRET-FACT thinking of ending it");
+  const inputs = await loadRunInputs(deps, userId);
+  await userSummarise(deps, run, inputs);
+  await userReflect(deps, run, inputs);
+  await userIdeate(deps, run, inputs);
+  const call = deps.llm.structuredCalls.filter((c) => c.purpose === "user_ideate").at(-1)!;
+  expect(call.input).not.toContain("SECRET");
+  expect(call.input).toContain("audition");
+  // The only summary read the sensitive memory, so ideate gets none.
+  expect(JSON.parse(call.input).summary).toBeNull();
+  expect(JSON.parse(call.input).noticed).toBeNull();
 });

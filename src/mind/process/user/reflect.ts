@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";
 import { liveSummary, recentReflections, type Trigger } from "@/db/repos/user/user-mind";
+import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
@@ -37,7 +38,7 @@ export async function userReflect(
         summary: summary?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs),
+        new_memories: memoryLines(inputs.facts),
         already_noticed: earlier.map((r) => r.content),
       }),
       schema: Output,
@@ -47,10 +48,13 @@ export async function userReflect(
     let reflectionId: string | null = null;
     if (out.reflection) {
       const [embedding] = await deps.embedder.embed([out.reflection], "document");
+      const sensitive =
+        inputs.facts.some((f) => f.sensitive) || (!!summary && isSensitive(summary));
       const row = await insertFact(db, userId, {
         subject: out.subject,
         kind: "reflection",
         content: out.reflection,
+        payload: sensitive ? { sensitive: true } : null,
         embedding: embedding!,
         created_at: now,
         status: "open",

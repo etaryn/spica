@@ -56,7 +56,8 @@ test("writes one live summary from the user's memories and her snapshot", async 
   const s = (await liveSummary(deps.db, userId))!;
   expect(s).toMatchObject({ kind: "summary", subject: "shared", source: "generated" });
   expect(s.content).toContain("Osaka");
-  expect(s.content).not.toContain("Private crisis");
+  expect(s.content).toContain("Private crisis");
+  expect(s.payload).toMatchObject({ sensitive: true });
   expect(s.payload).toHaveProperty("how_i_feel");
   const prompt = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
   expect(prompt.input).toContain("She loves old films.");
@@ -144,4 +145,28 @@ test("a memory committed after a summary but dated before it is still summarised
   const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise")[1]!;
   const contents = JSON.parse(second.input).new_memories.map((m: { content: string }) => m.content);
   expect(contents).toEqual(["They adopted a cat."]);
+});
+
+test("a sensitive memory marks the summary, and the mark carries to the next one", async () => {
+  const { deps, userId, fact, run } = await setup();
+  await fact("They said they'd been thinking of ending it.", 0.9, { sensitive: true });
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
+  const call = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise").at(-1)!;
+  expect(call.input).toContain("thinking of ending it");
+  const first = (await liveSummary(deps.db, userId))!;
+  expect(first.payload).toMatchObject({ sensitive: true });
+
+  deps.clock.advance(60_000);
+  await fact("They started a pottery class.", 0.9);
+  await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId));
+  const second = (await liveSummary(deps.db, userId))!;
+  expect(second.id).not.toBe(first.id);
+  expect(second.payload).toMatchObject({ sensitive: true });
+});
+
+test("a summary from ordinary memories is not marked", async () => {
+  const { deps, userId, fact, run } = await setup();
+  await fact("They started a pottery class.", 0.9);
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
+  expect((await liveSummary(deps.db, userId))!.payload).not.toHaveProperty("sensitive");
 });

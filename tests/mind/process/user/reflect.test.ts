@@ -65,3 +65,40 @@ test("null writes nothing and is still done; earlier reflections are passed back
   const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_reflect")[1]!;
   expect(JSON.parse(second.input).already_noticed).toEqual(["They hide hurt behind jokes."]);
 });
+
+async function sensitiveFact(
+  deps: ReturnType<typeof makeTestDeps>,
+  userId: string,
+  content: string,
+) {
+  return insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "feeling",
+    content,
+    payload: { sensitive: true },
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.95,
+    valence: -0.9,
+    confidence: 0.9,
+    source: "turn",
+  });
+}
+
+test("a reflection that read a sensitive memory is marked; one that didn't is not", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_reflect = sequence(
+    { reflection: "They quit things before they matter.", subject: "user" },
+    { reflection: "They carry more than they show.", subject: "user" },
+  );
+  await userReflect(deps, run, await loadRunInputs(deps, userId));
+  expect((await recentReflections(deps.db, userId, 1))[0]!.payload).toBeNull();
+
+  deps.clock.advance(60_000);
+  await sensitiveFact(deps, userId, "They said they'd been thinking of ending it.");
+  await userReflect(deps, run, await loadRunInputs(deps, userId));
+  expect((await recentReflections(deps.db, userId, 1))[0]!.payload).toMatchObject({
+    sensitive: true,
+  });
+});

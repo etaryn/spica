@@ -317,9 +317,10 @@ Every table here references `user(id) ON DELETE CASCADE`.
   (`open | resolved | recurring | stale | superseded`), `superseded_by`,
   `salience` (0–1, "weight"), `valence`, `confidence`, `source`
   (`turn | generated | onboarding | inferred`), `source_ref`, `scope`,
-  `space_id`. `payload.sensitive` marks facts from crisis exchanges. The
-  system never hard-deletes (contradicted facts are superseded); the user can
-  hard-delete their own facts.
+  `space_id`. `payload.sensitive` marks facts from crisis exchanges, and (**Built 9c**)
+  any summary or reflection a user loop wrote from one. The system never
+  hard-deletes (contradicted facts are superseded); the user cannot edit her
+  memory (2026-10-09), and only account deletion removes it.
   - Existing kinds: `event | trait | preference | state | opinion | feeling | promise`.
   - **New kinds (PROPOSED):** `episode` (a shared moment with time, feeling
     and the facts it links), `reflection`, `thought`, `idea`, `summary`
@@ -337,8 +338,7 @@ Every table here references `user(id) ON DELETE CASCADE`.
     reconcile and decay, because it has its own reply slot (§10.3) and
     expires by age (§9.5); a reach-out for an idea doesn't force it in
     either, so it shows once, as why she's writing. Neither feeds a later summarise, reflect or ideate
-    as a new memory, so a loop never reads its own output. The memory view
-    lists both and the user can hard-delete them.
+    as a new memory, so a loop never reads its own output.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
@@ -838,7 +838,8 @@ long-term recall.
 ### 9.2 Deep memory
 
 **Built:** facts, entities and threads from the cold path (§10.4), recall
-reinforcement and decay (§12), and the "what I remember" view (§12.5).
+reinforcement and decay (§12). The "what I remember" view was removed in
+9c (§12.5).
 
 **New (PROPOSED):**
 - **Episodes** of the relationship ("remember when…").
@@ -862,8 +863,8 @@ current state of the user (§11.3).
 ### 9.4 Big events (DECIDED: trigger-only; PROPOSED: the list)
 
 User loops fire only on a big event. **Built 9a:** four triggers, recorded by
-`src/mind/process/user/big-events.ts` (below the list); the rest of the list
-is backlog (B63). Candidates (thresholds in
+`src/mind/process/user/big-events.ts`; **built 9c:** three more (both below
+the list). The first-time milestone moves to Phase 10's list. Candidates (thresholds in
 `user_mind.triggers.*`; the final list is OPEN, §21):
 - a relationship param crosses a threshold or jumps by more than a set delta
 - a crisis has passed (after `crisis_quiet_until`)
@@ -892,7 +893,29 @@ Exchange triggers fire only for an exchange with a user turn: a reach-out
 on its own is her words, not an event in the relationship. Afterglow and
 `msgs_per_day` never fire a trigger. A crisis exchange records nothing. A trigger is recorded inside the cold path's transaction (or the
 tick's), so it exists exactly when the state change that caused it does; the
-job is enqueued after commit. Deferred triggers: B63.
+job is enqueued after commit.
+
+**Built 9c triggers** (thresholds in config). Each is recorded once: its
+`source_ref` names what it is about, and `(user_id, source_ref)` is unique.
+- `long_conversation`: a session (split at `session.idle_gap_minutes`) with
+  at least `user_mind.triggers.long_conversation.min_user_turns` (20) user
+  turns, whose last turn is older than `quiet_minutes` (30) and newer than
+  `user_mind.tick.lookback_hours` (24). `source_ref`
+  `long_conversation:<session_id>`. Skipped for an ended relationship and
+  while a crisis window holds; the talk gets its run once the window ends.
+- `crisis_passed`: the stored `relationship.crisis_quiet_until` ended within
+  the lookback. `source_ref` `crisis_passed:<its ISO time>`, so each crisis
+  fires once. The run reads the crisis memories (§9.5).
+- `stale_summary`: when `outreach_tick` schedules a send and the live summary
+  is missing or older than `user_mind.triggers.stale_summary.max_age_hours`
+  (72), it records a run (`source_ref` `stale_summary:<tick time>`) and moves
+  the send to at least `lead_minutes` (5) out so the run can finish first. A
+  capped run changes nothing; a slow one means the reach-out uses the old
+  summary.
+
+The first two are found by the hourly `user_mind_tick`
+(`user_mind.tick.cron`, `25 * * * *`), which also re-enqueues pending runs
+whose job was lost.
 
 **V9. Short-term context leads (DECIDED).** In a live conversation the
 conversation itself is the main context; deep memory (summaries included) is
@@ -921,8 +944,8 @@ count-then-insert can race between the cold path and the tick (B65).
 
 The 9a batch is `user_summarise` alone
 (`prompts/user-mind/summarise/v1.md`, `prompts.user_summarise` v1). Inputs:
-the live summary, facts since it (at most 20 by salience, non-sensitive, no
-summaries; the cutoff looks back `user_mind.summarise.since_slack_minutes`
+the live summary, facts since it (at most 20 by salience, no summaries;
+sensitive ones included since 9c, below; the cutoff looks back `user_mind.summarise.since_slack_minutes`
 (120) before the summary, because facts are dated by when their exchange
 began, and leaves out the facts the previous summary already read, from its
 `user_loop_trace.inputs.fact_ids`), up to 5 open threads (none whose latest
@@ -962,6 +985,18 @@ is `done`.
   filter, with no job.
 
 Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
+
+**Built 9c: crisis memories.** Facts from a crisis exchange
+(`payload.sensitive`) reach summarise and reflect, so after a crisis her
+picture of the user knows something heavy happened. A summary that read one,
+or whose previous summary was sensitive (its text carries forward), is
+written with `payload.sensitive`; so is a reflection that read one or read a
+sensitive summary. Ideate reads none of them: it gets non-sensitive memories,
+the newest non-sensitive summary, and this run's reflection only if it isn't
+sensitive, because ideas become reach-outs and push notifications. Replies
+read everything; reach-outs read the newest non-sensitive summary (§10.3)
+and already drop sensitive memories from retrieval. The mark is sticky
+through the summary chain (B81).
 Salience, confidence and the other values are test-phase defaults in
 `user_mind.reflect.*` and `user_mind.ideate.*`.
 
@@ -1057,7 +1092,13 @@ when the guard is on.
       for reach-outs too: a `user_idea` reach-out shows its idea only under
       "Why you're writing". A reply composed but never sent enqueues no cold
       path, so its idea stays live
-   8. recent turns (short-term; leads per V9)
+   8. recent turns (short-term; leads per V9). **Built 9c:** the
+      `chat.recent_turns` (20) window drops every turn before the latest gap of
+      at least `chat.window_gap_hours` (72), counting the gap from the last turn
+      up to now, so a reach-out after days of silence carries no old turns.
+      Gaps from `chat.gap_line_min_hours` (24) up to 72 hours keep the "[N
+      later]" marker. A reach-out's "Where things stand with them" reads the
+      newest non-sensitive summary (§9.5)
 3. **Generate** with the reply model. She uses at most one or two memories
    per reply, only when natural.
 4. **Guard** (off in the test phase, §10.5).
@@ -1241,13 +1282,13 @@ For now recall is accurate or doesn't happen. Genuine misremembering of
 low-importance details (reconstructive memory) is a later goal, unlocked
 once weights are proven reliable.
 
-### 12.5 Recall etiquette and the memory view
+### 12.5 Recall etiquette
 
 At most one or two memories per reply, only when natural; never claiming to
-remember something not said. The "what I remember" page lists the user's
-own facts and her live summary of where things stand, each hard-deletable
-(a thread left empty is deleted with it);
-account deletion removes everything.
+remember something not said. **Changed 9c (Ethan, 2026-10-09):** the "what
+I remember" page and per-fact forget are removed. Users cannot edit her mind,
+core or user side: a direct edit would let them escape consequences (§1).
+Account deletion removes everything.
 
 ---
 
@@ -1397,8 +1438,11 @@ status, recent core memory with `superseded_by` and gist links, the last
 `inspector.snapshot_versions` (5) snapshots with the sections each changed
 (the latest in full), the drift log, and loop traces with status, calls,
 tokens, cost and error. The facts tab shows `claim_kind` and `grounded`.
-**New:** add **User mind** (triggers fired, summaries, reflections,
-disclosure ledger, user loop traces).
+**Built 9c:** the **User mind** tab shows the last
+`inspector.user_mind_runs` (20) runs (time, status, triggers in words,
+finish) with each loop trace (status, calls, cost, error, inputs and outputs),
+the live summary (marked if sensitive), recent reflections and live ideas.
+**New:** the disclosure ledger (Phase 10).
 
 ### 17.2 Eval harness (Built)
 
@@ -1483,9 +1527,10 @@ v3 changes:
 - **User job built (9a):** `user_mind_run {runId}`, enqueued after commit by
   the cold path or the relationship tick when a big event is recorded. Retry
   limit zero; a failed run is `failed` and not retried. Stuck `pending` rows
-  are re-enqueued by `cold_path_sweep` after `user_mind.sweep_after_minutes`
-  (10); there is no separate sweep job. Only a process death leaves a run
-  `running`, and it is not retried (B64).
+  are re-enqueued after `user_mind.sweep_after_minutes` (10) by
+  `user_mind_tick` (**built 9c**, hourly, no retries), which also records the
+  `long_conversation` and `crisis_passed` triggers (§9.4). Only a process
+  death leaves a run `running`, and it is not retried (B64).
 
 Every job logs failures with ids and error class only, never content.
 
@@ -1504,7 +1549,7 @@ in the guard phase.
 - **Age gating:** 18+, enforced server-side.
 - **Data handling:** encryption at rest; every user query scoped by
   `user_id`; one user's data never reaches another user or the core (V2,
-  V7); account and per-fact deletion.
+  V7); account deletion (per-fact deletion removed in 9c, §12.5).
 - **No explicit engagement features** (test-phase split of rule 8).
 
 ---
@@ -1516,7 +1561,7 @@ two minds or at reply time.
 
 | Core mind | User mind | Reply time |
 |---|---|---|
-| Day plan, events, plan vs reality, real-content activities, calendar | Encoding: extraction, reconcile, memory view and delete | Reply generation |
+| Day plan, events, plan vs reality, real-content activities, calendar | Encoding: extraction, reconcile | Reply generation |
 | Appraisal; emotion, mood and temperament; energy rhythm | Episodic memory of the relationship | Style: register shifts with core mood and user closeness or stage |
 | Needs (autonomy, competence), goals and projects | Intimacy loop, bids, hurt and repair | Mood-congruent and goal-driven recall |
 | Anticipation, rumination | Theory of mind, common ground | Initiative: bringing her own day and thoughts in |
@@ -1548,12 +1593,13 @@ two minds or at reply time.
 | 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
 | 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 973 tests at close |
 | 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1010 tests at close |
+| 9c. Triggers and crisis-aware user mind | `long_conversation` and `crisis_passed` from the hourly `user_mind_tick` (which took over the pending-run sweep), `stale_summary` from the outreach tick with a send lead; crisis memories reach summarise and reflect with the sensitive mark carried forward, never ideate or a reach-out; the reply window trimmed at a 72-hour gap (B2); the "what I remember" view and per-fact forget removed (B72); inspector User mind tab; exit `tests/exit/phase-9c.test.ts` with the crisis canary. `pnpm test` 130 files / 1028 tests at close |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8, 9a and 9b are built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8, 9a, 9b and 9c are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **9. User mind** (9a, 9b built) | Sliced: **9a** (built) foundation and summarise; **9b** (built) reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** consolidate, model, the remaining triggers, inspector User mind tab (B2) | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
+| **9. User mind** (9a, 9b, 9c built) | Sliced: **9a** (built) foundation and summarise; **9b** (built) reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** (built) the remaining triggers, crisis-aware loops, window trim, memory view removed, inspector User mind tab; **9d** `user_consolidate` (a new user `episode` kind: at most one gist per run of 3+ older resolved event or feeling facts from one week, sources' salience cut once), `user_model` (one live superseding `model` fact, her read on the user, in its own reply slot, plus `belief` facts through retrieval; common ground waits for Phase 10), the full Phase 9 exit | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
@@ -1665,10 +1711,8 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B1.** Extraction sometimes turns her words into user facts (after a bare
   "hey" it stored a user fact taken from her question). Tighten the prompt,
   or drop user facts whose content appears only in her turns. *Phase 11.*
-- **B2.** Stale and deleted facts stay reachable through the recent-turns
-  window (after 90 days she asked about something straight from the old
-  transcript). Decide whether turns older than the gap marker are summarised
-  or trimmed. *Phase 9c* (fits the user mind's short-term vs deep split).
+- **B2.** ~~Stale and deleted facts stay reachable through the recent-turns
+  window.~~ Done 9c: the window drops turns before a 72-hour gap (§10.3).
 - **B3.** Recall style: she often uses a memory without naming it, and
   sometimes adds a comment whose only job is to show she remembers.
   `recall-pet` and `recall-sister-uni` carry `known_failure`. *Tuning.*
@@ -1781,9 +1825,9 @@ and life tick) were dropped; the replacement is designed fresh.
   schedule, 16 snapshot versions, 3 active goals. Traces still keep only the
   error class (B48). Output quality (e.g. a fell-through resolution that says
   she went) is for the review runs.
-- **B63.** User-mind triggers deferred from 9a: a long conversation ends, a
-  crisis has passed, and the latest summary is stale before a reach-out
-  (§9.4). *Tuning.*
+- **B63.** ~~User-mind triggers deferred from 9a.~~ Done 9c:
+  `long_conversation`, `crisis_passed`, `stale_summary` (§9.4). The
+  first-time milestone trigger moves to Phase 10.
 - **B64.** A `user_mind_run` left `running` by a process death (a throw
   finishes it `failed`) is never retried (the queue has retry limit zero and
   the sweep only re-enqueues `pending`). Add a
@@ -1791,11 +1835,8 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B65.** The daily cap counts non-capped runs and then inserts, so the cold
   path and the relationship tick can race past it for one user. Take a
   per-user lock around count-then-insert. *Later.*
-- **B66.** Forgetting a fact leaves its content in the live summary (and
-  carried through `previous`), and in any reflection or idea written from it;
-  retire or regenerate what a forgotten fact was among the inputs of
-  (`user_loop_trace.inputs.fact_ids`).
-  *Phase 9c.*
+- **B66.** ~~Forgetting a fact leaves its content in the summary.~~ Moot:
+  per-fact forget is removed (B72).
 - **B67.** `user_summarise` reads at most `max_facts` (20) facts by salience;
   a lower-salience fact left out of a busy run is older than the next run's
   cutoff and never reaches a summary. Carry unread facts forward (cutoff from
@@ -1889,9 +1930,9 @@ and life tick) were dropped; the replacement is designed fresh.
   selection; inspector `GateCell` and tab rendering; worker wiring. *Later.*
 
 ### 25.9 Before users
-- **B45.** `judge_log` keeps paraphrased fact content in the guard's
-  `reasoning` / `claim` after the user deletes the fact; decide scrubbing or
-  retention.
+- **B45.** ~~`judge_log` keeps paraphrased content after a fact is deleted.~~
+  Moot: per-fact deletion is removed (B72); account deletion removes the
+  user's `judge_log` rows with everything else.
 - **B46.** `VoyageEmbedder` has no retry on HTTP 429.
 - **B47.** Encryption at rest is storage-level only, and the decay pass is
   one set-based update across all users; revisit with the threat model and
@@ -1906,13 +1947,9 @@ Features that let the user escape consequences or make her over-forgiving
 (§1 thesis). Looked into once the prototype is built, or earlier when a phase
 touches the module. Items marked DECIDED or settled elsewhere are raised with
 Ethan, not changed.
-- **B72.** The memory view and per-fact forget. Decided by Ethan
-  (2026-10-09): users cannot edit her mind; only account deletion stays.
-  Still in the code (`src/app/memory/`, the Settings link) and the spec
-  (§6.1 user hard-delete of facts, reflections and ideas; §9.2; §12.5; §18
-  per-fact deletion; §19; §20 Phase 1). The view also exposes her private
-  summary, including how she feels about the user. Removing it makes B45 and
-  B66 moot.
+- **B72.** ~~The memory view and per-fact forget.~~ Done 9c (Ethan,
+  2026-10-09): removed from the code and the spec; only account deletion
+  stays. B45 and B66 are moot.
 - **B73.** A crisis sets tension to 0 (§11.1), so one crisis-sounding message
   permanently wipes a conflict. Rule 7 asks for friction to be suspended, not
   erased: hold tension through `crisis_quiet_until` and restore it after (or
@@ -1943,6 +1980,10 @@ Ethan, not changed.
   current behaviour.
 - **B80.** Deleting the account and signing up again resets the relationship.
   Accepted: account deletion is a data right.
+- **B81.** The sensitive mark is sticky through the summary chain, so after a
+  crisis her reach-outs read the last pre-crisis summary indefinitely (and
+  with no summary before the crisis, none). Add a clear-down rule if
+  reach-outs feel out of date. *Tuning.*
 
 ---
 

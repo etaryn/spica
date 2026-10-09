@@ -159,7 +159,7 @@ synthetic trigger, through the same hot path.
   × recency, top 12, due threads and preoccupation forced in; the hot path is
   read-only, the cold path writes recall reinforcement; daily decay to
   `stale`, never deleted; recall accurate or absent; at most 1–2 memories per
-  reply; "what I remember" view with hard delete.
+  reply; users cannot edit her memory (no memory view, no per-fact forget).
 - **Relationship (v3 §11):** `HomeostaticParam` judged by deviation from
   this user's baseline (closeness, trust, warmth, hurt, tension,
   `msgs_per_day`, extensible); signals from extraction; hurt → make-up flow
@@ -206,10 +206,11 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 9 (user mind), sliced 9a/9b/9c. Phases 9a (user mind
-foundation) and 9b (reflect, ideate, ideas slot, new outreach candidates, B26)
-are built; 9c (consolidate, model, remaining triggers, inspector User mind
-tab, B2) is next and needs a design doc.**
+**Current phase: Phase 9 (user mind), sliced 9a/9b/9c/9d. Phases 9a (user
+mind foundation), 9b (reflect, ideate, ideas slot, new outreach candidates,
+B26) and 9c (remaining triggers, crisis-aware user mind, window trim, memory
+view removed, inspector User mind tab) are built; 9d (consolidate, model,
+full Phase 9 exit) is next and needs a design doc.**
 Phase 8 (core loops) is built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
@@ -236,7 +237,7 @@ only); backchannel style global `judge`; shared day plan; reach-out caps
   guaranteed even if generation fails.
 - **Age gating:** 18+, server-side.
 - **Data:** encryption at rest; `user_id` scoping; no user data ever reaches
-  another user or the core; account and per-fact deletion.
+  another user or the core; account deletion (no per-fact deletion).
 - **No explicit engagement features.**
 
 ## Working conventions

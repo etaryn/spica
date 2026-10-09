@@ -107,3 +107,8 @@ code itself.
 | 2026-10-09 | Reflections are excluded from cold-path reconcile | A turn fact must not merge into or supersede her inference. |
 | 2026-10-09 | Reflections are read through ordinary retrieval, not a slot | A reflection is a memory about them; it should surface only when a conversation makes it relevant. |
 | 2026-10-09 | An idea gets one chance: it is retired once shown in a reply or used by a reach-out | Re-offering the same topic reads as nagging; the cold path retires it after the reply is sent, and the send transaction retires it for a reach-out. |
+| 2026-10-09 | `crisis_passed` keys on the stored `crisis_quiet_until`, not the effective window | Stable once the crisis exchange's cold path commits, so each crisis fires once. |
+| 2026-10-09 | `stale_summary`'s `source_ref` is the tick time | The reach-out log row doesn't exist yet when the run is recorded; a retried tick has the same time. |
+| 2026-10-09 | The window trim counts the gap from the last turn to now | A reach-out answers no turn, so its window must also drop a stale transcript. |
+| 2026-10-09 | Tests that need a vanished fact delete the row directly | Per-fact forget is gone; account deletion is the only remaining erasure. |
+| 2026-10-09 | The inspector orders a run's loop traces by time, then batch order | A fixed clock gives a run's loops one timestamp. |

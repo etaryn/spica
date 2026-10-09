@@ -523,6 +523,7 @@ const prompts = z.object({
   user_reflect: promptVersion,
   user_ideate: promptVersion,
   user_consolidate: promptVersion,
+  user_model: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
 });
@@ -570,6 +571,16 @@ const userMind = z.object({
     gist_source_factor: unit,
     max_chars: positiveInt,
     max_tokens: positiveInt,
+    confidence: unit,
+  }),
+  model: z.object({
+    max_chars: positiveInt,
+    max_tokens: positiveInt,
+    max_beliefs: countFromZero,
+    belief_context: countFromZero,
+    dedupe_similarity: unit,
+    salience: unit,
+    belief_salience: unit,
     confidence: unit,
   }),
 });

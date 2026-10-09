@@ -86,6 +86,28 @@ export class FakeLLMProvider implements LLMProvider {
       const ctx = JSON.parse(input) as { sources: { content: string }[] };
       return { gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280) };
     },
+    // Deterministic: a read built from the first new memory, and one belief about it that
+    // replaces the first belief it was shown, so supersede runs too.
+    user_model: (input: string) => {
+      const ctx = JSON.parse(input) as {
+        new_memories: { content: string }[];
+        beliefs: { id: string }[];
+      };
+      const first = ctx.new_memories[0]?.content;
+      return {
+        how_they_are: `Lately: ${first ?? "nothing new"}`.slice(0, 280),
+        what_they_want: "To be heard.",
+        what_lands: "Plain warmth.",
+        beliefs: first
+          ? [
+              {
+                text: `This matters to them: ${first}`.slice(0, 280),
+                replaces: ctx.beliefs[0]?.id ?? null,
+              },
+            ]
+          : [],
+      };
+    },
     core_resolve: (input: string) => ({
       content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
       valence: 0,

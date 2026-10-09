@@ -199,7 +199,8 @@
     "user_summarise": "v1",
     "user_reflect": "v1",
     "user_ideate": "v1",
-    "user_consolidate": "v1"
+    "user_consolidate": "v1",
+    "user_model": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -504,6 +505,16 @@
       "gist_source_factor": 0.5,
       "max_chars": 300,
       "max_tokens": 512,
+      "confidence": 0.6
+    },
+    "model": {
+      "max_chars": 300,
+      "max_tokens": 512,
+      "max_beliefs": 2,
+      "belief_context": 10,
+      "dedupe_similarity": 0.92,
+      "salience": 0.6,
+      "belief_salience": 0.5,
       "confidence": 0.6
     }
   }

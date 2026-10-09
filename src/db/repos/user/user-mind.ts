@@ -1,11 +1,13 @@
 /**
  * One user's mind runs: the durable row behind each batch of her thinking about them, the trace
- * of every loop in it, and the live summary she keeps of where things stand.
+ * of every loop in it, the live summary and read she keeps of them, and her beliefs about them.
  */
 import { and, desc, eq, gt, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Db } from "@/db/client";
 import { fact, user_loop_trace, user_mind_run } from "@/db/schema";
 import { getTimezone } from "@/db/repos/user/users";
+import { vecLiteral } from "@/db/repos/util";
 import { isValidTimeZone, localDateString } from "@/mind/platform/timezone";
 import type { FactRow } from "./facts";
 
@@ -79,7 +81,9 @@ export async function insertLoopTrace(db: Db, row: NewUserLoopTrace): Promise<vo
   await db.insert(user_loop_trace).values(row);
 }
 
-export async function liveSummary(db: Db, userId: string): Promise<FactRow | null> {
+type LiveKind = "summary" | "model";
+
+async function latestLive(db: Db, userId: string, kind: LiveKind): Promise<FactRow | null> {
   const rows = await db
     .select()
     .from(fact)
@@ -87,7 +91,7 @@ export async function liveSummary(db: Db, userId: string): Promise<FactRow | nul
       and(
         eq(fact.user_id, userId),
         eq(fact.scope, "private"),
-        eq(fact.kind, "summary"),
+        eq(fact.kind, kind),
         notInArray(fact.status, ["superseded", "stale"]),
       ),
     )
@@ -96,8 +100,8 @@ export async function liveSummary(db: Db, userId: string): Promise<FactRow | nul
   return rows[0] ?? null;
 }
 
-/** The newest summary that read nothing sensitive, live or superseded: what a reach-out may use. */
-export async function latestNonSensitiveSummary(db: Db, userId: string): Promise<FactRow | null> {
+/** The newest one that read nothing sensitive, live or superseded: what a reach-out may use. */
+async function latestNonSensitive(db: Db, userId: string, kind: LiveKind): Promise<FactRow | null> {
   const rows = await db
     .select()
     .from(fact)
@@ -105,13 +109,76 @@ export async function latestNonSensitiveSummary(db: Db, userId: string): Promise
       and(
         eq(fact.user_id, userId),
         eq(fact.scope, "private"),
-        eq(fact.kind, "summary"),
+        eq(fact.kind, kind),
         sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
       ),
     )
     .orderBy(desc(fact.created_at))
     .limit(1);
   return rows[0] ?? null;
+}
+
+export const liveSummary = (db: Db, userId: string) => latestLive(db, userId, "summary");
+export const latestNonSensitiveSummary = (db: Db, userId: string) =>
+  latestNonSensitive(db, userId, "summary");
+/** Her live read on them: how they are, what they want, what lands. */
+export const liveModel = (db: Db, userId: string) => latestLive(db, userId, "model");
+export const latestNonSensitiveModel = (db: Db, userId: string) =>
+  latestNonSensitive(db, userId, "model");
+
+/** Her standing beliefs about them, the weightiest first. */
+export async function liveBeliefs(db: Db, userId: string, limit: number): Promise<FactRow[]> {
+  return db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
+        eq(fact.kind, "belief"),
+        notInArray(fact.status, ["superseded", "stale"]),
+      ),
+    )
+    .orderBy(desc(fact.salience), desc(fact.created_at))
+    .limit(limit);
+}
+
+/** Similarity to her closest live belief about them; null when she holds none. */
+export async function nearestBeliefSimilarity(
+  db: Db,
+  userId: string,
+  embedding: number[],
+): Promise<number | null> {
+  const res = await db.execute(sql`
+    SELECT max(1 - (embedding <=> ${vecLiteral(embedding)}::vector))::float8 AS sim
+    FROM fact
+    WHERE user_id = ${userId} AND scope = 'private' AND kind = 'belief'
+      AND status NOT IN ('superseded', 'stale')`);
+  const sim = res.rows[0]?.sim;
+  return sim === null || sim === undefined ? null : Number(sim);
+}
+
+/** Replaces one of this user's live beliefs with `by`; false when it isn't one. */
+export async function supersedeBelief(
+  db: Db,
+  userId: string,
+  id: string,
+  by: string,
+): Promise<boolean> {
+  if (!z.uuid().safeParse(id).success) return false;
+  const rows = await db
+    .update(fact)
+    .set({ status: "superseded", superseded_by: by })
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.id, id),
+        eq(fact.kind, "belief"),
+        notInArray(fact.status, ["superseded", "stale"]),
+      ),
+    )
+    .returning({ id: fact.id });
+  return rows.length > 0;
 }
 
 /** The memory ids the loop that wrote this summary read; empty when its trace is gone. */

@@ -12,6 +12,11 @@ import { adminDecayFacts } from "@/db/repos/admin/decay";
 import { setTimezone } from "@/db/repos/user/users";
 import {
   latestNonSensitiveSummary,
+  latestNonSensitiveModel,
+  liveBeliefs,
+  liveModel,
+  nearestBeliefSimilarity,
+  supersedeBelief,
   claimRun,
   finishRun,
   insertRun,
@@ -246,4 +251,50 @@ test("her model stays out of retrieval and decay; gists, models and beliefs are 
   expect((await getFact(db, u, model.id))!.salience).toBe(0.5);
   expect((await getFact(db, u, belief.id))!.salience).toBeLessThan(0.5);
   expect((await getFact(db, u, episode.id))!.salience).toBeLessThan(0.5);
+});
+
+test("the live model, the newest non-sensitive model, beliefs by weight, and belief supersede", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const other = await createTestUser();
+  const at = (ms: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, 0, ms));
+  const add = (
+    userId: string,
+    kind: "model" | "belief",
+    content: string,
+    extra: Partial<Parameters<typeof insertFact>[2]> = {},
+  ) =>
+    insertFact(db, userId, {
+      subject: "user",
+      kind,
+      content,
+      embedding: vec(),
+      created_at: at(0),
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+      ...extra,
+    });
+  const plain = await add(u, "model", "Plain read.", { status: "superseded" });
+  const heavy = await add(u, "model", "Heavy read.", {
+    payload: { sensitive: true },
+    created_at: at(1),
+  });
+  expect((await liveModel(db, u))!.id).toBe(heavy.id);
+  expect((await latestNonSensitiveModel(db, u))!.id).toBe(plain.id);
+
+  const low = await add(u, "belief", "Low.", { salience: 0.2 });
+  const high = await add(u, "belief", "High.", { salience: 0.9 });
+  await add(u, "belief", "Gone.", { status: "superseded" });
+  const theirs = await add(other, "belief", "Theirs.");
+  expect((await liveBeliefs(db, u, 10)).map((b) => b.id)).toEqual([high.id, low.id]);
+  expect(await nearestBeliefSimilarity(db, u, vec())).toBeCloseTo(1);
+  expect(await nearestBeliefSimilarity(db, await createTestUser(), vec())).toBeNull();
+
+  expect(await supersedeBelief(db, u, low.id, high.id)).toBe(true);
+  expect(await supersedeBelief(db, u, low.id, high.id)).toBe(false);
+  expect(await supersedeBelief(db, u, theirs.id, high.id)).toBe(false);
+  expect(await supersedeBelief(db, u, "not-a-uuid", high.id)).toBe(false);
 });

@@ -1,6 +1,6 @@
 /**
  * Her user mind, run on a big event: recording the run with the exchange that caused it, running
- * its batch of loops once, and re-queueing runs whose job was lost. The batch reads this user's
+ * its batch of loops (summarise, reflect, ideate) once, and re-queueing runs whose job was lost. The batch reads this user's
  * memory and state and her latest snapshot, and writes this user's memory only.
  */
 import type { Db } from "@/db/client";
@@ -17,6 +17,8 @@ import { errorName } from "@/mind/platform/errors";
 import { USER_MIND_RUN_QUEUE, type UserMindRunJob } from "@/mind/platform/jobs";
 import { MINUTE } from "@/mind/platform/time";
 import { loadRunInputs } from "./inputs";
+import { userIdeate } from "./ideate";
+import { userReflect } from "./reflect";
 import { userSummarise } from "./summarise";
 
 export async function recordBigEvents(
@@ -63,7 +65,14 @@ export async function runUserMind(
   try {
     const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
     const loopDeps = { db, embedder, config, clock, log, llm, snapshot };
-    status = await userSummarise(loopDeps, run, await loadRunInputs(deps, run.user_id));
+    const inputs = await loadRunInputs(loopDeps, run.user_id);
+    // In order, each reading what the one before wrote; a failed loop doesn't stop the next.
+    const results = [
+      await userSummarise(loopDeps, run, inputs),
+      await userReflect(loopDeps, run, inputs),
+      await userIdeate(loopDeps, run, inputs),
+    ];
+    status = results.includes("failed") ? "failed" : "done";
   } catch (e) {
     // Failed, not thrown: a retry would spend the run again, and the job never retries.
     log.error("user_mind_run failed", { runId: run.id, error: errorName(e) });

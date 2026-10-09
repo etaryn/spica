@@ -160,7 +160,7 @@ test("the fourth big event of a day is capped and runs nothing", async () => {
   await drainRuns(d);
   expect(await count("user_mind_run", "status = 'done'")).toBe(3);
   expect(await count("user_mind_run", "status = 'capped'")).toBe(1);
-  expect(await count("user_loop_trace")).toBe(3);
+  expect(await count("user_loop_trace", "loop = 'user_summarise'")).toBe(3);
 });
 
 test("a lost enqueue is swept and runs once; the second summary supersedes the first", async () => {
@@ -175,7 +175,7 @@ test("a lost enqueue is swept and runs once; the second summary supersedes the f
   expect(await sweepPendingUserMindRuns(d, d.clock.now())).toBe(1);
   await drainRuns(d);
   expect(await sweepPendingUserMindRuns(d, d.clock.now())).toBe(0);
-  expect(await count("user_loop_trace")).toBe(2);
+  expect(await count("user_loop_trace", "loop = 'user_summarise'")).toBe(2);
   expect(await count("fact", "kind = 'summary' AND status = 'superseded'")).toBe(1);
   expect(await count("fact", "kind = 'summary' AND status NOT IN ('superseded','stale')")).toBe(1);
 });

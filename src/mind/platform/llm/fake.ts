@@ -75,6 +75,12 @@ export class FakeLLMProvider implements LLMProvider {
         subject: "user",
       };
     },
+    // Deterministic: an idea about the first new memory, none without one.
+    user_ideate: (input: string) => {
+      const ctx = JSON.parse(input) as { new_memories: { content: string }[] };
+      const first = ctx.new_memories[0]?.content;
+      return { idea: first ? `Ask about: ${first}`.slice(0, 190) : null };
+    },
     core_resolve: (input: string) => ({
       content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
       valence: 0,

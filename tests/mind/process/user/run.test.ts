@@ -29,7 +29,11 @@ test("a recorded run runs its batch once; a second job for it is skipped", async
   expect(await runUserMind(deps, { runId })).toBe("done");
   expect(await runUserMind(deps, { runId })).toBe("skipped");
   const traces = await getTestDb().execute(sql`SELECT loop FROM user_loop_trace`);
-  expect(traces.rows).toEqual([{ loop: "user_summarise" }]);
+  expect(traces.rows.map((r) => r.loop).sort()).toEqual([
+    "user_ideate",
+    "user_reflect",
+    "user_summarise",
+  ]);
   const run = await getTestDb().execute(sql`SELECT status FROM user_mind_run`);
   expect(run.rows[0]).toMatchObject({ status: "done" });
 });
@@ -86,4 +90,37 @@ test("a throw after the claim finishes the run failed, never left running", asyn
   const run = await getTestDb().execute(sql`SELECT status, finished_at FROM user_mind_run`);
   expect(run.rows[0]).toMatchObject({ status: "failed" });
   expect(run.rows[0]!.finished_at).not.toBeNull();
+});
+
+test("the batch runs summarise, reflect and ideate; a failed reflect still runs ideate", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  await insertFact(deps.db, u, {
+    subject: "user",
+    kind: "event",
+    content: "They are planning a trip.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.9,
+    valence: 0.5,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_reflect = () => {
+    throw new Error("boom");
+  };
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask about the trip." });
+  const runId = (await recordBigEvents(deps, deps.db, u, "exchange:a", trig))!;
+  expect(await runUserMind(deps, { runId })).toBe("failed");
+  const loops = await getTestDb().execute(sql`SELECT loop, status FROM user_loop_trace`);
+  expect(loops.rows.map((r) => `${r.loop}:${r.status}`).sort()).toEqual([
+    "user_ideate:done",
+    "user_reflect:failed",
+    "user_summarise:done",
+  ]);
+  const kinds = await getTestDb().execute(
+    sql`SELECT kind FROM fact WHERE kind IN ('idea','summary')`,
+  );
+  expect(kinds.rows.map((r) => r.kind).sort()).toEqual(["idea", "summary"]);
 });

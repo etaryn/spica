@@ -196,7 +196,8 @@
     "core_resolve": "v1",
     "reach_out": "v1",
     "user_summarise": "v1",
-    "user_reflect": "v1"
+    "user_reflect": "v1",
+    "user_ideate": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -472,6 +473,14 @@
       "max_tokens": 384,
       "salience": 0.5,
       "confidence": 0.6
+    },
+    "ideate": {
+      "max_chars": 200,
+      "max_tokens": 256,
+      "salience": 0.5,
+      "confidence": 0.6,
+      "ttl_days": 3,
+      "slot_max": 1
     }
   }
 }

@@ -142,6 +142,10 @@ export class CapturingLLM extends FakeLLMProvider {
         reflection: `${out.reflection ?? "I noticed"} ${canary}`,
       });
     }
+    if (canary && request.purpose === "user_ideate" && handler) {
+      const out = (await handler(request.input)) as { idea: string | null };
+      return request.schema.parse({ ...out, idea: `${out.idea ?? "Ask"} ${canary}` });
+    }
     if (canary && request.purpose === "core_drift_watch") {
       return request.schema.parse({
         findings: [{ value: "honesty", excerpt: canary, verdict: "strains" }],

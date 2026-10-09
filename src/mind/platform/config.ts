@@ -515,6 +515,7 @@ const prompts = z.object({
   core_resolve: promptVersion,
   user_summarise: promptVersion,
   user_reflect: promptVersion,
+  user_ideate: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
 });
@@ -542,6 +543,14 @@ const userMind = z.object({
     max_tokens: positiveInt,
     salience: unit,
     confidence: unit,
+  }),
+  ideate: z.object({
+    max_chars: positiveInt,
+    max_tokens: positiveInt,
+    salience: unit,
+    confidence: unit,
+    ttl_days: z.number().positive(),
+    slot_max: countFromZero,
   }),
 });
 

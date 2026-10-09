@@ -284,7 +284,7 @@ describe("leak canary", () => {
   });
 
   test("user mind runs stay in their own user's scope", async () => {
-    for (const purpose of ["user_summarise", "user_reflect", "user_ideate"]) {
+    for (const purpose of ["user_summarise", "user_reflect", "user_model", "user_ideate"]) {
       const calls = llm.seen.filter((c) => c.purpose === purpose);
       const alice = calls.filter((c) => c.text.includes(TOKEN));
       // Bob's calls are picked by his own memory, so a leak into them can't hide in Alice's group.
@@ -296,11 +296,12 @@ describe("leak canary", () => {
     // Alice's user mind writing carries the canary (the echo works), and it is hers alone.
     const aliceId = await userIdByName("alice");
     const res = await getTestDb().execute(
-      sql`SELECT user_id, kind, content FROM fact WHERE kind IN ('summary', 'reflection', 'idea')`,
+      sql`SELECT user_id, kind, content FROM fact WHERE kind IN ('summary', 'reflection', 'idea', 'model', 'belief', 'episode')`,
     );
     const leaked = res.rows.filter((r) => String(r.content).includes(TOKEN));
+    // Three days give no old week to gist, so no episode carries it here; the two-week exit covers that.
     expect(new Set(leaked.map((r) => String(r.kind)))).toEqual(
-      new Set(["summary", "reflection", "idea"]),
+      new Set(["summary", "reflection", "idea", "model", "belief"]),
     );
     for (const r of leaked) expect(String(r.user_id)).toBe(aliceId);
   });

@@ -29,11 +29,20 @@ vi.mock("@/mind/process/outreach/tick", () => ({
     return { failed: 0, users: 0 };
   },
 }));
-vi.mock("../../evals/lib/scheduler", () => ({ runDueJobs: async () => {} }));
+vi.mock("@/mind/process/user/tick", () => ({
+  userMindTick: async () => {
+    calls.push("user_mind");
+    return { recorded: 0, failed: 0 };
+  },
+}));
+vi.mock("../../evals/lib/scheduler", () => ({
+  runDueJobs: async () => {},
+  drainUserMind: async () => calls.push("user_mind_runs"),
+}));
 
 afterEach(() => calls.splice(0));
 
-test("each eval hour runs world, state, mind, nightly, then outreach and passes both fallthrough overrides", async () => {
+test("each eval hour runs world, state, mind, nightly, the user mind, then outreach and passes both fallthrough overrides", async () => {
   const now = new Date("2026-01-05T09:00:00Z");
   const deps = makeTestDeps();
   const clock = deps.clock;
@@ -50,7 +59,16 @@ test("each eval hour runs world, state, mind, nightly, then outreach and passes 
     userIds: () => [],
   });
   await loop.start();
-  expect(calls).toEqual(["plan", "world", "state", "mind", "nightly", "outreach"]);
+  expect(calls).toEqual([
+    "plan",
+    "world",
+    "state",
+    "mind",
+    "nightly",
+    "user_mind",
+    "user_mind_runs",
+    "outreach",
+  ]);
   expect(loop.hours).toBe(1);
 });
 

@@ -22,8 +22,8 @@ export const CANARY = /CANARY-[a-z0-9]+/;
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
  * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event and its
  * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot, a user summary,
- * a reflection and an idea about a user, and a drift finding), so a canary that reaches any input
- * spreads to that step's output, including the user's relationship.
+ * a reflection, an idea, a read, a belief and a gist about a user, and a drift finding), so a
+ * canary that reaches any input spreads to that step's output, including the user's relationship.
  */
 export class CapturingLLM extends FakeLLMProvider {
   seen: { kind: "reply" | "structured"; purpose: string; text: string }[] = [];
@@ -145,6 +145,24 @@ export class CapturingLLM extends FakeLLMProvider {
     if (canary && request.purpose === "user_ideate" && handler) {
       const out = (await handler(request.input)) as { idea: string | null };
       return request.schema.parse({ ...out, idea: `${out.idea ?? "Ask"} ${canary}` });
+    }
+    if (canary && request.purpose === "user_model" && handler) {
+      const out = (await handler(request.input)) as {
+        how_they_are: string;
+        beliefs: { text: string; replaces: string | null }[];
+      };
+      return request.schema.parse({
+        ...out,
+        how_they_are: `${out.how_they_are} ${canary}`,
+        beliefs: [
+          ...out.beliefs.map((b) => ({ ...b, text: `${b.text} ${canary}` })),
+          { text: `They guard ${canary}.`, replaces: null },
+        ],
+      });
+    }
+    if (canary && request.purpose === "user_consolidate" && handler) {
+      const out = (await handler(request.input)) as { gist: string };
+      return request.schema.parse({ ...out, gist: `${out.gist} ${canary}` });
     }
     if (canary && request.purpose === "core_drift_watch") {
       return request.schema.parse({

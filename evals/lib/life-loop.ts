@@ -9,12 +9,13 @@ import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { coreMindTick } from "@/mind/process/core/mind-tick";
 import { coreNightly } from "@/mind/process/core/nightly";
 import { outreachTick } from "@/mind/process/outreach/tick";
-import type { RecordingQueue } from "@/mind/platform/jobs";
+import { userMindTick } from "@/mind/process/user/tick";
+import { RecordingQueue } from "@/mind/platform/jobs";
 import { nextLocalDate } from "@/mind/platform/timezone";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertLifeDay } from "@/db/repos/world/life-day";
 import { session_log } from "@/db/schema";
-import { runDueJobs } from "./scheduler";
+import { drainUserMind, runDueJobs } from "./scheduler";
 import { BASE, type LifeScript, type OutreachScript } from "./script";
 import { DAY, HOUR } from "@/mind/platform/time";
 
@@ -26,7 +27,7 @@ export type LoopOutreach = {
 };
 
 /**
- * Runs the production hourly world jobs (plan, world tick, core state tick, core mind tick) at every whole simulated
+ * Runs the production hourly jobs (plan, world tick, core state tick, core mind tick, nightly, user mind tick) at every whole simulated
  * hour between sessions, never moving the clock backwards. Scripted plans are inserted instead of generated.
  * With `outreach`, each hour first runs due jobs (reach-out sends, simulated replies' turn timers),
  * then the script's auto-replies to reach-outs, then the world jobs and the outreach tick.
@@ -119,6 +120,10 @@ export function makeLifeLoop(
     await coreStateTick(coreDepsOf(deps), now);
     await coreMindTick(coreDepsOf(deps), now);
     await coreNightly(coreDepsOf(deps), now);
+    const um = await userMindTick(deps, now);
+    if (um.failed > 0) throw new Error(`user mind tick failed for ${um.failed} user(s)`);
+    // Eval deps always record jobs; the runs the tick records run before the next hour.
+    if (deps.queue instanceof RecordingQueue) await drainUserMind(deps, deps.queue);
     if (outreach) {
       const ot = await outreachTick(deps, now);
       if (ot.failed > 0)

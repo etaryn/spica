@@ -339,6 +339,8 @@ export const ScriptSchema = z
     seed_user_facts: z.array(SeedUserFact).default([]),
     /** Creates every user's relationship row before session 1 and sets these params' value and baseline. */
     relationship_seed: z.partialRecord(z.enum(PARAM_NAMES), z.number()).optional(),
+    /** Users created at the start who never talk (an idle user must cost nothing). */
+    idle_users: z.array(z.string().regex(/^[a-z0-9-]+$/)).default([]),
     assertions: z
       .array(
         z.union([

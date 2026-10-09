@@ -525,6 +525,14 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
         }
       }
     }
+    // Idle users come after the seeds: they have no profile, relationship or facts.
+    for (const key of script.idle_users) {
+      userIds[key] = await insertUserRow(db, {
+        name: key,
+        email: `${key}-${randomUUID()}@eval.local`,
+        now: first,
+      });
+    }
     await lifeLoop?.start();
     let prevStart: Date | null = null;
     // session_log.id is a global primary key, so a retry must reuse that same user's own last id, not another

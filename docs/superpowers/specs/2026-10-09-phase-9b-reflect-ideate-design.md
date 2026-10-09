@@ -41,6 +41,10 @@ One migration: `fact_kind` gains `reflection` and `idea`. No new tables or colum
 throws is traced `failed` and the next still runs; the run is `failed` if any loop failed,
 otherwise `done`. A loop that returns nothing (`null` output) is `done` and writes nothing.
 
+The run reads the live summary and the new memories once, before the loops (the query
+`user_summarise` uses today, now also leaving out `reflection` and `idea`), and passes the same
+memories to all three, so reflect and ideate see what summarise saw even when summarise fails.
+
 Cost: 3 calls per run; with `user_mind.max_triggers_per_day` (3), at most 9 per user per day.
 
 ## 3. `user_reflect`
@@ -49,8 +53,7 @@ Prompt `prompts/user-mind/reflect/v1.md`, `prompts.user_reflect` v1, model `mode
 
 **Inputs** (this user only, plus the snapshot read-only):
 - the live summary (the one summarise just wrote, or the previous if summarise failed);
-- the new memories this run's summarise read (its trace's `inputs.fact_ids`; if summarise failed,
-  the same query summarise uses), sensitive excluded;
+- the run's new memories (§2), sensitive excluded;
 - her `user_mind.reflect.recent` (5) most recent live reflections about this user, so she
   doesn't repeat herself;
 - the phrased relationship line ("You and them");
@@ -124,8 +127,9 @@ In the reach-out send transaction, a winner of kind `make_up` moves `make_up_sta
   0.20, on the threshold, so her own musings rarely beat anything about the user (noted with
   B25). Read through `deps.core.memory` (no user id): core → user, allowed by V2.
 
-The send gate and the reach-out prompt are unchanged; the candidate text fills "Why you're
-writing" as today.
+The send gate is unchanged. The reach-out prompt holds per-kind guidance, so it moves to
+`prompts/reach-out/v2.md` with a `core_thought` and a `user_idea` line (v1 is deleted); the
+candidate text fills "Why you're writing" as today.
 
 ## 8. Memory view
 

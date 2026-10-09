@@ -2,17 +2,21 @@
  * The hourly `outreach_tick`: for each user, decides whether she writes first. A cheap unlocked
  * pre-check skips users she can't reach out to, writing no row. Otherwise one `reach_out_log` row
  * records the candidates, the winner and the gate, and a winner through an open gate is
- * scheduled as a `reach_out_send` job, jittered up to `jitter_max_minutes` later.
+ * scheduled as a `reach_out_send` job, jittered up to `jitter_max_minutes` later. A reach-out
+ * about to go out on an old picture of them first records a user mind run, and the send waits a
+ * few minutes for it.
  */
 
 import { adminListOutreachUsers } from "@/db/repos/admin/relationship";
 import { hasPendingScheduled, insertReachOutLog } from "@/db/repos/user/reach-out";
 import { getRelationshipRow } from "@/db/repos/user/relationship";
+import { liveSummary } from "@/db/repos/user/user-mind";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { withTimeout } from "@/mind/platform/timeout";
+import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { buildCandidates, pickWinner } from "./candidates";
 import { evaluateGate } from "./gate";
 import * as inputs from "./inputs";
@@ -45,7 +49,14 @@ export async function outreachTickUser(
 
   const status = !winner ? "none" : gate.pass ? "scheduled" : "blocked";
   const sendAt =
-    status === "scheduled" ? jitteredSendTime(userId, now, settings.jitter_max_minutes) : null;
+    status === "scheduled"
+      ? await afterStaleSummary(
+          deps,
+          userId,
+          now,
+          jitteredSendTime(userId, now, settings.jitter_max_minutes),
+        )
+      : null;
 
   const logId = await insertReachOutLog(db, userId, {
     candidates,
@@ -89,6 +100,30 @@ async function canReachOut(deps: Deps, userId: string, now: Date): Promise<boole
 
   const pendingSince = new Date(now.getTime() - settings.pending_max_age_minutes * MINUTE);
   return !(await hasPendingScheduled(deps.db, userId, pendingSince));
+}
+
+/**
+ * When her summary of them is missing or old, she takes stock before writing: a user mind run is
+ * recorded, and the send moves to at least `lead_minutes` out so the run can finish first. A
+ * capped or repeated run changes nothing; a slow run means the reach-out uses the old summary.
+ */
+async function afterStaleSummary(
+  deps: Deps,
+  userId: string,
+  now: Date,
+  sendAt: Date,
+): Promise<Date> {
+  const settings = deps.config.user_mind.triggers.stale_summary;
+  const summary = await liveSummary(deps.db, userId);
+  const ageHours = summary ? (now.getTime() - summary.created_at.getTime()) / HOUR : null;
+  if (ageHours !== null && ageHours < settings.max_age_hours) return sendAt;
+  const runId = await recordBigEvents(deps, deps.db, userId, `stale_summary:${now.toISOString()}`, [
+    { kind: "stale_summary", age_hours: ageHours === null ? null : Math.round(ageHours) },
+  ]);
+  if (!runId) return sendAt;
+  await enqueueUserMindRun(deps, runId);
+  const earliest = new Date(now.getTime() + settings.lead_minutes * MINUTE);
+  return sendAt > earliest ? sendAt : earliest;
 }
 
 /** Deterministic per user and hour, so a retried tick picks the same time. */

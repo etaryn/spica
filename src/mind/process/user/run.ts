@@ -16,6 +16,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { USER_MIND_RUN_QUEUE, type UserMindRunJob } from "@/mind/platform/jobs";
 import { MINUTE } from "@/mind/platform/time";
+import { loadRunInputs } from "./inputs";
 import { userSummarise } from "./summarise";
 
 export async function recordBigEvents(
@@ -61,7 +62,8 @@ export async function runUserMind(
   let status: "done" | "failed";
   try {
     const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
-    status = await userSummarise({ db, embedder, config, clock, log, llm, snapshot }, run);
+    const loopDeps = { db, embedder, config, clock, log, llm, snapshot };
+    status = await userSummarise(loopDeps, run, await loadRunInputs(deps, run.user_id));
   } catch (e) {
     // Failed, not thrown: a retry would spend the run again, and the job never retries.
     log.error("user_mind_run failed", { runId: run.id, error: errorName(e) });

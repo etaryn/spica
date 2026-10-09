@@ -66,6 +66,15 @@ export class FakeLLMProvider implements LLMProvider {
         how_i_feel: "I feel the same about them.",
       };
     },
+    // Deterministic: a reflection on the first new memory, none without one.
+    user_reflect: (input: string) => {
+      const ctx = JSON.parse(input) as { new_memories: { content: string }[] };
+      const first = ctx.new_memories[0]?.content;
+      return {
+        reflection: first ? `What stays with me: ${first}`.slice(0, 280) : null,
+        subject: "user",
+      };
+    },
     core_resolve: (input: string) => ({
       content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
       valence: 0,

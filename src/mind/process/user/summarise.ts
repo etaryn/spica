@@ -6,46 +6,25 @@
  */
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import { insertFact, listFactsForSummary, setFactStatus } from "@/db/repos/user/facts";
+import { insertFact, setFactStatus } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
-import { liveSummary, summaryInputFactIds, type Trigger } from "@/db/repos/user/user-mind";
+import { liveSummary, type Trigger } from "@/db/repos/user/user-mind";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { MINUTE } from "@/mind/platform/time";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
+import { memoryLines, triggerText, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
-
-function triggerText(t: Trigger): string {
-  switch (t.kind) {
-    case "param_jump":
-      return `${t.param} between you just ${t.to > t.from ? "rose" : "fell"} sharply`;
-    case "param_band":
-      return `${t.param} between you just ${t.to > t.from ? "rose" : "fell"}`;
-    case "salient_fact":
-      return "they told you something important";
-    case "make_up_done":
-      return "you two made up after a hurt";
-  }
-}
 
 export async function userSummarise(
   deps: UserLoopDeps,
   run: { id: string; user_id: string; triggers: unknown },
+  inputs: RunInputs,
 ): Promise<"done" | "failed"> {
   const { config, db } = deps;
   const settings = config.user_mind.summarise;
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_summarise", async (ctx) => {
-    const previous = await liveSummary(db, userId);
-    // Memories are dated by when their exchange began, so one whose cold path committed after
-    // the last summary can be dated before it: look back a little, minus what it already read.
-    // ponytail: a cold path the daily sweep recovers can commit later than the slack; widen it if
-    // those memories matter
-    const since = previous
-      ? new Date(previous.created_at.getTime() - settings.since_slack_minutes * MINUTE)
-      : null;
-    const consumed = previous ? await summaryInputFactIds(db, userId, previous.id) : [];
-    const facts = await listFactsForSummary(db, userId, since, consumed, settings.max_facts);
+    const { previous, facts } = inputs;
     // A sensitive storyline's title can carry what the sensitive fact says.
     const threads = await listOpenThreads(db, userId, settings.max_threads, {
       excludeSensitive: true,
@@ -65,7 +44,7 @@ export async function userSummarise(
         previous: previous?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: facts.map(({ subject, kind, content }) => ({ subject, kind, content })),
+        new_memories: memoryLines(inputs),
         open_threads: threads.map((t) => t.title),
       }),
       schema: Output,

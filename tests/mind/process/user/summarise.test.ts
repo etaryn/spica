@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { forgetFact, insertFact } from "@/db/repos/user/facts";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
+import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
@@ -49,7 +50,9 @@ test("writes one live summary from the user's memories and her snapshot", async 
   const { deps, userId, fact, run } = await setup();
   await fact("They got the job in Osaka.", 0.9);
   await fact("Private crisis detail.", 0.95, { sensitive: true });
-  expect(await userSummarise(deps, await run("exchange:a"))).toBe("done");
+  expect(
+    await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId)),
+  ).toBe("done");
   const s = (await liveSummary(deps.db, userId))!;
   expect(s).toMatchObject({ kind: "summary", subject: "shared", source: "generated" });
   expect(s.content).toContain("Osaka");
@@ -62,11 +65,11 @@ test("writes one live summary from the user's memories and her snapshot", async 
 test("a second run supersedes the first; one stays live", async () => {
   const { deps, userId, fact, run } = await setup();
   await fact("They got the job in Osaka.", 0.9);
-  await userSummarise(deps, await run("exchange:a"));
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   const first = (await liveSummary(deps.db, userId))!;
   deps.clock.advance(60_000);
   await fact("They moved to Osaka.", 0.9);
-  await userSummarise(deps, await run("exchange:b"));
+  await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId));
   const res = await getTestDb().execute(
     sql`SELECT id, status, superseded_by FROM fact WHERE kind = 'summary' ORDER BY created_at`,
   );
@@ -83,10 +86,12 @@ test("a second run supersedes the first; one stays live", async () => {
 test("after the user deletes the summary, the next run writes a fresh one", async () => {
   const { deps, userId, fact, run } = await setup();
   await fact("They got the job in Osaka.", 0.9);
-  await userSummarise(deps, await run("exchange:a"));
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   await forgetFact(deps.db, userId, (await liveSummary(deps.db, userId))!.id);
   expect(await liveSummary(deps.db, userId)).toBeNull();
-  expect(await userSummarise(deps, await run("exchange:b"))).toBe("done");
+  expect(
+    await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId)),
+  ).toBe("done");
   expect(await liveSummary(deps.db, userId)).not.toBeNull();
 });
 
@@ -98,7 +103,9 @@ test("overlong parts are fitted; empty output fails and keeps the old summary", 
     whats_live: "a",
     how_i_feel: "b",
   });
-  expect(await userSummarise(deps, await run("exchange:a"))).toBe("done");
+  expect(
+    await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId)),
+  ).toBe("done");
   const kept = (await liveSummary(deps.db, userId))!;
   expect((kept.payload as { where_things_stand: string }).where_things_stand.length).toBe(
     deps.config.user_mind.summarise.max_chars,
@@ -108,7 +115,9 @@ test("overlong parts are fitted; empty output fails and keeps the old summary", 
     whats_live: "",
     how_i_feel: "",
   });
-  expect(await userSummarise(deps, await run("exchange:b"))).toBe("failed");
+  expect(
+    await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId)),
+  ).toBe("failed");
   expect((await liveSummary(deps.db, userId))!.id).toBe(kept.id);
 });
 
@@ -126,7 +135,7 @@ test("a thread whose latest memory is sensitive stays out of the summary", async
   const hidden = await thread("The hospital stay");
   await fact("Packing for Osaka.", 0.5, null, { thread_id: open.id });
   await fact("Back in hospital.", 0.5, { sensitive: true }, { thread_id: hidden.id });
-  await userSummarise(deps, await run("exchange:a"));
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   const input = JSON.parse(
     deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!.input,
   );
@@ -134,16 +143,16 @@ test("a thread whose latest memory is sensitive stays out of the summary", async
 });
 
 test("a memory committed after a summary but dated before it is still summarised, once", async () => {
-  const { deps, fact, run } = await setup();
+  const { deps, userId, fact, run } = await setup();
   await fact("They got the job in Osaka.", 0.9);
   deps.clock.advance(60_000);
-  await userSummarise(deps, await run("exchange:a"));
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   deps.clock.advance(60_000);
   // A late cold path: the exchange began before the summary, so its fact is dated then.
   await fact("They adopted a cat.", 0.8, null, {
     created_at: new Date(deps.clock.now().getTime() - 90_000),
   });
-  await userSummarise(deps, await run("exchange:b"));
+  await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId));
   const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise")[1]!;
   const contents = JSON.parse(second.input).new_memories.map((m: { content: string }) => m.content);
   expect(contents).toEqual(["They adopted a cat."]);

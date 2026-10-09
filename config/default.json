@@ -195,7 +195,8 @@
     "core_consolidate": "v1",
     "core_resolve": "v1",
     "reach_out": "v1",
-    "user_summarise": "v1"
+    "user_summarise": "v1",
+    "user_reflect": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -464,6 +465,13 @@
       "max_tokens": 512,
       "salience": 0.6,
       "confidence": 0.7
+    },
+    "reflect": {
+      "recent": 5,
+      "max_chars": 300,
+      "max_tokens": 384,
+      "salience": 0.5,
+      "confidence": 0.6
     }
   }
 }

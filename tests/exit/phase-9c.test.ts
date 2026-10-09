@@ -159,7 +159,7 @@ test("each new trigger runs its batch exactly once", async () => {
     [talker, "long_conversation", "done"],
     [writer, "stale_summary", "done"],
   ]);
-  expect(await count("user_loop_trace")).toBe(9);
+  expect(await count("user_loop_trace")).toBe(15);
   expect(await coreDump()).toBe(before);
 });
 

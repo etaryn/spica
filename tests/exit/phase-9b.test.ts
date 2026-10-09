@@ -170,13 +170,13 @@ async function sentTopics(d: D, u: string) {
   return rows.map((r) => r.topic);
 }
 
-test("one big event: three traces, a summary, a reflection, an idea", async () => {
+test("one big event: five traces, a summary, a reflection, an idea", async () => {
   const d = deps();
   const u = await newUser(d);
   const before = await coreDump();
   await bigEvent(d, u, "BIG audition friday");
   expect(await count("user_mind_run")).toBe(1);
-  expect(await count("user_loop_trace", "status = 'done'")).toBe(3);
+  expect(await count("user_loop_trace", "status = 'done'")).toBe(5);
   for (const kind of ["summary", "reflection", "idea"])
     expect(await count("fact", `kind = '${kind}'`), kind).toBe(1);
   expect(await coreDump()).toBe(before);

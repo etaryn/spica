@@ -2,9 +2,10 @@
  * The `reach_out_send` job: she writes first. The message is composed outside any lock, with
  * typing showing meanwhile. Then, under the conversation lock, the whole gate and the topic check
  * are re-run on fresh state, and the turn is inserted in the same transaction, so a user message
- * or a crisis that arrived during the jitter or typing always wins. An unlocked precheck runs
- * first, so a job that would fail anyway shows no typing and costs no generation; the locked
- * recheck stays the authority. Bubbles are paced like a reply.
+ * or a crisis that arrived during the jitter or typing always wins. An idea or a make-up a reply
+ * already used counts as a used topic: each gets one chance. An unlocked precheck runs first, so
+ * a job that would fail anyway shows no typing and costs no generation; the locked recheck stays
+ * the authority. Bubbles are paced like a reply.
  */
 import { randomUUID } from "node:crypto";
 import { getState } from "@/db/repos/user/conversation-state";
@@ -14,7 +15,12 @@ import {
   updateReachOutLog,
   usedTopics,
 } from "@/db/repos/user/reach-out";
-import { incrementUnanswered, markMakeUpOffered } from "@/db/repos/user/relationship";
+import { getFact } from "@/db/repos/user/facts";
+import {
+  getRelationshipRow,
+  incrementUnanswered,
+  markMakeUpOffered,
+} from "@/db/repos/user/relationship";
 import { retireIdeas } from "@/db/repos/user/user-mind";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
@@ -28,6 +34,7 @@ import { withTimeout } from "@/mind/platform/timeout";
 import { deliverPart } from "@/mind/process/deliver";
 import { composeReachOut, type Composed } from "@/mind/process/hot-path/compose";
 import { resolveSessionId } from "@/mind/process/receive/session";
+import { ideaCutoff } from "@/mind/process/user/ideate";
 import { sleepUntil, typingMs } from "@/mind/process/turn-taking/pacing";
 import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
@@ -143,12 +150,6 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
           send_at: insertAt,
         });
         await incrementUnanswered(tx, userId);
-        // Same transaction as the turn: an idea has had its chance, a make-up is offered
-        // (so a later reply doesn't offer it again).
-        if (winner.kind === "user_idea" && winner.factId) {
-          await retireIdeas(tx, userId, [winner.factId]);
-        }
-        if (winner.kind === "make_up") await markMakeUpOffered(tx, userId);
 
         // `sending_since` makes a user message arriving mid-bubbles buffer behind them.
         return {
@@ -212,11 +213,44 @@ async function checkGateAndTopic(
 ): Promise<{ gate: GateOutcome; topicUsed: boolean }> {
   const gateInputs = await loadGateInputs(deps, userId, at, db, conversation);
   const gate = gateInputs ? evaluateGate(gateInputs, deps.config.outreach, at) : CLOSED_GATE;
-  const topicUsed = (await usedTopics(db, userId)).includes(winner.topic);
+  const topicUsed =
+    (await usedTopics(db, userId)).includes(winner.topic) ||
+    !(await winnerLive(deps, db, userId, winner, at));
   return { gate, topicUsed };
 }
 
-/** Null when it's still fine to send; otherwise what changed. */
+/** An idea still open and within its chance; a make-up still due. Other kinds always are. */
+async function winnerLive(
+  deps: Deps,
+  db: Db,
+  userId: string,
+  winner: Candidate,
+  at: Date,
+): Promise<boolean> {
+  if (winner.kind === "user_idea") {
+    const idea = winner.factId ? await getFact(db, userId, winner.factId) : null;
+    const cutoff = ideaCutoff(at, deps.config.user_mind.ideate.ttl_days);
+    return idea?.kind === "idea" && idea.status === "open" && idea.created_at > cutoff;
+  }
+  if (winner.kind === "make_up") {
+    return (await getRelationshipRow(db, userId))?.make_up_state === "due";
+  }
+  return true;
+}
+
+/**
+ * Marks the winner used in the send's transaction; false when a concurrent write (a reply's cold
+ * path) used it first. Runs only once every other check has passed, so a drop never spends it.
+ */
+async function claimWinner(tx: Db, userId: string, winner: Candidate): Promise<boolean> {
+  if (winner.kind === "user_idea") {
+    return winner.factId !== null && (await retireIdeas(tx, userId, [winner.factId])) > 0;
+  }
+  if (winner.kind === "make_up") return markMakeUpOffered(tx, userId);
+  return true;
+}
+
+/** Null when it's still fine to send, with the winner now claimed; otherwise what changed. */
 async function recheckUnderLock(
   deps: Deps,
   tx: Db,
@@ -230,8 +264,9 @@ async function recheckUnderLock(
   const epochChanged = state.reply_epoch !== before.startEpoch;
   const newTurn = (await sessionLog.recentTurns(tx, userId, 1)).at(-1)?.id !== before.lastTurnId;
 
-  if (gate.pass && !topicUsed && !epochChanged && !newTurn) return null;
-  return { gate: gate.results, topicUsed, epochChanged, newTurn };
+  const passed = gate.pass && !topicUsed && !epochChanged && !newTurn;
+  if (passed && (await claimWinner(tx, userId, winner))) return null;
+  return { gate: gate.results, topicUsed: topicUsed || passed, epochChanged, newTurn };
 }
 
 async function releaseSending(deps: Deps, userId: string, epoch: number): Promise<void> {

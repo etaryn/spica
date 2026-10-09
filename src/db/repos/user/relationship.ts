@@ -245,10 +245,15 @@ export async function resetUnanswered(db: Db, userId: string): Promise<void> {
     .where(eq(relationship.user_id, userId));
 }
 
-/** She reached out to make up: the make-up has been offered, so a reply won't offer it again. */
-export async function markMakeUpOffered(db: Db, userId: string): Promise<void> {
-  await db
+/**
+ * She reached out to make up: the make-up has been offered, so a reply won't offer it again.
+ * False when it wasn't due any more.
+ */
+export async function markMakeUpOffered(db: Db, userId: string): Promise<boolean> {
+  const rows = await db
     .update(relationship)
     .set({ make_up_state: "offered" })
-    .where(and(eq(relationship.user_id, userId), eq(relationship.make_up_state, "due")));
+    .where(and(eq(relationship.user_id, userId), eq(relationship.make_up_state, "due")))
+    .returning({ id: relationship.user_id });
+  return rows.length > 0;
 }

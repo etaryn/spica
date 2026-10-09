@@ -7,6 +7,7 @@ import {
   localMidnight,
   nextLocalDate,
   previousLocalDate,
+  shiftLocalDate,
 } from "@/mind/platform/timezone";
 
 test("validates IANA names", () => {
@@ -95,4 +96,9 @@ test("localMidnight finds the start of the local date, including where literal m
   expect(localMidnight("2026-01-05", "Pacific/Kiritimati").toISOString()).toBe(
     "2026-01-04T10:00:00.000Z",
   );
+});
+
+test("shiftLocalDate moves across month and year ends", () => {
+  expect(shiftLocalDate("2026-01-05", -7)).toBe("2025-12-29");
+  expect(shiftLocalDate("2026-02-28", 1)).toBe("2026-03-01");
 });

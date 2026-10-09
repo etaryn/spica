@@ -81,6 +81,11 @@ export class FakeLLMProvider implements LLMProvider {
       const first = ctx.new_memories[0]?.content;
       return { idea: first ? `Ask about: ${first}`.slice(0, 190) : null };
     },
+    // Deterministic: the week's memories in one line, so a canary in a source carries through.
+    user_consolidate: (input: string) => {
+      const ctx = JSON.parse(input) as { sources: { content: string }[] };
+      return { gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280) };
+    },
     core_resolve: (input: string) => ({
       content: `Instead, ${/^Planned event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "Spica changed her plans."}`,
       valence: 0,

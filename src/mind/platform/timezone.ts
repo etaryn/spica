@@ -55,15 +55,16 @@ export function localDateString(at: Date, tz: string): string {
 
 /** The day before a "YYYY-MM-DD" date (calendar arithmetic, no time zone). */
 export function previousLocalDate(date: string): string {
-  return shiftDate(date, -1);
+  return shiftLocalDate(date, -1);
 }
 
 /** The day after a "YYYY-MM-DD" date (calendar arithmetic, no time zone). */
 export function nextLocalDate(date: string): string {
-  return shiftDate(date, 1);
+  return shiftLocalDate(date, 1);
 }
 
-function shiftDate(date: string, days: number): string {
+/** A "YYYY-MM-DD" date moved by `days` (calendar arithmetic, no time zone). */
+export function shiftLocalDate(date: string, days: number): string {
   const day = new Date(`${date}T00:00:00Z`);
   day.setUTCDate(day.getUTCDate() + days);
   return day.toISOString().slice(0, 10);

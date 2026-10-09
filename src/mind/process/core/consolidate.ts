@@ -9,12 +9,7 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { runCoreLoop } from "./runner";
 import { DAY } from "@/mind/platform/time";
-
-function daysBefore(day: string, count: number): string {
-  const date = new Date(`${day}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() - count);
-  return date.toISOString().slice(0, 10);
-}
+import { shiftLocalDate } from "@/mind/platform/timezone";
 
 export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopStatus> {
   const { config, core } = deps;
@@ -48,7 +43,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
     "core_consolidate",
     now,
     async (ctx) => {
-      const beforeDay = daysBefore(day, bounds.gist_after_days);
+      const beforeDay = shiftLocalDate(day, -bounds.gist_after_days);
       const [group] = await core.memory.eligibleGistGroups(
         beforeDay,
         timezone,

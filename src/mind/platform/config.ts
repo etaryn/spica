@@ -522,6 +522,7 @@ const prompts = z.object({
   user_summarise: promptVersion,
   user_reflect: promptVersion,
   user_ideate: promptVersion,
+  user_consolidate: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
 });
@@ -561,6 +562,15 @@ const userMind = z.object({
     ttl_days: z.number().positive(),
     max_planned: positiveInt,
     slot_max: countFromZero,
+  }),
+  consolidate: z.object({
+    gist_after_days: positiveInt,
+    min_group: positiveInt,
+    max_sources: positiveInt,
+    gist_source_factor: unit,
+    max_chars: positiveInt,
+    max_tokens: positiveInt,
+    confidence: unit,
   }),
 });
 

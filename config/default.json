@@ -198,7 +198,8 @@
     "reach_out": "v2",
     "user_summarise": "v1",
     "user_reflect": "v1",
-    "user_ideate": "v1"
+    "user_ideate": "v1",
+    "user_consolidate": "v1"
   },
   "queue": {
     "enqueue_timeout_ms": 2000
@@ -495,6 +496,15 @@
       "ttl_days": 3,
       "max_planned": 20,
       "slot_max": 1
+    },
+    "consolidate": {
+      "gist_after_days": 7,
+      "min_group": 3,
+      "max_sources": 12,
+      "gist_source_factor": 0.5,
+      "max_chars": 300,
+      "max_tokens": 512,
+      "confidence": 0.6
     }
   }
 }

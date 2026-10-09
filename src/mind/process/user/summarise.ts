@@ -26,7 +26,8 @@ export async function userSummarise(
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_summarise", async (ctx) => {
     const { previous, facts } = inputs;
-    // A sensitive storyline's title can carry what the sensitive fact says.
+    // A sensitive storyline's title can carry what the sensitive fact says, and a title doesn't
+    // mark the summary the way a sensitive memory does, so those storylines stay out.
     const threads = await listOpenThreads(db, userId, settings.max_threads, {
       excludeSensitive: true,
     });

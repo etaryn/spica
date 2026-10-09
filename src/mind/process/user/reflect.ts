@@ -48,8 +48,11 @@ export async function userReflect(
     let reflectionId: string | null = null;
     if (out.reflection) {
       const [embedding] = await deps.embedder.embed([out.reflection], "document");
+      // Anything she read that a crisis touched marks what she writes from it.
       const sensitive =
-        inputs.facts.some((f) => f.sensitive) || (!!summary && isSensitive(summary));
+        inputs.facts.some((f) => f.sensitive) ||
+        (!!summary && isSensitive(summary)) ||
+        earlier.some(isSensitive);
       const row = await insertFact(db, userId, {
         subject: out.subject,
         kind: "reflection",

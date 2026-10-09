@@ -105,7 +105,8 @@ async function canReachOut(deps: Deps, userId: string, now: Date): Promise<boole
 /**
  * When her summary of them is missing or old, she takes stock before writing: a user mind run is
  * recorded, and the send moves to at least `lead_minutes` out so the run can finish first. A
- * capped or repeated run changes nothing; a slow run means the reach-out uses the old summary.
+ * capped or repeated run (a retried tick) changes nothing, so the send keeps its jittered time; a
+ * slow run means the reach-out uses the old summary.
  */
 async function afterStaleSummary(
   deps: Deps,

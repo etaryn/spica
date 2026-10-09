@@ -64,6 +64,15 @@ export async function userMindTick(
     await each(c.user_id, async () => {
       const rel = await getRelationshipRow(db, c.user_id);
       if (!rel || rel.status === "ended_by_user") return false;
+      // A later crisis turn whose cold path hasn't committed still holds the window; its own
+      // stored end fires once that commits.
+      const quietUntil = await effectiveCrisisQuietUntil(
+        deps,
+        c.user_id,
+        rel.crisis_quiet_until,
+        now,
+      );
+      if (quietUntil && quietUntil > now) return false;
       return record(deps, c.user_id, `crisis_passed:${c.crisis_quiet_until.toISOString()}`, [
         { kind: "crisis_passed" },
       ]);

@@ -102,3 +102,29 @@ test("a reflection that read a sensitive memory is marked; one that didn't is no
     sensitive: true,
   });
 });
+
+test("a reflection that read a sensitive earlier reflection is marked too", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_reflect = sequence({
+    reflection: "They keep going quiet.",
+    subject: "user",
+  });
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "reflection",
+    content: "They were in a very dark place.",
+    payload: { sensitive: true },
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  deps.clock.advance(60_000);
+  await userReflect(deps, run, await loadRunInputs(deps, userId));
+  const [latest] = await recentReflections(deps.db, userId, 1);
+  expect(latest!.content).toBe("They keep going quiet.");
+  expect(latest!.payload).toMatchObject({ sensitive: true });
+});

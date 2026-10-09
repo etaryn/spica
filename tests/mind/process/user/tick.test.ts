@@ -116,6 +116,22 @@ test("a long conversation after a crisis window ended fires on its own", async (
   expect((await runs()).map((r) => r.source_ref)).toEqual([`long_conversation:${sid}`]);
 });
 
+test("crisis_passed waits while a later crisis turn still holds the window", async () => {
+  const { deps, u } = await setup();
+  await setQuietUntil(u, new Date(now.getTime() - 10 * MIN));
+  // A later crisis turn whose cold path hasn't committed yet: the stored window is stale.
+  await insertTurn(getTestDb(), u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "I'm here",
+    created_at: new Date(now.getTime() - 60 * MIN),
+    safety_flag: { flagged: true, category: "self_harm", source: "classifier" },
+  });
+  expect((await userMindTick(deps, now)).recorded).toBe(0);
+  expect(await runs()).toEqual([]);
+});
+
 test("a crisis that ended before the lookback fires nothing", async () => {
   const { deps, u } = await setup();
   await setQuietUntil(u, new Date(now.getTime() - 25 * 60 * MIN));

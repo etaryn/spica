@@ -906,7 +906,9 @@ job is enqueued after commit.
   once for both.
 - `crisis_passed`: the stored `relationship.crisis_quiet_until` ended within
   the lookback. `source_ref` `crisis_passed:<its ISO time>`, so each crisis
-  fires once. The run reads the crisis memories (§9.5).
+  fires once. It waits while a later flagged turn still holds the effective
+  window (its cold path not yet committed); that turn's stored end fires
+  instead. The run reads the crisis memories (§9.5).
 - `stale_summary`: when `outreach_tick` schedules a send and the live summary
   is missing or older than `user_mind.triggers.stale_summary.max_age_hours`
   (72), it records a run (`source_ref` `stale_summary:<tick time>`) and moves
@@ -991,8 +993,8 @@ Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
 (`payload.sensitive`) reach summarise and reflect, so after a crisis her
 picture of the user knows something heavy happened. A summary that read one,
 or whose previous summary was sensitive (its text carries forward), is
-written with `payload.sensitive`; so is a reflection that read one or read a
-sensitive summary. Ideate reads none of them: it gets non-sensitive memories,
+written with `payload.sensitive`; so is a reflection that read one, a
+sensitive summary or a sensitive earlier reflection. Ideate reads none of them: it gets non-sensitive memories,
 the newest non-sensitive summary, and this run's reflection only if it isn't
 sensitive, because ideas become reach-outs and push notifications. Replies
 read everything; reach-outs read the newest non-sensitive summary (§10.3)
@@ -1856,6 +1858,14 @@ and life tick) were dropped; the replacement is designed fresh.
   *Tuning.*
 - **B71.** Reflect and ideate call the model even with no new memories (a
   param-only trigger); skip them when there's nothing new. *Tuning.*
+- **B82.** `adminEndedLongSessions` scans `session_log` by `session_id` with
+  no `created_at` index, hourly, and its limit reuses `cold_path.sweep_batch`
+  (already-recorded sessions keep the oldest slots). Add an index and match on
+  `(user_id, session_id)` when the table grows. *Later.*
+- **B83.** `user_mind.triggers.long_conversation.quiet_minutes` (30) must stay
+  at or above `session.idle_gap_minutes` (30): otherwise the tick records a
+  session mid-talk and its real end never fires (the `source_ref` is taken).
+  Add a config check if either is tuned. *Tuning.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.

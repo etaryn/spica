@@ -150,7 +150,42 @@ test("retrieval reads reflections but not ideas; reconcile reads neither", async
   const ranked = await candidateFacts(getTestDb(), u, vec(), 10);
   expect(ranked.map((c) => c.id)).toContain(r.id);
   expect(ranked.map((c) => c.id)).not.toContain(i.id);
-  expect(await nearFacts(getTestDb(), u, "shared", vec(), 10, -1)).toEqual([]);
+  const control = await insertFact(getTestDb(), u, {
+    subject: "shared",
+    kind: "event",
+    content: "they watched a film together",
+    embedding: vec(),
+    created_at: T0,
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.8,
+    source: "turn",
+  });
+  const near = (await nearFacts(getTestDb(), u, "shared", vec(), 10, -1)).map((n) => n.id);
+  expect(near).toEqual([control.id]);
+});
+
+test("group-scoped reflections, ideas and summaries are never read as hers", async () => {
+  const u = await createTestUser();
+  for (const kind of ["reflection", "idea", "summary"] as const) {
+    await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind,
+      content: kind,
+      embedding: vec(),
+      created_at: T0,
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+      scope: "group",
+    });
+  }
+  expect(await recentReflections(getTestDb(), u, 5)).toEqual([]);
+  expect(await liveIdeas(getTestDb(), u, new Date(0), 5)).toEqual([]);
+  expect(await liveSummary(getTestDb(), u)).toBeNull();
 });
 
 test("the memory view lists reflections and ideas", async () => {

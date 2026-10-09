@@ -83,6 +83,7 @@ export async function liveSummary(db: Db, userId: string): Promise<FactRow | nul
     .where(
       and(
         eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
         eq(fact.kind, "summary"),
         notInArray(fact.status, ["superseded", "stale"]),
       ),
@@ -124,6 +125,7 @@ export async function recentReflections(db: Db, userId: string, limit: number): 
     .where(
       and(
         eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
         eq(fact.kind, "reflection"),
         notInArray(fact.status, ["superseded", "stale"]),
       ),
@@ -145,6 +147,7 @@ export async function liveIdeas(
     .where(
       and(
         eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
         eq(fact.kind, "idea"),
         eq(fact.status, "open"),
         gt(fact.created_at, since),

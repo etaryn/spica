@@ -20,7 +20,9 @@ export const ALL_PURPOSES = [
   "core_drift_watch",
   "user_summarise",
   "user_reflect",
+  "user_model",
   "user_ideate",
+  "user_consolidate",
   "embed",
 ];
 /** The annotation judges, made real by `--annotate`. */

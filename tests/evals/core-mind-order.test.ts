@@ -81,8 +81,8 @@ test("the new core purposes can be selected without enabling real reply scripts"
   expect(profile.realScripts).toBe(false);
 });
 
-test("every core-loop purpose the fake model answers can be made real", () => {
+test("every core and user loop purpose the fake model answers can be made real", () => {
   const fake = new FakeLLMProvider();
-  for (const p of Object.keys(fake.handlers).filter((k) => k.startsWith("core_")))
+  for (const p of Object.keys(fake.handlers).filter((k) => /^(core|user)_/.test(k)))
     expect(ALL_PURPOSES, p).toContain(p);
 });

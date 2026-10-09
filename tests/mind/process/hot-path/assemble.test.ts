@@ -206,6 +206,49 @@ describe("time-gap markers in the message window", () => {
     });
     expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "c", "d"]);
   });
+  test("turns before the latest gap of at least windowGapHours are left out", () => {
+    const p = assemblePrompt({
+      ...base,
+      now: at("2026-01-10T09:00:30Z"),
+      gapMarkerMinHours: 24,
+      windowGapHours: 72,
+      recentTurns: [
+        { role: "user", text: "old news", created_at: at("2026-01-01T09:00:00Z") },
+        { role: "companion", text: "old reply", created_at: at("2026-01-01T09:00:05Z") },
+        { role: "user", text: "two days on", created_at: at("2026-01-03T09:00:00Z") },
+        { role: "companion", text: "hey", created_at: at("2026-01-03T09:00:05Z") },
+        { role: "user", text: "back after a week", created_at: at("2026-01-10T09:00:00Z") },
+      ],
+    });
+    expect(p.messages.map((m) => m.content)).toEqual(["back after a week"]);
+  });
+  test("a gap under windowGapHours keeps the old turns and the marker", () => {
+    const p = assemblePrompt({
+      ...base,
+      now: at("2026-01-03T09:00:30Z"),
+      gapMarkerMinHours: 24,
+      windowGapHours: 72,
+      recentTurns: [
+        { role: "user", text: "a", created_at: at("2026-01-01T09:00:00Z") },
+        { role: "companion", text: "b", created_at: at("2026-01-01T09:00:05Z") },
+        { role: "user", text: "c", created_at: at("2026-01-03T09:00:00Z") },
+      ],
+    });
+    expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "[2 days later] c"]);
+  });
+  test("a reach-out after a long gap has no old turns and still ends on its cue", () => {
+    const p = assemblePrompt({
+      ...base,
+      windowGapHours: 72,
+      now: at("2026-01-10T09:00:00Z"),
+      recentTurns: [
+        { role: "user", text: "old", created_at: at("2026-01-01T09:00:00Z") },
+        { role: "companion", text: "older reply", created_at: at("2026-01-01T09:00:05Z") },
+      ],
+      reachOut: { slot: "why", cue: "CUE" },
+    });
+    expect(p.messages).toEqual([{ role: "user", content: "CUE" }]);
+  });
 });
 
 test("open questions fill their own slot after due threads, only when present", () => {

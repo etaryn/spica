@@ -27,6 +27,11 @@ export interface AssembleInput {
   now: Date;
   /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
+  /**
+   * Leaves out turns from before the latest gap of at least this many hours (the gap up to now
+   * counts too). After days apart the old transcript is stale; deep memory carries what matters.
+   */
+  windowGapHours?: number;
   /** The user's unanswered questions. */
   openQuestions?: string[];
   /** Things she wants to bring up with them (her ideas); none in a crisis or a reach-out. */
@@ -112,8 +117,9 @@ function questionList(questions: string[] | undefined): string | null {
  * after a long gap is marked; without the marker the model carries on from the old moment.
  */
 function conversationMessages(input: AssembleInput): ChatMessage[] {
-  const firstUser = input.recentTurns.findIndex((t) => t.role === "user");
-  const turns = firstUser === -1 ? [] : input.recentTurns.slice(firstUser);
+  const window = sinceLongGap(input);
+  const firstUser = window.findIndex((t) => t.role === "user");
+  const turns = firstUser === -1 ? [] : window.slice(firstUser);
 
   return turns.map((turn, i) => {
     const previous = turns[i - 1];
@@ -131,6 +137,21 @@ function conversationMessages(input: AssembleInput): ChatMessage[] {
       content: marked ? `[${elapsed(gapHours)} later] ${turn.text}` : turn.text,
     };
   });
+}
+
+/** The turns after the latest gap of at least `windowGapHours`, counting the gap up to now. */
+function sinceLongGap(input: AssembleInput): AssembleInput["recentTurns"] {
+  const turns = input.recentTurns;
+  if (input.windowGapHours === undefined) return turns;
+  const minGap = input.windowGapHours * HOUR;
+  const last = turns.at(-1)?.created_at;
+  if (last && input.now.getTime() - last.getTime() >= minGap) return [];
+  for (let i = turns.length - 1; i > 0; i--) {
+    const at = turns[i]!.created_at;
+    const before = turns[i - 1]!.created_at;
+    if (at && before && at.getTime() - before.getTime() >= minGap) return turns.slice(i);
+  }
+  return turns;
 }
 
 /** A reach-out ends on a user-role cue for the model to answer. */

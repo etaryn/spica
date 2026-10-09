@@ -300,6 +300,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     ideas: shownIdeas.map((i) => i.content),
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,
+    windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
     reachOut: input.reachOut
       ? renderReachOut(loadPrompt("reach-out", config.prompts.reach_out), input.reachOut)

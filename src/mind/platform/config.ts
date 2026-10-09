@@ -66,6 +66,7 @@ const chat = z.object({
   history_page_size: positiveInt,
   max_message_chars: positiveInt,
   gap_line_min_hours: nonNegative,
+  window_gap_hours: z.number().positive(),
   relationship_line: z.boolean(),
 });
 

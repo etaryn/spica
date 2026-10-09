@@ -36,6 +36,7 @@
     "history_page_size": 50,
     "max_message_chars": 4000,
     "gap_line_min_hours": 24,
+    "window_gap_hours": 72,
     "relationship_line": true
   },
   "inspector": { "snapshot_versions": 5 },

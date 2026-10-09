@@ -327,7 +327,17 @@ Every table here references `user(id) ON DELETE CASCADE`.
     reference). **Built 9a:** `summary` (migration 0024). A summary is a
     `shared`, `generated` fact that supersedes the previous one; user
     retrieval, reconcile neighbours and the decay pass leave summaries out, so
-    only the reply's own slot reads them (§10.3).
+    only the reply's own slot reads them (§10.3). **Built 9b:** `reflection`
+    and `idea` (migration 0025). Both are `generated` facts written by a user
+    loop and never read off an exchange (extraction cannot emit them). A
+    reflection (`user` or `shared`) comes back through ordinary retrieval and
+    decays like any fact, but is not a reconcile neighbour: it is her
+    inference, and a turn fact must not merge into or supersede it. An idea
+    (`shared`, `open` until used, then `resolved`) is left out of retrieval,
+    reconcile and decay, because it has its own reply slot (§10.3) and
+    expires by age (§9.5). Neither feeds a later summarise, reflect or ideate
+    as a new memory, so a loop never reads its own output. The memory view
+    lists both and the user can hard-delete them.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
@@ -832,7 +842,8 @@ reinforcement and decay (§12), and the "what I remember" view (§12.5).
 **New (PROPOSED):**
 - **Episodes** of the relationship ("remember when…").
 - **Big-event summaries** from `user_summarise`.
-- **Reflections, thoughts and ideas** about this user.
+- **Reflections, thoughts and ideas** about this user. **Built 9b:**
+  reflections and ideas (§6.1, §9.5); thoughts remain PROPOSED.
 - **Disclosure ledger** (§11.3) and **common ground** (what each knows the
   other knows).
 - **Idiolect**: inside jokes, nicknames, rituals, running references.
@@ -919,13 +930,45 @@ triggers in words, and the snapshot. Output `{where_things_stand,
 whats_live, how_i_feel}`, each fitted to 300 characters, capped at 512
 tokens. It is stored as the `summary` fact (salience 0.6, confidence
 `user_mind.summarise.confidence` 0.7) and supersedes the previous one under a
-per-user advisory lock. The other loops in the table are 9b and later.
+per-user advisory lock.
+
+**Built 9b:** the batch is three loops in sequence, `user_summarise`, then
+`user_reflect`, then `user_ideate`, each through `runUserLoop` with its own
+prompt and `user_loop_trace`; each reads what the one before wrote. The run
+loads the live summary and the new memories once, before the loops
+(`src/mind/process/user/inputs.ts`; the memory query leaves out summaries,
+reflections and ideas), and passes the same memories to all three, so reflect
+and ideate see what summarise saw even when summarise failed. A loop that
+throws is traced `failed` and the next still runs; the run is `failed` if any
+loop failed, otherwise `done`. A loop that returns nothing writes nothing and
+is `done`.
+- **`user_reflect`** (`prompts/user-mind/reflect/v1.md`,
+  `prompts.user_reflect` v1). Inputs: the live summary, the run's new
+  memories, her `user_mind.reflect.recent` (5) latest live reflections (so she
+  does not repeat herself), the phrased relationship line, the triggers in
+  words, the snapshot. Output `{reflection: string | null, subject: "user" |
+  "shared"}`, text fitted to `user_mind.reflect.max_chars` (300), capped at
+  `max_tokens` 384. Non-null writes one `reflection` fact (salience 0.5,
+  confidence 0.6, `source_ref` `user_reflect:<traceId>`).
+- **`user_ideate`** (`prompts/user-mind/ideate/v1.md`, `prompts.user_ideate`
+  v1). Inputs: the live summary, this run's reflection if reflect wrote one,
+  the same new memories, open non-sensitive threads, her live ideas for this
+  user (at most `user_mind.ideate.max_planned` (20), so she does not repeat
+  one), the snapshot. Output `{idea: string | null}`, fitted to
+  `max_chars` (200), `max_tokens` 256, at most one idea per run. Non-null
+  writes one `idea` fact (`shared`, salience 0.5, confidence 0.6). An idea is
+  live while `open` and younger than `ttl_days` (3); expiry is a read-time
+  filter, with no job.
+
+Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
+Salience, confidence and the other values are test-phase defaults in
+`user_mind.reflect.*` and `user_mind.ideate.*`.
 
 | Loop | Writes |
 |---|---|
 | `user_summarise` | Deep memory: a `summary` (where things stand, what's live, how she feels about them) |
-| `user_reflect` | Deep memory: `reflection` / `thought` about this user |
-| `user_ideate` | Deep memory: `idea` (things she wants to bring up); available to outreach and initiative |
+| `user_reflect` (**Built 9b**) | Deep memory: `reflection` about this user (`thought` stays PROPOSED) |
+| `user_ideate` (**Built 9b**) | Deep memory: `idea` (things she wants to bring up); available to outreach |
 | `user_consolidate` | Deep memory: episodes into gist |
 | `user_model` | State: inferred user state. Memory: beliefs about the user, common ground |
 
@@ -1001,7 +1044,16 @@ when the guard is on.
       easily. User retrieval is unchanged
    7. due threads ("things you might naturally ask about"), open questions,
       things she wants to bring up (`user_ideate`); for a reach-out, "Why
-      you're writing"
+      you're writing". **Built 9b:** "Things you want to bring up", after
+      "They asked and you haven't answered yet": at most
+      `user_mind.ideate.slot_max` (1) live idea, newest first, assembled in
+      code (the reply prompt does not change). Skipped for crisis replies and
+      for reach-outs (which have their own reason; a second topic invites
+      cramming). **One chance:** `Composed.offeredIdeas` carries the ids shown;
+      the cold path of the sent reply moves each one still `open` to
+      `resolved` in its transaction, and a reach-out that wins with an idea
+      resolves it in the send transaction. A reply composed but never sent
+      enqueues no cold path, so its idea stays live
    8. recent turns (short-term; leads per V9)
 3. **Generate** with the reply model. She uses at most one or two memories
    per reply, only when natural.
@@ -1221,7 +1273,20 @@ Code: `src/mind/process/outreach/`.
   (recent user event or promise), `her_day` (a recent core event), `check_in`
   (gap well beyond the user's cadence). **New (PROPOSED):** `core_thought`
   (a recent core thought worth sharing) and `user_idea` (from `user_ideate`).
-  A topic key is used once; sensitive items are filtered.
+  A topic key is used once; sensitive items are filtered. **Built 9b:**
+  the order is `thread, make_up, user_event, her_day, core_thought,
+  user_idea, check_in`. `user_idea`: one candidate per live idea (at most
+  `outreach.user_idea_limit` (3)), topic `idea:<id>`, strength = salience,
+  weight 0.6 (salience 0.5 scores 0.30). `core_thought`: her core memories of
+  kind `thought` or `idea` from the last `outreach.core_thought_lookback_hours`
+  (24), at most `outreach.core_thought_limit` (3), recallable only (no
+  hypotheticals, nothing future-dated), read through `deps.core.memory` (core
+  to user, V2); topic `core:<id>` (the `her_day` namespace, so one memory of
+  hers reaches a user once whichever kind carries it), strength = salience,
+  weight 0.5. The reach-out prompt is `prompts/reach-out/v2.md` (v1 deleted),
+  with a `core_thought` and a `user_idea` guidance line. **B26 fixed:** the
+  send transaction moves `make_up_state` from `due` to `offered` when a
+  `make_up` wins, so the next reply does not offer it again.
 - **Send gate** (every rule evaluated and logged): G1 not ended; G2 caps
   (`cap_per_day` 1, `cap_per_week` 3, rolling); G3 not in her busy or quiet
   block; G4 fewer than `max_unanswered` (2) unanswered; G5 no conversation in
@@ -1279,9 +1344,10 @@ match.
   share `core.loops.max_tokens` (512). Nightly reflect and render each cap
   output at 1024 tokens; consolidation and drift each cap at 512. A no-input
   reflection or no-gist consolidation records a zero-call `done` trace.
-- **User (Built 9a):** one triggered batch per big event, at most
+- **User (Built 9a, 9b):** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` (3) per user per local date, so cost scales
-  with what happens, not with users or time. Each user loop run writes a
+  with what happens, not with users or time. **Built 9b:** a batch is three
+  calls (summarise, reflect, ideate), so at most 9 per user per day. Each user loop run writes a
   `user_loop_trace` with tokens and cost from `core.prices`. Idle users cost nothing beyond
   the built per-user ticks (relationship, outreach), which are code-only
   except a reach-out's composition.
@@ -1470,12 +1536,13 @@ two minds or at reply time.
 | 8c. Core nightly | Nightly reflect, core decay and gist, self snapshot rendering and lines, diagnostic drift watch, hourly `core_nightly`; deterministic two-night exit and canary (`tests/exit/phase-8c.test.ts`, `tests/exit/mind-split.test.ts`). |
 | 8d. Core integration | Mood- and goal-biased core recall, the claim line (reply v11, extract v5 `claim_kind`, cold-path grounding against core), inspector Core tab (budget, goals, snapshot changes, drift), the fourteen-day exit all-fake (`tests/exit/core-loops.test.ts`, with a budget-6 case) and real-core (`pnpm exit:core`), canary over every core loop. Phase 8 built (`pnpm test` 118 files / 910 tests at close); the first real-core run fails its structural checks (B61) |
 | 9a. User mind foundation | `user_mind_run` and `user_loop_trace` (migration 0024), the four big-event triggers and the daily cap, `runUserLoop` sharing the core runner's metering, `user_summarise`, the `summary` fact kind (outside retrieval, reconcile and decay), the "Where things stand with them" reply slot, the sweep inside `cold_path_sweep`, evals (`pnpm exit:user`), exit `tests/exit/phase-9a.test.ts` and the canary over `user_summarise`. `pnpm test` 125 files / 973 tests at close |
+| 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1003 tests at close |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9a are built):**
+**Next phases (PROPOSED order; the order is OPEN, §21; Phases 8, 9a and 9b are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **9. User mind** (9a built) | Sliced: **9a** (built) foundation and summarise; **9b** reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** consolidate, model, the remaining triggers, inspector User mind tab (B2) | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
+| **9. User mind** (9a, 9b built) | Sliced: **9a** (built) foundation and summarise; **9b** (built) reflect, ideate, the ideas slot, outreach `core_thought` and `user_idea` candidates (B26); **9c** consolidate, model, the remaining triggers, inspector User mind tab (B2) | Each trigger fires its batch exactly once; idle users run no loop; outputs land in user scope only; canary passes |
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
@@ -1498,8 +1565,8 @@ smallest budget; raise only with review-run evidence.
 5. **Core memory storage:** settled, separate core tables (§6.2).
 6. **Drift response:** whether a values contradiction should eventually
    block or roll back a snapshot.
-7. **User-loop outputs to outreach:** whether `user_reflect` / `user_ideate`
-   feed reach-out candidates.
+7. **User-loop outputs to outreach:** settled 2026-10-09: ideas feed
+   outreach as `user_idea`; reflections do not.
 8. **Attachment at onboarding:** whether the test measures the user's
    attachment style.
 9. **Phase order:** §20's proposed order, including whether onboarding comes
@@ -1509,7 +1576,7 @@ smallest budget; raise only with review-run evidence.
 11. **Jab vs contempt:** where the line sits, and which suspended rules come
     back and how. Decided in the guard phase.
 
-Settled: core memory in separate tables; fixed Spica, the test calibrates the user; interests `adjacent` (at
+Settled: user-loop outputs to outreach (#7: ideas yes, reflections no); core memory in separate tables; fixed Spica, the test calibrates the user; interests `adjacent` (at
 reply time only, §7.5); backchannel style global `judge`; shared day plan;
 reach-out caps 1/day, 3/week, silence after 2 unanswered; identity
 disclosure honest, in her own voice.
@@ -1721,6 +1788,12 @@ and life tick) were dropped; the replacement is designed fresh.
   a lower-salience fact left out of a busy run is older than the next run's
   cutoff and never reaches a summary. Carry unread facts forward (cutoff from
   the oldest fact not yet read) if summaries miss things. *Tuning.*
+- **B68.** An idea offered in a reply whose cold path is later re-enqueued by
+  the sweep stays live until it expires (retirement rides on the cold path job
+  that carried the ids). *Later.*
+- **B69.** A run recorded while an earlier run for the same user is still
+  running could take that run's late reflection as its own in ideate (the
+  "this run's reflection" test is by creation time). *Later.*
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
@@ -1729,9 +1802,9 @@ and life tick) were dropped; the replacement is designed fresh.
   *Tuning.*
 - **B25.** `her_day` scores 0.24 against threshold 0.2; changing either
   silently turns it off. Tune weights, threshold and salience together.
+  *Tuning.* The same holds for `core_thought`: weight 0.5 × medium salience
+  (0.4) is 0.20, on the threshold, so her own musings rarely send anything.
   *Tuning.*
-- **B26.** A make-up reach-out doesn't move `make_up_state` to `offered`, so
-  the make-up may be offered again in a reply. *Phase 9b.*
 - **B27.** Stale `scheduled` rows are never closed (close them in the tick or
   a sweep). *Later.*
 - **B28.** Sensitive text in the recent turns can still reach a reach-out

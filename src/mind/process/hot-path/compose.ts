@@ -380,7 +380,10 @@ async function loadRelationshipLine(
   }
 }
 
-/** A reach-out forces its own memory in and keeps sensitive memories out. */
+/**
+ * A reach-out forces its own memory in and keeps sensitive memories out. An idea is not a memory
+ * (it hasn't happened): it shows only as why she's writing.
+ */
 function retrieveFor(
   deps: Deps,
   userId: string,
@@ -396,7 +399,10 @@ function retrieveFor(
     queryText,
     queryVector,
     ...(reachOut
-      ? { forceFactIds: reachOut.factId ? [reachOut.factId] : [], excludeSensitive: true }
+      ? {
+          forceFactIds: reachOut.factId && reachOut.kind !== "user_idea" ? [reachOut.factId] : [],
+          excludeSensitive: true,
+        }
       : {}),
   });
 }

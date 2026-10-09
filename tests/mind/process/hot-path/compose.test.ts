@@ -480,6 +480,7 @@ describe("ideas slot", () => {
     const flag = { flagged: true, category: "self_harm" as const, source: "classifier" as const };
     const crisis = await composeReply(deps, u, { turns: [turn], openQuestions: [], flag });
     expect(crisis.offeredIdeas).toEqual([]);
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## Things you want to bring up");
 
     const ro = await composeReachOut(
       deps,
@@ -522,6 +523,39 @@ describe("composeReachOut", () => {
     await out.writeGuardLog();
     const logs = await listJudgeLogs(getTestDb(), u, 10);
     expect((logs[0]!.input as { kind: string }).kind).toBe("reach_out");
+  });
+
+  test("a reach-out for her idea shows it once, as why she's writing, not as a memory", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "night!");
+    const idea = await insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "idea",
+      content: "Send them that old noir film.",
+      embedding: vec(),
+      created_at: deps.clock.now(),
+      status: "open",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.7,
+      source: "generated",
+    });
+    await composeReachOut(
+      deps,
+      u,
+      {
+        kind: "user_idea",
+        text: idea.content,
+        factId: idea.id,
+        threadId: null,
+        coreMemoryId: null,
+      },
+      [turn],
+    );
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system.split(idea.content)).toHaveLength(2);
+    expect(system.slice(system.indexOf("## Why you're writing"))).toContain(idea.content);
   });
 
   test("renderReachOut: check-in has no topic text", () => {

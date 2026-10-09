@@ -1,6 +1,6 @@
 /**
  * Read-only queries for the inspector, a dev-only tool that looks at one user's memory,
- * relationship, turn-taking, judge log, reach-outs, and her shared day plan.
+ * relationship, turn-taking, judge log, reach-outs, user mind runs, and her shared day plan.
  */
 import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -16,6 +16,8 @@ import {
   reach_out_log,
   retrieval_trace,
   thread,
+  user_loop_trace,
+  user_mind_run,
 } from "@/db/schema";
 import { getLifeDay } from "@/db/repos/world/life-day";
 import {
@@ -141,4 +143,36 @@ export async function resolveFactContents(
 /** The Life tab: her shared plan for the day (the same for every user). */
 export async function getLifeView(db: Db, day: string) {
   return { plan: await getLifeDay(db, day) };
+}
+
+// A run's loops share a timestamp under a fixed clock, so they're ordered by the batch's order.
+const LOOP_ORDER = ["user_summarise", "user_reflect", "user_ideate"];
+
+/** Her latest user mind runs for one user, newest first, each with its loop traces in order. */
+export async function listUserMindRuns(db: Db, userId: string, limit: number) {
+  const runs = await db
+    .select()
+    .from(user_mind_run)
+    .where(eq(user_mind_run.user_id, userId))
+    .orderBy(desc(user_mind_run.created_at))
+    .limit(limit);
+  if (runs.length === 0) return [];
+  const traces = await db
+    .select()
+    .from(user_loop_trace)
+    .where(
+      and(
+        eq(user_loop_trace.user_id, userId),
+        inArray(
+          user_loop_trace.run_id,
+          runs.map((r) => r.id),
+        ),
+      ),
+    );
+  traces.sort(
+    (x, y) =>
+      x.created_at.getTime() - y.created_at.getTime() ||
+      LOOP_ORDER.indexOf(x.loop) - LOOP_ORDER.indexOf(y.loop),
+  );
+  return runs.map((run) => ({ ...run, traces: traces.filter((t) => t.run_id === run.id) }));
 }

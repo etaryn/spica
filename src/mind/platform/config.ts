@@ -155,7 +155,7 @@ const retrieval = z.object({
   core_goal_bias: unit,
 });
 
-const inspector = z.object({ snapshot_versions: positiveInt });
+const inspector = z.object({ snapshot_versions: positiveInt, user_mind_runs: positiveInt });
 
 const claims = z.object({ grounded_similarity: unit });
 

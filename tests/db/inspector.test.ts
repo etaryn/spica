@@ -12,6 +12,7 @@ import {
   getRelationshipView,
   listFacts,
   listReachOuts,
+  listUserMindRuns,
   parseFactFilters,
   resolveFactContents,
 } from "@/db/repos/admin/inspector";
@@ -22,6 +23,7 @@ import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/user/relationship";
 import * as s from "@/db/schema";
 import { makeTestDeps } from "../helpers/deps";
+import { recordBigEvents, runUserMind } from "@/mind/process/user/run";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 beforeEach(resetDb);
@@ -283,4 +285,24 @@ test("the core page shows budget by loop, goals, memory counts, snapshot changes
   expect(v.drift).toHaveLength(1);
   expect(v.goals).toEqual([]);
   expect(v.memoryCounts).toEqual([]);
+});
+
+test("listUserMindRuns: newest run first, each with its traces in order, one user only", async () => {
+  const deps = makeTestDeps();
+  const a = await createTestUser("a");
+  const b = await createTestUser("b");
+  const r1 = (await recordBigEvents(deps, deps.db, a, "exchange:1", [{ kind: "make_up_done" }]))!;
+  deps.clock.set(new Date(deps.clock.now().getTime() + 60_000));
+  const r2 = (await recordBigEvents(deps, deps.db, a, "exchange:2", [{ kind: "crisis_passed" }]))!;
+  await recordBigEvents(deps, deps.db, b, "exchange:3", [{ kind: "make_up_done" }]);
+  await runUserMind(deps, { runId: r1 });
+  const runs = await listUserMindRuns(getTestDb(), a, 10);
+  expect(runs.map((r) => r.id)).toEqual([r2, r1]);
+  expect(runs[1]!.traces.map((t) => t.loop)).toEqual([
+    "user_summarise",
+    "user_reflect",
+    "user_ideate",
+  ]);
+  expect(runs[0]!.traces).toEqual([]);
+  expect(await listUserMindRuns(getTestDb(), b, 1)).toHaveLength(1);
 });

@@ -10,6 +10,7 @@ import {
   FactsTab,
   JudgeLogTab,
   LifeTab,
+  MindTab,
   ReachOutsTab,
   RelationshipTab,
   RetrievalTab,
@@ -27,6 +28,7 @@ const TABS = {
   turn: "Turn-taking",
   judge: "Judge log",
   reachouts: "Reach-outs",
+  mind: "User mind",
 } as const;
 type Tab = keyof typeof TABS;
 
@@ -73,6 +75,15 @@ export default async function InspectUser({
       {tab === "judge" && <JudgeLogTab db={db} userId={userId} />}
       {tab === "reachouts" && (
         <ReachOutsTab db={db} userId={userId} limit={config.outreach.log_list_limit} />
+      )}
+      {tab === "mind" && (
+        <MindTab
+          db={db}
+          userId={userId}
+          now={clock.now()}
+          cfg={config.user_mind}
+          limit={config.inspector.user_mind_runs}
+        />
       )}
     </>
   );

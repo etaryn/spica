@@ -39,7 +39,7 @@
     "window_gap_hours": 72,
     "relationship_line": true
   },
-  "inspector": { "snapshot_versions": 5 },
+  "inspector": { "snapshot_versions": 5, "user_mind_runs": 20 },
   "claims": { "grounded_similarity": 0.75 },
   "retrieval": {
     "candidate_pool": 200,

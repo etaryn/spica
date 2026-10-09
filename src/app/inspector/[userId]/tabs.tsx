@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { LifeConfig } from "@/mind/platform/config";
+import type { Config, LifeConfig } from "@/mind/platform/config";
 import { lifeDate } from "@/mind/world/her-clock";
 import type { RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
@@ -7,6 +7,10 @@ import type { Deps } from "@/mind/platform/deps";
 import * as r from "@/db/repos/admin/inspector";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { listTurns } from "@/db/repos/user/session-log";
+import { liveIdeas, liveSummary, recentReflections, type Trigger } from "@/db/repos/user/user-mind";
+import { isSensitive } from "@/mind/memory/user/retrieve";
+import { ideaCutoff } from "@/mind/process/user/ideate";
+import { triggerText } from "@/mind/process/user/inputs";
 import styles from "../inspector.module.css";
 import { eventStatus } from "./event-status";
 
@@ -570,6 +574,88 @@ export async function LifeTab({
       ) : (
         <p className={styles.empty}>No events yet today.</p>
       )}
+    </>
+  );
+}
+
+export async function MindTab({
+  db,
+  userId,
+  now,
+  cfg,
+  limit,
+}: {
+  db: Db;
+  userId: string;
+  now: Date;
+  cfg: Config["user_mind"];
+  limit: number;
+}) {
+  const runs = await r.listUserMindRuns(db, userId, limit);
+  const summary = await liveSummary(db, userId);
+  const reflections = await recentReflections(db, userId, cfg.reflect.recent);
+  const ideas = await liveIdeas(
+    db,
+    userId,
+    ideaCutoff(now, cfg.ideate.ttl_days),
+    cfg.ideate.max_planned,
+  );
+  const mark = (f: { payload: unknown }) => (isSensitive(f) ? " (sensitive)" : "");
+  if (!runs.length && !summary) return <Empty phase={9} />;
+  return (
+    <>
+      <h2>Where things stand{summary ? mark(summary) : ""}</h2>
+      <p>{summary ? `${iso(summary.created_at)} — ${summary.content}` : "—"}</p>
+      <h2>Reflections</h2>
+      <ul>
+        {reflections.map((f) => (
+          <li key={f.id}>
+            {iso(f.created_at)} — {f.content}
+            {mark(f)}
+          </li>
+        ))}
+      </ul>
+      <h2>Live ideas</h2>
+      <ul>
+        {ideas.map((f) => (
+          <li key={f.id}>
+            {iso(f.created_at)} — {f.content}
+          </li>
+        ))}
+      </ul>
+      <h2>Runs</h2>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>at</th>
+            <th>status</th>
+            <th>triggers</th>
+            <th>finished</th>
+            <th>loops</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run) => (
+            <tr key={run.id}>
+              <td>{iso(run.created_at)}</td>
+              <td>{run.status}</td>
+              <td>{(run.triggers as Trigger[]).map(triggerText).join("; ")}</td>
+              <td>{iso(run.finished_at)}</td>
+              <td>
+                {run.traces.map((t) => (
+                  <details key={t.id}>
+                    <summary>
+                      {t.loop} · {t.status} · {t.calls} call(s) · ${(t.cost ?? 0).toFixed(4)}
+                      {t.error ? ` · ${t.error}` : ""}
+                    </summary>
+                    {json({ inputs: t.inputs, outputs: t.outputs })}
+                  </details>
+                ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }

@@ -125,3 +125,32 @@ test("ideate never sees a sensitive memory, summary or reflection", async () => 
   expect(JSON.parse(call.input).summary).toBeNull();
   expect(JSON.parse(call.input).noticed).toBeNull();
 });
+
+test("ideate reads her latest read on them only when nothing sensitive went into it", async () => {
+  const { deps, userId, run } = await setup();
+  const model = (how: string, sensitive: boolean, at: Date) =>
+    insertFact(deps.db, userId, {
+      subject: "user",
+      kind: "model",
+      content: how,
+      payload: {
+        how_they_are: how,
+        what_they_want: "W.",
+        what_lands: "L.",
+        ...(sensitive ? { sensitive: true } : {}),
+      },
+      embedding: vec(),
+      created_at: at,
+      status: sensitive ? "open" : "superseded",
+      salience: 0.6,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+    });
+  await model("Plain read.", false, new Date(deps.clock.now().getTime() - 60_000));
+  await model("Crisis read.", true, deps.clock.now());
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const input = JSON.parse(deps.llm.structuredCalls.at(-1)!.input);
+  expect(input.your_read_on_them.how_they_are).toBe("Plain read.");
+  expect(JSON.stringify(input)).not.toContain("Crisis read.");
+});

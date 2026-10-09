@@ -7,12 +7,18 @@
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
-import { latestNonSensitiveSummary, liveIdeas, recentReflections } from "@/db/repos/user/user-mind";
+import {
+  latestNonSensitiveModel,
+  latestNonSensitiveSummary,
+  liveIdeas,
+  recentReflections,
+} from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
 import { memoryLines, type RunInputs } from "./inputs";
+import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 /** Ideas created at or before this are past their chance. */
@@ -46,6 +52,9 @@ export async function userIdeate(
     const threads = await listOpenThreads(db, userId, config.user_mind.summarise.max_threads, {
       excludeSensitive: true,
     });
+    // Ideas become reach-outs and push notifications, so a read a crisis touched stays out.
+    const readRow = await latestNonSensitiveModel(db, userId);
+    const read = readRow ? (modelPayload.safeParse(readRow.payload).data ?? null) : null;
     const Output = z.object({ idea: fitText(settings.max_chars).nullable() });
     const out = await ctx.deps.llm.classifyJson({
       purpose: "user_ideate",
@@ -55,6 +64,7 @@ export async function userIdeate(
         who_you_are: deps.snapshot,
         summary: summary?.payload ?? null,
         noticed: noticed?.content ?? null,
+        your_read_on_them: read,
         new_memories: memoryLines(facts),
         open_threads: threads.map((t) => t.title),
         already_planned: planned.map((i) => i.content),
@@ -85,6 +95,7 @@ export async function userIdeate(
       inputs: {
         summary_id: summary?.id ?? null,
         reflection_id: noticed?.id ?? null,
+        model_id: readRow?.id ?? null,
         fact_ids: facts.map((f) => f.id),
         planned_ids: planned.map((i) => i.id),
       },

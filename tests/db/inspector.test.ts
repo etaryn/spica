@@ -301,7 +301,9 @@ test("listUserMindRuns: newest run first, each with its traces in order, one use
   expect(runs[1]!.traces.map((t) => t.loop)).toEqual([
     "user_summarise",
     "user_reflect",
+    "user_model",
     "user_ideate",
+    "user_consolidate",
   ]);
   expect(runs[0]!.traces).toEqual([]);
   expect(await listUserMindRuns(getTestDb(), b, 1)).toHaveLength(1);

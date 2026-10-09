@@ -146,7 +146,13 @@ export async function getLifeView(db: Db, day: string) {
 }
 
 // A run's loops share a timestamp under a fixed clock, so they're ordered by the batch's order.
-const LOOP_ORDER = ["user_summarise", "user_reflect", "user_ideate"];
+const LOOP_ORDER = [
+  "user_summarise",
+  "user_reflect",
+  "user_model",
+  "user_ideate",
+  "user_consolidate",
+];
 
 /** Her latest user mind runs for one user, newest first, each with its loop traces in order. */
 export async function listUserMindRuns(db: Db, userId: string, limit: number) {

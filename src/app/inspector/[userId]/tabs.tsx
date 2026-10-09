@@ -7,7 +7,14 @@ import type { Deps } from "@/mind/platform/deps";
 import * as r from "@/db/repos/admin/inspector";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { listTurns } from "@/db/repos/user/session-log";
-import { liveIdeas, liveSummary, recentReflections, type Trigger } from "@/db/repos/user/user-mind";
+import {
+  liveBeliefs,
+  liveIdeas,
+  liveModel,
+  liveSummary,
+  recentReflections,
+  type Trigger,
+} from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { ideaCutoff } from "@/mind/process/user/ideate";
 import { triggerText } from "@/mind/process/user/inputs";
@@ -594,6 +601,8 @@ export async function MindTab({
   const runs = await r.listUserMindRuns(db, userId, limit);
   const summary = await liveSummary(db, userId);
   const reflections = await recentReflections(db, userId, cfg.reflect.recent);
+  const model = await liveModel(db, userId);
+  const beliefs = await liveBeliefs(db, userId, cfg.model.belief_context);
   const ideas = await liveIdeas(
     db,
     userId,
@@ -606,6 +615,17 @@ export async function MindTab({
     <>
       <h2>Where things stand{summary ? mark(summary) : ""}</h2>
       <p>{summary ? `${iso(summary.created_at)} — ${summary.content}` : "—"}</p>
+      <h2>Your read on them{model ? mark(model) : ""}</h2>
+      <p>{model ? `${iso(model.created_at)} — ${model.content}` : "—"}</p>
+      <h2>Beliefs</h2>
+      <ul>
+        {beliefs.map((f) => (
+          <li key={f.id}>
+            {iso(f.created_at)} — {f.content}
+            {mark(f)}
+          </li>
+        ))}
+      </ul>
       <h2>Reflections</h2>
       <ul>
         {reflections.map((f) => (

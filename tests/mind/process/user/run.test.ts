@@ -30,7 +30,9 @@ test("a recorded run runs its batch once; a second job for it is skipped", async
   expect(await runUserMind(deps, { runId })).toBe("skipped");
   const traces = await getTestDb().execute(sql`SELECT loop FROM user_loop_trace`);
   expect(traces.rows.map((r) => r.loop).sort()).toEqual([
+    "user_consolidate",
     "user_ideate",
+    "user_model",
     "user_reflect",
     "user_summarise",
   ]);
@@ -92,7 +94,7 @@ test("a throw after the claim finishes the run failed, never left running", asyn
   expect(run.rows[0]!.finished_at).not.toBeNull();
 });
 
-test("the batch runs summarise, reflect and ideate; a failed reflect still runs ideate", async () => {
+test("the batch runs all five loops in order; a failed reflect still runs the rest", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
   await insertFact(deps.db, u, {
@@ -113,14 +115,41 @@ test("the batch runs summarise, reflect and ideate; a failed reflect still runs 
   deps.llm.handlers.user_ideate = () => ({ idea: "Ask about the trip." });
   const runId = (await recordBigEvents(deps, deps.db, u, "exchange:a", trig))!;
   expect(await runUserMind(deps, { runId })).toBe("failed");
-  const loops = await getTestDb().execute(sql`SELECT loop, status FROM user_loop_trace`);
+  const loops = await getTestDb().execute(
+    sql`SELECT loop, status FROM user_loop_trace ORDER BY created_at, id`,
+  );
   expect(loops.rows.map((r) => `${r.loop}:${r.status}`).sort()).toEqual([
+    "user_consolidate:done",
     "user_ideate:done",
+    "user_model:done",
     "user_reflect:failed",
     "user_summarise:done",
   ]);
   const kinds = await getTestDb().execute(
-    sql`SELECT kind FROM fact WHERE kind IN ('idea','summary')`,
+    sql`SELECT kind FROM fact WHERE kind IN ('idea','summary','model','belief')`,
   );
-  expect(kinds.rows.map((r) => r.kind).sort()).toEqual(["idea", "summary"]);
+  expect(kinds.rows.map((r) => r.kind).sort()).toEqual(["belief", "idea", "model", "summary"]);
+});
+
+test("model reads this run's summary, and ideate reads this run's read on them", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  await insertFact(deps.db, u, {
+    subject: "user",
+    kind: "event",
+    content: "They booked a solo trip.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.9,
+    valence: 0.5,
+    confidence: 0.9,
+    source: "turn",
+  });
+  const runId = (await recordBigEvents(deps, deps.db, u, "exchange:a", trig))!;
+  await runUserMind(deps, { runId });
+  const input = (purpose: string) =>
+    JSON.parse(deps.llm.structuredCalls.find((c) => c.purpose === purpose)!.input);
+  expect(input("user_model").summary.whats_live).toContain("They booked a solo trip.");
+  expect(input("user_ideate").your_read_on_them.how_they_are).toContain("They booked a solo trip.");
 });

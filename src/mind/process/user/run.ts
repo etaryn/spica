@@ -1,6 +1,6 @@
 /**
  * Her user mind, run on a big event: recording the run with the exchange that caused it, running
- * its batch of loops (summarise, reflect, ideate) once, and re-queueing runs whose job was lost.
+ * its batch of loops (summarise, reflect, model, ideate, consolidate) once, and re-queueing runs whose job was lost.
  * The batch reads this user's memory and state and her latest snapshot, and writes this user's
  * memory only.
  */
@@ -18,7 +18,9 @@ import { errorName } from "@/mind/platform/errors";
 import { USER_MIND_RUN_QUEUE, type UserMindRunJob } from "@/mind/platform/jobs";
 import { MINUTE } from "@/mind/platform/time";
 import { loadRunInputs } from "./inputs";
+import { userConsolidate } from "./consolidate";
 import { userIdeate } from "./ideate";
+import { userModel } from "./model";
 import { userReflect } from "./reflect";
 import { userSummarise } from "./summarise";
 
@@ -71,7 +73,9 @@ export async function runUserMind(
     const results = [
       await userSummarise(loopDeps, run, inputs),
       await userReflect(loopDeps, run, inputs),
+      await userModel(loopDeps, run, inputs),
       await userIdeate(loopDeps, run, inputs),
+      await userConsolidate(loopDeps, run),
     ];
     status = results.includes("failed") ? "failed" : "done";
   } catch (e) {

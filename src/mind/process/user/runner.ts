@@ -11,11 +11,7 @@ import { meterLlm, spend } from "@/mind/platform/llm/meter";
 import type { LLMProvider } from "@/mind/platform/llm/types";
 
 export type UserLoopName =
-  | "user_summarise"
-  | "user_reflect"
-  | "user_model"
-  | "user_ideate"
-  | "user_consolidate";
+  "user_summarise" | "user_reflect" | "user_model" | "user_ideate" | "user_consolidate";
 export type UserLoopDeps = Pick<Deps, "db" | "embedder" | "config" | "clock" | "log"> & {
   llm: LLMProvider;
   /** Her latest self snapshot, read once per run; null before one exists. */

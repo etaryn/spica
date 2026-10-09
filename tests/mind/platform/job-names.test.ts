@@ -27,6 +27,7 @@ describe("job names", () => {
       "turn_sweep",
       "turn_timer",
       "user_mind_run",
+      "user_mind_tick",
     ]);
   });
 });

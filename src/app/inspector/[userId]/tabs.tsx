@@ -259,6 +259,24 @@ export async function RelationshipTab({
           </tbody>
         </table>
       )}
+      <h3>Your things together</h3>
+      {!v.idiolect.length ? (
+        <Empty phase={10} />
+      ) : (
+        <table className={styles.table}>
+          <tbody>
+            {v.idiolect.map((i, n) => (
+              <tr key={n}>
+                <td>{i.type}</td>
+                <td>{i.started_by}</td>
+                <td>{i.established_at ? "established" : "candidate"}</td>
+                <td>{i.status}</td>
+                <td>{i.content}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <h3>Params</h3>
       <table className={styles.table}>
         <tbody>

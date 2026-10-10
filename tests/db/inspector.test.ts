@@ -161,6 +161,39 @@ test("getRelationshipView: faded params with effect, events newest first, user-s
   expect(await getRelationshipView(db, b, now, cfg, 50)).toBeNull();
 });
 
+test("getRelationshipView lists idiolect with who started it, established or not", async () => {
+  const db = getTestDb();
+  const cfg = loadConfig().relationship;
+  const [a, b] = [await createTestUser(), await createTestUser()];
+  const now = new Date("2026-01-05T10:00:00Z");
+  for (const u of [a, b]) await ensureRelationship(db, u, now, cfg);
+  await insertFact(db, a, {
+    subject: "shared",
+    kind: "idiolect",
+    content: "The user calls Spica Starfish.",
+    payload: { idiolect: { type: "nickname", started_by: "user", established_at: null } },
+    embedding: vec(1),
+    entity_refs: [],
+    created_at: now,
+    salience: 0.6,
+    valence: 0.5,
+    confidence: 0.9,
+    source: "turn",
+    status: "open",
+  });
+  const v = await getRelationshipView(db, a, now, cfg, 50);
+  expect(v?.idiolect).toEqual([
+    {
+      content: "The user calls Spica Starfish.",
+      type: "nickname",
+      started_by: "user",
+      established_at: null,
+      status: "open",
+    },
+  ]);
+  expect((await getRelationshipView(db, b, now, cfg, 50))?.idiolect).toEqual([]);
+});
+
 test("getLifeView shows her shared plan for the day", async () => {
   const db = getTestDb();
   const t0 = new Date("2026-01-05T10:00:00Z");

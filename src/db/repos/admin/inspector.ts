@@ -16,6 +16,7 @@ import { z } from "zod";
 import { closenessCeiling } from "@/mind/state/user/relationship/closeness";
 import { deviationOf, fadeParams } from "@/mind/state/user/relationship/params";
 import { PARAM_NAMES, type RelationshipConfig } from "@/mind/state/user/relationship/types";
+import type { IdiolectPayload } from "@/mind/memory/user/idiolect";
 import type { Db } from "@/db/client";
 import {
   conversation_state,
@@ -135,12 +136,31 @@ export async function getRelationshipView(
       .orderBy(desc(session_log.created_at))
       .limit(1)
   )[0];
+  // Their things together, candidates too, so a review can see a joke being born.
+  const idiolect = (
+    await db
+      .select({ content: fact.content, payload: fact.payload, status: fact.status })
+      .from(fact)
+      .where(and(eq(fact.user_id, userId), eq(fact.kind, "idiolect")))
+      .orderBy(desc(fact.created_at))
+      .limit(ledgerLimit)
+  ).map((f) => {
+    const p = (f.payload as { idiolect?: Partial<IdiolectPayload> } | null)?.idiolect ?? {};
+    return {
+      content: f.content,
+      type: p.type ?? "reference",
+      started_by: p.started_by ?? "user",
+      established_at: p.established_at ?? null,
+      status: f.status,
+    };
+  });
   return {
     row,
     ceiling: closenessCeiling(row.hours_together, cfg),
     lastOpenness: lastReply?.openness ?? null,
     lastDepth: lastLimits?.depth ?? null,
     ledger,
+    idiolect,
     params: PARAM_NAMES.map((name) => ({
       name,
       ...params[name],

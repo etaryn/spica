@@ -1,0 +1,22 @@
+name: rel-idiolect
+description: A friend over three days; a running joke is born, called back and reused, and her bids are met, ignored and rebuffed. Logs each bid read, idiolect births and the slot for review.
+profile: none
+relationship_seed: { closeness: 0.45 }
+sessions:
+  - at: "day 1 20:00"
+    turns:
+      - "ok that cloud outside looks exactly like a whale"
+      - "a whale with a top hat honestly"
+      - "anyway how was your day"
+  - at: "day 2 20:00"
+    turns:
+      - "another whale cloud today. top hat and all"
+      - "lol"
+      - "sorry gtg, busy"
+  - at: "day 3 21:00"
+    turns:
+      - "whatever, not in the mood for jokes"
+      - "ok sorry. how are you really?"
+      - "goodnight whale-spotter"
+assertions:
+  - { type: relationship, after_session: 1, status: active }

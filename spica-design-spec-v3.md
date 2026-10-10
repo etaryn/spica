@@ -347,6 +347,12 @@ Every table here references `user(id) ON DELETE CASCADE`.
     A `model` (`user`, payload `how_they_are`, `what_they_want`, `what_lands`) is her live read
     on them: one at a time, superseding the last, read only through its own reply slot (§10.3),
     left out of retrieval, reconcile and decay. A gisted source carries `payload.gisted_into`.
+    **Built 10c:** `idiolect` (migration 0029), always `shared`, extracted from a turn, with
+    `payload.idiolect = { type: joke | nickname | ritual | reference, started_by: user |
+    spica, established_at }`. It starts as a candidate (`established_at` null) and is
+    established when reconcile judges a later exchange's candidate its `duplicate` (a different
+    `source_ref`). Left out of ordinary retrieval (its own reply slot, §10.3), but still a
+    reconcile neighbour, so callbacks find it, and it decays like any fact.
   - **`subject = self` in user scope (Changes in v3):** means "what she told
     this user" (V5), plus her hurt `feeling` facts. Her core self no longer
     lives here (§6.2).
@@ -1161,7 +1167,14 @@ when the guard is on.
       beliefs). "Who you are lately" keeps only the latest snapshot's lines at
       or below `open`. A strong match beyond `peek` adds a "Not ready to
       share" slot after "What you remember", once per item per session
-      (§11.3). Core retrieval is
+      (§11.3). **Built 10c:** "Your things together" sits between "What you
+      remember" and "Not ready to share": up to `relationship.idiolect.max_items`
+      (2) established, non-sensitive idiolect facts with similarity ≥
+      `idiolect.min_similarity` (0.3) to the reply query, ranked by similarity ×
+      salience, each marked *(they started this)* or *(you started this)*.
+      Below closeness `idiolect.min_closeness` (0.4), or with no relationship
+      yet, only what the user started. Empty in a crisis. Items shown join the
+      cold path's recall write-back. Core retrieval is
       read-only: replies write no recall reinforcement to core memory.
       **Built 8d:** each core candidate's score is multiplied by
       `(1 + retrieval.core_mood_bias × valence × mood_valence) ×
@@ -1201,11 +1214,13 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v13.md` (its rules about her own self sit under "Being
+`prompts/reply/v14.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
 hint, held-back and common-ground marks, and that she may deflect, never
-invent, and is always honest that she's an AI). v11 added the **claim line**
+invent, and is always honest that she's an AI; v14 adds "Your things
+together": at most one, when it fits, never explained, answer to a nickname
+they gave you). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1244,9 +1259,10 @@ tone sum, and while its mean is positive afterglow becomes
 with half-life `afterglow_half_life_hours`), so ten short warm exchanges glow
 like one warm conversation. A reach-out exchange applies none of this.
 4. **Her own words** extracted as `subject = self` stay user-scoped as "what
-   she told this user" (V5). **Built 8d:** extraction (now `prompts/extract/v6.md`, which
+   she told this user" (V5). **Built 8d:** extraction (now `prompts/extract/v7.md`, which
    **Built 10a** adds the `intimacy` block to: `user_disclosure` and
-   `user_responsiveness`, read from the user's messages only)
+   `user_responsiveness`, read from the user's messages only; **Built 10c** adds
+   `bid_response` and the idiolect fields `idiolect_type` and `started_by`, §11.3)
    labels each self fact's `claim_kind`; after reconcile, each `life` or
    `opinion` claim is graded against core (§12.6) and the result is stored on
    the new fact. A merge into an existing fact leaves its grading alone.
@@ -1338,9 +1354,9 @@ Each mechanic is user-scoped, and each names what it changes.
 |---|---|---|
 | **Intimacy loop** (**Built 10a**) | Reis & Shaver | Disclosure, then perceived responsiveness, then closeness. Closeness grows from good responses to disclosure, not message volume |
 | **Disclosure ledger and reciprocity** (**Built 10b**) | Altman & Taylor (Social Penetration) | Her self is tiered by depth; she reveals deeper tiers as closeness grows and as the user reciprocates; `disclosure` rows record what each user has seen |
-| **Bids for connection** | Gottman | Extraction classifies the user's response to her bids (toward, away, against); feeds warmth and trust |
+| **Bids for connection** (**Built 10c**) | Gottman | Extraction classifies the user's response to her bids (toward, away, against); feeds warmth and trust |
 | **Common ground** (**Built 10b**) | Clark | What each knows the other knows; checked before she references something |
-| **Idiolect** | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
+| **Idiolect** (**Built 10c**) | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
 | **Closeness by time together** (**Built 10a**) | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
 | **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
 | **Commitment** | Rusbult | Satisfaction + investment (shared history) |
@@ -1439,6 +1455,35 @@ weight is a first guess (test phase).
 - **Inspector:** the ledger (when, level, depth, item text) and the last
   reply's limits on the Relationship tab.
 - **Review run:** `pnpm exit:disclosure` runs `rel-disclosure` with real
+  extraction.
+
+**Built 10c: bids and idiolect.** Code: `bidAfter` and `normalizeBid` in
+`src/mind/state/user/relationship/signals.ts`, `applyBid` in `transitions.ts`,
+`src/mind/memory/user/idiolect.ts`. Every number is a first guess (test phase).
+
+- **Bids are read, not tagged.** Extraction v7's `bid_response` (`toward`,
+  `away`, `against`, or null) judges how the user's new messages met her last
+  message before them, if it was a bid (a joke, a question, her news, an
+  invitation, a reach-out). Code keeps it only when that message and the
+  user's first new turn share a `session_id`: coming back after a gap is not
+  turning away, even to a reach-out. No user turn, a crisis, or no earlier
+  message of hers: null. An invalid value is null.
+- **Effect:** `relationship.bids.effects` gives each response its moves (toward
+  warmth +0.03; away warmth −0.03; against warmth −0.06, trust −0.03), applied
+  with `nudge` (cause `bid`, `detail.response`); gains take diminishing
+  returns. Nothing moves once the user has ended it. The bid stacks with the
+  `warmth` signal (tuning).
+- **Idiolect** (§6.1): extraction emits a candidate for a moment that could
+  become theirs, and again whenever either calls back to one; a duplicate from
+  a later exchange establishes it. Missing labels fall back to a `reference`
+  the user started.
+- **Reuse** ("Your things together", §10.3): established items only, gated by
+  closeness (`relationship.idiolect`) with the they-started exception;
+  coining new ones is left to the reply model. The first-inside-joke
+  milestone trigger stays with 10d.
+- **Inspector:** idiolect facts (type, who started it, candidate or
+  established) on the Relationship tab; bid events in its event list.
+- **Review run:** `pnpm exit:idiolect` runs `rel-idiolect` with real
   extraction.
 
 ---
@@ -1646,6 +1691,8 @@ the live summary (marked if sensitive), recent reflections and live ideas.
 marked if sensitive); gists show in the facts tab as `episode` rows.
 **Built 10b:** the Relationship tab shows the disclosure ledger
 (`inspector.ledger_limit`, 50) and the last reply's depth limits.
+**Built 10c:** it also lists idiolect facts (type, who started it, candidate or
+established, status); bid events show in its event list.
 
 ### 17.2 Eval harness (Built)
 
@@ -1802,12 +1849,13 @@ two minds or at reply time.
 | 9d. Consolidate, model and the Phase 9 exit | `fact_kind` gains `episode`, `model` and `belief` (migration 0026); `user_consolidate` folds an older week into one gist; `user_model` keeps her live read on them and revisable beliefs; the batch of five; "Your read on them" reply slot; ideate reads the newest non-sensitive read (ideate prompt v2); inspector read and beliefs; the eval life loop runs `user_mind_tick` hourly and scripts take `idle_users`; the full Phase 9 exit `tests/exit/user-mind.test.ts` (two weeks, three users, every trigger, the canary); `pnpm exit:user` runs `user-mind-two-weeks` with real model and consolidate. Phase 9 built (`pnpm test` 133 files / 1060 tests at close) |
 | 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1095 tests at close |
 | 10b. How deep she goes | Depth on core memories and self lines (migration 0028, backfill by kind), judged by every memory-writing core loop (prompts v2) and snapshot render v2; `depthFor` limits from closeness, reciprocity and chemistry; hint, open and held-back offers; "Who you are lately" trimmed to the usual limit; `session_log.depth`; the `disclosure` ledger via `groundingMatch`; common-ground marks; outreach `too_deep`; reply v13; inspector ledger; exit `tests/exit/phase-10b.test.ts` (the canary); `pnpm exit:disclosure`. `pnpm test` 140 files / 1141 tests at close |
+| 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within her last message's session) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1164 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; then 10c bids and idiolect, 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
+| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; then 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |

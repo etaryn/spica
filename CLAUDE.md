@@ -206,9 +206,10 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 10 (relationship psychology), in slices. 10a (how closeness grows) and
-10b (how deep she goes: depth tiers, the disclosure ledger and reciprocity, common ground) are
-built; 10c (bids, idiolect) is next and needs its design doc.** Phases 8 (core loops) and 9 (user mind) are built.
+**Current phase: Phase 10 (relationship psychology), in slices. 10a (how closeness grows),
+10b (how deep she goes: depth tiers, the disclosure ledger and reciprocity, common ground) and
+10c (bids, idiolect) are built; 10d (stages, commitment, the milestone trigger) is next and
+needs its design doc.** Phases 8 (core loops) and 9 (user mind) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 

@@ -126,3 +126,8 @@ code itself.
 | 2026-10-11 | A repeated claim records another ledger row even when reconcile merges it | So a hint told again openly upgrades to open. |
 | 2026-10-11 | A reply with no stored depth limits counts its claims as open | Replies before this phase had no limits. |
 | 2026-10-11 | Truthful deflection now; tracked white lies later (B84) | Lies need cover stories in the ledger to stay consistent, and meet the guard-phase invented_self decision. |
+| 2026-10-11 | A bid's warmth move stacks with the warmth signal | The bid is a small read of one reach; the overlap is tuned in review runs. |
+| 2026-10-11 | A bid counts only within the session of her last message, a reach-out included | Coming back after a gap is not turning away. |
+| 2026-10-11 | Bid moves use `nudge`, like every signal | Bounded and consistent with signal gains; the configured value shrinks near the bound. |
+| 2026-10-11 | Idiolect is established by a duplicate from a different exchange | A joke becomes theirs when it comes up again, not when repeated in one breath; a retried job never counts. |
+| 2026-10-11 | Idiolect state lives in `fact.payload`, not columns | One fact kind, no migration beyond the enum value. |

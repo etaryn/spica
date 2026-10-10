@@ -11,8 +11,11 @@ import {
   relationshipAfterDailyTick,
   makeUpLineDue,
 } from "@/mind/state/user/relationship/transitions";
+import type { ExchangeSpan } from "@/mind/state/user/relationship/closeness";
 import {
   PARAM_NAMES,
+  type Intimacy,
+  type Openness,
   type Params,
   type RelationshipState,
 } from "@/mind/state/user/relationship/types";
@@ -67,6 +70,10 @@ const ex = (
     hurtFactId: string | null;
     replies: number;
     msgs24h: number;
+    span: ExchangeSpan | null;
+    intimacy: Intimacy | null;
+    herOpenness: Openness | null;
+    tone: number | null;
   }> = {},
 ) => ({
   now: t0,
@@ -76,6 +83,10 @@ const ex = (
   hurtFactId: null,
   replies: 1,
   msgs24h: 1,
+  span: null,
+  intimacy: null,
+  herOpenness: null,
+  tone: null,
   ...extra,
 });
 
@@ -242,11 +253,11 @@ test("scar: the trust baseline never recovers by itself (14 daily ticks with no 
   expect(params.trust.baseline).toBeLessThanOrEqual(cfg.initial.trust - cfg.scar_trust_dent + 1e-9);
 });
 
-test("warmth: diminishing returns above baseline; warm exchange grows closeness", () => {
+test("warmth: diminishing returns above baseline; warmth alone no longer grows closeness", () => {
   const p = init();
   const r = relationshipAfterExchange(fresh(), p, ex({ warmth: 1 }), cfg);
   expect(r.params.warmth.value).toBeGreaterThan(p.warmth.value);
-  expect(r.params.closeness.value).toBeGreaterThan(p.closeness.value);
+  expect(r.params.closeness.value).toBe(p.closeness.value);
   const high = init();
   high.warmth.value = 0.95;
   const r2 = relationshipAfterExchange(fresh(), high, ex({ warmth: 1 }), cfg);
@@ -287,10 +298,19 @@ test("ending: pending, then confirmed by a second signal; retract clears; repair
   r = relationshipAfterExchange(r.state, r.params, ex({ wants_repair: true }, { now: h(3) }), cfg);
   expect(r.state).toMatchObject({ status: "repairing", repair_started_at: h(3) });
   const before = r.params.closeness.value;
-  r = relationshipAfterExchange(r.state, r.params, ex({ warmth: 1 }, { now: h(4) }), cfg);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex(null, {
+      now: h(4),
+      intimacy: { user_disclosure: 1, user_responsiveness: null },
+      herOpenness: { disclosure: 0, responsiveness: 1 },
+    }),
+    cfg,
+  );
   const gain = r.params.closeness.value - before;
   expect(gain).toBeGreaterThan(0);
-  expect(gain).toBeLessThan(cfg.gains.closeness_per_warm_exchange * cfg.repair_gain_factor + 1e-9);
+  expect(gain).toBeLessThan(cfg.intimacy.closeness_gain * cfg.repair_gain_factor + 1e-9);
   const again = relationshipAfterExchange(
     r.state,
     r.params,
@@ -646,4 +666,138 @@ test("F3: retracts_ending while ended starts repair, like wants_repair", () => {
 test("F4: medianGapHours is order-independent (ascending input)", () => {
   expect(medianGapHours([h(-40), h(-30), h(-10), h(0)], cfg)).toBe(10);
   expect(medianGapHours([h(-10), h(-40), h(0), h(-30)], cfg)).toBe(10);
+});
+
+const span = (id: string, from: number, to: number) => ({
+  sessionId: id,
+  firstAt: h(from),
+  lastAt: h(to),
+});
+const opened = { user_disclosure: 1, user_responsiveness: null };
+const listening = { disclosure: 0, responsiveness: 1 };
+
+test("time accrues per session; a crisis adds none", () => {
+  let r = relationshipAfterExchange(fresh(), init(), ex(null, { span: span("a", 0, 1) }), cfg);
+  expect(r.state.hours_together).toBeCloseTo(1);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex(null, { span: span("a", 1, 2), now: h(2) }),
+    cfg,
+  );
+  expect(r.state.hours_together).toBeCloseTo(2);
+  const c = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex(null, { span: span("a", 2, 5), now: h(5), crisis: true }),
+    cfg,
+  );
+  expect(c.state.hours_together).toBeCloseTo(2);
+});
+
+test("an intimacy moment raises closeness up to the ceiling, never past it, never down", () => {
+  const p = init();
+  const r = relationshipAfterExchange(
+    fresh(),
+    p,
+    ex(null, { span: span("a", 0, 0.1), intimacy: opened, herOpenness: listening }),
+    cfg,
+  );
+  expect(r.params.closeness.value).toBeGreaterThan(p.closeness.value);
+  expect(r.events.some((e) => e.param === "closeness" && e.detail.moment === 1)).toBe(true);
+
+  // No time together yet, so the ceiling is exactly its start.
+  const capped = init();
+  capped.closeness.value = cfg.ceiling.start;
+  const atCeiling = relationshipAfterExchange(
+    fresh(),
+    capped,
+    ex(null, { intimacy: opened, herOpenness: listening }),
+    cfg,
+  );
+  expect(atCeiling.params.closeness.value).toBe(cfg.ceiling.start);
+
+  const above = init();
+  above.closeness.value = 0.95;
+  const stays = relationshipAfterExchange(
+    fresh(),
+    above,
+    ex(null, { intimacy: opened, herOpenness: listening }),
+    cfg,
+  );
+  expect(stays.params.closeness.value).toBe(0.95);
+});
+
+test("small talk (moment below the dead zone) leaves closeness alone", () => {
+  const p = init();
+  const r = relationshipAfterExchange(
+    fresh(),
+    p,
+    ex(
+      { warmth: 1 },
+      {
+        span: span("a", 0, 0.1),
+        intimacy: { user_disclosure: 0.05, user_responsiveness: 0.05 },
+        herOpenness: { disclosure: 0.9, responsiveness: 0.9 },
+      },
+    ),
+    cfg,
+  );
+  expect(r.params.closeness.value).toBe(p.closeness.value);
+});
+
+test("readings move the user's params toward them; a null responsiveness leaves it", () => {
+  const p = init();
+  const r = relationshipAfterExchange(
+    fresh(),
+    p,
+    ex(null, { intimacy: { user_disclosure: 1, user_responsiveness: null } }),
+    cfg,
+  );
+  expect(r.params.user_disclosure.value).toBeCloseTo(
+    p.user_disclosure.value + cfg.intimacy.ema_alpha * (1 - p.user_disclosure.value),
+  );
+  expect(r.params.user_responsiveness.value).toBe(p.user_responsiveness.value);
+  expect(r.events.find((e) => e.param === "user_disclosure")?.detail.reading).toBe(1);
+});
+
+test("a deep session boosts closeness, trust and warmth once", () => {
+  let state = fresh();
+  let params = init();
+  let fired = 0;
+  for (let i = 1; i <= 8; i++) {
+    const r = relationshipAfterExchange(
+      state,
+      params,
+      ex(null, {
+        now: h(i * 0.25),
+        span: span("a", (i - 1) * 0.25, i * 0.25),
+        intimacy: opened,
+        herOpenness: listening,
+      }),
+      cfg,
+    );
+    fired += r.events.filter((e) => e.cause === "deep_session" && e.param === "trust").length;
+    state = r.state;
+    params = r.params;
+  }
+  expect(fired).toBe(1);
+  expect(state.session?.deep_fired).toBe(true);
+});
+
+test("the session keeps the exchange tone for afterglow", () => {
+  let r = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex(null, { span: span("a", 0, 0.1), tone: 0.8 }),
+    cfg,
+  );
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex(null, { span: span("a", 0.1, 0.2), tone: 0.4 }),
+    cfg,
+  );
+  expect(r.state.session).toMatchObject({ tone_n: 2 });
+  expect(r.state.session!.tone_sum).toBeCloseTo(1.2);
 });

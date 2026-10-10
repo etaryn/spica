@@ -30,14 +30,24 @@ test("tone is the salience-weighted mean of non-zero valences", () => {
   ).toBeCloseTo(0.5);
 });
 
-test("a warm exchange raises affect and afterglow; a cold one lowers affect only", () => {
-  const warm = applyAffect(params(), 1, now, settings).params;
-  expect(warm.affect_valence.value).toBeCloseTo(0.5 + settings.affect.exchange_gain * 0.5);
-  expect(warm.afterglow.value).toBeGreaterThan(0);
+test("afterglow follows the session's mean tone; ten warm exchanges equal one", () => {
+  const once = applyAffect(params(), 0.8, 0.8, now, settings).params;
+  let many = params();
+  for (let i = 0; i < 10; i++) many = applyAffect(many, 0.8, 0.8, now, settings).params;
+  expect(once.afterglow.value).toBeCloseTo(settings.affect.afterglow_gain * 0.8);
+  expect(many.afterglow.value).toBeCloseTo(once.afterglow.value);
+  expect(once.affect_valence.value).toBeGreaterThan(0.5);
 
-  const cold = applyAffect(params(), -1, now, settings).params;
-  expect(cold.affect_valence.value).toBeCloseTo(0.5 - settings.affect.exchange_gain * 0.5);
+  const cold = applyAffect(params(), -0.8, -0.8, now, settings).params;
+  expect(cold.affect_valence.value).toBeLessThan(0.5);
   expect(cold.afterglow.value).toBe(0);
+});
+
+test("a stronger earlier glow is kept, faded, not replaced by a weaker session", () => {
+  const p = params();
+  p.afterglow = { ...p.afterglow, value: 0.6, updated_at: now };
+  const later = new Date(now.getTime() + settings.affect.afterglow_half_life_hours * 3_600_000);
+  expect(applyAffect(p, 0.1, 0.1, later, settings).params.afterglow.value).toBeCloseTo(0.3);
 });
 
 test("afterglow fades by its half-life", () => {

@@ -241,8 +241,7 @@
       "warmth": 0.15,
       "trust": 0.1,
       "tension": 0.3,
-      "hurt": 0.5,
-      "closeness_per_warm_exchange": 0.02
+      "hurt": 0.5
     },
     "intimacy": { "ema_alpha": 0.3, "closeness_gain": 0.06 },
     "hours": { "casual": 50, "friend": 90, "close": 200, "session_min_minutes": 5 },

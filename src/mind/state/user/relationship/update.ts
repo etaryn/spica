@@ -10,7 +10,7 @@ import { getTimezone } from "@/db/repos/user/users";
 import type { Deps } from "@/mind/platform/deps";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import type { RelationshipSnapshot } from "@/mind/process/user/big-events";
-import { applyAffect } from "./affect";
+import { applyAffect, sessionMeanTone } from "./affect";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
@@ -63,6 +63,10 @@ export async function updateRelationship(
       hurtFactId: update.hurtFactId,
       replies,
       msgs24h,
+      span: null,
+      intimacy: null,
+      herOpenness: null,
+      tone: update.tone,
     },
     settings,
   );
@@ -70,7 +74,13 @@ export async function updateRelationship(
   // Her feelings toward them follow the exchange's tone; a crisis exchange carries none.
   const affect =
     update.tone !== null && !update.crisis
-      ? applyAffect(transition.params, update.tone, now, settings)
+      ? applyAffect(
+          transition.params,
+          update.tone,
+          sessionMeanTone(transition.state.session),
+          now,
+          settings,
+        )
       : { params: transition.params, events: [] };
 
   const cadence = await currentCadence(tx, userId, now, msgs24h, deps);

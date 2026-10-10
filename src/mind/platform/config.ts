@@ -248,7 +248,6 @@ const relationship = z
       trust: unit,
       tension: unit,
       hurt: unit,
-      closeness_per_warm_exchange: unit,
     }),
     intimacy: z.object({ ema_alpha: unit, closeness_gain: unit }),
     hours: z.object({

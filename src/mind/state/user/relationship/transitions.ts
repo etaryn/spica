@@ -4,9 +4,18 @@
  * Only the user can end the relationship; repair is slow; a crisis suspends all friction.
  */
 import { HOUR } from "@/mind/platform/time";
+import {
+  advanceSession,
+  closenessCeiling,
+  type ExchangeSpan,
+  intimacyMoment,
+  sessionHours,
+} from "./closeness";
 import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
 import type { Signals } from "./signals";
 import {
+  type Intimacy,
+  type Openness,
   PARAM_NAMES,
   type ParamName,
   type Params,
@@ -32,6 +41,14 @@ export type ExchangeInput = {
   hurtFactId: string | null;
   replies: number;
   msgs24h: number;
+  /** The exchange's session and its first and last turn times: the time spent together. */
+  span: ExchangeSpan | null;
+  /** The extracted reading of the user's side of this exchange. */
+  intimacy: Intimacy | null;
+  /** The most open of the exchange's replies: what she brought to it. */
+  herOpenness: Openness | null;
+  /** The exchange's tone, kept in the session for its afterglow. */
+  tone: number | null;
 };
 
 export type TickInput = {
@@ -103,7 +120,10 @@ export function makeUpLineDue(state: RelationshipState, settings: RelationshipCo
 
 // ---------- After an exchange ----------
 
-/** Order: fade → frequency → crisis → make-up progress → signals → clear the make-up. */
+/**
+ * Order: fade → frequency → crisis → make-up progress → time together → signals → intimacy →
+ * session tone → clear the make-up.
+ */
 export function relationshipAfterExchange(
   state: RelationshipState,
   params: Params,
@@ -121,9 +141,10 @@ export function relationshipAfterExchange(
   }
 
   advanceMakeUp(draft, input.replies, settings);
-
+  if (input.span) accountTime(draft, input.span, settings);
   if (input.signals) applySignals(draft, input, input.signals, settings);
-
+  applyIntimacy(draft, input, settings);
+  recordSessionTone(draft, input.tone);
   clearMakeUpOnceHealed(draft, settings);
   return draft.result();
 }
@@ -191,17 +212,105 @@ function applyWarmthAndTrust(draft: Draft, signals: Signals, settings: Relations
     const gain = settings.gains[name] * returns;
     draft.setParam(name, nudge(draft.params[name].value, gain * signal), "signal", { signal });
   }
+}
 
-  if (signals.warmth >= deadzone) {
-    const repairing = draft.state.status === "repairing";
-    const gain =
-      settings.gains.closeness_per_warm_exchange *
-      diminishingReturns(draft.params.closeness, epsilon) *
-      (repairing ? settings.repair_gain_factor : 1);
-    draft.setParam("closeness", nudge(draft.params.closeness.value, gain), "signal", {
-      warm_exchange: true,
+// ---------- Closeness: time together and intimacy ----------
+
+function accountTime(draft: Draft, span: ExchangeSpan, settings: RelationshipConfig): void {
+  const next = advanceSession(draft.state.session, draft.state.hours_together, span, settings);
+  draft.updateState({ session: next.session, hours_together: next.hours });
+}
+
+/** The user's side moves their recent levels; a moment between them may raise closeness. */
+function applyIntimacy(draft: Draft, input: ExchangeInput, settings: RelationshipConfig): void {
+  const reading = input.intimacy;
+  if (reading) {
+    followReading(draft, "user_disclosure", reading.user_disclosure, settings);
+    if (reading.user_responsiveness !== null) {
+      followReading(draft, "user_responsiveness", reading.user_responsiveness, settings);
+    }
+  }
+
+  const moment = intimacyMoment(reading, input.herOpenness);
+  const session = draft.state.session;
+  if (session) {
+    draft.updateState({
+      session: {
+        ...session,
+        moment_sum: session.moment_sum + moment,
+        moment_n: session.moment_n + 1,
+      },
     });
   }
+
+  const ended = draft.state.status === "ended_by_user";
+  const ceiling = closenessCeiling(draft.state.hours_together, settings);
+  if (!ended && moment >= settings.signal_deadzone) {
+    const gain =
+      settings.intimacy.closeness_gain *
+      moment *
+      diminishingReturns(draft.params.closeness, settings.variance_epsilon);
+    raiseCloseness(draft, gain, ceiling, "signal", { moment, ceiling }, settings);
+  }
+  deepSession(draft, ceiling, ended, settings);
+}
+
+function followReading(
+  draft: Draft,
+  name: "user_disclosure" | "user_responsiveness",
+  reading: number,
+  settings: RelationshipConfig,
+): void {
+  const value = draft.params[name].value;
+  draft.setParam(name, value + settings.intimacy.ema_alpha * (reading - value), "signal", {
+    reading,
+  });
+}
+
+/** Up to the ceiling only; closeness already above it (earned before) is never pulled down. */
+function raiseCloseness(
+  draft: Draft,
+  gain: number,
+  ceiling: number,
+  cause: RelationshipCause,
+  detail: Detail,
+  settings: RelationshipConfig,
+): void {
+  const current = draft.params.closeness.value;
+  if (current >= ceiling) return;
+  const factor = draft.state.status === "repairing" ? settings.repair_gain_factor : 1;
+  draft.setParam("closeness", Math.min(ceiling, nudge(current, gain * factor)), cause, detail);
+}
+
+/** A long conversation that kept going deep counts once, while it's still going. */
+function deepSession(
+  draft: Draft,
+  ceiling: number,
+  ended: boolean,
+  settings: RelationshipConfig,
+): void {
+  const session = draft.state.session;
+  if (!session || session.deep_fired || session.moment_n === 0) return;
+
+  const depth = sessionHours(session, settings) * (session.moment_sum / session.moment_n);
+  if (depth < settings.deep_session.threshold) return;
+
+  draft.updateState({ session: { ...session, deep_fired: true } });
+  if (ended) return;
+
+  const gains = settings.deep_session.gains;
+  raiseCloseness(draft, gains.closeness, ceiling, "deep_session", { depth }, settings);
+  for (const name of ["trust", "warmth"] as const) {
+    draft.setParam(name, nudge(draft.params[name].value, gains[name]), "deep_session", { depth });
+  }
+}
+
+function recordSessionTone(draft: Draft, tone: number | null): void {
+  const session = draft.state.session;
+  if (tone === null || !session) return;
+  draft.updateState({
+    session: { ...session, tone_sum: session.tone_sum + tone, tone_n: session.tone_n + 1 },
+  });
 }
 
 function applyTension(draft: Draft, signals: Signals, settings: RelationshipConfig): void {

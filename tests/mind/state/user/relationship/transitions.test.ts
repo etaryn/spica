@@ -682,31 +682,55 @@ test("F4: medianGapHours is order-independent (ascending input)", () => {
   expect(medianGapHours([h(-10), h(-40), h(0), h(-30)], cfg)).toBe(10);
 });
 
-const span = (id: string, from: number, to: number) => ({
-  sessionId: id,
-  firstAt: h(from),
-  lastAt: h(to),
-});
+const span = (id: string, ...at: number[]) => ({ sessionId: id, times: at.map(h) });
 const opened = { user_disclosure: 1, user_responsiveness: null };
 const listening = { disclosure: 0, responsiveness: 1 };
 
-test("time accrues per session; a crisis adds none", () => {
-  let r = relationshipAfterExchange(fresh(), init(), ex(null, { span: span("a", 0, 1) }), cfg);
+test("time accrues per session; a crisis adds none, then or to the next exchange", () => {
+  let r = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex(null, { span: span("a", 0, 0.25, 0.5) }),
+    cfg,
+  );
+  expect(r.state.hours_together).toBeCloseTo(0.5);
+  r = relationshipAfterExchange(
+    r.state,
+    r.params,
+    ex(null, { span: span("a", 0.75, 1), now: h(1) }),
+    cfg,
+  );
   expect(r.state.hours_together).toBeCloseTo(1);
   r = relationshipAfterExchange(
     r.state,
     r.params,
-    ex(null, { span: span("a", 1, 2), now: h(2) }),
+    ex(null, { span: span("a", 1.25, 1.5), now: h(1.5), crisis: true }),
     cfg,
   );
-  expect(r.state.hours_together).toBeCloseTo(2);
-  const c = relationshipAfterExchange(
+  expect(r.state.hours_together).toBeCloseTo(1);
+  r = relationshipAfterExchange(
     r.state,
     r.params,
-    ex(null, { span: span("a", 2, 5), now: h(5), crisis: true }),
+    ex(null, { span: span("a", 1.75), now: h(1.75) }),
     cfg,
   );
-  expect(c.state.hours_together).toBeCloseTo(2);
+  expect(r.state.hours_together).toBeCloseTo(1.25);
+});
+
+test("a reply delayed for hours counts only up to the gap cap and fires no deep session", () => {
+  const r = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex(null, {
+      span: span("a", 0, 5),
+      now: h(5),
+      intimacy: { user_disclosure: 0.15, user_responsiveness: null },
+      herOpenness: listening,
+    }),
+    cfg,
+  );
+  expect(r.state.hours_together).toBeCloseTo(cfg.hours.max_gap_minutes / 60);
+  expect(r.events.some((e) => e.cause === "deep_session")).toBe(false);
 });
 
 test("an intimacy moment raises closeness up to the ceiling, never past it, never down", () => {

@@ -161,6 +161,7 @@ test("hours and session round-trip through save", async () => {
     id: "s1",
     started_at: now.toISOString(),
     last_at: now.toISOString(),
+    hours: 0.5,
     tone_sum: 0.5,
     tone_n: 1,
     moment_sum: 0.2,

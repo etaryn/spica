@@ -376,8 +376,8 @@ Every table here references `user(id) ON DELETE CASCADE`.
   `user_responsiveness` (seeded for existing users the same way);
   `relationship.hours_together` (real, summed session time) and
   `relationship.session` (jsonb, this conversation's running state: `id`,
-  `started_at`, `last_at`, `tone_sum`, `tone_n`, `moment_sum`, `moment_n`,
-  `deep_fired`); `relationship_cause` gains `deep_session`. Existing dev users
+  `started_at`, `last_at`, `hours`, `tone_sum`, `tone_n`, `moment_sum`,
+  `moment_n`, `deep_fired`); `relationship_cause` gains `deep_session`. Existing dev users
   start at 0 hours (no backfill). **New (PROPOSED):** `relatedness`,
   `reciprocity`.
 - **`identity`** (removed): its per-user ego columns (mood, energy,
@@ -1346,8 +1346,11 @@ weight is a first guess (test phase).
   `session_log.openness`. A crisis fixes them at `{ disclosure: 0,
   responsiveness: 1 }` with the crisis phrase.
 - **Time together sets a ceiling.** `relationship.hours_together` adds each
-  exchange's time: within a session the time since its last turn, a new
-  session its own span with a minimum of `hours.session_min_minutes` (5).
+  exchange's time, counting only its turns in the newest turn's session and
+  capping every gap between turns at `hours.max_gap_minutes` (30), so a
+  reply she deferred for hours is not hours together: within a session the
+  time since its last turn, a new session its own span with a minimum of
+  `hours.session_min_minutes` (5). The session keeps its own running `hours`.
   The ceiling interpolates `ceiling.start` 0.3 at 0 h, `casual` 0.5 at
   `hours.casual` 50, `friend` 0.7 at 90, `close` 0.9 at 200, flat after. It
   caps gains only and never lowers closeness.
@@ -1359,12 +1362,13 @@ weight is a first guess (test phase).
   to the ceiling. Warm small talk alone no longer moves closeness. Because
   diminishing returns read the baseline, which moves only on the daily tick,
   closeness grows over days rather than within one sitting.
-- **A deep session counts once.** When a session's hours × mean moment first
+- **A deep session counts once.** When a session's running hours × mean moment first
   reaches `deep_session.threshold` (0.3), closeness (capped), trust and
   warmth each gain `deep_session.gains` (0.04 / 0.03 / 0.03), cause
   `deep_session`.
 - **Crisis:** no hours, no reading, no moment, no deep session, no session
-  tone.
+  tone; the session's clock moves past it, so the next exchange doesn't count
+  its time either.
 - **Inspector:** hours together, the ceiling, the session and the last
   reply's openness on the Relationship tab.
 - **Review run:** `pnpm exit:intimacy` runs `rel-intimacy` with real
@@ -1724,7 +1728,7 @@ two minds or at reply time.
 | 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1010 tests at close |
 | 9c. Triggers and crisis-aware user mind | `long_conversation` and `crisis_passed` from the hourly `user_mind_tick` (which took over the pending-run sweep), `stale_summary` from the outreach tick with a send lead; crisis memories reach summarise and reflect with the sensitive mark carried forward, never ideate or a reach-out; the reply window trimmed at a 72-hour gap (B2); the "what I remember" view and per-fact forget removed (B72); inspector User mind tab; exit `tests/exit/phase-9c.test.ts` with the crisis canary. `pnpm test` 130 files / 1028 tests at close |
 | 9d. Consolidate, model and the Phase 9 exit | `fact_kind` gains `episode`, `model` and `belief` (migration 0026); `user_consolidate` folds an older week into one gist; `user_model` keeps her live read on them and revisable beliefs; the batch of five; "Your read on them" reply slot; ideate reads the newest non-sensitive read (ideate prompt v2); inspector read and beliefs; the eval life loop runs `user_mind_tick` hourly and scripts take `idle_users`; the full Phase 9 exit `tests/exit/user-mind.test.ts` (two weeks, three users, every trigger, the canary); `pnpm exit:user` runs `user-mind-two-weeks` with real model and consolidate. Phase 9 built (`pnpm test` 133 files / 1060 tests at close) |
-| 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1093 tests at close |
+| 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1095 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 

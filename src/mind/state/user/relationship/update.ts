@@ -13,6 +13,7 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import type { RelationshipSnapshot } from "@/mind/process/user/big-events";
 import { applyAffect, sessionMeanTone } from "./affect";
 import { buildCadence } from "./cadence";
+import type { ExchangeSpan } from "./closeness";
 import type { Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
 import type { Intimacy, Openness } from "./types";
@@ -37,6 +38,18 @@ export function herOpennessOf(turns: Turn[]): Openness | null {
   return {
     disclosure: Math.max(...stored.map((o) => o.disclosure)),
     responsiveness: Math.max(...stored.map((o) => o.responsiveness)),
+  };
+}
+
+/**
+ * Turns are oldest first; the newest turn's session is the conversation this belongs to, and a
+ * turn left over from an earlier session adds nothing to it.
+ */
+function exchangeSpan(turns: Turn[]): ExchangeSpan {
+  const sessionId = turns.at(-1)!.session_id;
+  return {
+    sessionId,
+    times: turns.filter((t) => t.session_id === sessionId).map((t) => t.created_at),
   };
 }
 
@@ -76,12 +89,7 @@ export async function updateRelationship(
       hurtFactId: update.hurtFactId,
       replies,
       msgs24h,
-      // Turns are oldest first; the newest turn's session is the conversation this belongs to.
-      span: {
-        sessionId: update.turns.at(-1)!.session_id,
-        firstAt: update.turns[0]!.created_at,
-        lastAt: update.turns.at(-1)!.created_at,
-      },
+      span: exchangeSpan(update.turns),
       intimacy: update.intimacy,
       herOpenness: herOpennessOf(update.turns),
       tone: update.crisis ? null : update.tone,

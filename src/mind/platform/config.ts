@@ -255,6 +255,8 @@ const relationship = z
       friend: z.number().positive(),
       close: z.number().positive(),
       session_min_minutes: nonNegative,
+      // A longer silence between turns (her busy, or them away) isn't time spent together.
+      max_gap_minutes: z.number().positive(),
     }),
     ceiling: z.object({ start: unit, casual: unit, friend: unit, close: unit }),
     deep_session: z.object({

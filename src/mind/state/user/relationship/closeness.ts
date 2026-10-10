@@ -31,7 +31,18 @@ export function intimacyMoment(user: Intimacy | null, her: Openness | null): num
   return Math.max(theyShared, sheShared);
 }
 
-export type ExchangeSpan = { sessionId: string; firstAt: Date; lastAt: Date };
+/** The exchange's session and the times of its turns in that session, oldest first. */
+export type ExchangeSpan = { sessionId: string; times: Date[] };
+
+/** Hours between consecutive times, each gap capped: a long silence isn't time together. */
+function activeHours(times: Date[], settings: RelationshipConfig): number {
+  const cap = settings.hours.max_gap_minutes * MINUTE;
+  let ms = 0;
+  for (let i = 1; i < times.length; i++) {
+    ms += Math.min(cap, Math.max(0, times[i]!.getTime() - times[i - 1]!.getTime()));
+  }
+  return ms / HOUR;
+}
 
 /** Adds this exchange's time together; a new session starts fresh running sums. */
 export function advanceSession(
@@ -40,35 +51,50 @@ export function advanceSession(
   span: ExchangeSpan,
   settings: RelationshipConfig,
 ): { session: SessionState; hours: number } {
+  const lastAt = span.times.at(-1)!;
   if (session && session.id === span.sessionId) {
-    const lastAt = new Date(session.last_at);
+    const previous = new Date(session.last_at);
     // An exchange scored out of order never takes time back.
-    if (span.lastAt <= lastAt) return { session, hours };
+    const newer = span.times.filter((t) => t > previous);
+    if (newer.length === 0) return { session, hours };
+    const added = activeHours([previous, ...newer], settings);
     return {
-      session: { ...session, last_at: span.lastAt.toISOString() },
-      hours: hours + (span.lastAt.getTime() - lastAt.getTime()) / HOUR,
+      session: { ...session, last_at: lastAt.toISOString(), hours: session.hours + added },
+      hours: hours + added,
     };
   }
-  const spanMs = Math.max(
-    settings.hours.session_min_minutes * MINUTE,
-    span.lastAt.getTime() - span.firstAt.getTime(),
+  const added = Math.max(
+    settings.hours.session_min_minutes / 60,
+    activeHours(span.times, settings),
   );
   return {
     session: {
       id: span.sessionId,
-      started_at: span.firstAt.toISOString(),
-      last_at: span.lastAt.toISOString(),
+      started_at: span.times[0]!.toISOString(),
+      last_at: lastAt.toISOString(),
+      hours: added,
       tone_sum: 0,
       tone_n: 0,
       moment_sum: 0,
       moment_n: 0,
       deep_fired: false,
     },
-    hours: hours + spanMs / HOUR,
+    hours: hours + added,
   };
 }
 
+/** A crisis adds no time, but the session's clock moves past it so the next exchange can't count it. */
+export function skipSessionTime(
+  session: SessionState | null,
+  span: ExchangeSpan,
+): SessionState | null {
+  if (!session || session.id !== span.sessionId) return session;
+  const lastAt = span.times.at(-1)!;
+  return lastAt > new Date(session.last_at)
+    ? { ...session, last_at: lastAt.toISOString() }
+    : session;
+}
+
 export function sessionHours(session: SessionState, settings: RelationshipConfig): number {
-  const span = new Date(session.last_at).getTime() - new Date(session.started_at).getTime();
-  return Math.max(settings.hours.session_min_minutes * MINUTE, span) / HOUR;
+  return Math.max(settings.hours.session_min_minutes / 60, session.hours);
 }

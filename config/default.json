@@ -244,7 +244,13 @@
       "hurt": 0.5
     },
     "intimacy": { "ema_alpha": 0.3, "closeness_gain": 0.06 },
-    "hours": { "casual": 50, "friend": 90, "close": 200, "session_min_minutes": 5 },
+    "hours": {
+      "casual": 50,
+      "friend": 90,
+      "close": 200,
+      "session_min_minutes": 5,
+      "max_gap_minutes": 30
+    },
     "ceiling": { "start": 0.3, "casual": 0.5, "friend": 0.7, "close": 0.9 },
     "deep_session": {
       "threshold": 0.3,

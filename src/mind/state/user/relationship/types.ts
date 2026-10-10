@@ -40,6 +40,8 @@ export type SessionState = {
   id: string;
   started_at: string;
   last_at: string;
+  /** Time together in this session, gaps capped; how deep it went is measured against it. */
+  hours: number;
   tone_sum: number;
   tone_n: number;
   moment_sum: number;

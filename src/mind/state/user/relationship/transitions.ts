@@ -10,6 +10,7 @@ import {
   type ExchangeSpan,
   intimacyMoment,
   sessionHours,
+  skipSessionTime,
 } from "./closeness";
 import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
 import type { Signals } from "./signals";
@@ -136,6 +137,8 @@ export function relationshipAfterExchange(
   recordFrequency(draft, input.msgs24h, input.now);
 
   if (input.crisis) {
+    if (input.span)
+      draft.updateState({ session: skipSessionTime(draft.state.session, input.span) });
     suspendForCrisis(draft, input.now, settings);
     return draft.result();
   }

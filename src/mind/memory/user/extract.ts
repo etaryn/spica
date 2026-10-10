@@ -189,6 +189,8 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   const facts = raw.facts
     .map((fact) => ({
       ...fact,
+      // What is theirs alone is between them, whoever the model credits it to.
+      subject: fact.kind === "idiolect" ? ("shared" as const) : fact.subject,
       content: tidy(fact.content),
       occurred_at: parseDate(fact.occurred_at),
       salience: clamp(fact.salience, 0, 1),
@@ -197,7 +199,8 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       entity_names: fact.entity_names.map(tidy).filter(Boolean),
       thread_title: fact.thread_title && tidy(fact.thread_title) ? tidy(fact.thread_title) : null,
       // Only her own statements are claims; a mislabelled user or shared fact carries none.
-      claim_kind: fact.subject === "self" ? (fact.claim_kind ?? null) : null,
+      claim_kind:
+        fact.subject === "self" && fact.kind !== "idiolect" ? (fact.claim_kind ?? null) : null,
       ...idiolectFields(fact),
     }))
     .filter((fact) => fact.content.length > 0)

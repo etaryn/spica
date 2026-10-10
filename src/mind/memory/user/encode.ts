@@ -283,7 +283,11 @@ async function encodeFacts(
     const target = planned.decision.targetId
       ? await getFact(db, userId, planned.decision.targetId)
       : null;
-    const relation = target ? planned.decision.relation : "new";
+    // A joke merged into a plain fact would be lost as a joke: it starts as its own candidate.
+    const relation =
+      target && !(fact.kind === "idiolect" && target.kind !== "idiolect")
+        ? planned.decision.relation
+        : "new";
 
     if (relation === "duplicate" && target) {
       await bumpDuplicate(

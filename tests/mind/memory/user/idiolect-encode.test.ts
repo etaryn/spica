@@ -126,6 +126,19 @@ test("a duplicate of a non-idiolect shared fact establishes nothing", async () =
   await exchange(d, u);
   const [row] = await getTestDb().select().from(s.fact).where(eq(s.fact.id, plain.id));
   expect(row!.payload).toBeNull();
+  // The joke is not swallowed by the plain fact: it starts as its own candidate.
+  const [candidate] = await idiolects(u);
+  expect(candidate!.payload).toMatchObject({ idiolect: { established_at: null } });
+});
+
+test("an idiolect fact is always between them, never her own claim", async () => {
+  const d = makeTestDeps();
+  const u = await createTestUser();
+  extracting(d, idiolectFact({ subject: "self", claim_kind: "reaction" }));
+  await exchange(d, u);
+  const [row] = await idiolects(u);
+  expect(row!.subject).toBe("shared");
+  expect(row!.claim_kind).toBeNull();
 });
 
 test("establishIdiolect keeps sensitive and fills a missing idiolect payload", async () => {

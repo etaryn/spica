@@ -97,6 +97,7 @@ export const factKind = pgEnum("fact_kind", [
   "episode",
   "model",
   "belief",
+  "idiolect",
 ]);
 export const userMindRunStatus = pgEnum("user_mind_run_status", [
   "pending",
@@ -168,6 +169,7 @@ export const relationshipCause = pgEnum("relationship_cause", [
   "scar",
   "baseline",
   "deep_session",
+  "bid",
 ]);
 export const coreMemoryKind = pgEnum("core_memory_kind", [
   "episode",

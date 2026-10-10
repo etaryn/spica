@@ -51,8 +51,8 @@ export async function candidateFacts(
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
       FROM fact f
       WHERE f.user_id = ${userId} AND f.scope = 'private' AND f.status NOT IN ('superseded', 'stale')
-        -- The summary, her ideas and her read on them have their own slots in the reply.
-        AND f.kind NOT IN ('summary', 'idea', 'model')
+        -- The summary, her ideas, her read on them and your things together have their own slots.
+        AND f.kind NOT IN ('summary', 'idea', 'model', 'idiolect')
         ${opts.excludeSensitive ? sql`AND COALESCE((f.payload->>'sensitive')::boolean, false) = false` : sql``}
       ORDER BY f.embedding <=> ${q}::vector
       LIMIT ${limit}`);

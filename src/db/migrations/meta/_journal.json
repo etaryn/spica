@@ -204,6 +204,13 @@
       "when": 1791656428694,
       "tag": "0028_disclosure",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791663805860,
+      "tag": "0029_idiolect",
+      "breakpoints": true
     }
   ]
 }

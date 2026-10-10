@@ -84,7 +84,8 @@ export type RelationshipCause =
   | "crisis"
   | "scar"
   | "baseline"
-  | "deep_session";
+  | "deep_session"
+  | "bid";
 
 /** One change, for the trace. `param` is null for a status change. */
 export type RelationshipEvent = {

@@ -149,3 +149,32 @@ test("a relationship made before the affect params gets them on ensure", async (
   await rel.ensureRelationship(db, u, now, cfg);
   expect((await rel.getParams(db, u)).afterglow.value).toBe(0);
 });
+
+test("hours and session round-trip through save", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  await rel.ensureRelationship(db, u, now, cfg);
+  const state = rel.toRelationshipState((await rel.getRelationshipRow(db, u))!);
+  expect(state.hours_together).toBe(0);
+  expect(state.session).toBeNull();
+  const session = {
+    id: "s1",
+    started_at: now.toISOString(),
+    last_at: now.toISOString(),
+    tone_sum: 0.5,
+    tone_n: 1,
+    moment_sum: 0.2,
+    moment_n: 1,
+    deep_fired: false,
+  };
+  await rel.saveRelationship(db, u, {
+    state: { ...state, hours_together: 1.5, session },
+    params: await rel.getParams(db, u),
+  });
+  const again = rel.toRelationshipState((await rel.getRelationshipRow(db, u))!);
+  expect(again.hours_together).toBe(1.5);
+  expect(again.session).toEqual(session);
+  expect((await rel.getParams(db, u)).user_disclosure.value).toBeCloseTo(
+    cfg.initial.user_disclosure,
+  );
+});

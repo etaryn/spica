@@ -35,11 +35,15 @@ const fresh = (): RelationshipState => ({
   crisis_quiet_until: null,
   last_tick: null,
   last_hurt_at: null,
+  hours_together: 0,
+  session: null,
 });
 
 test("phrases file has every key the summary can ask for", () => {
-  // Afterglow only ever sits above its baseline, so it has no "below" lines.
+  // Afterglow only ever sits above its baseline, so it has no "below" lines. The user's openness
+  // reaches her through how open she feels, not through "You and them".
   for (const p of PARAM_NAMES) {
+    if (p === "user_disclosure" || p === "user_responsiveness") continue;
     for (const dir of p === "afterglow" ? ["above"] : ["above", "below"])
       for (const band of ["strong", "mild"])
         expect(phrases[`${p} ${dir} ${band}`]?.length, `${p} ${dir} ${band}`).toBeGreaterThan(0);

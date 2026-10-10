@@ -13,6 +13,8 @@ const snap = (): RelSnapshot => ({
     crisis_quiet_until: null,
     last_tick: null,
     last_hurt_at: null,
+    hours_together: 0,
+    session: null,
   },
   params: {
     closeness: p(0.2),
@@ -23,6 +25,8 @@ const snap = (): RelSnapshot => ({
     msgs_per_day: p(40, 5),
     affect_valence: p(0.5),
     afterglow: p(0),
+    user_disclosure: p(0.2),
+    user_responsiveness: p(0.5),
   },
   effects: {
     closeness: 0,
@@ -33,6 +37,8 @@ const snap = (): RelSnapshot => ({
     msgs_per_day: 1,
     affect_valence: 0,
     afterglow: 0,
+    user_disclosure: 0,
+    user_responsiveness: 0,
   },
   events: [{ cause: "signal", param: "hurt", detail: { sensitised: true } }],
 });

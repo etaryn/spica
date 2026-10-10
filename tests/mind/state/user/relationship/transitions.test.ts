@@ -43,6 +43,8 @@ const fresh = (): RelationshipState => ({
   crisis_quiet_until: null,
   last_tick: null,
   last_hurt_at: null,
+  hours_together: 0,
+  session: null,
 });
 const none: Signals = {
   warmth: 0,

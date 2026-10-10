@@ -202,7 +202,32 @@ const perParam = <T extends z.ZodTypeAny>(value: T) =>
     msgs_per_day: value,
     affect_valence: value,
     afterglow: value,
+    user_disclosure: value,
+    user_responsiveness: value,
   });
+
+/** What her openness at reply time is computed from; each has a centre and two weights. */
+export const OPENNESS_INPUTS = [
+  "closeness",
+  "trust",
+  "hurt",
+  "tension",
+  "mood_valence",
+  "emotion_valence",
+  "energy",
+  "busy",
+  "affect_valence",
+  "afterglow",
+  "last_user_disclosure",
+  "user_responsiveness",
+] as const;
+const opennessWeights = z.object(
+  Object.fromEntries(OPENNESS_INPUTS.map((k) => [k, z.number()])) as Record<
+    (typeof OPENNESS_INPUTS)[number],
+    z.ZodNumber
+  >,
+);
+const opennessSide = z.object({ base: unit, weights: opennessWeights });
 
 const relationship = z
   .object({
@@ -224,6 +249,24 @@ const relationship = z
       tension: unit,
       hurt: unit,
       closeness_per_warm_exchange: unit,
+    }),
+    intimacy: z.object({ ema_alpha: unit, closeness_gain: unit }),
+    hours: z.object({
+      casual: z.number().positive(),
+      friend: z.number().positive(),
+      close: z.number().positive(),
+      session_min_minutes: nonNegative,
+    }),
+    ceiling: z.object({ start: unit, casual: unit, friend: unit, close: unit }),
+    deep_session: z.object({
+      threshold: z.number().positive(),
+      gains: z.object({ closeness: unit, trust: unit, warmth: unit }),
+    }),
+    openness: z.object({
+      centres: opennessWeights,
+      disclosure: opennessSide,
+      responsiveness: opennessSide,
+      bands: z.object({ low: unit, high: unit }),
     }),
     hurt_half_life_hours: z.number().positive(),
     tension_half_life_hours: z.number().positive(),
@@ -262,6 +305,21 @@ const relationship = z
   .refine(
     (r) => r.make_up_clear_threshold < r.make_up_threshold,
     "relationship.make_up_clear_threshold must be < make_up_threshold",
+  )
+  .refine(
+    (r) => r.hours.casual < r.hours.friend && r.hours.friend < r.hours.close,
+    "relationship.hours must rise casual < friend < close",
+  )
+  .refine(
+    (r) =>
+      r.ceiling.start <= r.ceiling.casual &&
+      r.ceiling.casual <= r.ceiling.friend &&
+      r.ceiling.friend <= r.ceiling.close,
+    "relationship.ceiling must not fall",
+  )
+  .refine(
+    (r) => r.openness.bands.low < r.openness.bands.high,
+    "relationship.openness.bands: low < high",
   );
 
 /** "HH:MM" in her zone; "24:00" closes a block at midnight. */
@@ -508,6 +566,7 @@ const prompts = z.object({
   guard_fallback: promptVersion,
   turn_judge: promptVersion,
   relationship_summary: promptVersion,
+  relationship_openness: promptVersion,
   life_plan: promptVersion,
   life_event: promptVersion,
   core_appraise: promptVersion,

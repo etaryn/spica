@@ -18,6 +18,7 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { EMBEDDING_DIMENSIONS } from "@/mind/platform/config";
+import type { Openness, SessionState } from "@/mind/state/user/relationship/types";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const emptyUuidArray = sql`'{}'::uuid[]`;
@@ -165,6 +166,7 @@ export const relationshipCause = pgEnum("relationship_cause", [
   "crisis",
   "scar",
   "baseline",
+  "deep_session",
 ]);
 export const coreMemoryKind = pgEnum("core_memory_kind", [
   "episode",
@@ -347,6 +349,9 @@ export const relationship = pgTable("relationship", {
   crisis_quiet_until: ts("crisis_quiet_until"),
   last_tick: date("last_tick", { mode: "string" }),
   last_hurt_at: ts("last_hurt_at"),
+  hours_together: real("hours_together").notNull().default(0),
+  // This session's running sums: afterglow and the deep-session boost are per conversation.
+  session: jsonb("session").$type<SessionState>(),
 });
 
 export type SafetyFlag = {
@@ -373,6 +378,8 @@ export const session_log = pgTable(
     extract_attempts: integer("extract_attempts").notNull().default(0),
     // The self snapshot a reply read, so behaviour traces back to the core loop that wrote it.
     snapshot_version: integer("snapshot_version"),
+    // How open she was steered to be in this reply; the cold path credits intimacy from it.
+    openness: jsonb("openness").$type<Openness>(),
   },
   (t) => [
     index("session_log_user_created_idx").on(t.user_id, t.created_at),

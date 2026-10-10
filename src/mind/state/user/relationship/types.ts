@@ -1,7 +1,8 @@
 /**
  * The shapes of one user's relationship state: the homeostatic params (closeness, trust, warmth,
- * hurt, tension, messages per day, and her own feelings toward them: affect and
- * afterglow), the status row, and the events that record every change.
+ * hurt, tension, messages per day, her own feelings toward them: affect and afterglow, and how
+ * open and attentive the user is with her), the status row, and the events that record every
+ * change.
  */
 import type { Config } from "@/mind/platform/config";
 
@@ -14,6 +15,8 @@ export const PARAM_NAMES = [
   "msgs_per_day",
   "affect_valence",
   "afterglow",
+  "user_disclosure",
+  "user_responsiveness",
 ] as const;
 export type ParamName = (typeof PARAM_NAMES)[number];
 
@@ -25,6 +28,24 @@ export type HomeostaticParam = {
   updated_at: Date;
 };
 export type Params = Record<ParamName, HomeostaticParam>;
+
+/** One exchange's reading of the user: how much they opened up, how well they met her. */
+export type Intimacy = { user_disclosure: number; user_responsiveness: number | null };
+
+/** How much she chose to open up, and how attentive she chose to be, in one reply. */
+export type Openness = { disclosure: number; responsiveness: number };
+
+/** This conversation's running state; ISO strings because it is stored as JSON. */
+export type SessionState = {
+  id: string;
+  started_at: string;
+  last_at: string;
+  tone_sum: number;
+  tone_n: number;
+  moment_sum: number;
+  moment_n: number;
+  deep_fired: boolean;
+};
 
 export type RelationshipStatus = "active" | "ended_by_user" | "repairing";
 export type MakeUpState = "none" | "due" | "offered";
@@ -40,6 +61,8 @@ export type RelationshipState = {
   crisis_quiet_until: Date | null;
   last_tick: string | null;
   last_hurt_at: Date | null;
+  hours_together: number;
+  session: SessionState | null;
 };
 
 export type RelationshipCause =
@@ -53,7 +76,8 @@ export type RelationshipCause =
   | "repair"
   | "crisis"
   | "scar"
-  | "baseline";
+  | "baseline"
+  | "deep_session";
 
 /** One change, for the trace. `param` is null for a status change. */
 export type RelationshipEvent = {

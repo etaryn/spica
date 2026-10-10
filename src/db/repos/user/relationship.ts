@@ -90,6 +90,8 @@ export function toRelationshipState(r: RelationshipRow): RelationshipState {
     crisis_quiet_until: r.crisis_quiet_until,
     last_tick: r.last_tick,
     last_hurt_at: r.last_hurt_at,
+    hours_together: r.hours_together,
+    session: r.session,
   };
 }
 

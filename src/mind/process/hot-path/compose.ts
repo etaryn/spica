@@ -45,7 +45,7 @@ import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary"
 import { FIRST_DEPTH, loadDepth } from "@/mind/state/user/relationship/depth";
 import type { DepthLimits, DepthRecord, Openness } from "@/mind/state/user/relationship/types";
 import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure";
-import { snapshotWithin } from "@/mind/memory/core/depth";
+import { sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
 import { z } from "zod";
 import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
@@ -239,7 +239,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
           deps,
           "depth",
           userId,
-          () => loadDepth(deps, userId, o, !!input.reachOut),
+          () => loadDepth(deps, userId, o, !!input.reachOut, input.anchor.session_id),
           FIRST_DEPTH,
         ),
       );
@@ -358,7 +358,8 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         "self lines",
         userId,
         () => deps.core.memory.selfLines(latestSnapshot.version),
-        [],
+        // Unread lines take their section's depth, so a failure never shows a stranger everything.
+        sectionDepths(latestSnapshot.content, config.core.depth.by_section),
       )
     : [];
   const shownIdeas = await ideas;

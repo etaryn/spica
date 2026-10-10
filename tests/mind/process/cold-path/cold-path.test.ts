@@ -658,3 +658,11 @@ test("a crisis exchange records nothing in the ledger", async () => {
   await tell(deps, u, { open: 1, peek: 1 }, 0, true);
   expect(await ledgerOf(u)).toEqual([]);
 });
+
+test("a claim that grounds on something deeper than she was shown records nothing", async () => {
+  const deps = ledgerDeps();
+  await seedSecret(deps);
+  const u = await createTestUser();
+  await tell(deps, u, { open: 1, peek: 1 }, 0);
+  expect(await ledgerOf(u)).toEqual([]);
+});

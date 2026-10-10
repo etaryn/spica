@@ -903,3 +903,82 @@ describe("how deep she goes", () => {
     expect(system).not.toContain("afraid of being forgotten");
   });
 });
+
+describe("depth review fixes", () => {
+  async function addCore(deps: ReturnType<typeof makeTestDeps>, content: string, depth: number) {
+    const [embedding] = await deps.embedder.embed([content], "document");
+    return deps.core.memory.insert({
+      kind: "episode",
+      content,
+      embedding: embedding!,
+      occurred_at: deps.clock.now(),
+      created_at: deps.clock.now(),
+      status: "resolved",
+      salience: 0.5,
+      valence: 0,
+      confidence: 1,
+      source: "world",
+      source_ref: null,
+      depth,
+    });
+  }
+
+  test("last night's deep conversation doesn't stretch a new one", async () => {
+    const deps = makeTestDeps({ retrieval: { core_top_n: 12 } });
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    await getTestDb().execute(
+      sql`UPDATE relationship_param SET value = 0.5 WHERE user_id = ${u} AND name = 'closeness'`,
+    );
+    const earlier = JSON.stringify({
+      id: "00000000-0000-4000-8000-0000000000bb",
+      started_at: deps.clock.now().toISOString(),
+      last_at: deps.clock.now().toISOString(),
+      hours: 1,
+      tone_sum: 0,
+      tone_n: 0,
+      moment_sum: 0,
+      moment_n: 0,
+      deep_fired: true,
+    });
+    await getTestDb().execute(
+      sql`UPDATE relationship SET session = ${earlier}::jsonb WHERE user_id = ${u}`,
+    );
+    await addCore(deps, "she is scared of being forgotten", 3);
+    const r = await composeReply(deps, u, {
+      turns: [await userTurn(deps, u, "morning")],
+      openQuestions: [],
+      flag: null,
+    });
+    expect(r.depth).toMatchObject({ open: 2, peek: 2 });
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("scared of being forgotten");
+  });
+
+  test("if her self lines can't be read, a stranger still sees only her surface sections", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    const [v] = await deps.embedder.embed(["x"], "document");
+    await deps.core.memory.insertSnapshot({
+      version: 1,
+      embedding: v!,
+      content: "### Opinions\n- Solaris is overrated\n\n### Lately\n- afraid of being forgotten",
+      sections: {},
+      source_ids: [],
+      rendered_at: deps.clock.now(),
+      model: "m",
+      prompt_version: "v2",
+    });
+    deps.core.memory.selfLines = async () => {
+      throw new Error("db down");
+    };
+    await composeReply(deps, u, {
+      turns: [await userTurn(deps, u, "hey")],
+      openQuestions: [],
+      flag: null,
+    });
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("- Solaris is overrated");
+    expect(system).not.toContain("afraid of being forgotten");
+  });
+});

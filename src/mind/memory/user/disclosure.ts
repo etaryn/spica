@@ -22,14 +22,21 @@ export async function recordDisclosures(
   },
 ): Promise<number> {
   if (input.crisis) return 0;
+  const replies = input.turns.filter((t) => t.role === "companion");
+  // A reply from before limits were stored had none: everything in it counts as told openly.
+  const limit = (pick: (d: { open: number; peek: number }) => number) =>
+    replies.length ? Math.max(...replies.map((t) => (t.depth ? pick(t.depth) : 3))) : 3;
+  const open = limit((d) => d.open);
+  const peek = limit((d) => d.peek);
+  // She can't have drawn on something deeper than she was shown: a claim that grounds there
+  // only sounds like it.
   const told = input.planned.flatMap((p, i) =>
-    p.groundRef ? [{ ref: p.groundRef, factId: input.factIds[i] ?? null }] : [],
+    p.groundRef && p.groundRef.depth <= peek
+      ? [{ ref: p.groundRef, factId: input.factIds[i] ?? null }]
+      : [],
   );
   if (!told.length) return 0;
 
-  const replies = input.turns.filter((t) => t.role === "companion");
-  // A reply from before limits were stored had none: everything in it counts as told openly.
-  const open = Math.max(1, ...replies.map((t) => t.depth?.open ?? 3));
   const ledger = await disclosureLevels(
     tx,
     input.userId,

@@ -52,12 +52,16 @@ export function levelFor(
   return depth <= open || ledger !== undefined ? "open" : "peek";
 }
 
-/** Read-only. No relationship yet: a stranger. */
+/**
+ * Read-only. No relationship yet: a stranger. Only this conversation's depth can draw her out:
+ * last night's deep talk is not tonight's chemistry.
+ */
 export async function loadDepth(
   deps: Pick<Deps, "db" | "config">,
   userId: string,
   herOpenness: Openness | null,
   reachOut: boolean,
+  sessionId: string,
 ): Promise<DepthLimits> {
   const settings = deps.config.relationship;
   const row = await relationshipRepo.getRelationshipRow(deps.db, userId);
@@ -73,7 +77,7 @@ export async function loadDepth(
         settings.depth.reciprocity_window,
       ),
       herDisclosure: herOpenness?.disclosure ?? null,
-      session: row.session,
+      session: row.session?.id === sessionId ? row.session : null,
       reachOut,
     },
     settings,

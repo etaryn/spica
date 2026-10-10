@@ -384,10 +384,16 @@ Every table here references `user(id) ON DELETE CASCADE`.
   preoccupation) and `life_last_date` went with the per-user ego and life
   tick; the table is gone. Core state (§6.2) and the params above replace it.
 - **`push_subscription`**: one row per browser subscription.
-- **New (PROPOSED): `disclosure`**: `user_id`, `core_ref` (the core memory
-  item or snapshot section revealed), `depth` (tier), `turn_id`,
-  `created_at`. Which parts of her self she has revealed to this user
-  (§11.3).
+- **`disclosure`** (**Built 10b**, migration 0028): the ledger of what she
+  has actually told this user about herself. `user_id`, `ref_kind`
+  (`memory | self_line`), `ref_id` (the core item; no foreign key, since core
+  never depends on a user table and core items are never hard-deleted),
+  `depth` (1–3), `level` (`open | peek`), `fact_id` (her self fact that told
+  it), `turn_id` (the reply), `created_at`. Rows append; readers take the
+  highest level per item (§11.3). `session_log.depth` (jsonb `{ open, peek,
+  held_back }`) records what each reply was allowed to reveal. Core side:
+  `core_memory.depth` and `core_self_line.depth` (smallint 1–3; existing
+  memories backfilled by kind, existing self lines surface).
 - **`user_mind_run`** (Built 9a): one row per big-event batch: `user_id`,
   `triggers` (jsonb: the structured triggers that fired, e.g.
   `{kind: "param_band", param, from, to}`), `source_ref` (`exchange:<replyTurnId>` or
@@ -521,8 +527,8 @@ self's own sections are `###`, so they nest under the reply's "Who you are
 lately".
 
 Nightly rendering uses `core.snapshot.max_items` (8 per active kind) and
-`core.snapshot.max_tokens` (1024), with `prompts.core_snapshot: v1` at
-`prompts/core/snapshot/v1.md`. Its six sections are Lately, Opinions,
+`core.snapshot.max_tokens` (1024), with `prompts.core_snapshot: v2` at
+`prompts/core/snapshot/v2.md`. Its six sections are Lately, Opinions,
 Interests, Goals, People, and Habits of speech; transient mood and energy
 are excluded and speech habits carry forward unless core evidence changes
 them. Insights are selected newest-first since the previous render. The
@@ -675,7 +681,7 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   run), appraises each event whose `at` has passed and whose `appraised_at`
   is null, in one transaction under the tick's lock (a surprise's people are
   added to `core_entity` and its `agents` set here). **`core_appraise`**
-  (Built; Haiku, `prompts/core/appraise/v1.md`, one budgeted run per tick
+  (Built; Haiku, `prompts/core/appraise/v2.md`, one budgeted run per tick
   that has due events, before the transaction) reads each event with what
   she expected (its intention), her state, the snapshot and her goals, and
   returns the episode in its own words (E1), an emotion, a salience word,
@@ -780,20 +786,20 @@ and `dedupe_similarity` (0.92). A nearest eligible neighbour with similarity
 **greater than** 0.92 drops an item; dropped items appear in trace outputs.
 Invalid model output or embedding leaves thought and source unchanged.
 
-- `core_anticipate` (`prompts/core/anticipate/v1.md`) chooses the soonest open,
+- `core_anticipate` (`prompts/core/anticipate/v2.md`) chooses the soonest open,
   unanticipated intention in the next `core.anticipate.lead_hours` (12),
   ties by ID. Accepted thought gets `payload.anticipates`; the intention gets
   `anticipated_at`. Emotion is bounded and mood arousal moves by
   `core.anticipate.arousal_gain` (0.3) toward proposed arousal; mood valence
   stays. Landing before apply makes the proposal ineligible.
-- `core_ruminate` (`prompts/core/ruminate/v1.md`) chooses the oldest eligible
+- `core_ruminate` (`prompts/core/ruminate/v2.md`) chooses the oldest eligible
   episode, ties by ID: age 2 through 24 hours from landing, absolute valence
   at least 0.5 and `payload.ruminated` below 1. Keys are
   `core.ruminate.delay_hours`, `window_hours`, `min_valence`,
   `max_per_episode`, `gain` (0.1). Acceptance writes `payload.ruminates`,
   increments the episode marker, reinforces recall and nudges mood valence
   toward the episode's sign. An absent historical emotion stays absent.
-- `core_wander` (`prompts/core/wander/v1.md`) needs today's plan and no busy
+- `core_wander` (`prompts/core/wander/v2.md`) needs today's plan and no busy
   or quiet block. Keys `core.wander.max_per_day` (2), `min_gap_hours` (3),
   `seed_days` (7), `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
   `min_similarity` (0.3), `max_items` (2) bound the selection and output.
@@ -809,7 +815,7 @@ and does not stop later steps. The date claim prevents a second run that
 night, including after a crash. Each loop uses the shared 24-call daily
 budget and a versioned prompt:
 
-- `core_reflect` (`prompts/core/reflect/v1.md`, `prompts.core_reflect: v1`)
+- `core_reflect` (`prompts/core/reflect/v2.md`, `prompts.core_reflect: v2`)
   reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
   with `reflected_at IS NULL` and `created_at <= now`, ordered by
   `(created_at, id)`, plus `context_items` (6) active neighbours. A capped run
@@ -823,8 +829,8 @@ budget and a versioned prompt:
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
   interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
   produces a zero-call successful trace and marks no memories.
-- `core_consolidate` (`prompts/core/consolidate/v1.md`,
-  `prompts.core_consolidate: v1`) applies core decay before any model call:
+- `core_consolidate` (`prompts/core/consolidate/v2.md`,
+  `prompts.core_consolidate: v2`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes
   `salience * (1 - rate * (1 - salience))`, with `rate` 0.08; at or below
   `stale_floor` (0.05) it becomes stale, never deleted. Open intentions,
@@ -834,13 +840,21 @@ budget and a versioned prompt:
   Monday-start local week. It handles at most `max_groups` (1) per night;
   sources remain and receive `gist_source_factor` (0.5) once. `max_tokens`
   is 512. Decay still runs on budget exhaustion or gist failure.
-- `core_render_snapshot` (`prompts/core/snapshot/v1.md`,
-  `prompts.core_snapshot: v1`) reads at most `core.snapshot.max_items` (8)
+- `core_render_snapshot` (`prompts/core/snapshot/v2.md`,
+  `prompts.core_snapshot: v2`) reads at most `core.snapshot.max_items` (8)
   per active kind, with `max_tokens` 1024. It writes six sections and their
   embedded bullet lines in one transaction with version N+1 and its trace;
   a failed render preserves the previous version and lines.
 - `core_drift_watch` (`prompts/core/drift/v1.md`) writes the diagnostic
   rows described in §7.3. A finding never blocks the new snapshot.
+- **Built 10b: depth.** Every loop that writes memory judges each item's
+  `depth` in the same call (`surface | personal | intimate`, 1–3): appraise,
+  wander, ruminate, anticipate, reflect and consolidate (all prompts v2), and
+  snapshot render v2 for each self line. A missing or malformed depth takes
+  `core.depth.by_kind[kind]` (snapshot lines `core.depth.by_section`); a gist
+  with none is as deep as its deepest source. Code-written intentions take
+  the kind default; core-value lines are always surface; seed lines take
+  their section's default.
 
 ---
 
@@ -1138,7 +1152,16 @@ when the guard is on.
    6. retrieved memory under "What you remember": "About them", "Between
       you", "What you've told them" (user-scope `subject = self`, V5), and
       "From your own life" (her core memory, the top `retrieval.core_top_n`
-      by the same score; future-dated items hidden). Core retrieval is
+      by the same score; future-dated items hidden). **Built 10b:** "From
+      your own life" holds only items at or below the reply's `peek` depth;
+      one above `open` is tagged *(only hint at this)*, and the ledger marks
+      *(they already know this)* or *(you've hinted at this before)*. Memories
+      about them are marked *(from when you first met)* (onboarding) or
+      *(your own guess, they never said this)* (inferred, reflections,
+      beliefs). "Who you are lately" keeps only the latest snapshot's lines at
+      or below `open`. A strong match beyond `peek` adds a "Not ready to
+      share" slot after "What you remember", once per item per session
+      (§11.3). Core retrieval is
       read-only: replies write no recall reinforcement to core memory.
       **Built 8d:** each core candidate's score is multiplied by
       `(1 + retrieval.core_mood_bias × valence × mood_valence) ×
@@ -1178,9 +1201,11 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v12.md` (its rules about her own self sit under "Being
-yourself", so no heading repeats the persona's; v12 adds one line under "Your
-own state" on following "How open you feel"). v11 added the **claim line**
+`prompts/reply/v13.md` (its rules about her own self sit under "Being
+yourself", so no heading repeats the persona's; v12 added one line under
+"Your own state" on following "How open you feel"; v13 adds how to read the
+hint, held-back and common-ground marks, and that she may deflect, never
+invent, and is always honest that she's an AI). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1312,9 +1337,9 @@ Each mechanic is user-scoped, and each names what it changes.
 | Mechanic | Source | What it does |
 |---|---|---|
 | **Intimacy loop** (**Built 10a**) | Reis & Shaver | Disclosure, then perceived responsiveness, then closeness. Closeness grows from good responses to disclosure, not message volume |
-| **Disclosure ledger and reciprocity** | Altman & Taylor (Social Penetration) | Her self is tiered by depth; she reveals deeper tiers as closeness grows and as the user reciprocates; `disclosure` rows record what each user has seen |
+| **Disclosure ledger and reciprocity** (**Built 10b**) | Altman & Taylor (Social Penetration) | Her self is tiered by depth; she reveals deeper tiers as closeness grows and as the user reciprocates; `disclosure` rows record what each user has seen |
 | **Bids for connection** | Gottman | Extraction classifies the user's response to her bids (toward, away, against); feeds warmth and trust |
-| **Common ground** | Clark | What each knows the other knows; checked before she references something |
+| **Common ground** (**Built 10b**) | Clark | What each knows the other knows; checked before she references something |
 | **Idiolect** | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
 | **Closeness by time together** (**Built 10a**) | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
 | **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
@@ -1374,6 +1399,46 @@ weight is a first guess (test phase).
 - **Review run:** `pnpm exit:intimacy` runs `rel-intimacy` with real
   extraction and logs readings, her openness and the closeness path.
 
+**Built 10b: how deep she goes.** Code: `src/mind/memory/core/depth.ts`,
+`src/mind/state/user/relationship/depth.ts`, `src/mind/memory/user/disclosure.ts`,
+`src/db/repos/user/disclosure.ts`.
+
+- **Her self is tiered** (§8.5): every core memory and self line carries a
+  depth, 1 surface (she'd tell an acquaintance), 2 personal (a friend), 3
+  intimate (only someone close).
+- **Allowed depth per reply** (`depthFor`, pure): the usual limit `open` is 1,
+  +1 at closeness ≥ `relationship.depth.bands.personal` (0.4), +1 at ≥
+  `bands.intimate` (0.65). **Reciprocity:** her recent sharing (mean depth of
+  the last `reciprocity_window` (10) ledger rows, scaled 0–1) more than
+  `reciprocity_gap` (0.35) above their `user_disclosure` drops `open` a tier
+  (never below 1). **Chemistry:** her openness disclosure in its high band, or
+  a deep session (deep-session boost fired, or mean moment ≥
+  `stretch_moment` 0.5), lets `peek = open + 1`; otherwise `peek = open`. A
+  reach-out never stretches; outreach candidates from her own memories
+  deeper than `open` are filtered `too_deep` (§13). No relationship yet, and
+  any crisis: `{ open: 1, peek: 1 }`.
+- **Peek vs open:** an item within `open` is offered plainly; above it, as a
+  hint, unless she has hinted at it before, when it is offered openly (the
+  glimpse becomes the story). One rule (`levelFor`) tags on the hot path and
+  records on the cold path.
+- **Held back:** the strongest match beyond `peek` with similarity ≥
+  `held_back_similarity` (0.85) gives "Not ready to share" once per item per
+  session (read from earlier replies' `session_log.depth`, so the hot path
+  stays read-only). She may deflect, play it down or change the subject;
+  she never invents. **Tracked white lies are deferred** (§25.3, B84).
+- **The ledger:** the cold path writes a `disclosure` row for each of her
+  `life` or `opinion` claims that grounds against core (§12.6), with the
+  level from the reply's stored limits (a reply with none counts as open).
+  A claim merged into an earlier fact still records a row. A crisis records
+  none. No extra calls.
+- **Common ground:** derived marks, no table: her items by the ledger
+  (*they already know this* / *you've hinted at this before*), theirs by
+  source (*from when you first met* / *your own guess*).
+- **Inspector:** the ledger (when, level, depth, item text) and the last
+  reply's limits on the Relationship tab.
+- **Review run:** `pnpm exit:disclosure` runs `rel-disclosure` with real
+  extraction.
+
 ---
 
 ## 12. Memory mechanics (Built; apply to both scopes)
@@ -1423,11 +1488,13 @@ Account deletion removes everything.
 
 ### 12.6 Claim grounding (Built 8d)
 
-`CoreMemory.groundingSimilarity(embedding)` returns her best match for a
-claim: the highest cosine similarity across recallable core memory (the same
+`CoreMemory.groundingMatch(embedding)` (**Built 10b**; was
+`groundingSimilarity`) returns her best match for a claim and what it was
+(`{ similarity, ref: { kind, id, depth } }`): the highest cosine similarity across recallable core memory (the same
 filter as retrieval: not superseded, stale or hypothetical, and no resolved
 intention) and `core_self_line` rows that are core values (`version` null) or
-belong to the latest snapshot. 0 when she has none. It takes no user and
+belong to the latest snapshot. 0 and null when she has none. The ref feeds
+the disclosure ledger (§11.3). It takes no user and
 touches no user table. The cold path calls it for each `life` or `opinion`
 self fact with the embedding it already has; `grounded` is that similarity
 ≥ `claims.grounded_similarity` (0.75). Reading core here is one-way (V2); the
@@ -1446,7 +1513,9 @@ Code: `src/mind/process/outreach/`.
   (recent user event or promise), `her_day` (a recent core event), `check_in`
   (gap well beyond the user's cadence). **New (PROPOSED):** `core_thought`
   (a recent core thought worth sharing) and `user_idea` (from `user_ideate`).
-  A topic key is used once; sensitive items are filtered. **Built 9b:**
+  A topic key is used once; sensitive items are filtered. **Built 10b:**
+  her own memories deeper than the user's usual depth limit are filtered
+  `too_deep`. **Built 9b:**
   the order is `thread, make_up, user_event, her_day, core_thought,
   user_idea, check_in`. `user_idea`: one candidate per live idea (at most
   `outreach.user_idea_limit` (3)), topic `idea:<id>`, strength = salience,
@@ -1573,7 +1642,8 @@ finish) with each loop trace (status, calls, cost, error, inputs and outputs),
 the live summary (marked if sensitive), recent reflections and live ideas.
 **Built 9d:** it also shows her live read on them and her live beliefs (each
 marked if sensitive); gists show in the facts tab as `episode` rows.
-**New:** the disclosure ledger (Phase 10).
+**Built 10b:** the Relationship tab shows the disclosure ledger
+(`inspector.ledger_limit`, 50) and the last reply's depth limits.
 
 ### 17.2 Eval harness (Built)
 
@@ -1729,12 +1799,13 @@ two minds or at reply time.
 | 9c. Triggers and crisis-aware user mind | `long_conversation` and `crisis_passed` from the hourly `user_mind_tick` (which took over the pending-run sweep), `stale_summary` from the outreach tick with a send lead; crisis memories reach summarise and reflect with the sensitive mark carried forward, never ideate or a reach-out; the reply window trimmed at a 72-hour gap (B2); the "what I remember" view and per-fact forget removed (B72); inspector User mind tab; exit `tests/exit/phase-9c.test.ts` with the crisis canary. `pnpm test` 130 files / 1028 tests at close |
 | 9d. Consolidate, model and the Phase 9 exit | `fact_kind` gains `episode`, `model` and `belief` (migration 0026); `user_consolidate` folds an older week into one gist; `user_model` keeps her live read on them and revisable beliefs; the batch of five; "Your read on them" reply slot; ideate reads the newest non-sensitive read (ideate prompt v2); inspector read and beliefs; the eval life loop runs `user_mind_tick` hourly and scripts take `idle_users`; the full Phase 9 exit `tests/exit/user-mind.test.ts` (two weeks, three users, every trigger, the canary); `pnpm exit:user` runs `user-mind-two-weeks` with real model and consolidate. Phase 9 built (`pnpm test` 133 files / 1060 tests at close) |
 | 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1095 tests at close |
+| 10b. How deep she goes | Depth on core memories and self lines (migration 0028, backfill by kind), judged by every memory-writing core loop (prompts v2) and snapshot render v2; `depthFor` limits from closeness, reciprocity and chemistry; hint, open and held-back offers; "Who you are lately" trimmed to the usual limit; `session_log.depth`; the `disclosure` ledger via `groundingMatch`; common-ground marks; outreach `too_deep`; reply v13; inspector ledger; exit `tests/exit/phase-10b.test.ts` (the canary); `pnpm exit:disclosure`. `pnpm test` 140 files / 1138 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; then 10b ledger and common ground, 10c bids and idiolect, 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
+| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; then 10c bids and idiolect, 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
@@ -1887,6 +1958,12 @@ and life tick) were dropped; the replacement is designed fresh.
   *Later.*
 
 ### 25.3 Relationship
+- **B84.** Tracked white lies: when she isn't ready to share, she may want to
+  say something untrue about herself rather than deflect. Needs cover
+  stories in the ledger so she stays consistent and can come clean when
+  closer, and meets the guard-phase `invented_self` decision (§25.7).
+  Honesty about being an AI is never part of it (Ethan, 2026-10-11).
+  *10d or its own slice.*
 - **B14.** Signal calibration: the real extractor scores hurt and tension
   lower than scripted amounts and reads light arguments as banter. Calibrate
   prompt anchors or `relationship.gains` against real conversations.

@@ -120,3 +120,9 @@ code itself.
 | 2026-10-10 | Existing dev users start Phase 10a at 0 hours together; no backfill from `session_log` | Test-phase data; the ceiling simply starts low for them. |
 | 2026-10-10 | Her openness for an exchange with several replies is the highest of its replies' | The moment credits the most she brought to the exchange. |
 | 2026-10-10 | The user's disclosure and responsiveness have no "You and them" phrases | They reach her through "How open you feel"; the summary already drops a deviation with no phrase. |
+| 2026-10-11 | Existing core memories take their depth from their kind; existing self lines are surface | No model backfill; self lines were already shown to everyone, so nothing changes until the next render. |
+| 2026-10-11 | Core-value lines are always surface | Who she is (an AI, Alcor, her loves) is never a secret. |
+| 2026-10-11 | Ledger rows point at core items with no foreign key | Core tables must never depend on a user table; core items are never hard-deleted. |
+| 2026-10-11 | A repeated claim records another ledger row even when reconcile merges it | So a hint told again openly upgrades to open. |
+| 2026-10-11 | A reply with no stored depth limits counts its claims as open | Replies before this phase had no limits. |
+| 2026-10-11 | Truthful deflection now; tracked white lies later (B84) | Lies need cover stories in the ledger to stay consistent, and meet the guard-phase invented_self decision. |

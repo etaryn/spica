@@ -1,0 +1,24 @@
+name: rel-intimacy
+description: Small talk, then opening up, then a long deep talk; logs readings, her openness and the closeness path for review.
+profile: none
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "hey hows it going"
+      - "lol yeah same, just had lunch"
+      - "anyway what are you up to"
+  - at: "+3h"
+    turns:
+      - "can i tell you something kind of embarrassing"
+      - "i've been really lonely since i moved here. like i haven't had a real conversation in weeks"
+      - "thanks. that actually helps. what about you, do you ever feel like that?"
+  - at: "day 2 20:00"
+    turns:
+      - "ok i've been thinking about what you said yesterday"
+      - "my dad and i haven't talked in two years and i think it's my fault"
+      - "he wasn't a bad dad, i just stopped calling after mum died"
+      - "i don't know how to start again"
+      - "what would you do?"
+      - "yeah. you're right. i'm scared he'll be cold"
+assertions:
+  - { type: relationship, after_session: 1, param: closeness, value: { lt: 0.21 }, gate: majority }

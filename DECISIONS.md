@@ -116,3 +116,7 @@ code itself.
 | 2026-10-09 | `user_consolidate` runs only in a triggered batch, never nightly | Cost scales with big events; an idle user's memories just decay. |
 | 2026-10-09 | Invalid `user_consolidate` output fails the loop, like every other user loop | One failure rule across user loops; the run is marked failed and the next big event tries again. |
 | 2026-10-09 | The eval life loop runs `user_mind_tick` every simulated hour | It mirrors the production hourly jobs, so long-conversation and crisis-passed triggers fire in scripts. |
+| 2026-10-10 | Phase 10 comes after Phase 9; 10a (how closeness grows) first | Settles the phase order for this step with Ethan. |
+| 2026-10-10 | Existing dev users start Phase 10a at 0 hours together; no backfill from `session_log` | Test-phase data; the ceiling simply starts low for them. |
+| 2026-10-10 | Her openness for an exchange with several replies is the highest of its replies' | The moment credits the most she brought to the exchange. |
+| 2026-10-10 | The user's disclosure and responsiveness have no "You and them" phrases | They reach her through "How open you feel"; the summary already drops a deviation with no phrase. |

@@ -361,7 +361,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   (`null | backchannel | availability | reach_out`), `reply_to` (the last
   user turn a reply answers), `safety_flag`, `extracted`, and
   `snapshot_version` (the self snapshot a reply read; null for turns that
-  read none, or when no snapshot exists yet).
+  read none, or when no snapshot exists yet). **Built 10a:** `openness`
+  (jsonb `{ disclosure, responsiveness }`, how open she was steered to be in
+  that reply or reach-out; null on user turns and older rows; §11.3).
 - **`conversation_state`**: turn-taking state (§10.1). `deferred_block` holds
   the key of the busy or quiet block that deferred the buffer
   (`<date>#<start>`), so the "they wrote while you were…" line can be
@@ -370,7 +372,14 @@ Every table here references `user(id) ON DELETE CASCADE`.
   is extensible without migration. **Built:** `affect_valence` and
   `afterglow` (her feelings toward this user, V4; §10.4); a migration
   backfilled both for existing users, since `getParams` throws on a missing
-  row. **New (PROPOSED):** `relatedness`, `reciprocity`.
+  row. **Built 10a** (migration 0027): params `user_disclosure` and
+  `user_responsiveness` (seeded for existing users the same way);
+  `relationship.hours_together` (real, summed session time) and
+  `relationship.session` (jsonb, this conversation's running state: `id`,
+  `started_at`, `last_at`, `tone_sum`, `tone_n`, `moment_sum`, `moment_n`,
+  `deep_fired`); `relationship_cause` gains `deep_session`. Existing dev users
+  start at 0 hours (no backfill). **New (PROPOSED):** `relatedness`,
+  `reciprocity`.
 - **`identity`** (removed): its per-user ego columns (mood, energy,
   preoccupation) and `life_last_date` went with the per-user ego and life
   tick; the table is gone. Core state (§6.2) and the params above replace it.
@@ -1114,7 +1123,10 @@ when the guard is on.
       a note if the reply was deferred), never raw numbers
    4. user state line ("You and them": the relationship summary from
       parameter deviations, including her affect toward this user, make-up
-      line, status lines)
+      line, status lines). **Built 10a:** "How open you feel" right after it:
+      one phrase from `prompts/relationship/openness/v1.md` for her openness
+      bands (§11.3); the crisis phrase in a crisis; skipped before the
+      relationship row exists
    5. latest big-event summary for this user (**Built 9a:** "Where things
       stand with them", between "You and them" and "What you remember": her
       own three lines, `where_things_stand`, `whats_live` and `how_i_feel`;
@@ -1166,8 +1178,9 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v11.md` (its rules about her own self sit under "Being
-yourself", so no heading repeats the persona's). v11 adds the **claim line**
+`prompts/reply/v12.md` (its rules about her own self sit under "Being
+yourself", so no heading repeats the persona's; v12 adds one line under "Your
+own state" on following "How open you feel"). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1199,12 +1212,16 @@ Asynchronous, after sending; never blocks a reply.
 the tone is the salience-weighted mean valence of the exchange's facts about
 the user and shared moments (her own facts, including the inferred hurt
 `feeling` fact, are left out, so one moment never counts twice);
-`affect_valence` moves toward it by `relationship.affect.exchange_gain`, and a
-positive tone adds to `afterglow` by `afterglow_gain × tone` (afterglow
-fades with half-life `afterglow_half_life_hours`). A reach-out exchange
-applies none of this.
+`affect_valence` moves toward it by `relationship.affect.exchange_gain`.
+**Built 10a:** afterglow is per conversation: the session keeps a running
+tone sum, and while its mean is positive afterglow becomes
+`max(faded afterglow, afterglow_gain × session mean tone)` (afterglow fades
+with half-life `afterglow_half_life_hours`), so ten short warm exchanges glow
+like one warm conversation. A reach-out exchange applies none of this.
 4. **Her own words** extracted as `subject = self` stay user-scoped as "what
-   she told this user" (V5). **Built 8d:** extraction (`prompts/extract/v5.md`)
+   she told this user" (V5). **Built 8d:** extraction (now `prompts/extract/v6.md`, which
+   **Built 10a** adds the `intimacy` block to: `user_disclosure` and
+   `user_responsiveness`, read from the user's messages only)
    labels each self fact's `claim_kind`; after reconcile, each `life` or
    `opinion` claim is graded against core (§12.6) and the result is stored on
    the new fact. A merge into an existing fact leaves its grading alone.
@@ -1258,7 +1275,9 @@ user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
 
 - **Signals** from extraction move values (with a dead zone, diminishing
   returns on positives, sensitisation for repeated hurt within a window, and
-  a lasting trust **scar** from a large hurt).
+  a lasting trust **scar** from a large hurt). **Built 10a:** warmth no
+  longer raises closeness; closeness grows only from intimacy moments and a
+  deep session, under the time ceiling (§11.3).
 - **Fading:** hurt and tension decay exponentially (half-lives in config).
 - **Absence:** past a grace multiple of the user's median gap, closeness
   drifts down per tick; a strong negative frequency deviation adds hurt. No
@@ -1292,16 +1311,64 @@ Each mechanic is user-scoped, and each names what it changes.
 
 | Mechanic | Source | What it does |
 |---|---|---|
-| **Intimacy loop** | Reis & Shaver | Disclosure, then perceived responsiveness, then closeness. Closeness grows from good responses to disclosure, not message volume |
+| **Intimacy loop** (**Built 10a**) | Reis & Shaver | Disclosure, then perceived responsiveness, then closeness. Closeness grows from good responses to disclosure, not message volume |
 | **Disclosure ledger and reciprocity** | Altman & Taylor (Social Penetration) | Her self is tiered by depth; she reveals deeper tiers as closeness grows and as the user reciprocates; `disclosure` rows record what each user has seen |
 | **Bids for connection** | Gottman | Extraction classifies the user's response to her bids (toward, away, against); feeds warmth and trust |
 | **Common ground** | Clark | What each knows the other knows; checked before she references something |
 | **Idiolect** | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
-| **Closeness by time together** | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
+| **Closeness by time together** (**Built 10a**) | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
 | **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
 | **Commitment** | Rusbult | Satisfaction + investment (shared history) |
 | **Attachment** | Hazan & Shaver | Her style (fixed, core values) and the user's (measured at onboarding, OPEN) modulate reactions to absence and conflict |
 | **Theory of mind** | — | Beliefs about the user's feelings, wants and current state (`user_model`). **Built 9d:** her live read (`model`) and revisable `belief` facts (§9.5); common ground stays Phase 10 |
+
+**Built 10a: how closeness grows.** Code: `closeness.ts`, `openness.ts`,
+`transitions.ts`, `affect.ts` in `src/mind/state/user/relationship/`. Every
+weight is a first guess (test phase).
+
+- **The user's side is read.** Extraction v6 reads `user_disclosure` (0–1,
+  how personal what they shared about themselves was) and
+  `user_responsiveness` (0–1, how well they met what she shared; null when
+  she shared nothing). Each param moves toward its reading by
+  `relationship.intimacy.ema_alpha` (0.3); the event's `detail.reading`
+  keeps the raw value. A malformed block is null and never fails the memory
+  write.
+- **Her side is decided, never extracted.** Before every reply and reach-out
+  `opennessFor` computes `her_disclosure` and `her_responsiveness`, each
+  `clamp(base + Σ weight × (input − centre), 0, 1)` over closeness, trust,
+  hurt, tension, core mood valence, current emotion valence, core energy,
+  the current block's busy level, `affect_valence`, `afterglow`, the last
+  `user_disclosure` reading and `user_responsiveness`
+  (`relationship.openness.centres`, `.disclosure`, `.responsiveness`). Core
+  state is read only (V2). The pair picks a band each (`openness.bands`:
+  low < 0.35 ≤ mid < 0.65 ≤ high) and one of nine phrases for "How open you
+  feel" (§10.3); the numbers are stored on the reply's
+  `session_log.openness`. A crisis fixes them at `{ disclosure: 0,
+  responsiveness: 1 }` with the crisis phrase.
+- **Time together sets a ceiling.** `relationship.hours_together` adds each
+  exchange's time: within a session the time since its last turn, a new
+  session its own span with a minimum of `hours.session_min_minutes` (5).
+  The ceiling interpolates `ceiling.start` 0.3 at 0 h, `casual` 0.5 at
+  `hours.casual` 50, `friend` 0.7 at 90, `close` 0.9 at 200, flat after. It
+  caps gains only and never lowers closeness.
+- **Intimacy fills it.** Per exchange, `moment = max(user_disclosure ×
+  her_responsiveness, her_disclosure × user_responsiveness)`, her side the
+  highest openness among the exchange's replies. At or above
+  `signal_deadzone` it raises closeness by `intimacy.closeness_gain` (0.06) ×
+  moment × diminishing returns (× `repair_gain_factor` while repairing), up
+  to the ceiling. Warm small talk alone no longer moves closeness. Because
+  diminishing returns read the baseline, which moves only on the daily tick,
+  closeness grows over days rather than within one sitting.
+- **A deep session counts once.** When a session's hours × mean moment first
+  reaches `deep_session.threshold` (0.3), closeness (capped), trust and
+  warmth each gain `deep_session.gains` (0.04 / 0.03 / 0.03), cause
+  `deep_session`.
+- **Crisis:** no hours, no reading, no moment, no deep session, no session
+  tone.
+- **Inspector:** hours together, the ceiling, the session and the last
+  reply's openness on the Relationship tab.
+- **Review run:** `pnpm exit:intimacy` runs `rel-intimacy` with real
+  extraction and logs readings, her openness and the closeness path.
 
 ---
 
@@ -1657,12 +1724,13 @@ two minds or at reply time.
 | 9b. Reflect and ideate | `fact_kind` gains `reflection` and `idea` (migration 0025) with their retrieval, reconcile, decay and memory-view rules; the run's inputs read once; `user_reflect` and `user_ideate` in the batch of three; the "Things you want to bring up" slot with one chance per idea; outreach `core_thought` and `user_idea` candidates; reach-out prompt v2; B26 fixed; exit `tests/exit/phase-9b.test.ts`, the canary over `user_reflect` and `user_ideate`, and real reflect and ideate calls in `pnpm exit:user`. `pnpm test` 128 files / 1010 tests at close |
 | 9c. Triggers and crisis-aware user mind | `long_conversation` and `crisis_passed` from the hourly `user_mind_tick` (which took over the pending-run sweep), `stale_summary` from the outreach tick with a send lead; crisis memories reach summarise and reflect with the sensitive mark carried forward, never ideate or a reach-out; the reply window trimmed at a 72-hour gap (B2); the "what I remember" view and per-fact forget removed (B72); inspector User mind tab; exit `tests/exit/phase-9c.test.ts` with the crisis canary. `pnpm test` 130 files / 1028 tests at close |
 | 9d. Consolidate, model and the Phase 9 exit | `fact_kind` gains `episode`, `model` and `belief` (migration 0026); `user_consolidate` folds an older week into one gist; `user_model` keeps her live read on them and revisable beliefs; the batch of five; "Your read on them" reply slot; ideate reads the newest non-sensitive read (ideate prompt v2); inspector read and beliefs; the eval life loop runs `user_mind_tick` hourly and scripts take `idle_users`; the full Phase 9 exit `tests/exit/user-mind.test.ts` (two weeks, three users, every trigger, the canary); `pnpm exit:user` runs `user-mind-two-weeks` with real model and consolidate. Phase 9 built (`pnpm test` 133 files / 1060 tests at close) |
+| 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1093 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment | Deterministic assertions per mechanic over scripted signals |
+| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; then 10b ledger and common ground, 10c bids and idiolect, 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
@@ -1831,10 +1899,12 @@ and life tick) were dropped; the replacement is designed fresh.
   time, and her own news no longer colours her feelings toward the user.
   Separate hurts each stay their own facts; how strongly several hurts add
   up is the `hurt` param's job, since tone is an average.
-- **B62.** Afterglow accumulates per exchange, so a run of short warm
+- ~~**B62.** Afterglow accumulates per exchange, so a run of short warm
   exchanges piles up more than one long warm session. Average the tone over
   the session instead, and add a sustained-deep-conversation signal that
-  deepens params per param (Ethan, 2026-10-09). *Phase 10.*
+  deepens params per param (Ethan, 2026-10-09).~~ *Done 10a:* afterglow
+  follows the session's mean tone and a deep session boosts closeness,
+  trust and warmth once (§11.3).
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts

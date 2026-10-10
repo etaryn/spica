@@ -295,6 +295,7 @@ test("her own thought reaches each user once", async () => {
     confidence: 1,
     source: "loop",
     source_ref: null,
+    depth: 1,
   });
   const before = await coreDump();
   const topic = `core:${thought}`;

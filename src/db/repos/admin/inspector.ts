@@ -2,8 +2,18 @@
  * Read-only queries for the inspector, a dev-only tool that looks at one user's memory,
  * relationship, turn-taking, judge log, reach-outs, user mind runs, and her shared day plan.
  */
-import { and, arrayContains, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  arrayContains,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
+import { closenessCeiling } from "@/mind/state/user/relationship/closeness";
 import { deviationOf, fadeParams } from "@/mind/state/user/relationship/params";
 import { PARAM_NAMES, type RelationshipConfig } from "@/mind/state/user/relationship/types";
 import type { Db } from "@/db/client";
@@ -15,6 +25,7 @@ import {
   factSubject,
   reach_out_log,
   retrieval_trace,
+  session_log,
   thread,
   user_loop_trace,
   user_mind_run,
@@ -78,8 +89,24 @@ export async function getRelationshipView(
   const row = await getRelationshipRow(db, userId);
   if (!row) return null;
   const params = fadeParams(await getParams(db, userId), now, cfg);
+  const lastReply = (
+    await db
+      .select({ openness: session_log.openness })
+      .from(session_log)
+      .where(
+        and(
+          eq(session_log.user_id, userId),
+          eq(session_log.role, "companion"),
+          isNotNull(session_log.openness),
+        ),
+      )
+      .orderBy(desc(session_log.created_at))
+      .limit(1)
+  )[0];
   return {
     row,
+    ceiling: closenessCeiling(row.hours_together, cfg),
+    lastOpenness: lastReply?.openness ?? null,
     params: PARAM_NAMES.map((name) => ({
       name,
       ...params[name],

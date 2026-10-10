@@ -234,6 +234,10 @@ export async function RelationshipTab({
         last_contact: row.last_contact,
         last_tick: row.last_tick,
         cadence: row.cadence,
+        hours_together: row.hours_together,
+        ceiling: v.ceiling,
+        session: row.session,
+        last_openness: v.lastOpenness,
       })}
       <h3>Params</h3>
       <table className={styles.table}>

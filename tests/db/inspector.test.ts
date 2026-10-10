@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { insertTurn } from "@/db/repos/user/session-log";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { seedSnapshot } from "@/mind/memory/core/seed";
@@ -309,4 +311,23 @@ test("listUserMindRuns: newest run first, each with its traces in order, one use
   ]);
   expect(runs[0]!.traces).toEqual([]);
   expect(await listUserMindRuns(getTestDb(), b, 1)).toHaveLength(1);
+});
+
+test("getRelationshipView shows the ceiling and the last reply's openness", async () => {
+  const db = getTestDb();
+  const cfg = loadConfig().relationship;
+  const u = await createTestUser();
+  const now = new Date("2026-01-05T10:00:00Z");
+  await ensureRelationship(db, u, now, cfg);
+  await insertTurn(db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "hi",
+    created_at: now,
+    openness: { disclosure: 0.4, responsiveness: 0.8 },
+  });
+  const v = await getRelationshipView(db, u, now, cfg);
+  expect(v?.ceiling).toBeCloseTo(cfg.ceiling.start);
+  expect(v?.lastOpenness).toEqual({ disclosure: 0.4, responsiveness: 0.8 });
 });

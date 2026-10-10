@@ -32,6 +32,8 @@ export type CoreMemoryItem = {
   status: CoreMemoryStatus;
   salience: number;
   valence: number;
+  /** How much of herself it reveals: 1 surface, 2 personal, 3 intimate. */
+  depth: number;
   source: "world" | "loop";
   source_ref: string | null;
 };
@@ -48,6 +50,8 @@ export type NewCoreMemory = {
   salience: number;
   valence: number;
   confidence: number;
+  /** The loops always judge it; left out, the column's default (personal) applies. */
+  depth?: number;
   source: "world" | "loop";
   source_ref: string | null;
 };
@@ -65,6 +69,7 @@ export type CoreCandidate = {
   valence: number;
   /** Best similarity to an active goal; 0 with none. */
   goal_sim: number;
+  depth: number;
 };
 
 export type CoreEntity = {
@@ -91,7 +96,10 @@ export type CoreSelfLine = {
   version: number | null;
   text: string;
   embedding: number[];
+  depth: number;
 };
+/** Left out, a line is surface. */
+export type NewCoreSelfLine = Omit<CoreSelfLine, "id" | "depth"> & { depth?: number };
 export type CoreGistGroup = { week: string; sources: CoreMemoryItem[] };
 
 export interface CoreMemory {
@@ -177,7 +185,7 @@ export interface CoreMemory {
   /** Only fills an existing null embedding; never changes content or a populated vector. */
   backfillSnapshotEmbedding(version: number, embedding: number[]): Promise<void>;
   selfLines(version: number | null): Promise<CoreSelfLine[]>;
-  insertSelfLines(lines: Omit<CoreSelfLine, "id">[]): Promise<void>;
+  insertSelfLines(lines: NewCoreSelfLine[]): Promise<void>;
   /** False when that version already exists. */
   insertSnapshot(snapshot: CoreSnapshot & { embedding: number[] }): Promise<boolean>;
 }

@@ -25,6 +25,7 @@ const turn = (role: "user" | "companion", text: string, at: string): Turn => ({
   extract_attempts: 0,
   snapshot_version: null,
   openness: null,
+  depth: null,
 });
 
 const rawFact = (over: Record<string, unknown> = {}) => ({

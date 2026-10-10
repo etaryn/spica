@@ -11,6 +11,7 @@ import {
   pgTable,
   primaryKey,
   real,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -18,7 +19,7 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { EMBEDDING_DIMENSIONS } from "@/mind/platform/config";
-import type { Openness, SessionState } from "@/mind/state/user/relationship/types";
+import type { DepthRecord, Openness, SessionState } from "@/mind/state/user/relationship/types";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const emptyUuidArray = sql`'{}'::uuid[]`;
@@ -380,6 +381,8 @@ export const session_log = pgTable(
     snapshot_version: integer("snapshot_version"),
     // How open she was steered to be in this reply; the cold path credits intimacy from it.
     openness: jsonb("openness").$type<Openness>(),
+    // What this reply was allowed to reveal; the cold path grades her claims against it.
+    depth: jsonb("depth").$type<DepthRecord>(),
   },
   (t) => [
     index("session_log_user_created_idx").on(t.user_id, t.created_at),
@@ -409,6 +412,30 @@ export const relationship_param = pgTable(
 );
 
 /** Every relationship change. Diagnostic only: never read by the chat loop. */
+export const disclosureRefKind = pgEnum("disclosure_ref_kind", ["memory", "self_line"]);
+export const disclosureLevel = pgEnum("disclosure_level", ["open", "peek"]);
+
+/** What she has actually told this user about herself, and how fully. */
+export const disclosure = pgTable(
+  "disclosure",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: userRef(),
+    ref_kind: disclosureRefKind("ref_kind").notNull(),
+    // No foreign key: core never depends on a user table, and core items are never hard-deleted.
+    ref_id: uuid("ref_id").notNull(),
+    depth: smallint("depth").notNull(),
+    level: disclosureLevel("level").notNull(),
+    fact_id: uuid("fact_id").references(() => fact.id, { onDelete: "set null" }),
+    turn_id: uuid("turn_id").references(() => session_log.id, { onDelete: "set null" }),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("disclosure_user_created_idx").on(t.user_id, t.created_at),
+    index("disclosure_user_ref_idx").on(t.user_id, t.ref_id),
+  ],
+);
+
 export const relationship_event = pgTable(
   "relationship_event",
   {
@@ -608,6 +635,7 @@ export const core_memory = pgTable(
     salience: real("salience").notNull(),
     valence: real("valence").notNull(),
     confidence: real("confidence").notNull(),
+    depth: smallint("depth").notNull().default(2),
     source: coreMemorySource("source").notNull(),
     source_ref: text("source_ref"),
   },
@@ -617,6 +645,7 @@ export const core_memory = pgTable(
     check("core_memory_salience_range", sql`${t.salience} BETWEEN 0 AND 1`),
     check("core_memory_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
     check("core_memory_confidence_range", sql`${t.confidence} BETWEEN 0 AND 1`),
+    check("core_memory_depth_range", sql`${t.depth} BETWEEN 1 AND 3`),
   ],
 );
 
@@ -667,6 +696,7 @@ export const core_self_line = pgTable("core_self_line", {
   version: integer("version").references(() => core_snapshot.version, { onDelete: "cascade" }),
   text: text("text").notNull(),
   embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+  depth: smallint("depth").notNull().default(1),
 });
 
 /** Diagnostic evidence of self drift; a finding never blocks a snapshot. */

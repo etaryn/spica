@@ -30,6 +30,7 @@ export function toItem(r: typeof core_memory.$inferSelect): CoreMemoryItem {
     status: r.status,
     salience: r.salience,
     valence: r.valence,
+    depth: r.depth,
     source: r.source,
     source_ref: r.source_ref,
   };
@@ -373,7 +374,7 @@ export function coreMemoryRepo(db: Db): CoreMemory {
     async candidates(embedding, limit): Promise<CoreCandidate[]> {
       const q = vecLiteral(embedding);
       const res = await db.execute(sql`
-        SELECT m.id, m.content, m.salience, m.valence, m.created_at, m.last_recalled_at,
+        SELECT m.id, m.content, m.salience, m.valence, m.depth, m.created_at, m.last_recalled_at,
                m.occurred_at, (1 - (m.embedding <=> ${q}::vector))::float8 AS sim,
                COALESCE((SELECT max(e.salience) FROM core_entity e
                          WHERE e.id = ANY(m.entity_refs)), 1.0)::float8 AS entity_salience,
@@ -395,6 +396,7 @@ export function coreMemoryRepo(db: Db): CoreMemory {
         entity_salience: Number(r.entity_salience),
         valence: Number(r.valence),
         goal_sim: Number(r.goal_sim),
+        depth: Number(r.depth),
       }));
     },
 

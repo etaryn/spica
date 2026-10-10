@@ -39,7 +39,7 @@
     "window_gap_hours": 72,
     "relationship_line": true
   },
-  "inspector": { "snapshot_versions": 5, "user_mind_runs": 20 },
+  "inspector": { "snapshot_versions": 5, "user_mind_runs": 20, "ledger_limit": 50 },
   "claims": { "grounded_similarity": 0.75 },
   "retrieval": {
     "candidate_pool": 200,
@@ -307,6 +307,13 @@
       },
       "bands": { "low": 0.35, "high": 0.65 }
     },
+    "depth": {
+      "bands": { "personal": 0.4, "intimate": 0.65 },
+      "reciprocity_window": 10,
+      "reciprocity_gap": 0.35,
+      "stretch_moment": 0.5,
+      "held_back_similarity": 0.85
+    },
     "hurt_half_life_hours": 48,
     "tension_half_life_hours": 24,
     "sensitise_window_days": 14,
@@ -359,6 +366,30 @@
     ]
   },
   "core": {
+    "depth": {
+      "by_kind": {
+        "episode": 2,
+        "opinion": 1,
+        "interest": 1,
+        "goal": 2,
+        "intention": 2,
+        "thought": 2,
+        "reflection": 3,
+        "idea": 2,
+        "hypothetical": 2,
+        "insight": 3,
+        "narrative": 3,
+        "agent_note": 3
+      },
+      "by_section": {
+        "Lately": 2,
+        "Opinions": 1,
+        "Interests": 1,
+        "Goals": 2,
+        "People": 2,
+        "Habits of speech": 1
+      }
+    },
     "snapshot": { "max_items": 8, "max_tokens": 1024 },
     "loops": {
       "max_chars": 300,

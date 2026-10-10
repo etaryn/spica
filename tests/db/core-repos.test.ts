@@ -865,3 +865,23 @@ test("groundingSimilarity ignores stale, superseded and hypothetical memory", as
     await core().memory.insert({ ...episode("x", 0, now), kind, status, embedding: axis(0) });
   expect(await core().memory.groundingSimilarity(axis(0))).toBe(0);
 });
+
+test("depth round-trips on memories, candidates and self lines; left out, the defaults apply", async () => {
+  const deep = await core().memory.insert({
+    ...episode("deep", 0.02, now),
+    kind: "reflection",
+    depth: 3,
+  });
+  expect((await core().memory.get(deep))!.depth).toBe(3);
+  const cands = await core().memory.candidates(vec(0.02), 5);
+  expect(cands.find((c) => c.id === deep)!.depth).toBe(3);
+  const plain = await core().memory.insert(episode("plain", 0.03, now));
+  expect((await core().memory.get(plain))!.depth).toBe(2);
+  await core().memory.insertSelfLines([
+    { version: null, text: "x", embedding: vec(0.04), depth: 2 },
+    { version: null, text: "y", embedding: vec(0.05) },
+  ]);
+  const lines = await core().memory.selfLines(null);
+  expect(lines.find((l) => l.text === "x")!.depth).toBe(2);
+  expect(lines.find((l) => l.text === "y")!.depth).toBe(1);
+});

@@ -11,6 +11,8 @@ import { isValidTimeZone } from "./timezone";
 
 const unit = z.number().min(0).max(1);
 const positiveInt = z.number().int().positive();
+/** A depth tier: 1 she'd tell an acquaintance, 2 a friend, 3 only someone close. */
+const tier = z.number().int().min(1).max(3);
 const countFromZero = z.number().int().min(0);
 const nonNegative = z.number().min(0);
 const text = z.string().min(1);
@@ -155,7 +157,11 @@ const retrieval = z.object({
   core_goal_bias: unit,
 });
 
-const inspector = z.object({ snapshot_versions: positiveInt, user_mind_runs: positiveInt });
+const inspector = z.object({
+  snapshot_versions: positiveInt,
+  user_mind_runs: positiveInt,
+  ledger_limit: positiveInt,
+});
 
 const claims = z.object({ grounded_similarity: unit });
 
@@ -269,6 +275,13 @@ const relationship = z
       responsiveness: opennessSide,
       bands: z.object({ low: unit, high: unit }),
     }),
+    depth: z.object({
+      bands: z.object({ personal: unit, intimate: unit }),
+      reciprocity_window: positiveInt,
+      reciprocity_gap: unit,
+      stretch_moment: unit,
+      held_back_similarity: unit,
+    }),
     hurt_half_life_hours: z.number().positive(),
     tension_half_life_hours: z.number().positive(),
     sensitise_window_days: nonNegative,
@@ -321,6 +334,10 @@ const relationship = z
   .refine(
     (r) => r.openness.bands.low < r.openness.bands.high,
     "relationship.openness.bands: low < high",
+  )
+  .refine(
+    (r) => r.depth.bands.personal < r.depth.bands.intimate,
+    "relationship.depth.bands: personal < intimate",
   );
 
 /** "HH:MM" in her zone; "24:00" closes a block at midnight. */
@@ -431,6 +448,24 @@ const coreLoop = z.enum(CORE_LOOPS);
 
 const core = z
   .object({
+    // Listed literally: schema.ts imports this file, so importing its kind enum would cycle.
+    depth: z.object({
+      by_kind: z.object({
+        episode: tier,
+        opinion: tier,
+        interest: tier,
+        goal: tier,
+        intention: tier,
+        thought: tier,
+        reflection: tier,
+        idea: tier,
+        hypothetical: tier,
+        insight: tier,
+        narrative: tier,
+        agent_note: tier,
+      }),
+      by_section: z.record(z.string(), tier),
+    }),
     appraise: coreAppraise,
     anticipate: z.object({ lead_hours: z.number().positive(), arousal_gain: unit }),
     ruminate: z.object({

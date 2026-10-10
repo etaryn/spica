@@ -49,6 +49,11 @@ export type SessionState = {
   deep_fired: boolean;
 };
 
+/** How deep she may go: `open` plainly, up to `peek` only as a hint. */
+export type DepthLimits = { open: number; peek: number };
+/** What a reply was allowed, and the item it held back, if any. */
+export type DepthRecord = DepthLimits & { held_back: string | null };
+
 export type RelationshipStatus = "active" | "ended_by_user" | "repairing";
 export type MakeUpState = "none" | "due" | "offered";
 

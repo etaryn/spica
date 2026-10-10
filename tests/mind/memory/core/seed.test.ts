@@ -84,3 +84,23 @@ test("seeding never adds goals when she already has some", async () => {
   await seedGoals(deps);
   expect(await deps.core.goals.count()).toBe(1);
 });
+
+test("core values are surface; seed lines take their section's depth", async () => {
+  const deps = coreDepsOf(makeTestDeps());
+  await seedSnapshot(deps);
+  const fixed = await deps.core.memory.selfLines(null);
+  expect(fixed.length).toBeGreaterThan(0);
+  expect(fixed.every((l) => l.depth === 1)).toBe(true);
+  const seeded = await deps.core.memory.selfLines(0);
+  const lately = loadPersona(deps.config)
+    .seedSelf.split("### Lately")[1]!
+    .split("###")[0]!
+    .split("\n")
+    .filter((l) => l.startsWith("- "))
+    .map((l) => l.slice(2).trim());
+  expect(lately.length).toBeGreaterThan(0);
+  for (const text of lately)
+    expect(seeded.find((l) => l.text === text)!.depth).toBe(
+      deps.config.core.depth.by_section.Lately,
+    );
+});

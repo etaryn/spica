@@ -26,7 +26,7 @@ test("render writes six sections, embeddings, bullet lines, provenance and N+1 a
   const lines = await deps.core.memory.selfLines(1);
   expect(lines.length).toBeGreaterThan(0);
   expect(lines.every((line) => line.embedding.length === 1024)).toBe(true);
-  expect(snapshot).toMatchObject({ model: all.config.models.core, prompt_version: "v1" });
+  expect(snapshot).toMatchObject({ model: all.config.models.core, prompt_version: "v2" });
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "done", calls: 1 }]);
 });
 
@@ -166,12 +166,37 @@ test("an overfilled section is trimmed to its bounds instead of failing the nigh
   const handler = all.llm.handlers.core_render_snapshot!;
   all.llm.handlers.core_render_snapshot = (input) => ({
     ...(handler(input) as object),
-    Opinions: Array.from({ length: max_items + 2 }, (_, i) => `Opinion ${i}.`),
-    Lately: [`${"long ".repeat(maxChars)}\nsecond line`],
+    Opinions: Array.from({ length: max_items + 2 }, (_, i) => ({
+      text: `Opinion ${i}.`,
+      depth: null,
+    })),
+    Lately: [{ text: `${"long ".repeat(maxChars)}\nsecond line`, depth: null }],
   });
   expect(await coreRenderSnapshot(deps, now)).toBe("done");
   const snapshot = (await deps.core.memory.latestSnapshot())!;
   expect(snapshot.sections.Opinions!.split("\n")).toHaveLength(max_items);
   expect(snapshot.sections.Lately!.length).toBeLessThanOrEqual(maxChars + 2);
   expect(snapshot.sections.Lately).not.toContain("\nsecond");
+});
+
+test("each rendered line keeps its depth; an untagged line takes its section's default", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  all.llm.handlers.core_render_snapshot = () => ({
+    Lately: [{ text: "misses Alcor more than she says", depth: "intimate" }],
+    Opinions: [{ text: "Solaris is overrated", depth: null }],
+    Interests: [],
+    Goals: [],
+    People: [],
+    "Habits of speech": [],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const snapshot = (await deps.core.memory.latestSnapshot())!;
+  const lines = await deps.core.memory.selfLines(snapshot.version);
+  expect(lines.find((l) => l.text.startsWith("misses"))!.depth).toBe(3);
+  expect(lines.find((l) => l.text.startsWith("Solaris"))!.depth).toBe(
+    all.config.core.depth.by_section.Opinions,
+  );
+  expect(snapshot.content).toContain("### Lately\n- misses Alcor more than she says");
 });

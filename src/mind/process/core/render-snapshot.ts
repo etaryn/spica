@@ -1,5 +1,6 @@
 /** Render a durable self description from bounded core evidence, preserving the prior version on failure. */
 import { z } from "zod";
+import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
@@ -24,7 +25,11 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
     const persona = loadPersona(config);
     const people = entities.slice(0, bounds.max_items);
     const activeGoals = goals.slice(0, bounds.max_items);
-    const section = fitList(fitText(config.core.loops.max_chars), bounds.max_items);
+    const line = z.object({
+      text: fitText(config.core.loops.max_chars),
+      depth: DepthLabel.nullable().default(null),
+    });
+    const section = fitList(line, bounds.max_items);
     const Output = z
       .object({
         Lately: section,
@@ -56,16 +61,21 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       maxTokens: bounds.max_tokens,
     });
     const sections = Object.fromEntries(
-      Object.entries(result).map(([name, lines]) => [
+      Object.entries(result).map(([name, items]) => [
         name,
-        lines.map((line) => `- ${line}`).join("\n"),
+        items.map((item) => `- ${item.text}`).join("\n"),
       ]),
     );
     const content = Object.entries(sections)
       .map(([name, text]) => `### ${name}\n${text}`)
       .join("\n\n");
-    const lines = Object.values(result).flat();
-    const vectors = await deps.embedder.embed([content, ...lines], "document");
+    const lines = Object.entries(result).flatMap(([name, items]) =>
+      items.map((item) => ({
+        text: item.text,
+        depth: depthOf(item.depth, config.core.depth.by_section[name] ?? 1),
+      })),
+    );
+    const vectors = await deps.embedder.embed([content, ...lines.map((l) => l.text)], "document");
     const sourceIds = [
       ...(narrative ? [narrative.id] : []),
       ...[...opinions, ...interests, ...insights, ...notes, ...activeGoals, ...people].map(
@@ -97,7 +107,12 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       )
         throw new Error("snapshot version conflict");
       await tx.memory.insertSelfLines(
-        lines.map((text, index) => ({ version, text, embedding: vectors[index + 1]! })),
+        lines.map((l, index) => ({
+          version,
+          text: l.text,
+          depth: l.depth,
+          embedding: vectors[index + 1]!,
+        })),
       );
       return {
         inputs: { source_ids: sourceIds },

@@ -5,6 +5,7 @@
  * starts her with. Seeding is idempotent and never touches what already exists.
  */
 import type { CoreDeps } from "@/mind/platform/deps";
+import { sectionDepths } from "@/mind/memory/core/depth";
 import { loadPersona, parseSeedGoals } from "@/mind/platform/persona";
 
 /** Seeding needs no reply model; goals are embedded, so the embedder comes along. */
@@ -24,7 +25,8 @@ export async function seedSnapshot(deps: SeedDeps): Promise<boolean> {
       .filter((line) => line.startsWith("- "))
       .map((line) => line.slice(2).trim());
   const fixedTexts = fixed.length ? [] : bullets(persona.coreValues);
-  const seedTexts = seeded.length ? [] : bullets(content);
+  const seedLines = seeded.length ? [] : sectionDepths(content, deps.config.core.depth.by_section);
+  const seedTexts = seedLines.map((line) => line.text);
   const needsEmbedding = !existing?.embedding;
   const texts = [...(needsEmbedding ? [content] : []), ...fixedTexts, ...seedTexts];
   const vectors = texts.length ? await deps.embedder.embed(texts, "document") : [];
@@ -44,13 +46,20 @@ export async function seedSnapshot(deps: SeedDeps): Promise<boolean> {
     await tx.memory.backfillSnapshotEmbedding(0, embedding);
     if (!(await tx.memory.selfLines(null)).length)
       await tx.memory.insertSelfLines(
-        fixedTexts.map((text, index) => ({ version: null, text, embedding: vectors[index]! })),
+        // Who she is (an AI, Alcor, what she loves) is never a secret.
+        fixedTexts.map((text, index) => ({
+          version: null,
+          text,
+          depth: 1,
+          embedding: vectors[index]!,
+        })),
       );
     if (!(await tx.memory.selfLines(0)).length)
       await tx.memory.insertSelfLines(
-        seedTexts.map((text, index) => ({
+        seedLines.map((line, index) => ({
           version: 0,
-          text,
+          text: line.text,
+          depth: line.depth,
           embedding: vectors[fixedTexts.length + index]!,
         })),
       );

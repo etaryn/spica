@@ -154,7 +154,7 @@ export class FakeLLMProvider implements LLMProvider {
       const habits =
         /### Habits of speech\s*\n([\s\S]*?)(?=\n### |$)/.exec(context.previous)?.[1] ?? "";
       return {
-        Lately: ["She is exploring her own interests."],
+        Lately: [{ text: "She is exploring her own interests.", depth: null }],
         Opinions: [],
         Interests: [],
         Goals: [],
@@ -162,7 +162,7 @@ export class FakeLLMProvider implements LLMProvider {
         "Habits of speech": habits
           .split("\n")
           .filter((line) => line.startsWith("- "))
-          .map((line) => line.slice(2)),
+          .map((line) => ({ text: line.slice(2), depth: null })),
       };
     },
     core_reflect: () => ({

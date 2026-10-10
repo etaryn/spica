@@ -8,7 +8,10 @@ import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
 import { KIND_ORDER, type Candidate, type CandidateInputs, type FilterReason } from "./types";
 
-type RawCandidate = Omit<Candidate, "score" | "filtered"> & { sensitive: boolean };
+type RawCandidate = Omit<Candidate, "score" | "filtered"> & {
+  sensitive: boolean;
+  tooDeep?: boolean;
+};
 
 export function buildCandidates(
   inputs: CandidateInputs,
@@ -62,6 +65,7 @@ export function buildCandidates(
       coreMemoryId: memory.id,
       threadId: null,
       sensitive: memory.sensitive,
+      tooDeep: memory.depth > inputs.depthLimit,
     });
   }
   for (const memory of inputs.coreThoughts) {
@@ -75,6 +79,7 @@ export function buildCandidates(
       coreMemoryId: memory.id,
       threadId: null,
       sensitive: false,
+      tooDeep: memory.depth > inputs.depthLimit,
     });
   }
   for (const idea of inputs.userIdeas) {
@@ -95,9 +100,16 @@ export function buildCandidates(
 
   const usedTopics = new Set(inputs.usedTopics);
   return raw
-    .map(({ sensitive, ...candidate }): Candidate => {
+    .map(({ sensitive, tooDeep, ...candidate }): Candidate => {
       const score = settings.weights[candidate.kind] * candidate.strength;
-      const filtered = filterReason(candidate.topic, sensitive, score, usedTopics, settings);
+      const filtered = filterReason(
+        candidate.topic,
+        sensitive,
+        tooDeep ?? false,
+        score,
+        usedTopics,
+        settings,
+      );
       return { ...candidate, score, filtered };
     })
     .sort(
@@ -151,11 +163,13 @@ function checkInCandidate(
 function filterReason(
   topic: string,
   sensitive: boolean,
+  tooDeep: boolean,
   score: number,
   usedTopics: Set<string>,
   settings: OutreachConfig,
 ): FilterReason | null {
   if (sensitive) return "sensitive";
+  if (tooDeep) return "too_deep";
   if (usedTopics.has(topic)) return "topic_used";
   if (score < settings.threshold) return "below_threshold";
   return null;

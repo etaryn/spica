@@ -90,6 +90,7 @@ test("her day comes from her core episodes: topic core:<id> and the core memory 
     confidence: 1,
     source: "world",
     source_ref: null,
+    depth: 1,
   });
   expect(await outreachTickUser(deps, u, now)).toBe("scheduled");
   const [r] = await rows(deps, u);

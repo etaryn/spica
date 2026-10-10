@@ -16,6 +16,8 @@ import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
+import { recentDisclosureDepths } from "@/db/repos/user/disclosure";
+import { depthFor, FIRST_DEPTH } from "@/mind/state/user/relationship/depth";
 import { faded } from "@/mind/state/user/relationship/params";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import type { CandidateInputs, GateInputs } from "./types";
@@ -69,7 +71,7 @@ export async function loadCandidateInputs(
     await deps.core.memory.recentThoughts(thoughtsFrom, now, settings.core_thought_limit)
   )
     .filter(recallable)
-    .map((m) => ({ id: m.id, content: m.content, salience: m.salience }));
+    .map((m) => ({ id: m.id, content: m.content, salience: m.salience, depth: m.depth }));
   const userIdeas = (
     await liveIdeas(
       db,
@@ -105,6 +107,25 @@ export async function loadCandidateInputs(
       medianGapHours: cadence.median_gap_hours ?? config.relationship.default_median_gap_hours,
     },
     usedTopics: await usedTopics(db, userId),
+    // Writing first draws on no live chemistry: her usual limit, never a stretch.
+    depthLimit:
+      relationship && params
+        ? depthFor(
+            {
+              closeness: params.closeness.value,
+              userDisclosure: params.user_disclosure.value,
+              recentDepths: await recentDisclosureDepths(
+                db,
+                userId,
+                config.relationship.depth.reciprocity_window,
+              ),
+              herDisclosure: null,
+              session: null,
+              reachOut: true,
+            },
+            config.relationship,
+          ).open
+        : FIRST_DEPTH.open,
   };
 }
 
@@ -125,12 +146,19 @@ async function loadHerDay(
     id: e.id,
     content: e.content,
     salience: e.salience,
+    depth: e.depth,
     sensitive: false,
   }));
   const state = await deps.core.state.get();
   const pre = state?.preoccupation ? await deps.core.memory.get(state.preoccupation) : null;
   if (pre && recallable(pre) && !herDay.some((m) => m.id === pre.id))
-    herDay.push({ id: pre.id, content: pre.content, salience: pre.salience, sensitive: false });
+    herDay.push({
+      id: pre.id,
+      content: pre.content,
+      salience: pre.salience,
+      depth: pre.depth,
+      sensitive: false,
+    });
   return herDay;
 }
 

@@ -15,6 +15,7 @@ const empty = (): CandidateInputs => ({
   userIdeas: [],
   checkIn: { lastContact: null, medianGapHours: 24 },
   usedTopics: [],
+  depthLimit: 3,
 });
 
 test("nothing eligible → no candidates, no winner", () => {
@@ -115,7 +116,7 @@ test("sensitive and used topics are kept but filtered; below threshold is filter
 test("winner is the highest score; ties break by kind order, then topic", () => {
   const i = empty();
   i.userEvents = [{ id: "u", content: "x", salience: 0.75, sensitive: false }]; // 0.8 × 0.75 = 0.6
-  i.herDay = [{ id: "s", content: "y", salience: 1, sensitive: false }]; // 0.6 × 1   = 0.6
+  i.herDay = [{ id: "s", content: "y", salience: 1, depth: 1, sensitive: false }]; // 0.6 × 1   = 0.6
   expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("user_event");
   i.herDay[0]!.salience = 1;
   i.userEvents[0]!.salience = 0.5; // 0.4 < 0.6
@@ -125,7 +126,13 @@ test("winner is the highest score; ties break by kind order, then topic", () => 
 test("her day is her own core memory: topic core:<id>, coreMemoryId set, never a fact", () => {
   const i = empty();
   i.herDay = [
-    { id: "m1", content: "Spica got the telescope images.", salience: 0.8, sensitive: false },
+    {
+      id: "m1",
+      content: "Spica got the telescope images.",
+      salience: 0.8,
+      depth: 1,
+      sensitive: false,
+    },
   ];
   i.userEvents = [{ id: "m1", content: "The user ran.", salience: 0.6, sensitive: false }];
   const cands = buildCandidates(i, cfg, now);
@@ -159,8 +166,10 @@ test("user_idea: topic idea:<id>, weighted, fact id set", () => {
 
 test("core_thought shares her_day's topic, so one memory is offered once", () => {
   const i = empty();
-  i.herDay = [{ id: "m1", content: "Watched Stalker again.", salience: 0.5, sensitive: false }];
-  i.coreThoughts = [{ id: "m1", content: "Watched Stalker again.", salience: 0.5 }];
+  i.herDay = [
+    { id: "m1", content: "Watched Stalker again.", salience: 0.5, depth: 1, sensitive: false },
+  ];
+  i.coreThoughts = [{ id: "m1", content: "Watched Stalker again.", salience: 0.5, depth: 1 }];
   i.usedTopics = ["core:m1"];
   const cands = buildCandidates(i, cfg, now);
   expect(cands.map((c) => c.kind).sort()).toEqual(["core_thought", "her_day"]);
@@ -169,8 +178,22 @@ test("core_thought shares her_day's topic, so one memory is offered once", () =>
 
 test("a medium core thought sits at the threshold; her_day outranks it on ties", () => {
   const i = empty();
-  i.coreThoughts = [{ id: "m2", content: "Thinking about tides.", salience: 0.4 }];
+  i.coreThoughts = [{ id: "m2", content: "Thinking about tides.", salience: 0.4, depth: 1 }];
   const [c] = buildCandidates(i, cfg, now);
   expect(c).toMatchObject({ kind: "core_thought", topic: "core:m2", coreMemoryId: "m2" });
   expect(c!.score).toBeCloseTo(0.2);
+});
+
+test("her own memory deeper than their usual limit is never offered", () => {
+  const i = empty();
+  i.depthLimit = 1;
+  i.herDay = [
+    { id: "m3", content: "She cried at the planetarium.", salience: 1, depth: 2, sensitive: false },
+  ];
+  i.coreThoughts = [{ id: "m4", content: "Alcor might leave.", salience: 1, depth: 3 }];
+  const cands = buildCandidates(i, cfg, now);
+  expect(cands.map((c) => c.filtered)).toEqual(["too_deep", "too_deep"]);
+  expect(pickWinner(cands)).toBeNull();
+  i.depthLimit = 3;
+  expect(buildCandidates(i, cfg, now).every((c) => c.filtered === null)).toBe(true);
 });

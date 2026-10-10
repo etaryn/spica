@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loadCandidateInputs, loadGateInputs } from "@/mind/process/outreach/inputs";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertLifeDay } from "@/db/repos/world/life-day";
@@ -326,4 +326,16 @@ test("gate inputs are null without a relationship row", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
   expect(await loadGateInputs(deps, u, now)).toBeNull();
+});
+
+test("her depth limit for writing first is her usual one: a stranger 1, a close friend 3", async () => {
+  const deps = makeTestDeps();
+  const stranger = await createTestUser();
+  expect((await loadCandidateInputs(deps, stranger, now)).depthLimit).toBe(1);
+  const close = await createTestUser();
+  await ensureRelationship(deps.db, close, now, deps.config.relationship);
+  await deps.db.execute(
+    sql`UPDATE relationship_param SET value = 0.8 WHERE user_id = ${close} AND name IN ('closeness', 'user_disclosure')`,
+  );
+  expect((await loadCandidateInputs(deps, close, now)).depthLimit).toBe(3);
 });

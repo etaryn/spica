@@ -1,9 +1,10 @@
 /**
  * Relationship signals: what extraction read from how the user treated her in one exchange.
- * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair; and how
- * much the user opened up and met what she shared.
+ * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair; how much
+ * the user opened up and met what she shared; and how they met her last bid.
  */
 import { z } from "zod";
+import type { Turn } from "@/db/repos/user/session-log";
 import { clamp } from "@/mind/platform/math";
 import type { Intimacy } from "./types";
 
@@ -83,4 +84,30 @@ export function normalizeSignals(raw: unknown): Signals | null {
 /** Why she's hurt lives in memory as a `feeling` fact, not on the relationship row. */
 export function hurtFactContent(cause: string): string {
   return `Spica felt hurt because ${cause}.`;
+}
+
+/** How the user met her last reach: a joke, a question, her news, an invitation. */
+export const BID_RESPONSES = ["toward", "away", "against"] as const;
+export type BidResponse = (typeof BID_RESPONSES)[number];
+export const BidResponseSchema = z.enum(BID_RESPONSES).nullable();
+
+export function normalizeBid(raw: unknown): BidResponse | null {
+  const parsed = z.enum(BID_RESPONSES).safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * A response counts only when the user answers her last message in the same conversation:
+ * coming back after a gap is not turning away.
+ */
+export function bidAfter(
+  response: BidResponse | null,
+  context: Turn[],
+  turns: Turn[],
+): BidResponse | null {
+  if (!response) return null;
+  const hers = context.filter((t) => t.role === "companion").at(-1);
+  const firstUser = turns.find((t) => t.role === "user");
+  if (!hers || !firstUser) return null;
+  return hers.session_id === firstUser.session_id ? response : null;
 }

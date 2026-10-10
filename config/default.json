@@ -170,7 +170,7 @@
     "reply": "v13",
     "crisis_classifier": "v2",
     "persona": "v5",
-    "extract": "v6",
+    "extract": "v7",
     "reconcile": "v1",
     "judge_recall": "v3",
     "judge_false_recall": "v8",
@@ -306,6 +306,13 @@
         }
       },
       "bands": { "low": 0.35, "high": 0.65 }
+    },
+    "bids": {
+      "effects": {
+        "toward": { "warmth": 0.03 },
+        "away": { "warmth": -0.03 },
+        "against": { "warmth": -0.06, "trust": -0.03 }
+      }
     },
     "depth": {
       "bands": { "personal": 0.4, "intimate": 0.65 },

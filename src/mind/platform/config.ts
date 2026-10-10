@@ -10,6 +10,8 @@ import { isValidTimeZone } from "./timezone";
 // ---------- Building blocks ----------
 
 const unit = z.number().min(0).max(1);
+/** A move down, as a negative delta. */
+const loss = z.number().min(-1).max(0);
 const positiveInt = z.number().int().positive();
 /** A depth tier: 1 she'd tell an acquaintance, 2 a friend, 3 only someone close. */
 const tier = z.number().int().min(1).max(3);
@@ -274,6 +276,13 @@ const relationship = z
       disclosure: opennessSide,
       responsiveness: opennessSide,
       bands: z.object({ low: unit, high: unit }),
+    }),
+    bids: z.object({
+      effects: z.object({
+        toward: z.object({ warmth: unit.optional(), trust: unit.optional() }),
+        away: z.object({ warmth: loss.optional(), trust: loss.optional() }),
+        against: z.object({ warmth: loss.optional(), trust: loss.optional() }),
+      }),
     }),
     depth: z.object({
       bands: z.object({ personal: unit, intimate: unit }),

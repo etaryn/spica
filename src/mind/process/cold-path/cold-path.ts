@@ -24,7 +24,7 @@ import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { exchangeTone } from "@/mind/state/user/relationship/affect";
-import { hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
+import { bidAfter, hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
 import { updateRelationship } from "@/mind/state/user/relationship/update";
 
 export class LockBusyError extends Error {}
@@ -50,7 +50,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     const turns = await getTurnsByIds(tx, job.userId, job.turnIds);
     if (turns.length === 0 || turns.every((t) => t.extracted)) return { status: "skipped" };
 
-    const extraction = await extractExchange(deps, tx, job.userId, turns);
+    const { extraction, context } = await extractExchange(deps, tx, job.userId, turns);
 
     // Each idea she was shown gets one chance; idempotent, so a retried job changes nothing.
     // ponytail: a cold path re-enqueued by the sweep carries no offered ideas, so they stay live until they expire
@@ -61,6 +61,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
     const intimacy = crisis || !hasUserTurn ? null : extraction.intimacy;
+    const bid = crisis || !hasUserTurn ? null : bidAfter(extraction.bid, context, turns);
 
     const hurt = significantHurt(signals, config.relationship.signal_deadzone);
     const candidates: CandidateFact[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
@@ -100,6 +101,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
         turns,
         signals,
         intimacy,
+        bid,
         crisis,
         hurtFactId,
         // How she feels about them follows what they did. Her own facts are left out: her
@@ -140,18 +142,19 @@ async function extractExchange(
   tx: Db,
   userId: string,
   turns: Turn[],
-): Promise<Extraction> {
+): Promise<{ extraction: Extraction; context: Turn[] }> {
   const { config } = deps;
   const context = (
     await turnsUpTo(tx, userId, turns[0]!, config.extraction.context_turns + 1)
   ).slice(0, -1);
 
-  return extract(deps, {
+  const extraction = await extract(deps, {
     newTurns: turns,
     contextTurns: context,
     openThreads: await listOpenThreads(tx, userId, config.extraction.open_threads_in_prompt),
     timezone: await getTimezone(tx, userId),
   });
+  return { extraction, context };
 }
 
 /**

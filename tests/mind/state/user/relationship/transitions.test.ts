@@ -1,8 +1,12 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { medianGapHours } from "@/mind/state/user/relationship/cadence";
+import { nudge } from "@/mind/state/user/relationship/params";
+import type { Turn } from "@/db/repos/user/session-log";
 import {
+  bidAfter,
   hurtFactContent,
+  normalizeBid,
   normalizeIntimacy,
   normalizeSignals,
   type Signals,
@@ -75,6 +79,7 @@ const ex = (
     intimacy: Intimacy | null;
     herOpenness: Openness | null;
     tone: number | null;
+    bid: "toward" | "away" | "against" | null;
   }> = {},
 ) => ({
   now: t0,
@@ -88,6 +93,7 @@ const ex = (
   intimacy: null,
   herOpenness: null,
   tone: null,
+  bid: null,
   ...extra,
 });
 
@@ -838,4 +844,47 @@ test("the session keeps the exchange tone for afterglow", () => {
   );
   expect(r.state.session).toMatchObject({ tone_n: 2 });
   expect(r.state.session!.tone_sum).toBeCloseTo(1.2);
+});
+
+const turn = (role: "user" | "companion", session: string): Turn =>
+  ({ id: crypto.randomUUID(), role, session_id: session, text: "x", created_at: t0 }) as Turn;
+
+test("normalizeBid keeps the three responses and nulls anything else", () => {
+  expect(normalizeBid("toward")).toBe("toward");
+  expect(normalizeBid("against")).toBe("against");
+  expect(normalizeBid("sideways")).toBeNull();
+  expect(normalizeBid(undefined)).toBeNull();
+});
+
+test("a bid counts only against her last message in the same session", () => {
+  const hers = turn("companion", "s1");
+  expect(bidAfter("away", [hers], [turn("user", "s1"), turn("companion", "s1")])).toBe("away");
+  // Coming back later, even to a reach-out, is not turning away.
+  expect(bidAfter("away", [hers], [turn("user", "s2")])).toBeNull();
+  expect(bidAfter("away", [], [turn("user", "s1")])).toBeNull();
+  expect(bidAfter("away", [hers], [turn("companion", "s1")])).toBeNull();
+  expect(bidAfter(null, [hers], [turn("user", "s1")])).toBeNull();
+});
+
+test("toward, away and against move warmth and trust by the configured amounts", () => {
+  const p = init();
+  const run = (bid: "toward" | "away" | "against") =>
+    relationshipAfterExchange(fresh(), init(), ex(null, { bid }), cfg);
+
+  const away = run("away");
+  expect(away.params.warmth.value).toBeCloseTo(nudge(p.warmth.value, -0.03), 6);
+  expect(away.params.trust.value).toBeCloseTo(p.trust.value, 6);
+  const against = run("against");
+  expect(against.params.warmth.value).toBeCloseTo(nudge(p.warmth.value, -0.06), 6);
+  expect(against.params.trust.value).toBeCloseTo(nudge(p.trust.value, -0.03), 6);
+  const toward = run("toward");
+  expect(toward.params.warmth.value).toBeGreaterThan(p.warmth.value);
+  expect(toward.params.warmth.value).toBeLessThanOrEqual(nudge(p.warmth.value, 0.03) + 1e-9);
+  expect(toward.events.some((e) => e.cause === "bid" && e.detail.response === "toward")).toBe(true);
+});
+
+test("no bid moves anything once they have ended it", () => {
+  const ended = { ...fresh(), status: "ended_by_user" as const };
+  const out = relationshipAfterExchange(ended, init(), ex(null, { bid: "against" }), cfg);
+  expect(out.events.some((e) => e.cause === "bid")).toBe(false);
 });

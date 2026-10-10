@@ -1,7 +1,8 @@
 /**
  * Extraction: the cold path's first step. One strict-JSON model call reads a finished exchange and
- * returns candidate memories, the people and things mentioned, thread updates, and the
- * relationship signals from how the user treated her and how much they opened up.
+ * returns candidate memories, the people and things mentioned, thread updates, the relationship
+ * signals from how the user treated her and how much they opened up, and how they met her last
+ * bid.
  */
 import { z } from "zod";
 import type { EntityMention } from "@/db/repos/user/entities";
@@ -11,10 +12,13 @@ import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 import {
+  BidResponseSchema,
   IntimacySchema,
+  normalizeBid,
   normalizeIntimacy,
   normalizeSignals,
   RelationshipSignalsSchema,
+  type BidResponse,
   type Signals,
 } from "@/mind/state/user/relationship/signals";
 import type { Intimacy } from "@/mind/state/user/relationship/types";
@@ -68,6 +72,8 @@ export const ExtractionSchema = z.object({
   relationship: RelationshipSignalsSchema.nullable(),
   // Required for the model; fixtures without it read as null.
   intimacy: IntimacySchema.nullable().default(null),
+  // Required for the model; fixtures without it read as null.
+  bid_response: BidResponseSchema.default(null),
 });
 
 type RawExtraction = z.infer<typeof ExtractionSchema>;
@@ -88,6 +94,7 @@ export type Extraction = {
   threads: ExtractedThread[];
   relationship: Signals | null;
   intimacy: Intimacy | null;
+  bid: BidResponse | null;
 };
 
 export type ExtractArgs = {
@@ -138,12 +145,13 @@ export function buildExtractionInput(args: ExtractArgs): string {
  * and drops empty entries.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
-  // Lenient about the relationship and intimacy blocks, unlike the schema sent to the model: a
+  // Lenient about the relationship, intimacy and bid blocks, unlike the schema sent to the model: a
   // malformed block must never fail the memory write. Their normalisers turn anything invalid
   // into null.
   const raw = ExtractionSchema.extend({
     relationship: z.unknown().optional(),
     intimacy: z.unknown().optional(),
+    bid_response: z.unknown().optional(),
   }).parse(input);
 
   const facts = raw.facts
@@ -184,6 +192,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
     threads,
     relationship: normalizeSignals(raw.relationship ?? null),
     intimacy: normalizeIntimacy(raw.intimacy ?? null),
+    bid: normalizeBid(raw.bid_response),
   };
 }
 

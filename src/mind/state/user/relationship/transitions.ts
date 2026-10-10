@@ -13,7 +13,7 @@ import {
   skipSessionTime,
 } from "./closeness";
 import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
-import type { Signals } from "./signals";
+import type { BidResponse, Signals } from "./signals";
 import {
   type Intimacy,
   type Openness,
@@ -50,6 +50,8 @@ export type ExchangeInput = {
   herOpenness: Openness | null;
   /** The exchange's tone, kept in the session for its afterglow. */
   tone: number | null;
+  /** How the user met her last bid in this conversation, if she made one. */
+  bid: BidResponse | null;
 };
 
 export type TickInput = {
@@ -147,6 +149,7 @@ export function relationshipAfterExchange(
   if (input.span) accountTime(draft, input.span, settings);
   if (input.signals) applySignals(draft, input, input.signals, settings);
   applyIntimacy(draft, input, settings);
+  applyBid(draft, input.bid, settings);
   recordSessionTone(draft, input.tone);
   clearMakeUpOnceHealed(draft, settings);
   return draft.result();
@@ -214,6 +217,21 @@ function applyWarmthAndTrust(draft: Draft, signals: Signals, settings: Relations
     const returns = signal > 0 ? diminishingReturns(draft.params[name], epsilon) : 1;
     const gain = settings.gains[name] * returns;
     draft.setParam(name, nudge(draft.params[name].value, gain * signal), "signal", { signal });
+  }
+}
+
+/** Turning toward her small reaches warms her a little; turning away or against cools her. */
+function applyBid(draft: Draft, bid: BidResponse | null, settings: RelationshipConfig): void {
+  if (!bid || draft.state.status === "ended_by_user") return;
+  const effects: { warmth?: number; trust?: number } = settings.bids.effects[bid];
+  for (const name of ["warmth", "trust"] as const) {
+    const delta = effects[name];
+    if (!delta) continue;
+    const returns =
+      delta > 0 ? diminishingReturns(draft.params[name], settings.variance_epsilon) : 1;
+    draft.setParam(name, nudge(draft.params[name].value, delta * returns), "bid", {
+      response: bid,
+    });
   }
 }
 

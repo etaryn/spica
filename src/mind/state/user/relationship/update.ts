@@ -14,7 +14,7 @@ import type { RelationshipSnapshot } from "@/mind/process/user/big-events";
 import { applyAffect, sessionMeanTone } from "./affect";
 import { buildCadence } from "./cadence";
 import type { ExchangeSpan } from "./closeness";
-import type { Signals } from "./signals";
+import type { BidResponse, Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
 import type { Intimacy, Openness } from "./types";
 import { DAY } from "@/mind/platform/time";
@@ -26,6 +26,8 @@ export type RelationshipUpdate = {
   turns: Turn[];
   signals: Signals | null;
   intimacy: Intimacy | null;
+  /** How they met her last bid, already guarded to this conversation. */
+  bid: BidResponse | null;
   crisis: boolean;
   hurtFactId: string | null;
   tone: number | null;
@@ -93,6 +95,7 @@ export async function updateRelationship(
       intimacy: update.intimacy,
       herOpenness: herOpennessOf(update.turns),
       tone: update.crisis ? null : update.tone,
+      bid: update.crisis ? null : update.bid,
     },
     settings,
   );

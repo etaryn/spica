@@ -209,13 +209,15 @@ export async function RelationshipTab({
   userId,
   now,
   cfg,
+  ledgerLimit,
 }: {
   db: Db;
   userId: string;
   now: Date;
   cfg: RelationshipConfig;
+  ledgerLimit: number;
 }) {
-  const v = await r.getRelationshipView(db, userId, now, cfg);
+  const v = await r.getRelationshipView(db, userId, now, cfg, ledgerLimit);
   if (!v) return <Empty phase={4} />;
   const { row } = v;
   return (
@@ -238,7 +240,25 @@ export async function RelationshipTab({
         ceiling: v.ceiling,
         session: row.session,
         last_openness: v.lastOpenness,
+        last_depth: v.lastDepth,
       })}
+      <h3>Disclosure ledger</h3>
+      {!v.ledger.length ? (
+        <Empty phase={10} />
+      ) : (
+        <table className={styles.table}>
+          <tbody>
+            {v.ledger.map((d, i) => (
+              <tr key={i}>
+                <td>{d.created_at.toISOString()}</td>
+                <td>{d.level}</td>
+                <td>depth {d.depth}</td>
+                <td>{d.text ?? "(gone)"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       <h3>Params</h3>
       <table className={styles.table}>
         <tbody>

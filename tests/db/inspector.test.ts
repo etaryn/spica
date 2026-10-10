@@ -25,6 +25,7 @@ import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { ensureRelationship, insertRelationshipEvents } from "@/db/repos/user/relationship";
 import * as s from "@/db/schema";
 import { makeTestDeps } from "../helpers/deps";
+import { insertDisclosures } from "@/db/repos/user/disclosure";
 import { recordBigEvents, runUserMind } from "@/mind/process/user/run";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
@@ -143,7 +144,7 @@ test("getRelationshipView: faded params with effect, events newest first, user-s
     [{ param: "hurt", before: 0, after: 0.3, cause: "signal", deviation: 1, detail: {} }],
     { turnId: null, now },
   );
-  const v = await getRelationshipView(db, a, now, cfg);
+  const v = await getRelationshipView(db, a, now, cfg, 50);
   expect(v?.params.map((p) => p.name)).toEqual([
     "closeness",
     "trust",
@@ -157,7 +158,7 @@ test("getRelationshipView: faded params with effect, events newest first, user-s
     "user_responsiveness",
   ]);
   expect(v?.events).toHaveLength(1);
-  expect(await getRelationshipView(db, b, now, cfg)).toBeNull();
+  expect(await getRelationshipView(db, b, now, cfg, 50)).toBeNull();
 });
 
 test("getLifeView shows her shared plan for the day", async () => {
@@ -327,7 +328,59 @@ test("getRelationshipView shows the ceiling and the last reply's openness", asyn
     created_at: now,
     openness: { disclosure: 0.4, responsiveness: 0.8 },
   });
-  const v = await getRelationshipView(db, u, now, cfg);
+  const v = await getRelationshipView(db, u, now, cfg, 50);
   expect(v?.ceiling).toBeCloseTo(cfg.ceiling.start);
   expect(v?.lastOpenness).toEqual({ disclosure: 0.4, responsiveness: 0.8 });
+});
+
+test("getRelationshipView shows the ledger with each item's text, and the last reply's limits", async () => {
+  const db = getTestDb();
+  const cfg = loadConfig().relationship;
+  const deps = makeTestDeps();
+  const [a, b] = [await createTestUser(), await createTestUser()];
+  const now = new Date("2026-01-05T10:00:00Z");
+  for (const u of [a, b]) await ensureRelationship(db, u, now, cfg);
+  const id = await deps.core.memory.insert({
+    kind: "reflection",
+    content: "She is scared Alcor will outgrow her.",
+    embedding: vec(0.02),
+    occurred_at: now,
+    created_at: now,
+    status: "recurring",
+    salience: 0.5,
+    valence: 0,
+    confidence: 1,
+    source: "loop",
+    source_ref: null,
+    depth: 3,
+  });
+  await insertDisclosures(db, a, [
+    {
+      ref_kind: "memory",
+      ref_id: id,
+      depth: 3,
+      level: "peek",
+      fact_id: null,
+      turn_id: null,
+      created_at: now,
+    },
+  ]);
+  await insertTurn(db, a, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "hm",
+    created_at: now,
+    depth: { open: 2, peek: 3, held_back: null },
+  });
+  const v = await getRelationshipView(db, a, now, cfg, 50);
+  expect(v?.ledger).toEqual([
+    expect.objectContaining({
+      level: "peek",
+      depth: 3,
+      text: "She is scared Alcor will outgrow her.",
+    }),
+  ]);
+  expect(v?.lastDepth).toEqual({ open: 2, peek: 3, held_back: null });
+  expect((await getRelationshipView(db, b, now, cfg, 50))?.ledger).toEqual([]);
 });

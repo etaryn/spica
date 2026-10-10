@@ -19,6 +19,9 @@ import { PARAM_NAMES, type RelationshipConfig } from "@/mind/state/user/relation
 import type { Db } from "@/db/client";
 import {
   conversation_state,
+  core_memory,
+  core_self_line,
+  disclosure,
   entity,
   fact,
   factStatus,
@@ -85,9 +88,38 @@ export async function getRelationshipView(
   userId: string,
   now: Date,
   cfg: RelationshipConfig,
+  ledgerLimit: number,
 ) {
   const row = await getRelationshipRow(db, userId);
   if (!row) return null;
+  // Dev-only and cross-scope on purpose: each ledger row with the core item it points at.
+  const ledger = await db
+    .select({
+      created_at: disclosure.created_at,
+      level: disclosure.level,
+      depth: disclosure.depth,
+      text: sql<string | null>`COALESCE(${core_memory.content}, ${core_self_line.text})`,
+    })
+    .from(disclosure)
+    .leftJoin(core_memory, eq(core_memory.id, disclosure.ref_id))
+    .leftJoin(core_self_line, eq(core_self_line.id, disclosure.ref_id))
+    .where(eq(disclosure.user_id, userId))
+    .orderBy(desc(disclosure.created_at))
+    .limit(ledgerLimit);
+  const lastLimits = (
+    await db
+      .select({ depth: session_log.depth })
+      .from(session_log)
+      .where(
+        and(
+          eq(session_log.user_id, userId),
+          eq(session_log.role, "companion"),
+          isNotNull(session_log.depth),
+        ),
+      )
+      .orderBy(desc(session_log.created_at))
+      .limit(1)
+  )[0];
   const params = fadeParams(await getParams(db, userId), now, cfg);
   const lastReply = (
     await db
@@ -107,6 +139,8 @@ export async function getRelationshipView(
     row,
     ceiling: closenessCeiling(row.hours_together, cfg),
     lastOpenness: lastReply?.openness ?? null,
+    lastDepth: lastLimits?.depth ?? null,
+    ledger,
     params: PARAM_NAMES.map((name) => ({
       name,
       ...params[name],

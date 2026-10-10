@@ -67,7 +67,13 @@ export default async function InspectUser({
       {tab === "facts" && <FactsTab db={db} userId={userId} sp={sp} />}
       {tab === "graph" && <EntitiesThreadsTab db={db} userId={userId} base={base} />}
       {tab === "relationship" && (
-        <RelationshipTab db={db} userId={userId} now={clock.now()} cfg={config.relationship} />
+        <RelationshipTab
+          db={db}
+          userId={userId}
+          now={clock.now()}
+          cfg={config.relationship}
+          ledgerLimit={config.inspector.ledger_limit}
+        />
       )}
       {tab === "life" && <LifeTab db={db} core={core} now={clock.now()} cfg={config.life} />}
       {tab === "retrieval" && <RetrievalTab db={db} userId={userId} />}

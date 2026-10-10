@@ -5,6 +5,7 @@
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
+import type { IdiolectPayload } from "@/mind/memory/user/idiolect";
 import type { Db } from "@/db/client";
 import { fact, factStatus, retrieval_trace } from "@/db/schema";
 import { one, toDate, toDateOrNull, vecLiteral } from "@/db/repos/util";
@@ -73,6 +74,40 @@ export async function candidateFacts(
 }
 
 export type { Neighbor };
+
+export type IdiolectCandidate = {
+  id: string;
+  content: string;
+  salience: number;
+  sim: number;
+  payload: IdiolectPayload;
+};
+
+/** Their established things together nearest the conversation; never a sensitive one. */
+export async function idiolectCandidates(
+  db: Db,
+  userId: string,
+  queryVec: number[],
+  limit: number,
+): Promise<IdiolectCandidate[]> {
+  const q = vecLiteral(queryVec);
+  const res = await db.execute(sql`
+    SELECT id, content, salience, payload, (1 - (embedding <=> ${q}::vector))::float8 AS sim
+    FROM fact
+    WHERE user_id = ${userId} AND scope = 'private' AND kind = 'idiolect'
+      AND status NOT IN ('superseded', 'stale')
+      AND (payload->'idiolect'->>'established_at') IS NOT NULL
+      AND COALESCE((payload->>'sensitive')::boolean, false) = false
+    ORDER BY embedding <=> ${q}::vector
+    LIMIT ${limit}`);
+  return res.rows.map((r) => ({
+    id: String(r.id),
+    content: String(r.content),
+    salience: Number(r.salience),
+    sim: Number(r.sim),
+    payload: (r.payload as { idiolect: IdiolectPayload }).idiolect,
+  }));
+}
 
 /** Active facts of the same subject at or above `minSim` (reconcile candidates, approach A). */
 export async function nearFacts(

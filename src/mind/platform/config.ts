@@ -277,6 +277,7 @@ const relationship = z
       responsiveness: opennessSide,
       bands: z.object({ low: unit, high: unit }),
     }),
+    idiolect: z.object({ min_closeness: unit, min_similarity: unit, max_items: positiveInt }),
     bids: z.object({
       effects: z.object({
         toward: z.object({ warmth: unit.optional(), trust: unit.optional() }),

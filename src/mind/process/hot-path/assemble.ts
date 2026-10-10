@@ -3,7 +3,7 @@
  * empty: core values, who she is lately, how she is feeling, her day, you and them, how open she
  * feels, where things
  * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life, each
- * marked with what they already know), what she isn't ready to share, things to ask
+ * marked with what they already know), your things together, what she isn't ready to share, things to ask
  * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
@@ -48,6 +48,8 @@ export interface AssembleInput {
   windowGapHours?: number;
   /** The user's unanswered questions. */
   openQuestions?: string[];
+  /** Their inside jokes, nicknames and rituals she may use; none in a crisis. */
+  idiolect?: { content: string; started_by: "user" | "spica" }[];
   /** Things she wants to bring up with them (her ideas); none in a crisis or a reach-out. */
   ideas?: string[];
   /** Why she's writing first, and the trailing user-role cue the model answers. */
@@ -83,6 +85,14 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
         : null,
     ),
     section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
+    section(
+      "Your things together",
+      input.idiolect?.length
+        ? input.idiolect
+            .map((i) => `- ${i.content} (${i.started_by === "user" ? "they" : "you"} started this)`)
+            .join("\n")
+        : null,
+    ),
     section("Not ready to share", input.heldBack ?? null),
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),

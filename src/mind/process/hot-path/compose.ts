@@ -43,6 +43,8 @@ import {
 } from "@/mind/state/user/relationship/openness";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { FIRST_DEPTH, loadDepth } from "@/mind/state/user/relationship/depth";
+import type { IdiolectCandidate } from "@/db/repos/user/facts";
+import { loadIdiolect } from "@/mind/memory/user/idiolect";
 import type { DepthLimits, DepthRecord, Openness } from "@/mind/state/user/relationship/types";
 import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure";
 import { sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
@@ -314,6 +316,16 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             ),
           [] as { id: string; content: string }[],
         );
+  // Their things together; nothing playful in a crisis.
+  const idiolect = inCrisis
+    ? Promise.resolve([] as IdiolectCandidate[])
+    : bounded(
+        deps,
+        "idiolect",
+        userId,
+        () => loadIdiolect(deps, userId, queryVector),
+        [] as IdiolectCandidate[],
+      );
   const noCore = { memories: [] as RetrievedFact[], heldBack: null };
   const coreMemories = inCrisis
     ? Promise.resolve(noCore)
@@ -335,6 +347,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       );
 
   const retrieval = await retrieveFor(deps, userId, input, queryText, queryVector);
+  const shownIdiolect = await idiolect;
   const latestSnapshot = await snapshot;
   const allowed = await limits;
   const recalledCore = await coreMemories;
@@ -398,6 +411,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,
     ideas: shownIdeas.map((i) => i.content),
+    idiolect: shownIdiolect.map((i) => ({ content: i.content, started_by: i.payload.started_by })),
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     windowGapHours: config.chat.window_gap_hours,
@@ -434,7 +448,19 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   return {
     text: guarded.text,
     parts: splitParts(guarded.text, config.chat.max_parts),
-    recalled: retrieval.recalled,
+    // What she was offered of their things together is reinforced like any recalled memory.
+    recalled: [
+      ...retrieval.recalled,
+      ...shownIdiolect.map((i) => ({
+        factId: i.id,
+        sim: i.sim,
+        fact_salience: i.salience,
+        entity_salience: 1,
+        recency: 1,
+        score: i.sim * i.salience,
+        forced: false,
+      })),
+    ],
     snapshotVersion: latestSnapshot?.version ?? null,
     openness: herOpenness,
     depth: { ...allowed, held_back: heldBack },

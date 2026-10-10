@@ -167,7 +167,7 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v13",
+    "reply": "v14",
     "crisis_classifier": "v2",
     "persona": "v5",
     "extract": "v7",
@@ -307,6 +307,7 @@
       },
       "bands": { "low": 0.35, "high": 0.65 }
     },
+    "idiolect": { "min_closeness": 0.4, "min_similarity": 0.3, "max_items": 2 },
     "bids": {
       "effects": {
         "toward": { "warmth": 0.03 },

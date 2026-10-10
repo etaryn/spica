@@ -161,6 +161,7 @@ async function applyDay(
         salience: config.core.world.event_salience,
         valence: c.valence,
         confidence: config.core.world.event_confidence,
+        depth: config.core.depth.by_kind.intention,
         source: "world",
         source_ref: eventRef(worldEventId),
       });

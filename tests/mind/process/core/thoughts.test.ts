@@ -29,6 +29,7 @@ test("preparation trims content and supplies a correctly sized embedding", async
     kind: "idea",
     content: "Read the old letter",
     salience: "medium",
+    depth: null,
   });
   expect(prepared[0]!.embedding).toHaveLength(deps.config.embedding.dimensions);
 });
@@ -159,4 +160,16 @@ test("overlong content is shortened to the line limit instead of rejecting the b
   ]);
   expect(prepared!.item.content).toHaveLength(max);
   expect(prepared!.item.content.endsWith("…")).toBe(true);
+});
+
+test("a thought keeps its judged depth; without one it takes its kind's default", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  const prepared = await prepareThoughts(deps, [
+    { kind: "thought", content: "Alcor never calls first", salience: "low", depth: "intimate" },
+    { kind: "thought", content: "The rain sounds like static", salience: "low" },
+  ]);
+  const { ids } = await deps.core.transaction((tx) => storeThoughts(tx, deps, prepared, meta));
+  expect((await deps.core.memory.get(ids[0]!))!.depth).toBe(3);
+  expect((await deps.core.memory.get(ids[1]!))!.depth).toBe(all.config.core.depth.by_kind.thought);
 });

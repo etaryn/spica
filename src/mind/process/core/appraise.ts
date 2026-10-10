@@ -7,6 +7,7 @@
  * day: the episode is written in her appraisal's words.
  */
 import { z } from "zod";
+import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { Config } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
@@ -37,6 +38,8 @@ export const AppraisalSchema = z.object({
     }),
   ),
   need_effects: z.object({ autonomy: z.number(), competence: z.number() }),
+  // Required for the model; fixtures without it read as null and take the kind default.
+  depth: DepthLabel.nullable().default(null),
 });
 export type RawAppraisal = z.infer<typeof AppraisalSchema>;
 export type Appraisal = {
@@ -46,6 +49,7 @@ export type Appraisal = {
   salience: number;
   goalEffects: { goalId: string; delta: number }[];
   needEffects: CoreNeeds;
+  depth: number;
 };
 export type LandingEvent = {
   worldEventId: string;
@@ -98,6 +102,7 @@ export function boundAppraisal(
       autonomy: need(raw.need_effects.autonomy),
       competence: need(raw.need_effects.competence),
     },
+    depth: depthOf(raw.depth, cfg.depth.by_kind.episode),
   };
 }
 
@@ -114,6 +119,7 @@ export function codeAppraisal(event: LandingEvent, cfg: Config["core"]): Apprais
     salience: cfg.world.event_salience,
     goalEffects: [],
     needEffects: NO_NEEDS,
+    depth: cfg.depth.by_kind.episode,
   };
 }
 
@@ -193,6 +199,7 @@ export async function applyAppraisal(
     salience: a.salience,
     valence: a.emotion.valence,
     confidence: world.event_confidence,
+    depth: a.depth,
     source: "world",
     source_ref: ref,
   });

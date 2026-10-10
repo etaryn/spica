@@ -1,6 +1,7 @@
 /** Nightly core memory decay and one bounded gist of older resolved episodes. */
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
+import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
 import { errorName } from "@/mind/platform/errors";
@@ -52,10 +53,14 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
       );
       if (!group) return { inputs: { week: null }, outputs: { gist_id: null, source_ids: [] } };
       const ids = group.sources.map((source) => source.id);
-      const Output = z.object({ gist: fitText(config.core.loops.max_chars) });
+      const Output = z.object({
+        gist: fitText(config.core.loops.max_chars),
+        depth: DepthLabel.nullable().default(null),
+      });
       let gist: string;
+      let judged: z.infer<typeof Output>["depth"];
       try {
-        ({ gist } = await ctx.deps.llm.classifyJson({
+        ({ gist, depth: judged } = await ctx.deps.llm.classifyJson({
           purpose: "core_consolidate",
           model: "core",
           system: loadPrompt("core/consolidate", config.prompts.core_consolidate),
@@ -110,6 +115,8 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
           salience: Math.max(...group.sources.map((source) => source.salience)),
           valence: 0,
           confidence: 0.6,
+          // A gist reveals as much as the most private thing it remembers.
+          depth: depthOf(judged, Math.max(...group.sources.map((source) => source.depth))),
           source: "loop",
           source_ref: `core_consolidate:${ctx.traceId}`,
         });

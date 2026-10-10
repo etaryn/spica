@@ -7,6 +7,7 @@ import { fitChars } from "@/mind/platform/llm/fit";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreStateRow } from "@/mind/state/core/types";
 import { z } from "zod";
+import { DepthLabel, depthOf, type DepthLabelT } from "@/mind/memory/core/depth";
 
 /** Thinking takes the world tick's lock, so a thought never lands beside a half-applied event. */
 export const WORLD_LOCK = "core_world_tick";
@@ -36,6 +37,8 @@ export type ThoughtInput = {
   kind: "thought" | "idea" | "hypothetical";
   content: string;
   salience: "low" | "medium";
+  /** Judged by the loop's model; null or left out takes the kind default. */
+  depth?: DepthLabelT | null;
 };
 
 export type PreparedThought = { item: ThoughtInput; embedding: number[] };
@@ -48,13 +51,14 @@ function validItem(item: ThoughtInput, maxChars: number): ThoughtInput {
     !item ||
     !["thought", "idea", "hypothetical"].includes(item.kind) ||
     !["low", "medium"].includes(item.salience) ||
+    (item.depth != null && !DepthLabel.options.includes(item.depth)) ||
     typeof item.content !== "string"
   ) {
     throw new Error("invalid thought item");
   }
   const content = fitChars(item.content.trim(), maxChars);
   if (!content) throw new Error("invalid thought content");
-  return { kind: item.kind, content, salience: item.salience };
+  return { kind: item.kind, content, salience: item.salience, depth: item.depth ?? null };
 }
 
 function validEmbedding(embedding: number[], dimensions: number): number[] {
@@ -129,6 +133,7 @@ export async function storeThoughts(
         salience: deps.config.core.loops.salience[item.salience],
         valence: meta.valence,
         confidence: deps.config.core.loops.thought_confidence,
+        depth: depthOf(item.depth, deps.config.core.depth.by_kind[item.kind]),
         source: "loop",
         source_ref: `${meta.loop}:${meta.traceId}`,
       }),

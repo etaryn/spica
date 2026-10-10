@@ -41,6 +41,7 @@ const raw = (over: Partial<RawAppraisal> = {}): RawAppraisal => ({
   salience: "high",
   goal_effects: [],
   need_effects: { autonomy: 1, competence: 0 },
+  depth: null,
   ...over,
 });
 
@@ -181,4 +182,20 @@ test("a context read failure is traced and rethrown, not used as appraisal fallb
     .from(core_loop_trace)
     .where(eq(core_loop_trace.loop, "core_appraise"));
   expect(trace).toMatchObject({ status: "failed", error: "Error", calls: 0 });
+});
+
+test("the judged depth is kept; a missing one, or the code fallback, takes the episode default", () => {
+  expect(boundAppraisal(raw({ depth: "intimate" }), new Set(), cfg)!.depth).toBe(3);
+  expect(boundAppraisal(raw(), new Set(), cfg)!.depth).toBe(cfg.depth.by_kind.episode);
+  const event = {
+    worldEventId: "e",
+    kind: "planned" as const,
+    content: "x",
+    valence: 0.2,
+    stakes: "low" as const,
+    at: new Date(),
+    agents: [],
+    goalRef: null,
+  };
+  expect(codeAppraisal(event, cfg).depth).toBe(cfg.depth.by_kind.episode);
 });

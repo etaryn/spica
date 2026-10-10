@@ -1,5 +1,6 @@
 /** Wandering associates recent real memories during free time without moving her state. */
 import { z } from "zod";
+import { DepthLabel } from "@/mind/memory/core/depth";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
@@ -20,6 +21,7 @@ const Output = z.object({
         kind: z.enum(["thought", "idea", "hypothetical"]),
         content: z.string(),
         salience: z.enum(["low", "medium"]),
+        depth: DepthLabel.nullable().default(null),
       }),
     )
     .min(1),

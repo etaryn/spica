@@ -1,5 +1,6 @@
 /** Rumination returns to a strong landed episode once and keeps its effects atomic. */
 import { z } from "zod";
+import { DepthLabel } from "@/mind/memory/core/depth";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
@@ -23,6 +24,7 @@ const Output = z.object({
     kind: z.literal("thought"),
     content: z.string(),
     salience: z.enum(["low", "medium"]),
+    depth: DepthLabel.nullable().default(null),
   }),
 });
 const HistoricalEmotion = z.object({

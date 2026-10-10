@@ -26,6 +26,7 @@ async function item(
     status: "resolved" | "open" | "recurring";
     at: Date;
     salience: number;
+    depth: number;
   }> = {},
 ) {
   return deps.core.memory.insert({
@@ -40,6 +41,7 @@ async function item(
     confidence: 0.6,
     source: "loop",
     source_ref: null,
+    depth: options.depth ?? 2,
   });
 }
 
@@ -219,4 +221,24 @@ test("an overlong gist is shortened instead of failing consolidation", async () 
   const [gist] = (await all.db.select().from(core_memory)).filter((row) => row.payload !== null);
   expect(gist!.content.length).toBe(all.config.core.loops.max_chars);
   expect(gist!.content.endsWith("…")).toBe(true);
+});
+
+test("a gist with no judged depth is as deep as its deepest source; a judged one is kept", async () => {
+  const { all, deps } = setup();
+  for (const [i, depth] of [1, 3, 2].entries()) await item(deps, `Film ${i}.`, { depth });
+  expect(await coreConsolidate(deps, now)).toBe("done");
+  const gist = (await all.db.select().from(core_memory)).find((r) =>
+    r.source_ref?.startsWith("core_consolidate:"),
+  )!;
+  expect(gist.depth).toBe(3);
+
+  await resetDb();
+  const again = setup();
+  again.all.llm.handlers.core_consolidate = () => ({ gist: "Films again.", depth: "surface" });
+  for (const [i, depth] of [3, 3, 3].entries()) await item(again.deps, `Film ${i}.`, { depth });
+  expect(await coreConsolidate(again.deps, now)).toBe("done");
+  const judged = (await again.all.db.select().from(core_memory)).find((r) =>
+    r.source_ref?.startsWith("core_consolidate:"),
+  )!;
+  expect(judged.depth).toBe(1);
 });

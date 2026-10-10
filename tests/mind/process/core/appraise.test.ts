@@ -200,6 +200,7 @@ test("the appraised feeling, needs and goal progress are applied, and a goal at 
     salience: 0.6,
     goalEffects: [{ goalId: goal, delta: 0.1 }],
     needEffects: { autonomy: 0, competence: 0.15 },
+    depth: 2,
   };
   const before = (await deps.core.state.get())!;
   const out = await deps.core.transaction((tx) =>
@@ -224,4 +225,19 @@ test("the appraised feeling, needs and goal progress are applied, and a goal at 
   expect(state.preoccupation).toBe(out.episodeId);
   expect(await deps.core.goals.get(goal)).toMatchObject({ progress: 1, status: "done" });
   expect((await deps.core.world.events("2026-01-05"))[0]!.goal_ref).toBe(goal);
+});
+
+test("the episode keeps the appraisal's depth", async () => {
+  const { deps, event } = await setup();
+  const out = await deps.core.transaction((tx) =>
+    applyAppraisal(
+      tx,
+      deps,
+      event,
+      { ...codeAppraisal(event, deps.config.core), depth: 3 },
+      vec(0.01),
+      now,
+    ),
+  );
+  expect((await deps.core.memory.get(out.episodeId))!.depth).toBe(3);
 });

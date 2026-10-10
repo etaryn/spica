@@ -1,5 +1,6 @@
 /** Anticipation gives an approaching plan one thought and a bounded rise in feeling. */
 import { z } from "zod";
+import { DepthLabel } from "@/mind/memory/core/depth";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import { loadPersona } from "@/mind/platform/persona";
@@ -23,6 +24,7 @@ const Output = z.object({
     kind: z.literal("thought"),
     content: z.string(),
     salience: z.enum(["low", "medium"]),
+    depth: DepthLabel.nullable().default(null),
   }),
   emotion: z.object({
     label: z.string(),

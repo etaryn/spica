@@ -1,5 +1,6 @@
 /** Nightly reflection converts new core experience into bounded memories and goal changes. */
 import { z } from "zod";
+import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { CoreMemoryItem, NewCoreMemory } from "@/mind/memory/core/types";
 import type { CoreDeps } from "@/mind/platform/deps";
 import type { LoopStatus } from "@/mind/platform/core";
@@ -41,20 +42,22 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     const persona = loadPersona(config);
     const maxChars = config.core.loops.max_chars;
     const line = fitText(maxChars);
+    const depth = DepthLabel.nullable().default(null);
     const Output = z.object({
-      insights: fitList(line, bounds.max_insights),
+      insights: fitList(z.object({ content: line, depth }), bounds.max_insights),
       opinions: fitList(
         z.object({
           subject: line,
           stance: line,
           confidence: z.enum(["low", "medium", "high"]),
           supersedes: z.uuid().nullable().optional(),
+          depth,
         }),
         bounds.max_opinions,
       ),
       interests: fitList(
         z.discriminatedUnion("status", [
-          z.object({ status: z.literal("new"), content: line }),
+          z.object({ status: z.literal("new"), content: line, depth }),
           z.object({ status: z.literal("fading"), target_id: z.uuid() }),
         ]),
         bounds.max_interests,
@@ -84,12 +87,14 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
+    const byKind = config.core.depth.by_kind;
     const proposals = [
-      ...result.insights.map((content) => ({
+      ...result.insights.map((item) => ({
         kind: "insight" as const,
-        content,
+        content: item.content,
         confidence: bounds.confidence.medium,
         salience: bounds.salience.insight,
+        depth: depthOf(item.depth, byKind.insight),
         target: null,
       })),
       ...result.opinions.map((item) => ({
@@ -97,6 +102,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         content: `${item.subject}: ${item.stance}`,
         confidence: bounds.confidence[item.confidence],
         salience: bounds.salience.opinion,
+        depth: depthOf(item.depth, byKind.opinion),
         target: item.supersedes ?? null,
       })),
       ...result.interests
@@ -106,6 +112,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           content: item.content,
           confidence: bounds.confidence.medium,
           salience: bounds.salience.interest,
+          depth: depthOf(item.depth, byKind.interest),
           target: null,
         })),
       ...(result.narrative
@@ -115,6 +122,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
               content: result.narrative,
               confidence: bounds.confidence.medium,
               salience: bounds.salience.narrative,
+              depth: byKind.narrative,
               target: null,
             },
           ]
@@ -148,6 +156,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           salience: proposal.salience,
           valence: 0,
           confidence: proposal.confidence,
+          depth: proposal.depth,
           source: "loop",
           source_ref: sourceRef,
         };

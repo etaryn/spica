@@ -209,7 +209,7 @@ test("bounded proposals supersede opinions and narrative, fade interests, and ch
     embedding: vec(),
   });
   all.llm.handlers.core_reflect = () => ({
-    insights: ["A film can change her mind."],
+    insights: [{ content: "A film can change her mind.", depth: null }],
     opinions: [
       {
         subject: "old films",
@@ -300,7 +300,7 @@ test("overfilled output is trimmed to its bounds instead of failing the night", 
   await memory(deps, "episode", "An experience.");
   const bounds = all.config.core.reflect;
   all.llm.handlers.core_reflect = () => ({
-    insights: ["one", "two", "three"],
+    insights: ["one", "two", "three"].map((content) => ({ content, depth: null })),
     opinions: Array.from({ length: bounds.max_opinions + 1 }, (_, i) => ({
       subject: `films ${i}`,
       stance: "good",
@@ -420,4 +420,24 @@ test("drops never leave her fewer active goals than the floor unless she adds re
   });
   expect(await coreReflect(deps, new Date(now.getTime() + 2000))).toBe("done");
   expect((await deps.core.goals.active()).map((g) => g.title)).toEqual(["Read more"]);
+});
+
+test("each new memory keeps its judged depth, or its kind's default", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "An experience.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [{ content: "She hides how much Alcor matters.", depth: "intimate" }],
+    opinions: [{ subject: "musicals", stance: "too loud", confidence: "medium" }],
+    interests: [{ status: "new", content: "Radio dramas.", depth: "surface" }],
+    goals: { add: [], drop: [] },
+    narrative: "She is quieter lately.",
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const rows = await all.db.select().from(core_memory);
+  const depth = (kind: string) => rows.find((r) => r.kind === kind)!.depth;
+  const byKind = all.config.core.depth.by_kind;
+  expect(depth("insight")).toBe(3);
+  expect(depth("opinion")).toBe(byKind.opinion);
+  expect(depth("interest")).toBe(1);
+  expect(depth("narrative")).toBe(byKind.narrative);
 });

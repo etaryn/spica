@@ -7,6 +7,7 @@
  * reconcile at once. It throws on failure so pg-boss retries, and it never delays a reply.
  */
 import type { GroundRef } from "@/mind/memory/core/types";
+import { recordDisclosures } from "@/mind/memory/user/disclosure";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { nearFacts } from "@/db/repos/user/facts";
@@ -82,6 +83,14 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
       turnIds: job.turnIds,
     });
     log.info("cold_path applied", { userId: job.userId, ...applied });
+    await recordDisclosures(tx, {
+      userId: job.userId,
+      planned,
+      factIds: applied.factIds,
+      turns,
+      crisis,
+      now: clock.now(),
+    });
 
     let relationship: Awaited<ReturnType<typeof updateRelationshipSafely>> = null;
     if (hasUserTurn) {

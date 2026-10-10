@@ -530,3 +530,131 @@ test("ideas the reply offered are resolved, once, even when the job is retried",
   await runColdPath(deps, withIdeas);
   expect((await getFact(getTestDb(), u, idea.id))!.status).toBe("resolved");
 });
+
+const SECRET = "Spica is scared Alcor will outgrow her.";
+
+/** A reply written under `limits`, then the cold path for it; her claim is the core memory's text. */
+async function tell(
+  deps: ReturnType<typeof makeTestDeps>,
+  u: string,
+  limits: { open: number; peek: number } | null,
+  min: number,
+  flagged = false,
+) {
+  const db = getTestDb();
+  const ut = await insertTurn(db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "user",
+    text: "do you ever feel left behind?",
+    created_at: at(min),
+    safety_flag: flagged ? { flagged: true, category: "self_harm", source: "classifier" } : null,
+  });
+  const ct = await insertTurn(db, u, {
+    id: randomUUID(),
+    session_id: ut.session_id,
+    role: "companion",
+    text: "honestly? about alcor, yeah",
+    created_at: at(min),
+    reply_to: ut.id,
+    depth: limits ? { ...limits, held_back: null } : null,
+  });
+  await runColdPath(deps, { userId: u, turnIds: [ut.id, ct.id], replyTurnId: ct.id, recalled: [] });
+  return ct;
+}
+
+function ledgerDeps() {
+  const deps = makeTestDeps();
+  deps.llm.handlers.extract = (input: string) => ({
+    facts: input.includes("New exchange")
+      ? [
+          {
+            subject: "self",
+            kind: "feeling",
+            content: SECRET,
+            occurred_at: null,
+            salience: 0.6,
+            valence: -0.4,
+            confidence: 0.9,
+            entity_names: [],
+            thread_title: null,
+            claim_kind: "life",
+          },
+        ]
+      : [],
+    entities: [],
+    threads: [],
+    relationship: null,
+  });
+  deps.llm.handlers.reconcile = (input: string) => ({
+    relation: /id=([0-9a-f-]{36})/.test(input) ? "duplicate" : "new",
+    target_fact_id: /id=([0-9a-f-]{36})/.exec(input)?.[1] ?? null,
+  });
+  return deps;
+}
+
+async function seedSecret(deps: ReturnType<typeof makeTestDeps>) {
+  const [embedding] = await deps.embedder.embed([SECRET], "document");
+  return deps.core.memory.insert({
+    kind: "reflection",
+    content: SECRET,
+    embedding: embedding!,
+    occurred_at: at(0),
+    created_at: at(0),
+    status: "recurring",
+    salience: 0.6,
+    valence: -0.4,
+    confidence: 0.8,
+    source: "loop",
+    source_ref: null,
+    depth: 3,
+  });
+}
+
+const ledgerOf = (u: string) =>
+  getTestDb()
+    .select()
+    .from(s.disclosure)
+    .where(eq(s.disclosure.user_id, u))
+    .orderBy(s.disclosure.created_at);
+
+test("a hint beyond her usual limit is recorded as a peek; telling it again, merged, makes it open", async () => {
+  const deps = ledgerDeps();
+  const id = await seedSecret(deps);
+  const u = await createTestUser();
+  const first = await tell(deps, u, { open: 1, peek: 3 }, 0);
+  const rows = await ledgerOf(u);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    ref_kind: "memory",
+    ref_id: id,
+    depth: 3,
+    level: "peek",
+    turn_id: first.id,
+  });
+  expect(rows[0]!.fact_id).not.toBeNull();
+
+  deps.clock.advance(60_000);
+  await tell(deps, u, { open: 1, peek: 3 }, 5);
+  const again = await ledgerOf(u);
+  expect(again.map((r) => r.level)).toEqual(["peek", "open"]);
+  expect(again[1]!.fact_id).toBe(rows[0]!.fact_id);
+});
+
+test("within her limit it is open; a reply with no stored limits counts as open", async () => {
+  const deps = ledgerDeps();
+  await seedSecret(deps);
+  const [a, b] = [await createTestUser(), await createTestUser()];
+  await tell(deps, a, { open: 3, peek: 3 }, 0);
+  await tell(deps, b, null, 0);
+  expect((await ledgerOf(a)).map((r) => r.level)).toEqual(["open"]);
+  expect((await ledgerOf(b)).map((r) => r.level)).toEqual(["open"]);
+});
+
+test("a crisis exchange records nothing in the ledger", async () => {
+  const deps = ledgerDeps();
+  await seedSecret(deps);
+  const u = await createTestUser();
+  await tell(deps, u, { open: 1, peek: 1 }, 0, true);
+  expect(await ledgerOf(u)).toEqual([]);
+});

@@ -393,9 +393,12 @@ function selfClaimDeps(sim: number | Error) {
     threads: [],
     relationship: null,
   });
-  deps.core.memory.groundingSimilarity = async () => {
+  deps.core.memory.groundingMatch = async () => {
     if (sim instanceof Error) throw sim;
-    return sim;
+    return {
+      similarity: sim,
+      ref: { kind: "memory", id: "00000000-0000-4000-8000-000000000001", depth: 1 },
+    };
   };
   return deps;
 }
@@ -427,7 +430,7 @@ test("a duplicate claim leaves the existing fact's grading alone", async () => {
   const deps = selfClaimDeps(0.9);
   const u = await createTestUser();
   await runColdPath(deps, (await exchange(u, "a", "b", 0)).job);
-  deps.core.memory.groundingSimilarity = async () => 0.1;
+  deps.core.memory.groundingMatch = async () => ({ similarity: 0.1, ref: null });
   deps.llm.handlers.reconcile = (input: string) => ({
     relation: "duplicate",
     target_fact_id: /id=([0-9a-f-]{36})/.exec(input)?.[1] ?? null,

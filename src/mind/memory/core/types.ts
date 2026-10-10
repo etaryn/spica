@@ -100,6 +100,9 @@ export type CoreSelfLine = {
 };
 /** Left out, a line is surface. */
 export type NewCoreSelfLine = Omit<CoreSelfLine, "id" | "depth"> & { depth?: number };
+/** What a claim of hers matched in core: one memory or one line of her self. */
+export type GroundRef = { kind: "memory" | "self_line"; id: string; depth: number };
+
 export type CoreGistGroup = { week: string; sources: CoreMemoryItem[] };
 
 export interface CoreMemory {
@@ -162,10 +165,10 @@ export interface CoreMemory {
    */
   candidates(embedding: number[], limit: number): Promise<CoreCandidate[]>;
   /**
-   * Her best match for a claim: the highest similarity to her recallable memory, her core values
-   * and her latest self. 0 when she has none.
+   * Her best match for a claim, across her recallable memory, her core values and her latest
+   * self: its similarity and what it was. 0 and null when she has none.
    */
-  groundingSimilarity(embedding: number[]): Promise<number>;
+  groundingMatch(embedding: number[]): Promise<{ similarity: number; ref: GroundRef | null }>;
   /** The newest `limit` episodes whose time falls in (from, to], oldest first. */
   recentEpisodes(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   /** Her thoughts and ideas created in (from, to], newest first; hypotheticals are their own kind. */

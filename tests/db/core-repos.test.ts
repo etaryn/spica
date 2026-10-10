@@ -837,24 +837,24 @@ const snapshot = (version: number) => ({
   embedding: axis(1),
 });
 
-test("groundingSimilarity: 0 with nothing; counts core values and only the latest snapshot's lines", async () => {
+test("groundingMatch: 0 with nothing; counts core values and only the latest snapshot's lines", async () => {
   const [a, b] = [axis(0), axis(1)];
-  expect(await core().memory.groundingSimilarity(a)).toBe(0);
+  expect((await core().memory.groundingMatch(a)).similarity).toBe(0);
 
   await core().memory.insertSnapshot(snapshot(0));
   await core().memory.insertSelfLines([{ version: 0, text: "old line", embedding: a }]);
-  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(1);
+  expect((await core().memory.groundingMatch(a)).similarity).toBeCloseTo(1);
 
   await core().memory.insertSnapshot(snapshot(1));
   await core().memory.insertSelfLines([{ version: 1, text: "new line", embedding: b }]);
   // v0's line no longer counts once v1 exists.
-  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(0);
+  expect((await core().memory.groundingMatch(a)).similarity).toBeCloseTo(0);
 
   await core().memory.insertSelfLines([{ version: null, text: "a value", embedding: a }]);
-  expect(await core().memory.groundingSimilarity(a)).toBeCloseTo(1);
+  expect((await core().memory.groundingMatch(a)).similarity).toBeCloseTo(1);
 });
 
-test("groundingSimilarity ignores stale, superseded and hypothetical memory", async () => {
+test("groundingMatch ignores stale, superseded and hypothetical memory", async () => {
   const kinds = [
     ["episode", "stale"],
     ["episode", "superseded"],
@@ -863,7 +863,7 @@ test("groundingSimilarity ignores stale, superseded and hypothetical memory", as
   ] as const;
   for (const [kind, status] of kinds)
     await core().memory.insert({ ...episode("x", 0, now), kind, status, embedding: axis(0) });
-  expect(await core().memory.groundingSimilarity(axis(0))).toBe(0);
+  expect((await core().memory.groundingMatch(axis(0))).similarity).toBe(0);
 });
 
 test("depth round-trips on memories, candidates and self lines; left out, the defaults apply", async () => {
@@ -884,4 +884,28 @@ test("depth round-trips on memories, candidates and self lines; left out, the de
   const lines = await core().memory.selfLines(null);
   expect(lines.find((l) => l.text === "x")!.depth).toBe(2);
   expect(lines.find((l) => l.text === "y")!.depth).toBe(1);
+});
+
+test("groundingMatch names what it matched: a memory or a self line, with its depth", async () => {
+  expect(await core().memory.groundingMatch(axis(0))).toEqual({ similarity: 0, ref: null });
+  const id = await core().memory.insert({
+    ...episode("scared", 0, now),
+    kind: "reflection",
+    status: "recurring",
+    embedding: axis(0),
+    depth: 3,
+  });
+  expect(await core().memory.groundingMatch(axis(0))).toEqual({
+    similarity: expect.closeTo(1),
+    ref: { kind: "memory", id, depth: 3 },
+  });
+  await core().memory.insertSelfLines([
+    { version: null, text: "a value", embedding: axis(1), depth: 1 },
+  ]);
+  const line = (await core().memory.selfLines(null))[0]!;
+  expect((await core().memory.groundingMatch(axis(1))).ref).toEqual({
+    kind: "self_line",
+    id: line.id,
+    depth: 1,
+  });
 });

@@ -4,6 +4,7 @@
  * reinforcement. Runs inside the cold path's transaction; every id the model supplied is checked
  * to belong to this user.
  */
+import type { GroundRef } from "@/mind/memory/core/types";
 import type { Db } from "@/db/client";
 import { normalizeName, upsertEntityMention } from "@/db/repos/user/entities";
 import {
@@ -33,6 +34,8 @@ export type PlannedFact = {
   source?: "turn" | "inferred";
   /** Whether core backed this claim; null when it isn't a life or opinion claim. */
   grounded?: boolean | null;
+  /** What in core backed it, when it was backed: the ledger records that she told them. */
+  groundRef?: GroundRef | null;
 };
 
 export type EncodeInput = {

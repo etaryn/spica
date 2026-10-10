@@ -6,6 +6,7 @@
  * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
  * reconcile at once. It throws on failure so pg-boss retries, and it never delays a reply.
  */
+import type { GroundRef } from "@/mind/memory/core/types";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { nearFacts } from "@/db/repos/user/facts";
@@ -203,12 +204,14 @@ async function reconcileCandidates(
       { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
       neighbors,
     );
+    const grounding = await groundClaim(deps, fact, embedding);
     planned.push({
       fact,
       embedding,
       decision,
       source,
-      grounded: await groundClaim(deps, fact, embedding),
+      grounded: grounding.grounded,
+      groundRef: grounding.ref,
     });
   }
   return planned;
@@ -223,14 +226,16 @@ async function groundClaim(
   deps: Deps,
   fact: ExtractedFact,
   embedding: number[],
-): Promise<boolean | null> {
-  if (fact.claim_kind !== "life" && fact.claim_kind !== "opinion") return null;
+): Promise<{ grounded: boolean | null; ref: GroundRef | null }> {
+  if (fact.claim_kind !== "life" && fact.claim_kind !== "opinion")
+    return { grounded: null, ref: null };
   try {
-    const sim = await deps.core.memory.groundingSimilarity(embedding);
-    return sim >= deps.config.claims.grounded_similarity;
+    const match = await deps.core.memory.groundingMatch(embedding);
+    const grounded = match.similarity >= deps.config.claims.grounded_similarity;
+    return { grounded, ref: grounded ? match.ref : null };
   } catch (e) {
     deps.log.error("claim grounding failed", { error: errorName(e) });
-    return null;
+    return { grounded: null, ref: null };
   }
 }
 

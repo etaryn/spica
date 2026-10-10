@@ -400,20 +400,32 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       }));
     },
 
-    async groundingSimilarity(embedding) {
+    async groundingMatch(embedding) {
       const q = vecLiteral(embedding);
-      // GREATEST skips nulls; with neither memory nor self lines it is null, read as 0.
       const res = await db.execute(sql`
-        SELECT GREATEST(
-          (SELECT 1 - (m.embedding <=> ${q}::vector) FROM core_memory m
-           WHERE m.status NOT IN ('superseded', 'stale') AND m.kind <> 'hypothetical'
-             AND NOT (m.kind = 'intention' AND m.status = 'resolved')
-           ORDER BY m.embedding <=> ${q}::vector LIMIT 1),
-          (SELECT 1 - (l.embedding <=> ${q}::vector) FROM core_self_line l
-           WHERE l.version IS NULL OR l.version = (SELECT max(version) FROM core_snapshot)
-           ORDER BY l.embedding <=> ${q}::vector LIMIT 1)
-        )::float8 AS sim`);
-      return Number(res.rows[0]?.sim ?? 0);
+        (SELECT 'memory' AS kind, m.id, m.depth,
+                (1 - (m.embedding <=> ${q}::vector))::float8 AS sim
+         FROM core_memory m
+         WHERE m.status NOT IN ('superseded', 'stale') AND m.kind <> 'hypothetical'
+           AND NOT (m.kind = 'intention' AND m.status = 'resolved')
+         ORDER BY m.embedding <=> ${q}::vector LIMIT 1)
+        UNION ALL
+        (SELECT 'self_line' AS kind, l.id, l.depth,
+                (1 - (l.embedding <=> ${q}::vector))::float8 AS sim
+         FROM core_self_line l
+         WHERE l.version IS NULL OR l.version = (SELECT max(version) FROM core_snapshot)
+         ORDER BY l.embedding <=> ${q}::vector LIMIT 1)
+        ORDER BY sim DESC LIMIT 1`);
+      const r = res.rows[0];
+      if (!r) return { similarity: 0, ref: null };
+      return {
+        similarity: Number(r.sim),
+        ref: {
+          kind: r.kind === "memory" ? "memory" : "self_line",
+          id: String(r.id),
+          depth: Number(r.depth),
+        },
+      };
     },
 
     async recentEpisodes(from, to, limit) {

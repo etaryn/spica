@@ -141,6 +141,26 @@ export async function bumpDuplicate(
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
 }
 
+/**
+ * Marks an idiolect fact established, once. Builds the idiolect object if it is missing, and
+ * keeps the rest of the payload (a sensitive flag survives).
+ */
+export async function establishIdiolect(
+  db: Db,
+  userId: string,
+  id: string,
+  at: Date,
+): Promise<void> {
+  await db.execute(sql`
+    UPDATE fact
+    SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object(
+      'idiolect',
+      COALESCE(payload->'idiolect', '{"type":"reference","started_by":"user"}'::jsonb)
+        || jsonb_build_object('established_at', ${at.toISOString()}::text))
+    WHERE user_id = ${userId} AND id = ${id} AND kind = 'idiolect'
+      AND (payload->'idiolect'->>'established_at') IS NULL`);
+}
+
 export async function setFactStatus(
   db: Db,
   userId: string,

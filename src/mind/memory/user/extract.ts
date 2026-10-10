@@ -23,6 +23,13 @@ import {
 } from "@/mind/state/user/relationship/signals";
 import type { Intimacy } from "@/mind/state/user/relationship/types";
 import { clamp } from "@/mind/platform/math";
+import {
+  IDIOLECT_STARTERS,
+  IDIOLECT_TYPES,
+  idiolectPayload,
+  type IdiolectStarter,
+  type IdiolectType,
+} from "./idiolect";
 
 const subject = z.enum(["user", "self", "shared"]);
 // Summaries, reflections and ideas are hers to write after a big event, never read off one exchange.
@@ -34,22 +41,25 @@ const extractableKind = z
  * The output format sent to the model. It carries no numeric or length bounds (the model API
  * doesn't support them); values are clamped after parsing instead.
  */
+const FactSchema = z.object({
+  subject,
+  kind: extractableKind,
+  content: z.string(),
+  occurred_at: z.string().nullable(),
+  salience: z.number(),
+  valence: z.number(),
+  confidence: z.number(),
+  entity_names: z.array(z.string()),
+  thread_title: z.string().nullable(),
+  // Required for the model, so it never skips the label; fixtures without it read as null.
+  claim_kind: z.enum(claimKind.enumValues).nullable().default(null),
+  // Only idiolect facts carry these; fixtures without them read as null.
+  idiolect_type: z.enum(IDIOLECT_TYPES).nullable().default(null),
+  started_by: z.enum(IDIOLECT_STARTERS).nullable().default(null),
+});
+
 export const ExtractionSchema = z.object({
-  facts: z.array(
-    z.object({
-      subject,
-      kind: extractableKind,
-      content: z.string(),
-      occurred_at: z.string().nullable(),
-      salience: z.number(),
-      valence: z.number(),
-      confidence: z.number(),
-      entity_names: z.array(z.string()),
-      thread_title: z.string().nullable(),
-      // Required for the model, so it never skips the label; fixtures without it read as null.
-      claim_kind: z.enum(claimKind.enumValues).nullable().default(null),
-    }),
-  ),
+  facts: z.array(FactSchema),
   entities: z.array(
     z.object({
       name: z.string(),
@@ -78,10 +88,16 @@ export const ExtractionSchema = z.object({
 
 type RawExtraction = z.infer<typeof ExtractionSchema>;
 
-export type ExtractedFact = Omit<RawExtraction["facts"][number], "occurred_at" | "claim_kind"> & {
+export type ExtractedFact = Omit<
+  RawExtraction["facts"][number],
+  "occurred_at" | "claim_kind" | "idiolect_type" | "started_by"
+> & {
   occurred_at: Date | null;
   /** Only her own facts carry one; facts code writes (her hurt) leave it out. */
   claim_kind?: RawExtraction["facts"][number]["claim_kind"];
+  /** Only idiolect facts carry these. */
+  idiolect_type?: IdiolectType | null;
+  started_by?: IdiolectStarter | null;
 };
 export type ExtractedEntity = EntityMention;
 export type ExtractedThread = Omit<RawExtraction["threads"][number], "next_checkpoint"> & {
@@ -113,6 +129,15 @@ function parseDate(text: string | null): Date | null {
   if (!text) return null;
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function idiolectFields(fact: { kind: string; idiolect_type?: unknown; started_by?: unknown }): {
+  idiolect_type: IdiolectType | null;
+  started_by: IdiolectStarter | null;
+} {
+  if (fact.kind !== "idiolect") return { idiolect_type: null, started_by: null };
+  const payload = idiolectPayload(fact);
+  return { idiolect_type: payload.type, started_by: payload.started_by };
 }
 
 export function buildExtractionInput(args: ExtractArgs): string {
@@ -149,6 +174,13 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   // malformed block must never fail the memory write. Their normalisers turn anything invalid
   // into null.
   const raw = ExtractionSchema.extend({
+    // An idiolect fact with a bad label falls back rather than failing the whole write.
+    facts: z.array(
+      FactSchema.extend({
+        idiolect_type: z.unknown().optional(),
+        started_by: z.unknown().optional(),
+      }),
+    ),
     relationship: z.unknown().optional(),
     intimacy: z.unknown().optional(),
     bid_response: z.unknown().optional(),
@@ -166,6 +198,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       thread_title: fact.thread_title && tidy(fact.thread_title) ? tidy(fact.thread_title) : null,
       // Only her own statements are claims; a mislabelled user or shared fact carries none.
       claim_kind: fact.subject === "self" ? (fact.claim_kind ?? null) : null,
+      ...idiolectFields(fact),
     }))
     .filter((fact) => fact.content.length > 0)
     .slice(0, maxCandidates);

@@ -10,6 +10,7 @@ import { normalizeName, upsertEntityMention } from "@/db/repos/user/entities";
 import {
   applyRecall,
   bumpDuplicate,
+  establishIdiolect,
   getFact,
   insertFact,
   setFactStatus,
@@ -26,6 +27,7 @@ import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Config } from "@/mind/platform/config";
 import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract";
 import type { Decision } from "@/mind/memory/shared/reconcile";
+import { idiolectPayload } from "./idiolect";
 
 export type PlannedFact = {
   fact: ExtractedFact;
@@ -242,10 +244,12 @@ async function encodeFacts(
   outcome: EncodeOutcome,
 ): Promise<void> {
   const { userId } = input;
-  const payload = input.sensitive ? { sensitive: true } : null;
 
   for (const planned of input.facts) {
     const fact = planned.fact;
+    const sensitive = input.sensitive ? { sensitive: true } : null;
+    const payload =
+      fact.kind === "idiolect" ? { ...sensitive, idiolect: idiolectPayload(fact) } : sensitive;
     const subject = entitySubjectOf(fact.subject);
 
     const entityRefs = fact.entity_names
@@ -290,6 +294,10 @@ async function encodeFacts(
         config.retrieval.recall_cap,
         fact.confidence,
       );
+      // An inside joke is born when it comes up again in another exchange, not twice in one.
+      if (target.kind === "idiolect" && target.source_ref !== input.sourceRef) {
+        await establishIdiolect(db, userId, target.id, input.exchangeAt);
+      }
       outcome.duplicates += 1;
       outcome.factIds.push(target.id);
       continue;

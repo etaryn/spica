@@ -1,7 +1,7 @@
 /**
  * Extraction: the cold path's first step. One strict-JSON model call reads a finished exchange and
  * returns candidate memories, the people and things mentioned, thread updates, and the
- * relationship signals from how the user treated her.
+ * relationship signals from how the user treated her and how much they opened up.
  */
 import { z } from "zod";
 import type { EntityMention } from "@/db/repos/user/entities";
@@ -11,10 +11,13 @@ import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 import {
+  IntimacySchema,
+  normalizeIntimacy,
   normalizeSignals,
   RelationshipSignalsSchema,
   type Signals,
 } from "@/mind/state/user/relationship/signals";
+import type { Intimacy } from "@/mind/state/user/relationship/types";
 import { clamp } from "@/mind/platform/math";
 
 const subject = z.enum(["user", "self", "shared"]);
@@ -63,6 +66,8 @@ export const ExtractionSchema = z.object({
     }),
   ),
   relationship: RelationshipSignalsSchema.nullable(),
+  // Required for the model; fixtures without it read as null.
+  intimacy: IntimacySchema.nullable().default(null),
 });
 
 type RawExtraction = z.infer<typeof ExtractionSchema>;
@@ -82,6 +87,7 @@ export type Extraction = {
   entities: ExtractedEntity[];
   threads: ExtractedThread[];
   relationship: Signals | null;
+  intimacy: Intimacy | null;
 };
 
 export type ExtractArgs = {
@@ -132,9 +138,13 @@ export function buildExtractionInput(args: ExtractArgs): string {
  * and drops empty entries.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
-  // Lenient about the relationship block, unlike the schema sent to the model: a malformed block
-  // must never fail the memory write. normalizeSignals turns anything invalid into null.
-  const raw = ExtractionSchema.extend({ relationship: z.unknown().optional() }).parse(input);
+  // Lenient about the relationship and intimacy blocks, unlike the schema sent to the model: a
+  // malformed block must never fail the memory write. Their normalisers turn anything invalid
+  // into null.
+  const raw = ExtractionSchema.extend({
+    relationship: z.unknown().optional(),
+    intimacy: z.unknown().optional(),
+  }).parse(input);
 
   const facts = raw.facts
     .map((fact) => ({
@@ -168,7 +178,13 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
     }))
     .filter((thread) => thread.title.length > 0);
 
-  return { facts, entities, threads, relationship: normalizeSignals(raw.relationship ?? null) };
+  return {
+    facts,
+    entities,
+    threads,
+    relationship: normalizeSignals(raw.relationship ?? null),
+    intimacy: normalizeIntimacy(raw.intimacy ?? null),
+  };
 }
 
 export async function extract(

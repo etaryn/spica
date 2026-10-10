@@ -3,6 +3,7 @@ import { loadConfig } from "@/mind/platform/config";
 import { medianGapHours } from "@/mind/state/user/relationship/cadence";
 import {
   hurtFactContent,
+  normalizeIntimacy,
   normalizeSignals,
   type Signals,
 } from "@/mind/state/user/relationship/signals";
@@ -88,6 +89,19 @@ const ex = (
   herOpenness: null,
   tone: null,
   ...extra,
+});
+
+test("normalizeIntimacy: invalid → null, clamps, keeps a null responsiveness", () => {
+  expect(normalizeIntimacy(null)).toBeNull();
+  expect(normalizeIntimacy({ user_disclosure: "lots" })).toBeNull();
+  expect(normalizeIntimacy({ user_disclosure: 3, user_responsiveness: -1 })).toEqual({
+    user_disclosure: 1,
+    user_responsiveness: 0,
+  });
+  expect(normalizeIntimacy({ user_disclosure: 0.4, user_responsiveness: null })).toEqual({
+    user_disclosure: 0.4,
+    user_responsiveness: null,
+  });
 });
 
 test("normalizeSignals: null/invalid → null, clamps, blank cause drops hurt", () => {

@@ -203,3 +203,27 @@ test("extraction can't write a summary: that kind is hers to write after a big e
   expect(kinds).toContain("event");
   expect(kinds).not.toContain("summary");
 });
+
+test("a malformed intimacy block becomes null without failing the extraction", () => {
+  const out = normalizeExtraction(
+    { facts: [], entities: [], threads: [], relationship: null, intimacy: { nope: 1 } },
+    10,
+  );
+  expect(out.intimacy).toBeNull();
+  const missing = normalizeExtraction(
+    { facts: [], entities: [], threads: [], relationship: null },
+    10,
+  );
+  expect(missing.intimacy).toBeNull();
+  const read = normalizeExtraction(
+    {
+      facts: [],
+      entities: [],
+      threads: [],
+      relationship: null,
+      intimacy: { user_disclosure: 0.7, user_responsiveness: null },
+    },
+    10,
+  );
+  expect(read.intimacy).toEqual({ user_disclosure: 0.7, user_responsiveness: null });
+});

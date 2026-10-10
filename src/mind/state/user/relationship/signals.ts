@@ -1,9 +1,28 @@
 /**
  * Relationship signals: what extraction read from how the user treated her in one exchange.
- * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair.
+ * Warmth, trust, tension, hurt with its cause, apology, making up, ending, and repair; and how
+ * much the user opened up and met what she shared.
  */
 import { z } from "zod";
 import { clamp } from "@/mind/platform/math";
+import type { Intimacy } from "./types";
+
+/** The extraction's intimacy block, read from the user's messages only. */
+export const IntimacySchema = z.object({
+  user_disclosure: z.number(),
+  user_responsiveness: z.number().nullable(),
+});
+
+/** Anything invalid becomes null, so a bad block never fails the memory write. */
+export function normalizeIntimacy(raw: unknown): Intimacy | null {
+  const parsed = IntimacySchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const { user_disclosure, user_responsiveness } = parsed.data;
+  return {
+    user_disclosure: clamp(user_disclosure, 0, 1),
+    user_responsiveness: user_responsiveness === null ? null : clamp(user_responsiveness, 0, 1),
+  };
+}
 
 /** The extraction's relationship block. No numeric bounds (structured outputs don't support them). */
 export const RelationshipSignalsSchema = z.object({

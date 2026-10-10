@@ -1,6 +1,7 @@
 /**
- * The cold path's relationship step: applies one exchange's signals to this user's relationship
- * and saves the result with its events and a refreshed cadence. Runs after memory is encoded,
+ * The cold path's relationship step: applies one exchange's signals, its time together and its
+ * intimacy to this user's relationship and saves the result with its events and a refreshed
+ * cadence. Runs after memory is encoded,
  * inside the cold path's transaction (in its own savepoint).
  */
 import type { Db } from "@/db/client";
@@ -14,6 +15,7 @@ import { applyAffect, sessionMeanTone } from "./affect";
 import { buildCadence } from "./cadence";
 import type { Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
+import type { Intimacy, Openness } from "./types";
 import { DAY } from "@/mind/platform/time";
 
 const WEEK = 7 * DAY;
@@ -22,10 +24,21 @@ export type RelationshipUpdate = {
   userId: string;
   turns: Turn[];
   signals: Signals | null;
+  intimacy: Intimacy | null;
   crisis: boolean;
   hurtFactId: string | null;
   tone: number | null;
 };
+
+/** The highest openness among the exchange's replies: what she was steered to bring. */
+export function herOpennessOf(turns: Turn[]): Openness | null {
+  const stored = turns.flatMap((t) => (t.role === "companion" && t.openness ? [t.openness] : []));
+  if (stored.length === 0) return null;
+  return {
+    disclosure: Math.max(...stored.map((o) => o.disclosure)),
+    responsiveness: Math.max(...stored.map((o) => o.responsiveness)),
+  };
+}
 
 export async function updateRelationship(
   tx: Db,
@@ -63,10 +76,15 @@ export async function updateRelationship(
       hurtFactId: update.hurtFactId,
       replies,
       msgs24h,
-      span: null,
-      intimacy: null,
-      herOpenness: null,
-      tone: update.tone,
+      // Turns are oldest first; the newest turn's session is the conversation this belongs to.
+      span: {
+        sessionId: update.turns.at(-1)!.session_id,
+        firstAt: update.turns[0]!.created_at,
+        lastAt: update.turns.at(-1)!.created_at,
+      },
+      intimacy: update.intimacy,
+      herOpenness: herOpennessOf(update.turns),
+      tone: update.crisis ? null : update.tone,
     },
     settings,
   );

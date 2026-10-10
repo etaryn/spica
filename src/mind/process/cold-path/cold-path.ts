@@ -58,6 +58,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     // A reach-out on its own is only her words: no user behaviour to score, no exchange tone.
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
+    const intimacy = crisis || !hasUserTurn ? null : extraction.intimacy;
 
     const hurt = significantHurt(signals, config.relationship.signal_deadzone);
     const candidates: CandidateFact[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
@@ -88,6 +89,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
         userId: job.userId,
         turns,
         signals,
+        intimacy,
         crisis,
         hurtFactId,
         // How she feels about them follows what they did. Her own facts are left out: her

@@ -35,7 +35,8 @@ Test phase: functionality over accuracy; every threshold is a first guess, tuned
 ## 1. Depth on her self (core side, the same for every user)
 
 **Columns:** `core_memory.depth` and `core_self_line.depth` (smallint 1–3: 1 surface, 2 personal,
-3 intimate), `core_self_line.section` (the snapshot section a line belongs to).
+3 intimate). A line's section is read from the snapshot content it came from, so it needs no
+column.
 
 **Who writes depth:**
 - Every core loop that writes memories through the model adds one `depth` field to its output,
@@ -44,13 +45,14 @@ Test phase: functionality over accuracy; every threshold is a first guess, tuned
   opinions, interests and whatever else it writes), consolidate (gists: the deepest of their
   sources unless the model says otherwise). Each prompt bumps a version; old versions are deleted.
 - Code-written memories (intentions from the day plan) take `core.depth.by_kind[kind]`.
-- Snapshot render v2 tags each bullet with a depth, stored on its self line with its section.
+- Snapshot render v2 tags each bullet with a depth, stored on its self line.
 - Seed-self lines take `core.depth.by_section[section]`; core-value lines are always 1 (who she
   is, an AI with a sibling and her loves, is never secret).
 
 **Existing rows:** the migration backfills `core_memory.depth` by kind (interest, opinion 1;
 episode, goal, intention, thought, idea, hypothetical 2; reflection, insight, narrative,
-agent_note 3) and self lines from their section default (core-value lines 1). No model backfill.
+agent_note 3). Existing self lines become 1, which is what every user sees today, so nothing
+changes for them until the next render. No model backfill.
 
 A malformed or missing depth from the model falls back to the kind default; it never fails the
 loop.
@@ -70,6 +72,9 @@ loop.
 - **Stretch (`peek`):** `open + 1` (at most 3) when her openness disclosure is in its high band, or
   this session went deep (`session.deep_fired`, or session mean moment ≥ `depth.stretch_moment`
   0.5); otherwise `peek = open`.
+- **Level, in one place:** an item at or below `open` is open; above it, it is open if the ledger
+  already holds a peek of it (the glimpse became the story), else a peek. The hot path tags with
+  this rule and the cold path records with it, so no offered tags are stored.
 - **Reach-out:** no live chemistry, so `peek = open`. Outreach candidates from her own memories
   (`her_day`, `core_thought`) skip items deeper than `open`.
 - **Crisis:** the crisis reply already skips her own memories; `{ open: 1, peek: 1 }` is stored.
@@ -106,8 +111,8 @@ null on delete), `turn_id` (the reply), `created_at`. Index on `(user_id, create
 or `opinion` self fact whose similarity is ≥ `claims.grounded_similarity`, the cold path inserts a
 ledger row in the same transaction: `level = peek` when the item's depth is above the reply's
 stored `depth.open`, else `open` (a reply with no stored depth counts as `open`). A reach-out's own
-cold path records rows too. A crisis exchange writes none. A merge into an existing self fact
-records nothing new. No extra calls: grounding already embeds and queries.
+cold path records rows too. A crisis exchange writes none. A claim that extraction merges into an
+earlier self fact still records a row, so a peek told again openly is upgraded. No extra calls: grounding already embeds and queries.
 
 **Common ground marks:**
 - *Her side:* each "From your own life" item, by this user's ledger: told open → *(they already
@@ -127,8 +132,7 @@ reaches a core loop. The canary covers the ledger and the depth marks.
 ## 4. Storage, config, deletions
 
 **Migration 0028:** `core_memory.depth smallint not null default 2` then the backfill by kind;
-`core_self_line.depth smallint not null default 1`, `core_self_line.section text` with the
-backfill; `session_log.depth jsonb`; table `disclosure` with its indexes.
+`core_self_line.depth smallint not null default 1`; `session_log.depth jsonb`; table `disclosure` with its indexes.
 
 **Config:** `relationship.depth` (`bands.personal`, `bands.intimate`, `reciprocity_window`,
 `reciprocity_gap`, `stretch_moment`, `held_back_similarity`); `core.depth.by_kind`,

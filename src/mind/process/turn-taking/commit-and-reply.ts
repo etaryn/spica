@@ -168,6 +168,7 @@ async function sendWhileTyping(
           role: "companion",
           text: reply.text,
           snapshot_version: reply.snapshotVersion,
+          openness: reply.openness,
           created_at: insertAt,
           reply_to: last.id,
         });

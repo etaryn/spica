@@ -736,3 +736,32 @@ describe("composeReachOut", () => {
     expect(reply).toContain("Spica keeps worrying about the diagnosis");
   });
 });
+
+describe("her openness", () => {
+  test("a reply carries her openness and its phrase; a crisis reply gets the fixed one", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    const turns = [await userTurn(deps, u, "hey")];
+    const normal = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(normal.openness).not.toBeNull();
+    expect(deps.llm.calls.at(-1)!.system).toContain("## How open you feel");
+
+    const crisis = await composeReply(deps, u, {
+      turns,
+      openQuestions: [],
+      flag: { flagged: true, category: "self_harm", source: "classifier" },
+    });
+    expect(crisis.openness).toEqual({ disclosure: 0, responsiveness: 1 });
+    expect(deps.llm.calls.at(-1)!.system).toContain("Just be there for them.");
+  });
+
+  test("a first message with no relationship row composes without the openness slot", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turns = [await userTurn(deps, u, "hi")];
+    const r = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
+    expect(r.openness).toBeNull();
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## How open you feel");
+  });
+});

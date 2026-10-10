@@ -141,6 +141,7 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
           role: "companion",
           text: composed.text,
           snapshot_version: composed.snapshotVersion,
+          openness: composed.openness,
           created_at: insertAt,
           trigger: "reach_out",
         });

@@ -465,3 +465,17 @@ describe("ideas slot", () => {
     );
   });
 });
+
+test("the openness line sits right after You and them", () => {
+  const { system } = assemblePrompt({
+    ...base,
+    recentTurns: [],
+    relationshipSummary: "You feel close.",
+    summary: { where_things_stand: "w", whats_live: "l", how_i_feel: "f" },
+    openness: "You feel open with them.",
+  });
+  expect(system).toContain("## How open you feel\nYou feel open with them.");
+  const at = system.indexOf("## How open you feel");
+  expect(at).toBeGreaterThan(system.indexOf("## You and them"));
+  expect(at).toBeLessThan(system.indexOf("## Where things stand with them"));
+});

@@ -373,6 +373,7 @@ async function sendCrisisReply(
       role: "companion",
       text: composed.text,
       snapshot_version: composed.snapshotVersion,
+      openness: composed.openness,
       created_at: clock.now(),
       reply_to: replyTo,
       safety_flag: flag,

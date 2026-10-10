@@ -34,7 +34,15 @@ import type { Candidate } from "@/mind/process/outreach/types";
 import { ideaCutoff } from "@/mind/process/user/ideate";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
+import {
+  CRISIS_OPENNESS,
+  crisisOpennessLine,
+  loadOpenness,
+  loadOpennessPhrases,
+  opennessLine,
+} from "@/mind/state/user/relationship/openness";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
+import type { Openness } from "@/mind/state/user/relationship/types";
 import { z } from "zod";
 import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
@@ -53,6 +61,8 @@ export type Composed = {
   recalled: RecalledFact[];
   /** The self snapshot this reply was written from; null when none exists yet. */
   snapshotVersion: number | null;
+  /** How open she was steered to be; stored with the reply so the cold path credits intimacy. */
+  openness: Openness | null;
   /** Her ideas shown in this reply: each gets one chance, so the cold path retires them. */
   offeredIdeas: string[];
   writeGuardLog: () => Promise<void>;
@@ -212,6 +222,10 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         () => loadRelationshipSummary(deps, userId, clock.now()),
         null,
       );
+  // In a crisis she is simply there for them, whatever her state.
+  const openness: Promise<Openness | null> = inCrisis
+    ? Promise.resolve(CRISIS_OPENNESS)
+    : bounded(deps, "openness", userId, () => loadOpenness(deps, userId, clock.now()), null);
   const feeling = inCrisis
     ? Promise.resolve(null)
     : bounded(deps, "core state line", userId, () => loadCoreStateLine(deps, clock.now()), null);
@@ -313,6 +327,13 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     [[factualLine, gap].filter((x): x is string => !!x).join(" "), await relationshipSummary]
       .filter((x): x is string => !!x)
       .join("\n") || null;
+  const herOpenness = await openness;
+  const opennessPhrases = loadOpennessPhrases(config);
+  const opennessText = !herOpenness
+    ? null
+    : inCrisis
+      ? crisisOpennessLine(opennessPhrases)
+      : opennessLine(herOpenness, opennessPhrases, config.relationship);
 
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
@@ -320,6 +341,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     coreMemories: herMemories,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
+    openness: opennessText,
     summary: await summary,
     read: await read,
     yourDay: await yourDay,
@@ -364,6 +386,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     parts: splitParts(guarded.text, config.chat.max_parts),
     recalled: retrieval.recalled,
     snapshotVersion: latestSnapshot?.version ?? null,
+    openness: herOpenness,
     offeredIdeas: shownIdeas.map((i) => i.id),
     writeGuardLog: guarded.writeLog,
   };

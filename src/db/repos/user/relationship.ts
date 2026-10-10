@@ -259,3 +259,19 @@ export async function markMakeUpOffered(db: Db, userId: string): Promise<boolean
     .returning({ id: relationship.user_id });
   return rows.length > 0;
 }
+
+/** The raw reading behind a param's newest change: extraction's last word, not the average. */
+export async function latestReading(
+  db: Db,
+  userId: string,
+  param: ParamName,
+): Promise<number | null> {
+  const rows = await db
+    .select({ detail: relationship_event.detail })
+    .from(relationship_event)
+    .where(and(eq(relationship_event.user_id, userId), eq(relationship_event.param, param)))
+    .orderBy(desc(relationship_event.created_at))
+    .limit(1);
+  const reading = (rows[0]?.detail as { reading?: unknown } | undefined)?.reading;
+  return typeof reading === "number" ? reading : null;
+}

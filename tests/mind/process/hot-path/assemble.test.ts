@@ -479,3 +479,41 @@ test("the openness line sits right after You and them", () => {
   expect(at).toBeGreaterThan(system.indexOf("## You and them"));
   expect(at).toBeLessThan(system.indexOf("## Where things stand with them"));
 });
+
+test("her items carry share tags, theirs carry origin marks; held back has its own slot", () => {
+  const when = new Date("2026-01-12T11:00:00Z");
+  const { system } = assemblePrompt({
+    ...base,
+    recentTurns: [],
+    retrieval: {
+      ...emptyRetrieval(),
+      facts: {
+        user: [
+          { id: "u1", content: "They hate mornings.", when, origin: "onboarding" },
+          { id: "u2", content: "They seem lonely.", when, origin: "guess" },
+          { id: "u3", content: "They have a dog.", when },
+        ],
+        self: [],
+        shared: [],
+      },
+    },
+    coreMemories: [
+      { id: "c1", content: "She fears being forgotten.", when, share: "hint" },
+      { id: "c2", content: "She loves Paper Moon.", when, share: "known" },
+      { id: "c3", content: "She misses Alcor.", when, share: "hinted" },
+    ],
+    heldBack: "There's something here you're not ready to share with them yet.",
+  });
+  expect(system).toContain("- They hate mornings. (today) (from when you first met)");
+  expect(system).toContain("- They seem lonely. (today) (your own guess, they never said this)");
+  expect(system).toContain("- They have a dog. (today)\n");
+  expect(system).toContain("- She fears being forgotten. (today) (only hint at this)");
+  expect(system).toContain("- She loves Paper Moon. (today) (they already know this)");
+  expect(system).toContain("- She misses Alcor. (today) (you've hinted at this before)");
+  expect(system).toContain(
+    "## Not ready to share\nThere's something here you're not ready to share with them yet.",
+  );
+  expect(system.indexOf("## Not ready to share")).toBeGreaterThan(
+    system.indexOf("## What you remember"),
+  );
+});

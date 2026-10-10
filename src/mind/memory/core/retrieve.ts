@@ -12,7 +12,11 @@ import { rankMemories } from "@/mind/memory/shared/ranking";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 
-export type CoreRetrieval = { memories: RetrievedFact[] };
+/** `heldBack` is the best strong match she isn't ready to share with this person. */
+export type CoreRetrieval = {
+  memories: RetrievedFact[];
+  heldBack: { id: string; sim: number } | null;
+};
 
 type CoreRetrieveDeps = Pick<Deps, "core" | "embedder" | "config" | "log">;
 
@@ -41,10 +45,14 @@ export async function retrieveCore(
     queryVector?: Promise<number[] | null>;
     now: Date;
     forceIds?: string[];
+    /** The deepest tier this person may hear about; nothing deeper is recalled. */
+    maxDepth?: number;
   },
 ): Promise<CoreRetrieval> {
   const { core, embedder, config, log } = deps;
+  const maxDepth = input.maxDepth ?? 3;
   const memories: RetrievedFact[] = [];
+  let heldBack: CoreRetrieval["heldBack"] = null;
   const seen = new Set<string>();
   let state: Awaited<ReturnType<typeof core.state.get>> = null;
 
@@ -56,7 +64,11 @@ export async function retrieveCore(
     });
     const vector = await (input.queryVector ?? embedQuery({ embedder, config }, input.queryText));
     if (vector) {
-      const candidates = await core.memory.candidates(vector, config.retrieval.candidate_pool);
+      const all = await core.memory.candidates(vector, config.retrieval.candidate_pool);
+      const candidates = all.filter((c) => c.depth <= maxDepth);
+      const closestDeeper = all.filter((c) => c.depth > maxDepth).sort((a, b) => b.sim - a.sim)[0];
+      if (closestDeeper && closestDeeper.sim >= config.relationship.depth.held_back_similarity)
+        heldBack = { id: closestDeeper.id, sim: closestDeeper.sim };
       const mood = state?.mood_valence ?? 0;
       const boosted = candidates.map((c) => ({
         ...c,
@@ -68,7 +80,12 @@ export async function retrieveCore(
       });
       for (const m of ranked) {
         seen.add(m.id);
-        memories.push({ id: m.id, content: m.content, when: m.occurred_at ?? m.created_at });
+        memories.push({
+          id: m.id,
+          content: m.content,
+          when: m.occurred_at ?? m.created_at,
+          depth: m.depth,
+        });
       }
     }
   } catch (e) {
@@ -79,13 +96,18 @@ export async function retrieveCore(
     for (const id of input.forceIds ?? []) {
       if (seen.has(id)) continue;
       const m = await core.memory.get(id);
-      if (!m || !recallable(m)) continue;
+      if (!m || !recallable(m) || m.depth > maxDepth) continue;
       seen.add(id);
-      memories.push({ id, content: m.content, when: m.occurred_at ?? m.created_at });
+      memories.push({
+        id,
+        content: m.content,
+        when: m.occurred_at ?? m.created_at,
+        depth: m.depth,
+      });
     }
     state ??= await core.state.get();
     const pre = state?.preoccupation ? await core.memory.get(state.preoccupation) : null;
-    if (pre && recallable(pre)) {
+    if (pre && recallable(pre) && pre.depth <= maxDepth) {
       const existing = memories.find((m) => m.id === pre.id);
       if (existing) existing.onMind = true;
       else {
@@ -94,6 +116,7 @@ export async function retrieveCore(
           content: pre.content,
           when: pre.occurred_at ?? pre.created_at,
           onMind: true,
+          depth: pre.depth,
         });
       }
     }
@@ -101,5 +124,5 @@ export async function retrieveCore(
     log.error("core forced recall failed", { error: errorName(e) });
   }
 
-  return { memories };
+  return { memories, heldBack };
 }

@@ -90,7 +90,8 @@ function script(aText: string) {
       life: { timezone: "UTC" },
       core: { world: { event_probability: 1, events_per_day_max: 1 } },
     },
-    relationship_seed: {},
+    // Friends, so her personal-tier episodes are theirs to hear about.
+    relationship_seed: { closeness: 0.45 },
     life: {
       plan: "model",
       inject: [

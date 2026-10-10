@@ -13,6 +13,7 @@ import {
   emptyRetrieval,
   type RecalledFact,
   type RetrievalResult,
+  type RetrievedFact,
 } from "@/mind/memory/shared/types";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
@@ -92,6 +93,13 @@ async function rankAgainstConversation(
   }
 }
 
+/** Whether they told her this, or she worked it out herself: what they know she knows. */
+export function originOf(source: string, kind: string): RetrievedFact["origin"] {
+  if (source === "onboarding") return "onboarding";
+  if (source === "inferred" || ["reflection", "belief", "model"].includes(kind)) return "guess";
+  return undefined;
+}
+
 function addRanked(
   result: RetrievalResult,
   seen: Set<string>,
@@ -103,6 +111,7 @@ function addRanked(
       id: memory.id,
       content: memory.content,
       when: memory.occurred_at ?? memory.created_at,
+      origin: originOf(memory.source, memory.kind),
     });
     result.recalled.push({
       factId: memory.id,
@@ -138,6 +147,7 @@ async function addForcedFacts(
       id: fact.id,
       content: fact.content,
       when: fact.occurred_at ?? fact.created_at,
+      origin: originOf(fact.source, fact.kind),
     });
     result.recalled.push(forcedRecall(fact.id, fact.salience));
   }

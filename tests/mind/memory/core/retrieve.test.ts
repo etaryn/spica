@@ -58,7 +58,10 @@ test("forced ids are included; reading never writes to core memory", async () =>
 test("an embed failure degrades to the preoccupation only, never throws", async () => {
   const deps = makeTestDeps();
   vi.spyOn(deps.embedder, "embed").mockRejectedValue(new Error("down"));
-  await expect(retrieveCore(deps, { queryText: "hi", now })).resolves.toEqual({ memories: [] });
+  await expect(retrieveCore(deps, { queryText: "hi", now })).resolves.toEqual({
+    memories: [],
+    heldBack: null,
+  });
 });
 
 async function addIntention(deps: ReturnType<typeof makeTestDeps>, status: "open" | "resolved") {
@@ -148,4 +151,51 @@ test("a memory near an active goal outranks an equally close one that isn't", as
     now,
   });
   expect(r.memories.map((m) => m.id)).toEqual([id]);
+});
+
+async function addAt(deps: ReturnType<typeof makeTestDeps>, content: string, depth: number) {
+  const [embedding] = await deps.embedder.embed([content], "document");
+  return deps.core.memory.insert({
+    kind: "episode",
+    content,
+    embedding: embedding!,
+    occurred_at: now,
+    created_at: now,
+    status: "resolved",
+    salience: 0.4,
+    valence: 0,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+    depth,
+  });
+}
+
+test("nothing deeper than the limit comes back, forced or on her mind; each carries its depth", async () => {
+  const deps = makeTestDeps({ retrieval: { core_top_n: 12 } });
+  await addAt(deps, "toast", 1);
+  await addAt(deps, "a worry", 2);
+  const secret = await addAt(deps, "a secret", 3);
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
+  await deps.core.state.update({ preoccupation: secret, preoccupation_since: now });
+  const r = await retrieveCore(deps, { queryText: "hi", now, maxDepth: 2, forceIds: [secret] });
+  expect(r.memories.map((m) => [m.content, m.depth]).sort()).toEqual([
+    ["a worry", 2],
+    ["toast", 1],
+  ]);
+});
+
+test("a strong match beyond the limit is named as held back; a weak one isn't", async () => {
+  const deps = makeTestDeps({
+    retrieval: { core_top_n: 12 },
+    relationship: { depth: { held_back_similarity: 0.99 } },
+  });
+  await addAt(deps, "toast", 1);
+  const secret = await addAt(deps, "a secret", 3);
+  const strong = await retrieveCore(deps, { queryText: "a secret", now, maxDepth: 1 });
+  expect(strong.heldBack?.id).toBe(secret);
+  const weak = await retrieveCore(deps, { queryText: "the weather", now, maxDepth: 1 });
+  expect(weak.heldBack).toBeNull();
+  const within = await retrieveCore(deps, { queryText: "a secret", now, maxDepth: 3 });
+  expect(within.heldBack).toBeNull();
 });

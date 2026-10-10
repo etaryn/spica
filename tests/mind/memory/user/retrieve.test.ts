@@ -180,3 +180,48 @@ test("an empty query (check-in with no turns) skips the embed", async () => {
   await retrieve(deps(e), u, { answering: [], context: [], now, queryText: "" });
   expect(spy).not.toHaveBeenCalled();
 });
+
+test("what they told her is plain; onboarding answers and her own guesses are marked", async () => {
+  const u = await createTestUser();
+  const e = new ScriptedEmbedder(D);
+  const q = await turn(u, "about you");
+  e.set("about you", ScriptedEmbedder.axis(D, 1));
+  const base = {
+    subject: "user" as const,
+    created_at: now,
+    status: "open" as const,
+    valence: 0,
+    confidence: 0.9,
+    salience: 0.9,
+    embedding: ScriptedEmbedder.axis(D, 1),
+  };
+  await facts.insertFact(getTestDb(), u, {
+    ...base,
+    kind: "event",
+    content: "Told her.",
+    source: "turn",
+  });
+  await facts.insertFact(getTestDb(), u, {
+    ...base,
+    kind: "preference",
+    content: "From onboarding.",
+    source: "onboarding",
+  });
+  await facts.insertFact(getTestDb(), u, {
+    ...base,
+    kind: "reflection",
+    content: "Her guess.",
+    source: "generated",
+  });
+  const r = await retrieve({ ...makeTestDeps({ retrieval: { top_n: 5 } }), embedder: e }, u, {
+    answering: [q],
+    context: [],
+    now,
+  });
+  const origin = Object.fromEntries(r.facts.user.map((f) => [f.content, f.origin]));
+  expect(origin).toEqual({
+    "Told her.": undefined,
+    "From onboarding.": "onboarding",
+    "Her guess.": "guess",
+  });
+});

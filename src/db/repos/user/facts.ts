@@ -24,6 +24,8 @@ export type CandidateFact = {
   occurred_at: Date | null;
   sim: number;
   entity_salience: number;
+  source: string;
+  kind: string;
 };
 
 /**
@@ -42,7 +44,8 @@ export async function candidateFacts(
     // The HNSW index spans all users; iterative scan keeps filtered result sets full.
     await tx.execute(sql`SET LOCAL hnsw.iterative_scan = relaxed_order`);
     const res = await tx.execute(sql`
-      SELECT f.id, f.subject, f.content, f.salience, f.created_at, f.last_recalled_at, f.occurred_at,
+      SELECT f.id, f.subject, f.kind, f.source, f.content, f.salience, f.created_at,
+             f.last_recalled_at, f.occurred_at,
              (1 - (f.embedding <=> ${q}::vector))::float8 AS sim,
              COALESCE((SELECT max(e.salience) FROM entity e
                        WHERE e.user_id = f.user_id AND e.id = ANY(f.entity_refs)), 1.0)::float8 AS entity_salience
@@ -63,6 +66,8 @@ export async function candidateFacts(
       occurred_at: toDateOrNull(r.occurred_at),
       sim: Number(r.sim),
       entity_salience: Number(r.entity_salience),
+      source: String(r.source),
+      kind: String(r.kind),
     }));
   });
 }

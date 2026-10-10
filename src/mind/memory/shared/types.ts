@@ -14,7 +14,18 @@ export type RecalledFact = {
   forced: boolean;
 };
 
-export type RetrievedFact = { id: string; content: string; when: Date; onMind?: boolean };
+export type RetrievedFact = {
+  id: string;
+  content: string;
+  when: Date;
+  onMind?: boolean;
+  /** Hers only: how much of herself it reveals, 1–3. */
+  depth?: number;
+  /** Hers only: hint at it, or they already know it (told, or only hinted before). */
+  share?: "hint" | "known" | "hinted";
+  /** Theirs only: from when they first met, or her own guess rather than something they said. */
+  origin?: "onboarding" | "guess";
+};
 
 export type DueThread = { id: string; title: string; detail?: string | null };
 

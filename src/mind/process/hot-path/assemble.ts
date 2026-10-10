@@ -2,7 +2,8 @@
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
  * empty: core values, who she is lately, how she is feeling, her day, you and them, how open she
  * feels, where things
- * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life), things to ask
+ * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life, each
+ * marked with what they already know), what she isn't ready to share, things to ask
  * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
@@ -19,6 +20,8 @@ export interface AssembleInput {
   relationshipSummary: string | null;
   /** How open she feels with them right now, as one phrase. */
   openness?: string | null;
+  /** Something of hers that came up which she isn't ready to share with them. */
+  heldBack?: string | null;
   /** Her latest summary of where things stand with them; null before one exists or in a crisis. */
   summary?: { where_things_stand: string; whats_live: string; how_i_feel: string } | null;
   /** Her latest read on them; null before one exists or in a crisis. */
@@ -80,6 +83,7 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
         : null,
     ),
     section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
+    section("Not ready to share", input.heldBack ?? null),
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),
     section("Things you want to bring up", questionList(input.ideas)),
@@ -112,12 +116,28 @@ function memorySection(
   return lists.length ? lists.join("\n\n") : null;
 }
 
+/** What they already know of hers: common ground from her side. */
+const SHARE = {
+  hint: "only hint at this",
+  known: "they already know this",
+  hinted: "you've hinted at this before",
+};
+/** Whether they told her: common ground from theirs. */
+const ORIGIN = {
+  onboarding: "from when you first met",
+  guess: "your own guess, they never said this",
+};
+
 function factList(title: string, facts: RetrievedFact[], now: Date): string | null {
   if (facts.length === 0) return null;
 
   const lines = facts.map((fact) => {
     const onMind = fact.onMind ? " (on your mind lately)" : "";
-    return `- ${fact.content} (${relativeDate(fact.when, now)})${onMind}`;
+    const notes = [fact.share && SHARE[fact.share], fact.origin && ORIGIN[fact.origin]].filter(
+      Boolean,
+    );
+    const tail = notes.length ? ` (${notes.join("; ")})` : "";
+    return `- ${fact.content} (${relativeDate(fact.when, now)})${onMind}${tail}`;
   });
   return `### ${title}\n${lines.join("\n")}`;
 }

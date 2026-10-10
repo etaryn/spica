@@ -167,7 +167,7 @@
     "sweep_batch": 500
   },
   "prompts": {
-    "reply": "v12",
+    "reply": "v13",
     "crisis_classifier": "v2",
     "persona": "v5",
     "extract": "v6",

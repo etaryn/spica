@@ -42,7 +42,10 @@ import {
   opennessLine,
 } from "@/mind/state/user/relationship/openness";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import type { Openness } from "@/mind/state/user/relationship/types";
+import { FIRST_DEPTH, loadDepth } from "@/mind/state/user/relationship/depth";
+import type { DepthLimits, DepthRecord, Openness } from "@/mind/state/user/relationship/types";
+import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure";
+import { snapshotWithin } from "@/mind/memory/core/depth";
 import { z } from "zod";
 import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
 import { splitParts } from "./split-parts";
@@ -63,6 +66,8 @@ export type Composed = {
   snapshotVersion: number | null;
   /** How open she was steered to be; stored with the reply so the cold path credits intimacy. */
   openness: Openness | null;
+  /** What she was allowed to reveal, and what she held back; the cold path grades her claims by it. */
+  depth: DepthRecord;
   /** Her ideas shown in this reply: each gets one chance, so the cold path retires them. */
   offeredIdeas: string[];
   writeGuardLog: () => Promise<void>;
@@ -226,6 +231,18 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const openness: Promise<Openness | null> = inCrisis
     ? Promise.resolve(CRISIS_OPENNESS)
     : bounded(deps, "openness", userId, () => loadOpenness(deps, userId, clock.now()), null);
+  // How deep she may go follows how open she feels; a crisis reply stays on the surface.
+  const limits: Promise<DepthLimits> = inCrisis
+    ? Promise.resolve(FIRST_DEPTH)
+    : openness.then((o) =>
+        bounded(
+          deps,
+          "depth",
+          userId,
+          () => loadDepth(deps, userId, o, !!input.reachOut),
+          FIRST_DEPTH,
+        ),
+      );
   const feeling = inCrisis
     ? Promise.resolve(null)
     : bounded(deps, "core state line", userId, () => loadCoreStateLine(deps, clock.now()), null);
@@ -297,25 +314,53 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             ),
           [] as { id: string; content: string }[],
         );
+  const noCore = { memories: [] as RetrievedFact[], heldBack: null };
   const coreMemories = inCrisis
-    ? Promise.resolve({ memories: [] as RetrievedFact[] })
-    : bounded(
-        deps,
-        "core memory",
-        userId,
-        () =>
-          retrieveCore(deps, {
-            queryText,
-            queryVector,
-            now: clock.now(),
-            forceIds: input.reachOut?.coreMemoryId ? [input.reachOut.coreMemoryId] : [],
-          }),
-        { memories: [] as RetrievedFact[] },
+    ? Promise.resolve(noCore)
+    : limits.then((l) =>
+        bounded(
+          deps,
+          "core memory",
+          userId,
+          () =>
+            retrieveCore(deps, {
+              queryText,
+              queryVector,
+              now: clock.now(),
+              forceIds: input.reachOut?.coreMemoryId ? [input.reachOut.coreMemoryId] : [],
+              maxDepth: l.peek,
+            }),
+          noCore,
+        ),
       );
 
   const retrieval = await retrieveFor(deps, userId, input, queryText, queryVector);
   const latestSnapshot = await snapshot;
-  const herMemories = (await coreMemories).memories;
+  const allowed = await limits;
+  const recalledCore = await coreMemories;
+  const herMemories = await tagShares(deps, userId, recalledCore.memories, allowed);
+  const heldBack =
+    !inCrisis &&
+    !input.reachOut &&
+    recalledCore.heldBack &&
+    !(await bounded(
+      deps,
+      "held back",
+      userId,
+      () => heldBackInSession(db, userId, input.anchor.session_id, recalledCore.heldBack!.id),
+      true,
+    ))
+      ? recalledCore.heldBack.id
+      : null;
+  const selfLines = latestSnapshot
+    ? await bounded(
+        deps,
+        "self lines",
+        userId,
+        () => deps.core.memory.selfLines(latestSnapshot.version),
+        [],
+      )
+    : [];
   const shownIdeas = await ideas;
   const factualLine = await relationshipLinePromise;
   const gap = gapLine(
@@ -337,8 +382,12 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
 
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
-    snapshot: latestSnapshot?.content ?? null,
+    // The snapshot never stretches: only her memories can be drawn out as a hint.
+    snapshot: latestSnapshot
+      ? snapshotWithin(latestSnapshot.content, selfLines, allowed.open)
+      : null,
     coreMemories: herMemories,
+    heldBack: heldBack ? "There's something here you're not ready to share with them yet." : null,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
     openness: opennessText,
@@ -387,6 +436,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     recalled: retrieval.recalled,
     snapshotVersion: latestSnapshot?.version ?? null,
     openness: herOpenness,
+    depth: { ...allowed, held_back: heldBack },
     offeredIdeas: shownIdeas.map((i) => i.id),
     writeGuardLog: guarded.writeLog,
   };
@@ -456,5 +506,42 @@ function retrieveFor(
           excludeSensitive: true,
         }
       : {}),
+  });
+}
+
+/**
+ * Marks each of her memories with what this person already knows of it, and hints at anything
+ * past her usual limit. A ledger she can't read leaves the memories unmarked, never missing.
+ */
+async function tagShares(
+  deps: Deps,
+  userId: string,
+  memories: RetrievedFact[],
+  limits: DepthLimits,
+): Promise<RetrievedFact[]> {
+  if (!memories.length) return memories;
+  const ledger = await bounded(
+    deps,
+    "ledger",
+    userId,
+    () =>
+      disclosureLevels(
+        deps.db,
+        userId,
+        memories.map((m) => m.id),
+      ),
+    new Map<string, "open" | "peek">(),
+  );
+  return memories.map((m) => {
+    const seen = ledger.get(m.id);
+    const share =
+      seen === "open"
+        ? "known"
+        : seen === "peek"
+          ? "hinted"
+          : (m.depth ?? 1) > limits.open
+            ? "hint"
+            : undefined;
+    return share ? { ...m, share } : m;
   });
 }

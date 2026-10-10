@@ -351,6 +351,7 @@ describe("composeReply", () => {
       confidence: 1,
       source: "world",
       source_ref: null,
+      depth: 1,
     });
     const turns = [await userTurn(deps, u, "seen any good films?")];
     const composed = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
@@ -763,5 +764,142 @@ describe("her openness", () => {
     const r = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
     expect(r.openness).toBeNull();
     expect(deps.llm.calls.at(-1)!.system).not.toContain("## How open you feel");
+  });
+});
+
+describe("how deep she goes", () => {
+  async function addCore(deps: ReturnType<typeof makeTestDeps>, content: string, depth: number) {
+    const [embedding] = await deps.embedder.embed([content], "document");
+    return deps.core.memory.insert({
+      kind: "episode",
+      content,
+      embedding: embedding!,
+      occurred_at: deps.clock.now(),
+      created_at: deps.clock.now(),
+      status: "resolved",
+      salience: 0.5,
+      valence: 0,
+      confidence: 1,
+      source: "world",
+      source_ref: null,
+      depth,
+    });
+  }
+  const many = () => makeTestDeps({ retrieval: { core_top_n: 12 } });
+  const ask = async (deps: ReturnType<typeof makeTestDeps>, u: string, text = "hey") =>
+    composeReply(deps, u, {
+      turns: [await userTurn(deps, u, text)],
+      openQuestions: [],
+      flag: null,
+    });
+
+  test("a stranger never sees her deep self; the limits come back for the reply row", async () => {
+    const deps = many();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    await addCore(deps, "she had toast", 1);
+    await addCore(deps, "she is scared of being forgotten", 3);
+    const r = await ask(deps, u);
+    expect(r.depth).toEqual({ open: 1, peek: 1, held_back: null });
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("she had toast");
+    expect(system).not.toContain("scared of being forgotten");
+  });
+
+  test("a friend in a deep session gets the next tier as a hint", async () => {
+    const deps = many();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    await getTestDb().execute(
+      sql`UPDATE relationship_param SET value = 0.5 WHERE user_id = ${u} AND name = 'closeness'`,
+    );
+    const session = JSON.stringify({
+      id: SESSION,
+      started_at: deps.clock.now().toISOString(),
+      last_at: deps.clock.now().toISOString(),
+      hours: 1,
+      tone_sum: 0,
+      tone_n: 0,
+      moment_sum: 0,
+      moment_n: 0,
+      deep_fired: true,
+    });
+    await getTestDb().execute(
+      sql`UPDATE relationship SET session = ${session}::jsonb WHERE user_id = ${u}`,
+    );
+    await addCore(deps, "she is scared of being forgotten", 3);
+    const r = await ask(deps, u);
+    expect(r.depth).toMatchObject({ open: 2, peek: 3 });
+    expect(deps.llm.calls.at(-1)!.system).toMatch(
+      /- she is scared of being forgotten \([^)]*\) \(only hint at this\)/,
+    );
+  });
+
+  test("first message, no relationship row: stranger limits", async () => {
+    const deps = many();
+    const u = await createTestUser();
+    expect((await ask(deps, u, "hi")).depth).toEqual({ open: 1, peek: 1, held_back: null });
+  });
+
+  test("a strong match she can't share is held back once per session", async () => {
+    const deps = makeTestDeps({
+      retrieval: { core_top_n: 12 },
+      relationship: { depth: { held_back_similarity: 0.99 } },
+    });
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    const secret = await addCore(deps, "she is scared of being forgotten", 3);
+    const first = await ask(deps, u, "she is scared of being forgotten");
+    expect(first.depth.held_back).toBe(secret);
+    expect(deps.llm.calls.at(-1)!.system).toContain("## Not ready to share");
+    await insertTurn(getTestDb(), u, {
+      id: randomUUID(),
+      session_id: SESSION,
+      role: "companion",
+      text: "mm",
+      created_at: deps.clock.now(),
+      depth: first.depth,
+    });
+    const second = await ask(deps, u, "she is scared of being forgotten");
+    expect(second.depth.held_back).toBeNull();
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## Not ready to share");
+  });
+
+  test("a crisis reply stores the stranger limits and holds nothing back", async () => {
+    const deps = makeTestDeps({ relationship: { depth: { held_back_similarity: 0 } } });
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    await addCore(deps, "she is scared of being forgotten", 3);
+    const r = await composeReply(deps, u, {
+      turns: [await userTurn(deps, u, "she is scared of being forgotten")],
+      openQuestions: [],
+      flag: { flagged: true, category: "self_harm", source: "classifier" },
+    });
+    expect(r.depth).toEqual({ open: 1, peek: 1, held_back: null });
+  });
+
+  test("who she is lately shows a stranger only her surface lines", async () => {
+    const deps = many();
+    const u = await createTestUser();
+    await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+    const [v] = await deps.embedder.embed(["x"], "document");
+    await deps.core.memory.insertSnapshot({
+      version: 1,
+      embedding: v!,
+      content: "### Lately\n- on a film kick\n- afraid of being forgotten",
+      sections: {},
+      source_ids: [],
+      rendered_at: deps.clock.now(),
+      model: "m",
+      prompt_version: "v2",
+    });
+    await deps.core.memory.insertSelfLines([
+      { version: 1, text: "on a film kick", embedding: v!, depth: 1 },
+      { version: 1, text: "afraid of being forgotten", embedding: v!, depth: 3 },
+    ]);
+    await ask(deps, u);
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("- on a film kick");
+    expect(system).not.toContain("afraid of being forgotten");
   });
 });

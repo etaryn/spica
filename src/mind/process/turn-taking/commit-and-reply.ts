@@ -169,6 +169,7 @@ async function sendWhileTyping(
           text: reply.text,
           snapshot_version: reply.snapshotVersion,
           openness: reply.openness,
+          depth: reply.depth,
           created_at: insertAt,
           reply_to: last.id,
         });

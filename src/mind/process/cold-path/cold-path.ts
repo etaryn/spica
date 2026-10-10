@@ -61,7 +61,10 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     const hasUserTurn = turns.some((t) => t.role === "user");
     const signals = crisis || !hasUserTurn ? null : extraction.relationship;
     const intimacy = crisis || !hasUserTurn ? null : extraction.intimacy;
-    const bid = crisis || !hasUserTurn ? null : bidAfter(extraction.bid, context, turns);
+    const bid =
+      crisis || !hasUserTurn
+        ? null
+        : bidAfter(extraction.bid, context, turns, config.session.idle_gap_minutes);
 
     const hurt = significantHurt(signals, config.relationship.signal_deadzone);
     const candidates: CandidateFact[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));

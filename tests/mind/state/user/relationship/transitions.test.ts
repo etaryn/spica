@@ -846,8 +846,15 @@ test("the session keeps the exchange tone for afterglow", () => {
   expect(r.state.session!.tone_sum).toBeCloseTo(1.2);
 });
 
-const turn = (role: "user" | "companion", session: string): Turn =>
-  ({ id: crypto.randomUUID(), role, session_id: session, text: "x", created_at: t0 }) as Turn;
+const turn = (role: "user" | "companion", minutes: number, session = "s1"): Turn =>
+  ({
+    id: crypto.randomUUID(),
+    role,
+    session_id: session,
+    text: "x",
+    created_at: new Date(t0.getTime() + minutes * 60_000),
+  }) as Turn;
+const GAP = 30;
 
 test("normalizeBid keeps the three responses and nulls anything else", () => {
   expect(normalizeBid("toward")).toBe("toward");
@@ -856,14 +863,20 @@ test("normalizeBid keeps the three responses and nulls anything else", () => {
   expect(normalizeBid(undefined)).toBeNull();
 });
 
-test("a bid counts only against her last message in the same session", () => {
-  const hers = turn("companion", "s1");
-  expect(bidAfter("away", [hers], [turn("user", "s1"), turn("companion", "s1")])).toBe("away");
-  // Coming back later, even to a reach-out, is not turning away.
-  expect(bidAfter("away", [hers], [turn("user", "s2")])).toBeNull();
-  expect(bidAfter("away", [], [turn("user", "s1")])).toBeNull();
-  expect(bidAfter("away", [hers], [turn("companion", "s1")])).toBeNull();
-  expect(bidAfter(null, [hers], [turn("user", "s1")])).toBeNull();
+test("a bid counts when the user answers her last message within the idle gap", () => {
+  const hers = turn("companion", 0);
+  expect(bidAfter("away", [hers], [turn("user", 5), turn("companion", 6)], GAP)).toBe("away");
+  // A reply to her reach-out or a deferred reply lands in a new session; it still counts.
+  expect(bidAfter("toward", [turn("companion", 0, "x")], [turn("user", 2, "y")], GAP)).toBe(
+    "toward",
+  );
+});
+
+test("coming back after the idle gap, or with nothing of hers before, is no bid", () => {
+  expect(bidAfter("away", [turn("companion", 0)], [turn("user", GAP + 1)], GAP)).toBeNull();
+  expect(bidAfter("away", [], [turn("user", 1)], GAP)).toBeNull();
+  expect(bidAfter("away", [turn("companion", 0)], [turn("companion", 1)], GAP)).toBeNull();
+  expect(bidAfter(null, [turn("companion", 0)], [turn("user", 1)], GAP)).toBeNull();
 });
 
 test("toward, away and against move warmth and trust by the configured amounts", () => {

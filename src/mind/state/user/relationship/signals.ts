@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { Turn } from "@/db/repos/user/session-log";
 import { clamp } from "@/mind/platform/math";
+import { MINUTE } from "@/mind/platform/time";
 import type { Intimacy } from "./types";
 
 /** The extraction's intimacy block, read from the user's messages only. */
@@ -97,17 +98,20 @@ export function normalizeBid(raw: unknown): BidResponse | null {
 }
 
 /**
- * A response counts only when the user answers her last message in the same conversation:
- * coming back after a gap is not turning away.
+ * A response counts only when the user answers her last message within the idle gap: coming
+ * back after a gap is not turning away. Timed, not by session id: a reach-out or a deferred
+ * reply sits in a different session from the user's answer to it.
  */
 export function bidAfter(
   response: BidResponse | null,
   context: Turn[],
   turns: Turn[],
+  idleGapMinutes: number,
 ): BidResponse | null {
   if (!response) return null;
   const hers = context.filter((t) => t.role === "companion").at(-1);
   const firstUser = turns.find((t) => t.role === "user");
   if (!hers || !firstUser) return null;
-  return hers.session_id === firstUser.session_id ? response : null;
+  const gap = firstUser.created_at.getTime() - hers.created_at.getTime();
+  return gap <= idleGapMinutes * MINUTE ? response : null;
 }

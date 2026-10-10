@@ -186,14 +186,33 @@ test("toward, away and against move warmth and trust as configured", async () =>
   }
 });
 
-test("a return in a new session records no bid", async () => {
+test("coming back after the idle gap records no bid", async () => {
   const { d, next } = setup();
   const u = await user(d, 0.5);
   await talk(d, u, randomUUID(), "hey");
+  d.clock.advance((d.config.session.idle_gap_minutes + 1) * 60_000);
   const later = await talk(d, u, randomUUID(), "back");
   next.bid = "away";
   await settle(d, u, later);
   expect(await bidEvents(u)).toEqual([]);
+});
+
+test("answering her reach-out soon after counts, though it lands in a new session", async () => {
+  const { d, next } = setup();
+  const u = await user(d, 0.5);
+  d.clock.advance(60_000);
+  await insertTurn(d.db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "I finally watched Casablanca!",
+    created_at: d.clock.now(),
+    trigger: "reach_out",
+  });
+  const answer = await talk(d, u, randomUUID(), "no way, how was it?");
+  next.bid = "toward";
+  await settle(d, u, answer);
+  expect((await bidEvents(u)).length).toBeGreaterThan(0);
 });
 
 test("a joke seen once is not offered; called back in a later exchange, it is", async () => {

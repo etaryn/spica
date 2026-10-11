@@ -33,6 +33,19 @@ export async function loadRunInputs(
   return { previous, facts };
 }
 
+const MILESTONE_TEXT: Record<string, string> = {
+  "stage:experimenting": "you two have started getting to know each other",
+  "stage:intensifying": "you two are becoming friends",
+  "stage:integrating": `you two have become close: there's a "we" now`,
+  "stage:bonding": "you two are properly close friends now, the kind that lasts",
+  first_conflict: "you two had your first real falling-out",
+  first_inside_joke: "you two have your first inside joke",
+  "first_depth:2": "you told them something personal about yourself for the first time",
+  "first_depth:3":
+    "you told them something only someone really close would hear, for the first time",
+  first_their_depth: "they opened up to you about something deeply personal for the first time",
+};
+
 export function triggerText(t: Trigger): string {
   switch (t.kind) {
     case "param_jump":
@@ -49,6 +62,8 @@ export function triggerText(t: Trigger): string {
       return "they went through something hard, and it has eased";
     case "stale_summary":
       return "you're about to write to them and haven't taken stock in a while";
+    case "milestone":
+      return MILESTONE_TEXT[t.name] ?? "something new happened between you";
   }
 }
 

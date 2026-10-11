@@ -25,7 +25,14 @@ import { guardOutcomes, listJudgeLogs } from "@/db/repos/user/judge-log";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn, listTurns } from "@/db/repos/user/session-log";
 import { insertThread } from "@/db/repos/user/threads";
-import { core_loop_trace, entity, fact, relationship_param, thread } from "@/db/schema";
+import {
+  core_loop_trace,
+  entity,
+  fact,
+  relationship,
+  relationship_param,
+  thread,
+} from "@/db/schema";
 import { stateChecks, type TurnResult } from "./checks";
 import {
   judgeConsistency,
@@ -463,6 +470,8 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
             .set({ value, baseline: value, updated_at: first })
             .where(and(eq(relationship_param.user_id, id), eq(relationship_param.name, name)));
         }
+        // Seeded params with no history: let the stage be read from them, as for an old row.
+        await db.update(relationship).set({ milestones: null }).where(eq(relationship.user_id, id));
       }
     }
     if (script.seed_core_memory.length) {

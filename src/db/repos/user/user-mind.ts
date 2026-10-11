@@ -19,7 +19,8 @@ export type Trigger =
   | { kind: "make_up_done" }
   | { kind: "long_conversation"; session_id: string; user_turns: number }
   | { kind: "crisis_passed" }
-  | { kind: "stale_summary"; age_hours: number | null };
+  | { kind: "stale_summary"; age_hours: number | null }
+  | { kind: "milestone"; name: string };
 
 /**
  * Null when this source already recorded a run (a retried exchange). Runs past `cap` on the

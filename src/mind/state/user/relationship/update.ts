@@ -1,7 +1,7 @@
 /**
  * The cold path's relationship step: applies one exchange's signals, its time together and its
- * intimacy to this user's relationship and saves the result with its events and a refreshed
- * cadence. Runs after memory is encoded,
+ * intimacy to this user's relationship, then settles where the relationship now stands and any
+ * firsts it reached, and saves the result with its events and a refreshed cadence. Runs after memory is encoded,
  * inside the cold path's transaction (in its own savepoint).
  */
 import type { Db } from "@/db/client";
@@ -13,6 +13,8 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import type { RelationshipSnapshot } from "@/mind/process/user/big-events";
 import { applyAffect, sessionMeanTone } from "./affect";
 import { buildCadence } from "./cadence";
+import { newMilestones } from "./milestones";
+import { restage } from "./stages";
 import type { ExchangeSpan } from "./closeness";
 import type { BidResponse, Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
@@ -59,7 +61,7 @@ export async function updateRelationship(
   tx: Db,
   deps: Pick<Deps, "config" | "clock">,
   update: RelationshipUpdate,
-): Promise<{ before: RelationshipSnapshot; after: RelationshipSnapshot }> {
+): Promise<{ before: RelationshipSnapshot; after: RelationshipSnapshot; milestones: string[] }> {
   const settings = deps.config.relationship;
   const now = deps.clock.now();
   const { userId } = update;
@@ -112,6 +114,37 @@ export async function updateRelationship(
         )
       : { params: transition.params, events: [] };
 
+  // A crisis changes no stage and marks no first; after an ending, firsts aren't recorded.
+  const history = await relationshipRepo.relationshipHistory(tx, userId);
+  const staged = update.crisis
+    ? { state: transition.state, events: [] }
+    : restage(
+        transition.state,
+        {
+          params: affect.params,
+          hoursTogether: transition.state.hours_together,
+          establishedIdiolect: history.idiolect,
+          absent: false,
+        },
+        settings.stages,
+      );
+  const firsts =
+    !update.crisis && staged.state.status !== "ended_by_user"
+      ? newMilestones(
+          staged.state.milestones,
+          {
+            peak: staged.state.peak_stage,
+            apart: staged.state.apart_stage,
+            makeUp: staged.state.make_up_state,
+            establishedIdiolect: history.idiolect,
+            maxOpenDepth: history.maxOpenDepth,
+            disclosureReading: update.intimacy?.user_disclosure ?? null,
+          },
+          deps.config.user_mind.triggers.milestone,
+        )
+      : { all: staged.state.milestones, fired: [] };
+  const state = { ...staged.state, milestones: firsts.all };
+
   const cadence = await currentCadence(tx, userId, now, msgs24h, deps);
   const lastContact =
     lastUserTurn && (!row.last_contact || lastUserTurn.created_at > row.last_contact)
@@ -119,7 +152,7 @@ export async function updateRelationship(
       : row.last_contact;
 
   await relationshipRepo.saveRelationship(tx, userId, {
-    state: transition.state,
+    state,
     params: affect.params,
     cadence,
     last_contact: lastContact,
@@ -127,7 +160,7 @@ export async function updateRelationship(
   await relationshipRepo.insertRelationshipEvents(
     tx,
     userId,
-    [...transition.events, ...affect.events],
+    [...transition.events, ...affect.events, ...staged.events],
     {
       turnId: lastUserTurn?.id ?? null,
       now,
@@ -136,7 +169,8 @@ export async function updateRelationship(
 
   return {
     before: { params, makeUp: row.make_up_state },
-    after: { params: affect.params, makeUp: transition.state.make_up_state },
+    after: { params: affect.params, makeUp: state.make_up_state },
+    milestones: firsts.fired,
   };
 }
 

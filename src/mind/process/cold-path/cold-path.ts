@@ -19,6 +19,7 @@ import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/m
 import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
+import type { Trigger } from "@/db/repos/user/user-mind";
 import { detectBigEvents } from "@/mind/process/user/big-events";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { errorName } from "@/mind/platform/errors";
@@ -115,16 +116,22 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
 
     // A big event makes her think about them; recorded with the exchange so it runs exactly once.
     // Her words alone (a reach-out nobody answered yet) are no event in the relationship.
-    const triggers =
+    const triggers: Trigger[] =
       crisis || !hasUserTurn
         ? []
-        : detectBigEvents({
-            before: relationship?.before ?? null,
-            after: relationship?.after ?? null,
-            newFactSaliences: applied.insertedSaliences,
-            settings: config.user_mind.triggers,
-            source: "exchange",
-          });
+        : [
+            ...detectBigEvents({
+              before: relationship?.before ?? null,
+              after: relationship?.after ?? null,
+              newFactSaliences: applied.insertedSaliences,
+              settings: config.user_mind.triggers,
+              source: "exchange",
+            }),
+            ...(relationship?.milestones ?? []).map((name) => ({
+              kind: "milestone" as const,
+              name,
+            })),
+          ];
     const userMindRunId = await recordBigEvents(
       deps,
       tx,

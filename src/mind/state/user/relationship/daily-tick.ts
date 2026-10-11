@@ -1,6 +1,7 @@
 /**
  * The relationship's daily tick, run per user: hurt and tension fade, absence pulls closeness
- * down, baselines learn from yesterday, and a pending ending or repair settles. The job runs
+ * down, baselines learn from yesterday, a pending ending or repair settles, her commitment is
+ * reckoned, and the stage settles. The job runs
  * hourly, and each user ticks once per local date, on the first run at or after
  * `tick_local_hour` in their own zone (DST included).
  */
@@ -17,7 +18,10 @@ import {
 } from "@/mind/platform/timezone";
 import { detectBigEvents } from "@/mind/process/user/big-events";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
-import { relationshipAfterDailyTick } from "./transitions";
+import { applyCommitment } from "./commitment";
+import { newMilestones } from "./milestones";
+import { restage } from "./stages";
+import { isAbsent, relationshipAfterDailyTick } from "./transitions";
 import { DAY } from "@/mind/platform/time";
 
 /** Already ticked on `localDate` or later. */
@@ -50,6 +54,7 @@ export async function tickUser(
 
     const params = await relationshipRepo.getParams(tx, userId);
     const cadence = row.cadence as Partial<relationshipRepo.Cadence>;
+    const medianGapHours = cadence.median_gap_hours ?? settings.default_median_gap_hours;
 
     const transition = relationshipAfterDailyTick(
       relationshipRepo.toRelationshipState(row),
@@ -70,22 +75,55 @@ export async function tickUser(
           now,
         ),
         lastContact: row.last_contact,
-        medianGapHours: cadence.median_gap_hours ?? settings.default_median_gap_hours,
+        medianGapHours,
       },
       settings,
     );
 
-    await relationshipRepo.saveRelationship(tx, userId, {
-      state: transition.state,
-      params: transition.params,
-    });
-    await relationshipRepo.insertRelationshipEvents(tx, userId, transition.events, {
-      turnId: null,
-      now,
-    });
+    const history = await relationshipRepo.relationshipHistory(tx, userId);
+    const committed = applyCommitment(
+      transition.params,
+      transition.state.hours_together,
+      history,
+      settings,
+    );
+    const staged = restage(
+      transition.state,
+      {
+        params: committed.params,
+        hoursTogether: transition.state.hours_together,
+        establishedIdiolect: history.idiolect,
+        absent: isAbsent(now, row.last_contact, medianGapHours, settings),
+      },
+      settings.stages,
+    );
+    const ended = staged.state.status === "ended_by_user";
+    const firsts = ended
+      ? { all: staged.state.milestones, fired: [] }
+      : newMilestones(
+          staged.state.milestones,
+          {
+            peak: staged.state.peak_stage,
+            apart: staged.state.apart_stage,
+            makeUp: staged.state.make_up_state,
+            establishedIdiolect: history.idiolect,
+            maxOpenDepth: history.maxOpenDepth,
+            disclosureReading: null,
+          },
+          deps.config.user_mind.triggers.milestone,
+        );
+    const state = { ...staged.state, milestones: firsts.all };
+
+    await relationshipRepo.saveRelationship(tx, userId, { state, params: committed.params });
+    await relationshipRepo.insertRelationshipEvents(
+      tx,
+      userId,
+      [...transition.events, ...committed.events, ...staged.events],
+      { turnId: null, now },
+    );
 
     // Params drifting after the user ended it are no event: nothing is happening between them.
-    if (transition.state.status === "ended_by_user") return null;
+    if (ended) return null;
     return recordBigEvents(
       deps,
       tx,
@@ -93,11 +131,11 @@ export async function tickUser(
       `tick:${localDate}`,
       detectBigEvents({
         before: { params, makeUp: row.make_up_state },
-        after: { params: transition.params, makeUp: transition.state.make_up_state },
+        after: { params: committed.params, makeUp: state.make_up_state },
         newFactSaliences: [],
         settings: deps.config.user_mind.triggers,
         source: "tick",
-      }),
+      }).concat(firsts.fired.map((name) => ({ kind: "milestone" as const, name }))),
     );
   });
   if (runId) await enqueueUserMindRun(deps, runId);

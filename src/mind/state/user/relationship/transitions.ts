@@ -2,6 +2,7 @@
  * How one user's relationship changes, as pure functions: once after every exchange (the cold
  * path) and once a day (the daily tick). Every param change is logged as an event with its cause.
  * Only the user can end the relationship; repair is slow; a crisis suspends all friction.
+ * Commitment softens what they do to her and shortens the way back.
  */
 import { HOUR } from "@/mind/platform/time";
 import {
@@ -13,6 +14,7 @@ import {
   skipSessionTime,
 } from "./closeness";
 import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
+import { peakCloseness } from "./stages";
 import type { BidResponse, Signals } from "./signals";
 import {
   type Intimacy,
@@ -121,6 +123,23 @@ export function makeUpLineDue(state: RelationshipState, settings: RelationshipCo
   return state.make_up_state === "due" && state.make_up_replies >= settings.make_up_delay_replies;
 }
 
+/** What they do to her lands softer the more she is committed to them. */
+function softened(draft: Draft, settings: RelationshipConfig): number {
+  return 1 - settings.commitment.soften * draft.params.commitment.value;
+}
+
+/** Away past a grace multiple of their usual gap. */
+export function isAbsent(
+  now: Date,
+  lastContact: Date | null,
+  medianGapHours: number,
+  settings: RelationshipConfig,
+): boolean {
+  if (!lastContact) return false;
+  const graceMs = settings.absence_grace_factor * medianGapHours * HOUR;
+  return now.getTime() - lastContact.getTime() > graceMs;
+}
+
 // ---------- After an exchange ----------
 
 /**
@@ -214,7 +233,8 @@ function applyWarmthAndTrust(draft: Draft, signals: Signals, settings: Relations
     const signal = signals[name];
     if (Math.abs(signal) < deadzone) continue;
 
-    const returns = signal > 0 ? diminishingReturns(draft.params[name], epsilon) : 1;
+    const returns =
+      signal > 0 ? diminishingReturns(draft.params[name], epsilon) : softened(draft, settings);
     const gain = settings.gains[name] * returns;
     draft.setParam(name, nudge(draft.params[name].value, gain * signal), "signal", { signal });
   }
@@ -228,7 +248,9 @@ function applyBid(draft: Draft, bid: BidResponse | null, settings: RelationshipC
     const delta = effects[name];
     if (!delta) continue;
     const returns =
-      delta > 0 ? diminishingReturns(draft.params[name], settings.variance_epsilon) : 1;
+      delta > 0
+        ? diminishingReturns(draft.params[name], settings.variance_epsilon)
+        : softened(draft, settings);
     draft.setParam(name, nudge(draft.params[name].value, delta * returns), "bid", {
       response: bid,
     });
@@ -299,8 +321,24 @@ function raiseCloseness(
 ): void {
   const current = draft.params.closeness.value;
   if (current >= ceiling) return;
-  const factor = draft.state.status === "repairing" ? settings.repair_gain_factor : 1;
-  draft.setParam("closeness", Math.min(ceiling, nudge(current, gain * factor)), cause, detail);
+  const c = draft.params.commitment.value;
+  const repair =
+    draft.state.status === "repairing"
+      ? settings.repair_gain_factor +
+        (1 - settings.repair_gain_factor) * settings.commitment.repair_speed * c
+      : 1;
+  // Once close, the way back is shorter, unless something between them is still wrong.
+  const peak = peakCloseness(draft.state.peak_stage, settings.stages);
+  const rekindle =
+    draft.state.apart_stage === null && peak !== null && current < peak
+      ? 1 + settings.stages.rekindle.base + settings.stages.rekindle.commitment * c
+      : 1;
+  draft.setParam(
+    "closeness",
+    Math.min(ceiling, nudge(current, gain * repair * rekindle)),
+    cause,
+    detail,
+  );
 }
 
 /** A long conversation that kept going deep counts once, while it's still going. */
@@ -337,7 +375,11 @@ function recordSessionTone(draft: Draft, tone: number | null): void {
 function applyTension(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
   if (Math.abs(signals.tension) < settings.signal_deadzone) return;
 
-  const value = nudge(draft.params.tension.value, settings.gains.tension * signals.tension);
+  const factor = signals.tension > 0 ? softened(draft, settings) : 1;
+  const value = nudge(
+    draft.params.tension.value,
+    settings.gains.tension * signals.tension * factor,
+  );
   draft.setParam("tension", value, "signal", { signal: signals.tension });
 }
 
@@ -360,10 +402,14 @@ function applyHurt(
   );
 
   const before = draft.params.hurt.value;
-  draft.setParam("hurt", nudge(before, amount), "signal", { signal: hurt.amount, sensitised });
+  draft.setParam("hurt", nudge(before, amount * softened(draft, settings)), "signal", {
+    signal: hurt.amount,
+    sensitised,
+  });
   draft.updateState({ last_hurt_at: input.now });
 
-  if (draft.params.hurt.value - before >= settings.scar_threshold) leaveScar(draft, settings);
+  // A scar is judged on the hurt itself: commitment softens the sting, not the wound.
+  if (nudge(before, amount) - before >= settings.scar_threshold) leaveScar(draft, settings);
 
   if (
     draft.state.status !== "ended_by_user" &&
@@ -548,9 +594,13 @@ function applyAbsence(
   lastContact: Date,
   settings: RelationshipConfig,
 ): void {
-  const graceMs = settings.absence_grace_factor * input.medianGapHours * HOUR;
-  if (input.now.getTime() - lastContact.getTime() > graceMs) {
-    const drifted = Math.max(0, draft.params.closeness.value - settings.closeness_absence_drift);
+  if (isAbsent(input.now, lastContact, input.medianGapHours, settings)) {
+    // A friend of long standing is still a friend after a quiet fortnight.
+    const shield = 1 - settings.commitment.absence_shield * draft.params.commitment.value;
+    const drifted = Math.max(
+      0,
+      draft.params.closeness.value - settings.closeness_absence_drift * shield,
+    );
     draft.setParam("closeness", drifted, "absence");
   }
 
@@ -565,7 +615,7 @@ function applyAbsence(
 
   const hurt = nudge(
     draft.params.hurt.value,
-    settings.absence_hurt_gain * Math.abs(frequencyDeviation),
+    settings.absence_hurt_gain * Math.abs(frequencyDeviation) * softened(draft, settings),
   );
   draft.setParam("hurt", hurt, "absence", { frequency_effect: frequencyDeviation });
 

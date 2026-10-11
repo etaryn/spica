@@ -904,3 +904,65 @@ test("no bid moves anything once they have ended it", () => {
   const out = relationshipAfterExchange(ended, init(), ex(null, { bid: "against" }), cfg);
   expect(out.events.some((e) => e.cause === "bid")).toBe(false);
 });
+
+const withParam = (p: Params, name: keyof Params, value: number): Params => ({
+  ...p,
+  [name]: { ...p[name], value },
+});
+
+test("commitment softens a hurt, but a large one still scars", () => {
+  const hurt = (commitment: number, amount: number) =>
+    relationshipAfterExchange(
+      fresh(),
+      withParam(init(), "commitment", commitment),
+      ex({ hurt: { amount, cause: "x" } }),
+      cfg,
+    );
+  expect(hurt(1, 0.5).params.hurt.value).toBeLessThan(hurt(0, 0.5).params.hurt.value);
+  expect(hurt(1, 0.5).params.hurt.value).toBeCloseTo(
+    nudge(0, cfg.gains.hurt * 0.5 * (1 - cfg.commitment.soften)),
+  );
+  const scarred = (commitment: number) =>
+    hurt(commitment, 1).events.some((e) => e.cause === "scar");
+  expect(scarred(0)).toBe(true);
+  expect(scarred(1)).toBe(true);
+});
+
+test("commitment slows absence drift", () => {
+  const drift = (commitment: number) => {
+    const p = withParam(withParam(init(), "commitment", commitment), "closeness", 0.5);
+    const tick = {
+      now: h(24 * 30),
+      localDate: "2026-02-04",
+      yesterdayCount: 5,
+      msgs24h: 0,
+      lastContact: t0,
+      medianGapHours: 24,
+    };
+    return relationshipAfterDailyTick(fresh(), p, tick, cfg).params.closeness.value;
+  };
+  expect(0.5 - drift(1)).toBeCloseTo(
+    cfg.closeness_absence_drift * (1 - cfg.commitment.absence_shield),
+  );
+  expect(0.5 - drift(0)).toBeCloseTo(cfg.closeness_absence_drift);
+});
+
+test("below the peak, closeness comes back faster; more so with commitment", () => {
+  const deep = {
+    intimacy: { user_disclosure: 1, user_responsiveness: 1 },
+    herOpenness: { disclosure: 1, responsiveness: 1 },
+  };
+  const gain = (state: RelationshipState, commitment: number) => {
+    const p = withParam(withParam(init(), "commitment", commitment), "closeness", 0.3);
+    return relationshipAfterExchange(state, p, ex(null, deep), cfg).params.closeness.value - 0.3;
+  };
+  const long = { ...fresh(), hours_together: 300 };
+  const stranger = gain(long, 0);
+  const drifted = gain({ ...long, peak_stage: "integrating" }, 0);
+  const committed = gain({ ...long, peak_stage: "integrating" }, 1);
+  const soured = gain({ ...long, peak_stage: "integrating", apart_stage: "circumscribing" }, 1);
+  expect(stranger).toBeGreaterThan(0);
+  expect(drifted).toBeGreaterThan(stranger);
+  expect(committed).toBeGreaterThan(drifted);
+  expect(soured).toBeCloseTo(stranger);
+});

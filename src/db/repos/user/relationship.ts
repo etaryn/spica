@@ -288,3 +288,32 @@ export async function latestReading(
   const reading = (rows[0]?.detail as { reading?: unknown } | undefined)?.reading;
   return typeof reading === "number" ? reading : null;
 }
+
+export type RelationshipHistory = {
+  /** The depths of everything she has told them openly, summed. */
+  ledgerDepth: number;
+  maxOpenDepth: number;
+  /** Their established inside jokes, nicknames, rituals and references. */
+  idiolect: number;
+  episodes: number;
+};
+
+/** What the two of them have built up: read for her commitment and for their firsts. */
+export async function relationshipHistory(db: Db, userId: string): Promise<RelationshipHistory> {
+  const res = await db.execute(sql`
+    SELECT
+      (SELECT coalesce(sum(depth), 0) FROM disclosure
+         WHERE user_id = ${userId} AND level = 'open')::int AS ledger_depth,
+      (SELECT coalesce(max(depth), 0) FROM disclosure
+         WHERE user_id = ${userId} AND level = 'open')::int AS max_open_depth,
+      (SELECT count(*) FROM fact WHERE user_id = ${userId} AND kind = 'idiolect'
+         AND (payload->'idiolect'->>'established_at') IS NOT NULL)::int AS idiolect,
+      (SELECT count(*) FROM fact WHERE user_id = ${userId} AND kind = 'episode')::int AS episodes`);
+  const r = res.rows[0] as Record<string, unknown>;
+  return {
+    ledgerDepth: Number(r.ledger_depth),
+    maxOpenDepth: Number(r.max_open_depth),
+    idiolect: Number(r.idiolect),
+    episodes: Number(r.episodes),
+  };
+}

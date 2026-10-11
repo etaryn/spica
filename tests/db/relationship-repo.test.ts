@@ -206,3 +206,13 @@ test("a new relationship starts at initiating, staged, with a commitment param",
     ["stage:intensifying"],
   ]);
 });
+
+test("relationship history counts her open ledger, their established idiolect and episodes", async () => {
+  const u = await createTestUser();
+  expect(await rel.relationshipHistory(getTestDb(), u)).toEqual({
+    ledgerDepth: 0,
+    maxOpenDepth: 0,
+    idiolect: 0,
+    episodes: 0,
+  });
+});

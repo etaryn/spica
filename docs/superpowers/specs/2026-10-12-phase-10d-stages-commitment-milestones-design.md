@@ -122,12 +122,11 @@ slowly and holds through low days.
 
 ### Computed
 
-A new homeostatic param `commitment` (no migration for the table; existing users get the row from
-`relationship.initial`). Set once a day on the daily tick, cause `commitment`, with
+A new homeostatic param `commitment` (no migration for the table; the migration adds the row for existing users). Set once a day on the daily tick, cause `commitment`, with
 `detail: { satisfaction, investment }`:
 
-- **Satisfaction** (0–1): `clamp(Σ w × input)` over warmth, trust, `affect_valence` (rescaled to
-  0–1), minus hurt and tension, with weights in `relationship.commitment.satisfaction`. Read from
+- **Satisfaction** (0–1): `clamp(Σ w × input)` over warmth, trust, `affect_valence` (all 0–1),
+  minus hurt and tension, with weights in `relationship.commitment.satisfaction`. Read from
   the day's values, which already fade and smooth.
 - **Investment** (0–1, only grows in practice): the mean of saturating terms
   `x / (x + half)` over hours together, the depth-weighted ledger count, established idiolect
@@ -167,7 +166,7 @@ and one test (the list stays OPEN, §21 #1). The snapshot is read inside the tra
 | Name | Reached when |
 |---|---|
 | `stage:experimenting` … `stage:bonding` | `peak_stage` first reaches it |
-| `first_conflict` | `apart_stage` first set, or `make_up_state` first leaves `none` |
+| `first_conflict` | `apart_stage` first set to anything but `avoiding` (absence is no conflict), or `make_up_state` first leaves `none` |
 | `first_inside_joke` | at least one established idiolect item |
 | `first_depth:2`, `first_depth:3` | her first `open` ledger row at that depth |
 | `first_their_depth` | an exchange's `user_disclosure` reading ≥ `user_mind.triggers.milestone.their_depth` (0.7) |
@@ -179,9 +178,10 @@ their prompts are unchanged.
 ## Data
 
 - `relationship`: `peak_stage` (enum, default `initiating`), `apart_stage` (enum, nullable),
-  `milestones` (text[], default `{}`). One migration. Existing rows backfill `peak_stage` from
-  current closeness, trust and idiolect by running the evaluator once, and `milestones` from what
-  has already happened, so old users don't fire a burst of "firsts".
+  `milestones` (text[], nullable). One migration, no SQL backfill. A new relationship row starts
+  with `milestones = {}`. Null means never staged (rows from before 10d, and eval seeds): readers
+  derive the peak from the current params, and the first evaluation records every milestone
+  already reached without firing any, so old users don't get a burst of "firsts".
 - `relationship_param`: `commitment` rows for existing users (in the migration).
 - `relationship_event`: causes `stage` (detail `{ peak | apart, from, to }`) and `commitment`.
 

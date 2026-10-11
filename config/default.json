@@ -310,7 +310,7 @@
       },
       "bands": { "low": 0.35, "high": 0.65 }
     },
-    "idiolect": { "min_closeness": 0.4, "min_similarity": 0.3, "max_items": 2 },
+    "idiolect": { "min_similarity": 0.3, "max_items": 2 },
     "bids": {
       "effects": {
         "toward": { "warmth": 0.03 },
@@ -319,7 +319,6 @@
       }
     },
     "depth": {
-      "bands": { "personal": 0.4, "intimate": 0.65 },
       "reciprocity_window": 10,
       "reciprocity_gap": 0.35,
       "stretch_moment": 0.5,

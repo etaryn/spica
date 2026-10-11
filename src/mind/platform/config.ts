@@ -283,7 +283,7 @@ const relationship = z
       responsiveness: opennessSide,
       bands: z.object({ low: unit, high: unit }),
     }),
-    idiolect: z.object({ min_closeness: unit, min_similarity: unit, max_items: positiveInt }),
+    idiolect: z.object({ min_similarity: unit, max_items: positiveInt }),
     bids: z.object({
       effects: z.object({
         toward: z.object({ warmth: unit.optional(), trust: unit.optional() }),
@@ -292,7 +292,6 @@ const relationship = z
       }),
     }),
     depth: z.object({
-      bands: z.object({ personal: unit, intimate: unit }),
       reciprocity_window: positiveInt,
       reciprocity_gap: unit,
       stretch_moment: unit,
@@ -413,10 +412,6 @@ const relationship = z
       r.stages.circumscribing.clear_tension < r.stages.circumscribing.tension &&
       r.stages.stagnating.clear_warmth > r.stages.stagnating.warmth,
     "relationship.stages: each clear threshold must sit on the healthy side of its enter threshold",
-  )
-  .refine(
-    (r) => r.depth.bands.personal < r.depth.bands.intimate,
-    "relationship.depth.bands: personal < intimate",
   );
 
 /** "HH:MM" in her zone; "24:00" closes a block at midnight. */

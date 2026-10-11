@@ -7,7 +7,7 @@ import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
 import type { SafetyFlag } from "@/db/schema";
 import { composeReply } from "@/mind/process/hot-path/compose";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, seedStageFor } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -52,6 +52,7 @@ async function user(d: D, closeness: number | null) {
     await d.db.execute(
       sql`UPDATE relationship_param SET value = ${closeness} WHERE user_id = ${u} AND name = 'closeness'`,
     );
+    await seedStageFor(d.db, u, closeness);
   }
   return u;
 }

@@ -11,7 +11,14 @@ import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn, type Turn } from "@/db/repos/user/session-log";
 import { insertThread } from "@/db/repos/user/threads";
-import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
+import {
+  closeTestDb,
+  createTestUser,
+  getTestDb,
+  resetDb,
+  vec,
+  seedStageFor,
+} from "../../../helpers/db";
 import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../../../helpers/deps";
@@ -813,6 +820,7 @@ describe("how deep she goes", () => {
     await getTestDb().execute(
       sql`UPDATE relationship_param SET value = 0.5 WHERE user_id = ${u} AND name = 'closeness'`,
     );
+    await seedStageFor(getTestDb(), u, 0.5);
     const session = JSON.stringify({
       id: SESSION,
       started_at: deps.clock.now().toISOString(),
@@ -930,6 +938,7 @@ describe("depth review fixes", () => {
     await getTestDb().execute(
       sql`UPDATE relationship_param SET value = 0.5 WHERE user_id = ${u} AND name = 'closeness'`,
     );
+    await seedStageFor(getTestDb(), u, 0.5);
     const earlier = JSON.stringify({
       id: "00000000-0000-4000-8000-0000000000bb",
       started_at: deps.clock.now().toISOString(),

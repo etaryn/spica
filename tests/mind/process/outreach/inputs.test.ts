@@ -9,7 +9,7 @@ import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { relationship, conversation_state } from "@/db/schema";
-import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
+import { closeTestDb, createTestUser, resetDb, vec, seedStageFor } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -337,5 +337,6 @@ test("her depth limit for writing first is her usual one: a stranger 1, a close 
   await deps.db.execute(
     sql`UPDATE relationship_param SET value = 0.8 WHERE user_id = ${close} AND name IN ('closeness', 'user_disclosure')`,
   );
+  await seedStageFor(deps.db, close, 0.8);
   expect((await loadCandidateInputs(deps, close, now)).depthLimit).toBe(3);
 });

@@ -1,4 +1,4 @@
-/** Which of their things she may use: established ones that fit, gated by closeness. */
+/** Which of their things she may use: established ones that fit, as the stage allows. */
 import { expect, test } from "vitest";
 import type { IdiolectCandidate } from "@/db/repos/user/facts";
 import { loadConfig } from "@/mind/platform/config";
@@ -18,11 +18,11 @@ const item = (
   payload: { type: "joke", started_by, established_at: "2026-10-01T00:00:00.000Z" },
 });
 
-test("below the band only what they started; at it, hers too", () => {
+test("none, theirs only, or all of it, as the stage allows", () => {
   const items = [item("theirs", "user", 0.8), item("hers", "spica", 0.9)];
-  expect(selectIdiolect(items, 0.2, settings).map((i) => i.id)).toEqual(["theirs"]);
-  expect(selectIdiolect(items, null, settings).map((i) => i.id)).toEqual(["theirs"]);
-  expect(selectIdiolect(items, 0.5, settings).map((i) => i.id)).toEqual(["hers", "theirs"]);
+  expect(selectIdiolect(items, "none", settings)).toEqual([]);
+  expect(selectIdiolect(items, "theirs", settings).map((i) => i.id)).toEqual(["theirs"]);
+  expect(selectIdiolect(items, "all", settings).map((i) => i.id)).toEqual(["hers", "theirs"]);
 });
 
 test("a weak match is dropped and at most max_items come back, best first", () => {
@@ -32,5 +32,5 @@ test("a weak match is dropped and at most max_items come back, best first", () =
     item("c", "user", 0.6, 0.9),
     item("d", "user", 0.7, 0.9),
   ];
-  expect(selectIdiolect(items, 0.9, settings).map((i) => i.id)).toEqual(["d", "c"]);
+  expect(selectIdiolect(items, "all", settings).map((i) => i.id)).toEqual(["d", "c"]);
 });

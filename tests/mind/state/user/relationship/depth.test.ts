@@ -4,7 +4,7 @@ import { depthFor, levelFor } from "@/mind/state/user/relationship/depth";
 
 const cfg = loadConfig().relationship;
 const base = {
-  closeness: 0.2,
+  usualOpen: 1,
   userDisclosure: 0.5,
   recentDepths: [] as number[],
   herDisclosure: 0.4,
@@ -23,16 +23,16 @@ const deep = {
   deep_fired: true,
 };
 
-test("closeness bands set the usual limit", () => {
+test("the stage sets the usual limit", () => {
   expect(depthFor(base, cfg)).toEqual({ open: 1, peek: 1 });
-  expect(depthFor({ ...base, closeness: cfg.depth.bands.personal }, cfg).open).toBe(2);
-  expect(depthFor({ ...base, closeness: cfg.depth.bands.intimate }, cfg).open).toBe(3);
+  expect(depthFor({ ...base, usualOpen: 2 }, cfg).open).toBe(2);
+  expect(depthFor({ ...base, usualOpen: 3 }, cfg).open).toBe(3);
 });
 
 test("out-sharing them drops a tier, never below 1", () => {
-  const close = { ...base, closeness: 0.7, userDisclosure: 0.1, recentDepths: [3, 3, 3] };
+  const close = { ...base, usualOpen: 3, userDisclosure: 0.1, recentDepths: [3, 3, 3] };
   expect(depthFor(close, cfg).open).toBe(2);
-  expect(depthFor({ ...close, closeness: 0.1 }, cfg).open).toBe(1);
+  expect(depthFor({ ...close, usualOpen: 1 }, cfg).open).toBe(1);
   expect(depthFor({ ...close, userDisclosure: 0.9 }, cfg).open).toBe(3);
 });
 
@@ -48,7 +48,7 @@ test("high openness or a deep session stretches one tier as a peek; a reach-out 
     open: 1,
     peek: 1,
   });
-  expect(depthFor({ ...base, closeness: 0.9, herDisclosure: 1 }, cfg)).toEqual({
+  expect(depthFor({ ...base, usualOpen: 3, herDisclosure: 1 }, cfg)).toEqual({
     open: 3,
     peek: 3,
   });

@@ -15,7 +15,7 @@ import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { composeReply } from "@/mind/process/hot-path/compose";
 import { nudge } from "@/mind/state/user/relationship/params";
 import type { BidResponse } from "@/mind/state/user/relationship/signals";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, seedStageFor } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
 beforeEach(resetDb);
@@ -89,6 +89,7 @@ async function user(d: D, closeness: number) {
   await d.db.execute(
     sql`UPDATE relationship_param SET value = ${closeness} WHERE user_id = ${u} AND name = 'closeness'`,
   );
+  await seedStageFor(d.db, u, closeness);
   return u;
 }
 

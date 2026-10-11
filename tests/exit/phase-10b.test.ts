@@ -18,7 +18,7 @@ import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { composeReachOut, composeReply } from "@/mind/process/hot-path/compose";
 import { buildCandidates } from "@/mind/process/outreach/candidates";
 import { loadCandidateInputs } from "@/mind/process/outreach/inputs";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
+import { closeTestDb, createTestUser, getTestDb, resetDb, seedStageFor } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
 beforeEach(resetDb);
@@ -116,6 +116,7 @@ async function user(d: D, params: Record<string, number> = {}, session?: object)
     await d.db.execute(
       sql`UPDATE relationship_param SET value = ${value} WHERE user_id = ${u} AND name = ${name}`,
     );
+  await seedStageFor(d.db, u, params.closeness ?? 0);
   if (session)
     await d.db.execute(
       sql`UPDATE relationship SET session = ${JSON.stringify(session)}::jsonb WHERE user_id = ${u}`,

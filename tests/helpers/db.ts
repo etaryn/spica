@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { createDb, type Db } from "@/db/client";
 import { insertUserRow, truncateAll } from "@/db/admin";
 
@@ -33,4 +34,13 @@ export async function createTestUser(name = "tester"): Promise<string> {
 /** A non-zero vector of the schema dimension (zero vectors are undefined under cosine). */
 export function vec(fill = 0.01): number[] {
   return Array.from({ length: 1024 }, () => fill);
+}
+
+/**
+ * The peak stage a test's seeded closeness stands for, so gates read as they did when closeness
+ * set them directly: the together stages' closeness thresholds.
+ */
+export async function seedStageFor(db: Db, userId: string, closeness: number): Promise<void> {
+  const peak = closeness >= 0.65 ? "integrating" : closeness >= 0.4 ? "intensifying" : "initiating";
+  await db.execute(sql`UPDATE relationship SET peak_stage = ${peak} WHERE user_id = ${userId}`);
 }

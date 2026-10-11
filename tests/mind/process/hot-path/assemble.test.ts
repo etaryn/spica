@@ -517,3 +517,17 @@ test("her items carry share tags, theirs carry origin marks; held back has its o
     system.indexOf("## What you remember"),
   );
 });
+
+test("where you are with them sits right after you and them, before how open you feel", () => {
+  const { system } = assemblePrompt({
+    ...base,
+    recentTurns: [],
+    relationshipSummary: "You feel close.",
+    stage: "You're close.",
+    openness: "You feel open with them.",
+  });
+  expect(system).toContain("## Where you are with them\nYou're close.");
+  const at = system.indexOf("## Where you are with them");
+  expect(at).toBeGreaterThan(system.indexOf("## You and them"));
+  expect(at).toBeLessThan(system.indexOf("## How open you feel"));
+});

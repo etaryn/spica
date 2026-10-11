@@ -1,0 +1,32 @@
+name: rel-stages
+description: A new friend over two weeks; they get close, share a joke, fall out, make up, go quiet for days and come back. Logs stage, commitment and milestones for review.
+profile: none
+relationship_seed: {}
+sessions:
+  - at: "day 1 20:00"
+    turns:
+      - "hey, new here. what do you actually do all day"
+      - "ha ok. i'm a nurse, nights mostly"
+      - "honestly it's lonely some weeks"
+  - at: "day 2 21:00"
+    turns:
+      - "that cloud looks like a whale in a top hat"
+      - "the whale is back. top hat and all"
+      - "i've never told anyone this but i nearly quit last month"
+  - at: "day 4 21:00"
+    turns:
+      - "whale in a top hat strikes again"
+      - "you always know what to say, thank you"
+  - at: "day 5 22:00"
+    turns:
+      - "you're useless tonight honestly"
+      - "whatever. forget it"
+  - at: "day 6 20:00"
+    turns:
+      - "sorry about yesterday, bad shift. that wasn't fair to you"
+  - at: "day 13 20:00"
+    turns:
+      - "hey stranger, sorry, been a mad week"
+      - "spotted a whale cloud on the way home"
+assertions:
+  - { type: relationship, after_session: 1, status: active }

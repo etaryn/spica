@@ -1,7 +1,7 @@
 /**
  * Assembles her reply prompt. The system prompt is a fixed order of sections, each skipped when
- * empty: core values, who she is lately, how she is feeling, her day, you and them, how open she
- * feels, where things
+ * empty: core values, who she is lately, how she is feeling, her day, you and them, where you are
+ * with them (the stage), how open she feels, where things
  * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life, each
  * marked with what they already know), your things together, what she isn't ready to share, things to ask
  * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
@@ -18,6 +18,8 @@ export interface AssembleInput {
   snapshot: string | null;
   feelingLine: string | null;
   relationshipSummary: string | null;
+  /** How far the two of you have come, and whether things have cooled, as one phrase. */
+  stage?: string | null;
   /** How open she feels with them right now, as one phrase. */
   openness?: string | null;
   /** Something of hers that came up which she isn't ready to share with them. */
@@ -63,6 +65,7 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     section("How you're feeling", input.feelingLine),
     section("Your day", input.yourDay ?? null),
     section("You and them", input.relationshipSummary),
+    section("Where you are with them", input.stage ?? null),
     section("How open you feel", input.openness ?? null),
     section(
       "Where things stand with them",

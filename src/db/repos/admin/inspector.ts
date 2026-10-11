@@ -39,7 +39,9 @@ import {
   getParams,
   getRelationshipRow,
   listRelationshipEvents,
+  toRelationshipState,
 } from "@/db/repos/user/relationship";
+import { stageOf } from "@/mind/state/user/relationship/stages";
 
 export type FactFilters = {
   subject: (typeof factSubject.enumValues)[number] | undefined;
@@ -157,6 +159,7 @@ export async function getRelationshipView(
   return {
     row,
     ceiling: closenessCeiling(row.hours_together, cfg),
+    stage: stageOf(toRelationshipState(row), params, cfg.stages),
     lastOpenness: lastReply?.openness ?? null,
     lastDepth: lastLimits?.depth ?? null,
     ledger,

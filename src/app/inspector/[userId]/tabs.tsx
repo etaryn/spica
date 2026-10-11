@@ -238,6 +238,8 @@ export async function RelationshipTab({
         cadence: row.cadence,
         hours_together: row.hours_together,
         ceiling: v.ceiling,
+        stage: v.stage,
+        milestones: row.milestones,
         session: row.session,
         last_openness: v.lastOpenness,
         last_depth: v.lastDepth,

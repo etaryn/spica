@@ -22,6 +22,7 @@ import {
 import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../../../helpers/deps";
+import { loadStagePhrases } from "@/mind/state/user/relationship/stages";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -990,4 +991,29 @@ describe("depth review fixes", () => {
     expect(system).toContain("- Solaris is overrated");
     expect(system).not.toContain("afraid of being forgotten");
   });
+});
+
+test("the stage line follows the stored stage and is skipped in a crisis", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
+  await getTestDb().execute(
+    sql`UPDATE relationship SET peak_stage = 'integrating', apart_stage = 'circumscribing' WHERE user_id = ${u}`,
+  );
+  const phrase = loadStagePhrases(deps.config).circumscribing![0]!;
+
+  await composeReply(deps, u, {
+    turns: [await userTurn(deps, u, "hey")],
+    openQuestions: [],
+    flag: null,
+  });
+  expect(deps.llm.calls.at(-1)!.system).toContain(`## Where you are with them\n${phrase}`);
+
+  const crisis = { flagged: true, category: "self_harm", source: "classifier" } as const;
+  await composeReply(deps, u, {
+    turns: [await userTurn(deps, u, "help")],
+    openQuestions: [],
+    flag: crisis,
+  });
+  expect(deps.llm.calls.at(-1)!.system).not.toContain("## Where you are with them");
 });

@@ -45,6 +45,7 @@ import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary"
 import { FIRST_DEPTH, loadDepth } from "@/mind/state/user/relationship/depth";
 import type { IdiolectCandidate } from "@/db/repos/user/facts";
 import { loadIdiolect } from "@/mind/memory/user/idiolect";
+import { loadStage, loadStagePhrases, stageLine } from "@/mind/state/user/relationship/stages";
 import type { DepthLimits, DepthRecord, Openness } from "@/mind/state/user/relationship/types";
 import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure";
 import { sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
@@ -233,6 +234,10 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const openness: Promise<Openness | null> = inCrisis
     ? Promise.resolve(CRISIS_OPENNESS)
     : bounded(deps, "openness", userId, () => loadOpenness(deps, userId, clock.now()), null);
+  // How far they've come and whether things have cooled; in a crisis she is simply there for them.
+  const stage = inCrisis
+    ? Promise.resolve(null)
+    : bounded(deps, "stage", userId, () => loadStage(deps, userId), null);
   // How deep she may go follows how open she feels; a crisis reply stays on the surface.
   const limits: Promise<DepthLimits> = inCrisis
     ? Promise.resolve(FIRST_DEPTH)
@@ -386,6 +391,8 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     [[factualLine, gap].filter((x): x is string => !!x).join(" "), await relationshipSummary]
       .filter((x): x is string => !!x)
       .join("\n") || null;
+  const stageView = await stage;
+  const stageText = stageView ? stageLine(stageView, loadStagePhrases(config)) : null;
   const herOpenness = await openness;
   const opennessPhrases = loadOpennessPhrases(config);
   const opennessText = !herOpenness
@@ -404,6 +411,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     heldBack: heldBack ? "There's something here you're not ready to share with them yet." : null,
     feelingLine: await feeling,
     relationshipSummary: youAndThem,
+    stage: stageText,
     openness: opennessText,
     summary: await summary,
     read: await read,

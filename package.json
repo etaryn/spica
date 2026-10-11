@@ -21,6 +21,7 @@
     "exit:intimacy": "tsx --env-file-if-exists=.env evals/run.ts --only rel-intimacy --runs 1 --review --trace --real extract",
     "exit:disclosure": "tsx --env-file-if-exists=.env evals/run.ts --only rel-disclosure --runs 1 --review --trace --real extract",
     "exit:idiolect": "tsx --env-file-if-exists=.env evals/run.ts --only rel-idiolect --runs 1 --review --trace --real extract",
+    "exit:stages": "tsx --env-file-if-exists=.env evals/run.ts --only rel-stages --runs 1 --review --trace --real extract",
     "exit:core": "tsx --env-file-if-exists=.env evals/run.ts --only core-two-weeks --runs 1 --review --trace --real core_resolve,core_appraise,core_anticipate,core_ruminate,core_wander,core_reflect,core_consolidate,core_render_snapshot,core_drift_watch",
     "format": "prettier --write ."
   },

@@ -47,9 +47,9 @@ test("they open up deeply for the first time", () => {
   expect(newMilestones([], { ...quiet, disclosureReading: s.their_depth }, s).fired).toEqual([
     "first_their_depth",
   ]);
-  expect(
-    newMilestones([], { ...quiet, disclosureReading: s.their_depth - 0.01 }, s).fired,
-  ).toEqual([]);
+  expect(newMilestones([], { ...quiet, disclosureReading: s.their_depth - 0.01 }, s).fired).toEqual(
+    [],
+  );
 });
 
 test("every milestone reads in plain words for the user loops", () => {

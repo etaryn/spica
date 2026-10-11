@@ -15,6 +15,9 @@ const snap = (): RelSnapshot => ({
     last_hurt_at: null,
     hours_together: 0,
     session: null,
+    peak_stage: "initiating",
+    apart_stage: null,
+    milestones: [],
   },
   params: {
     closeness: p(0.2),
@@ -27,6 +30,7 @@ const snap = (): RelSnapshot => ({
     afterglow: p(0),
     user_disclosure: p(0.2),
     user_responsiveness: p(0.5),
+    commitment: p(0),
   },
   effects: {
     closeness: 0,
@@ -39,6 +43,7 @@ const snap = (): RelSnapshot => ({
     afterglow: 0,
     user_disclosure: 0,
     user_responsiveness: 0,
+    commitment: 0,
   },
   events: [{ cause: "signal", param: "hurt", detail: { sensitised: true } }],
 });

@@ -1,8 +1,8 @@
 /**
  * The shapes of one user's relationship state: the homeostatic params (closeness, trust, warmth,
  * hurt, tension, messages per day, her own feelings toward them: affect and afterglow, and how
- * open and attentive the user is with her), the status row, and the events that record every
- * change.
+ * open and attentive the user is with her, and her commitment to them), the status row with where
+ * the relationship stands (Knapp's stages), and the events that record every change.
  */
 import type { Config } from "@/mind/platform/config";
 
@@ -17,6 +17,7 @@ export const PARAM_NAMES = [
   "afterglow",
   "user_disclosure",
   "user_responsiveness",
+  "commitment",
 ] as const;
 export type ParamName = (typeof PARAM_NAMES)[number];
 
@@ -54,6 +55,19 @@ export type DepthLimits = { open: number; peek: number };
 /** What a reply was allowed, and the item it held back, if any. */
 export type DepthRecord = DepthLimits & { held_back: string | null };
 
+/** How far they have come together; the peak only ever rises. */
+export const TOGETHER = [
+  "initiating",
+  "experimenting",
+  "intensifying",
+  "integrating",
+  "bonding",
+] as const;
+export type TogetherStage = (typeof TOGETHER)[number];
+/** Coming apart, laid over the peak while it holds; mildest first. */
+export const APART = ["differentiating", "circumscribing", "stagnating", "avoiding"] as const;
+export type ApartStage = (typeof APART)[number];
+
 export type RelationshipStatus = "active" | "ended_by_user" | "repairing";
 export type MakeUpState = "none" | "due" | "offered";
 
@@ -70,6 +84,10 @@ export type RelationshipState = {
   last_hurt_at: Date | null;
   hours_together: number;
   session: SessionState | null;
+  peak_stage: TogetherStage;
+  apart_stage: ApartStage | null;
+  /** Milestones already reached; null until the relationship is first staged. */
+  milestones: string[] | null;
 };
 
 export type RelationshipCause =
@@ -85,7 +103,9 @@ export type RelationshipCause =
   | "scar"
   | "baseline"
   | "deep_session"
-  | "bid";
+  | "bid"
+  | "stage"
+  | "commitment";
 
 /** One change, for the trace. `param` is null for a status change. */
 export type RelationshipEvent = {

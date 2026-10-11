@@ -19,7 +19,13 @@ import {
   vector,
 } from "drizzle-orm/pg-core";
 import { EMBEDDING_DIMENSIONS } from "@/mind/platform/config";
-import type { DepthRecord, Openness, SessionState } from "@/mind/state/user/relationship/types";
+import {
+  APART,
+  TOGETHER,
+  type DepthRecord,
+  type Openness,
+  type SessionState,
+} from "@/mind/state/user/relationship/types";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 const emptyUuidArray = sql`'{}'::uuid[]`;
@@ -156,6 +162,8 @@ export const reachOutStatus = pgEnum("reach_out_status", [
   "dropped",
 ]);
 export const makeUpState = pgEnum("make_up_state", ["none", "due", "offered"]);
+export const relationshipPeakStage = pgEnum("relationship_peak_stage", TOGETHER);
+export const relationshipApartStage = pgEnum("relationship_apart_stage", APART);
 export const relationshipCause = pgEnum("relationship_cause", [
   "signal",
   "frequency",
@@ -170,6 +178,8 @@ export const relationshipCause = pgEnum("relationship_cause", [
   "baseline",
   "deep_session",
   "bid",
+  "stage",
+  "commitment",
 ]);
 export const coreMemoryKind = pgEnum("core_memory_kind", [
   "episode",
@@ -355,6 +365,10 @@ export const relationship = pgTable("relationship", {
   hours_together: real("hours_together").notNull().default(0),
   // This session's running sums: afterglow and the deep-session boost are per conversation.
   session: jsonb("session").$type<SessionState>(),
+  peak_stage: relationshipPeakStage("peak_stage").notNull().default("initiating"),
+  apart_stage: relationshipApartStage("apart_stage"),
+  // Null until first staged: rows from before stages read their peak from the params.
+  milestones: text("milestones").array(),
 });
 
 export type SafetyFlag = {

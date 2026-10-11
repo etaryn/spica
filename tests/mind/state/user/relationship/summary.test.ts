@@ -37,13 +37,17 @@ const fresh = (): RelationshipState => ({
   last_hurt_at: null,
   hours_together: 0,
   session: null,
+  peak_stage: "initiating",
+  apart_stage: null,
+  milestones: [],
 });
 
 test("phrases file has every key the summary can ask for", () => {
   // Afterglow only ever sits above its baseline, so it has no "below" lines. The user's openness
   // reaches her through how open she feels, not through "You and them".
   for (const p of PARAM_NAMES) {
-    if (p === "user_disclosure" || p === "user_responsiveness") continue;
+    // Commitment is never phrased: the stage line carries how she is with them.
+    if (p === "user_disclosure" || p === "user_responsiveness" || p === "commitment") continue;
     for (const dir of p === "afterglow" ? ["above"] : ["above", "below"])
       for (const band of ["strong", "mild"])
         expect(phrases[`${p} ${dir} ${band}`]?.length, `${p} ${dir} ${band}`).toBeGreaterThan(0);

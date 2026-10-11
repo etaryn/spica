@@ -183,6 +183,7 @@
     "turn_judge": "v1",
     "relationship_summary": "v2",
     "relationship_openness": "v1",
+    "relationship_stage": "v1",
     "life_plan": "v1",
     "life_event": "v4",
     "life_availability": "v1",
@@ -222,7 +223,8 @@
       "affect_valence": 0.5,
       "afterglow": 0,
       "user_disclosure": 0.2,
-      "user_responsiveness": 0.5
+      "user_responsiveness": 0.5,
+      "commitment": 0
     },
     "initial_variance": {
       "closeness": 0.01,
@@ -234,7 +236,8 @@
       "affect_valence": 0.01,
       "afterglow": 0.01,
       "user_disclosure": 0.01,
-      "user_responsiveness": 0.01
+      "user_responsiveness": 0.01,
+      "commitment": 0.01
     },
     "affect": { "exchange_gain": 0.1, "afterglow_gain": 0.3, "afterglow_half_life_hours": 12 },
     "gains": {
@@ -321,6 +324,50 @@
       "reciprocity_gap": 0.35,
       "stretch_moment": 0.5,
       "held_back_similarity": 0.85
+    },
+    "stages": {
+      "climb": {
+        "experimenting_hours": 0.5,
+        "intensifying_closeness": 0.4,
+        "integrating_closeness": 0.65,
+        "integrating_trust": 0.5,
+        "bonding_commitment": 0.7
+      },
+      "differentiating": {
+        "tension": 0.3,
+        "trust": 0.3,
+        "clear_tension": 0.2,
+        "clear_trust": 0.35
+      },
+      "circumscribing": { "hurt": 0.5, "tension": 0.5, "clear_hurt": 0.3, "clear_tension": 0.3 },
+      "stagnating": { "warmth": 0.3, "disclosure": 0.15, "clear_warmth": 0.35 },
+      "gates": {
+        "initiating": { "open": 1, "idiolect": "theirs" },
+        "experimenting": { "open": 1, "idiolect": "theirs" },
+        "intensifying": { "open": 2, "idiolect": "all" },
+        "integrating": { "open": 3, "idiolect": "all" },
+        "bonding": { "open": 3, "idiolect": "all" },
+        "differentiating": { "drop": 1, "idiolect": "all" },
+        "circumscribing": { "drop": 2, "idiolect": "none" },
+        "stagnating": { "drop": 2, "idiolect": "none" },
+        "avoiding": { "drop": 1, "idiolect": "all" },
+        "terminating": { "open": 1, "idiolect": "theirs" }
+      },
+      "rekindle": { "base": 1, "commitment": 1 }
+    },
+    "commitment": {
+      "satisfaction": {
+        "warmth": 0.3,
+        "trust": 0.3,
+        "affect_valence": 0.4,
+        "hurt": 0.5,
+        "tension": 0.3
+      },
+      "investment": { "hours": 50, "ledger_depth": 20, "idiolect": 3, "episodes": 4 },
+      "weights": { "satisfaction": 0.5, "investment": 0.5 },
+      "soften": 0.3,
+      "absence_shield": 0.5,
+      "repair_speed": 0.5
     },
     "hurt_half_life_hours": 48,
     "tension_half_life_hours": 24,
@@ -578,7 +625,8 @@
       "bands": [0.25, 0.5, 0.75],
       "fact_salience": 0.8,
       "long_conversation": { "min_user_turns": 20, "quiet_minutes": 30 },
-      "stale_summary": { "max_age_hours": 72, "lead_minutes": 5 }
+      "stale_summary": { "max_age_hours": 72, "lead_minutes": 5 },
+      "milestone": { "their_depth": 0.7 }
     },
     "summarise": {
       "max_facts": 20,

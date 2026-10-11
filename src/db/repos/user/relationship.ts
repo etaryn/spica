@@ -30,7 +30,10 @@ export async function ensureRelationship(
   now: Date,
   cfg: RelationshipConfig,
 ): Promise<void> {
-  await tx.insert(relationship).values({ user_id: userId, cadence: {} }).onConflictDoNothing();
+  await tx
+    .insert(relationship)
+    .values({ user_id: userId, cadence: {}, milestones: [] })
+    .onConflictDoNothing();
   await tx
     .insert(relationship_param)
     .values(
@@ -92,6 +95,9 @@ export function toRelationshipState(r: RelationshipRow): RelationshipState {
     last_hurt_at: r.last_hurt_at,
     hours_together: r.hours_together,
     session: r.session,
+    peak_stage: r.peak_stage,
+    apart_stage: r.apart_stage,
+    milestones: r.milestones,
   };
 }
 

@@ -53,6 +53,9 @@ const fresh = (): RelationshipState => ({
   last_hurt_at: null,
   hours_together: 0,
   session: null,
+  peak_stage: "initiating",
+  apart_stage: null,
+  milestones: [],
 });
 const none: Signals = {
   warmth: 0,

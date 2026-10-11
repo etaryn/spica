@@ -179,3 +179,30 @@ test("hours and session round-trip through save", async () => {
     cfg.initial.user_disclosure,
   );
 });
+
+test("a new relationship starts at initiating, staged, with a commitment param", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  await rel.ensureRelationship(db, u, now, cfg);
+  const state = rel.toRelationshipState((await rel.getRelationshipRow(db, u))!);
+  expect(state.peak_stage).toBe("initiating");
+  expect(state.apart_stage).toBeNull();
+  expect(state.milestones).toEqual([]);
+  expect((await rel.getParams(db, u)).commitment.value).toBe(cfg.initial.commitment);
+
+  await rel.saveRelationship(db, u, {
+    state: {
+      ...state,
+      peak_stage: "intensifying",
+      apart_stage: "avoiding",
+      milestones: ["stage:intensifying"],
+    },
+    params: await rel.getParams(db, u),
+  });
+  const again = rel.toRelationshipState((await rel.getRelationshipRow(db, u))!);
+  expect([again.peak_stage, again.apart_stage, again.milestones]).toEqual([
+    "intensifying",
+    "avoiding",
+    ["stage:intensifying"],
+  ]);
+});

@@ -212,6 +212,7 @@ const perParam = <T extends z.ZodTypeAny>(value: T) =>
     afterglow: value,
     user_disclosure: value,
     user_responsiveness: value,
+    commitment: value,
   });
 
 /** What her openness at reply time is computed from; each has a centre and two weights. */
@@ -236,6 +237,11 @@ const opennessWeights = z.object(
   >,
 );
 const opennessSide = z.object({ base: unit, weights: opennessWeights });
+
+const idiolectReuse = z.enum(["none", "theirs", "all"]);
+const depthTier = z.number().int().min(1).max(3);
+const togetherGate = z.object({ open: depthTier, idiolect: idiolectReuse });
+const apartGate = z.object({ drop: z.number().int().min(0).max(2), idiolect: idiolectReuse });
 
 const relationship = z
   .object({
@@ -292,6 +298,60 @@ const relationship = z
       stretch_moment: unit,
       held_back_similarity: unit,
     }),
+    stages: z.object({
+      climb: z.object({
+        experimenting_hours: nonNegative,
+        intensifying_closeness: unit,
+        integrating_closeness: unit,
+        integrating_trust: unit,
+        bonding_commitment: unit,
+      }),
+      differentiating: z.object({
+        tension: unit,
+        trust: unit,
+        clear_tension: unit,
+        clear_trust: unit,
+      }),
+      circumscribing: z.object({
+        hurt: unit,
+        tension: unit,
+        clear_hurt: unit,
+        clear_tension: unit,
+      }),
+      stagnating: z.object({ warmth: unit, disclosure: unit, clear_warmth: unit }),
+      gates: z.object({
+        initiating: togetherGate,
+        experimenting: togetherGate,
+        intensifying: togetherGate,
+        integrating: togetherGate,
+        bonding: togetherGate,
+        differentiating: apartGate,
+        circumscribing: apartGate,
+        stagnating: apartGate,
+        avoiding: apartGate,
+        terminating: togetherGate,
+      }),
+      rekindle: z.object({ base: nonNegative, commitment: nonNegative }),
+    }),
+    commitment: z.object({
+      satisfaction: z.object({
+        warmth: unit,
+        trust: unit,
+        affect_valence: unit,
+        hurt: unit,
+        tension: unit,
+      }),
+      investment: z.object({
+        hours: z.number().positive(),
+        ledger_depth: z.number().positive(),
+        idiolect: z.number().positive(),
+        episodes: z.number().positive(),
+      }),
+      weights: z.object({ satisfaction: unit, investment: unit }),
+      soften: unit,
+      absence_shield: unit,
+      repair_speed: unit,
+    }),
     hurt_half_life_hours: z.number().positive(),
     tension_half_life_hours: z.number().positive(),
     sensitise_window_days: nonNegative,
@@ -344,6 +404,15 @@ const relationship = z
   .refine(
     (r) => r.openness.bands.low < r.openness.bands.high,
     "relationship.openness.bands: low < high",
+  )
+  .refine(
+    (r) =>
+      r.stages.differentiating.clear_tension < r.stages.differentiating.tension &&
+      r.stages.differentiating.clear_trust > r.stages.differentiating.trust &&
+      r.stages.circumscribing.clear_hurt < r.stages.circumscribing.hurt &&
+      r.stages.circumscribing.clear_tension < r.stages.circumscribing.tension &&
+      r.stages.stagnating.clear_warmth > r.stages.stagnating.warmth,
+    "relationship.stages: each clear threshold must sit on the healthy side of its enter threshold",
   )
   .refine(
     (r) => r.depth.bands.personal < r.depth.bands.intimate,
@@ -613,6 +682,7 @@ const prompts = z.object({
   turn_judge: promptVersion,
   relationship_summary: promptVersion,
   relationship_openness: promptVersion,
+  relationship_stage: promptVersion,
   life_plan: promptVersion,
   life_event: promptVersion,
   core_appraise: promptVersion,
@@ -643,6 +713,7 @@ const userMind = z.object({
     fact_salience: unit,
     long_conversation: z.object({ min_user_turns: positiveInt, quiet_minutes: countFromZero }),
     stale_summary: z.object({ max_age_hours: z.number().positive(), lead_minutes: countFromZero }),
+    milestone: z.object({ their_depth: unit }),
   }),
   summarise: z.object({
     max_facts: positiveInt,

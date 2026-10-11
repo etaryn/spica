@@ -327,10 +327,14 @@ function raiseCloseness(
       ? settings.repair_gain_factor +
         (1 - settings.repair_gain_factor) * settings.commitment.repair_speed * c
       : 1;
-  // Once close, the way back is shorter, unless something between them is still wrong.
+  // Once close, the way back is shorter, unless something between them is still wrong. Repair
+  // after an ending is its own slow road: no rekindling on top of it.
   const peak = peakCloseness(draft.state.peak_stage, settings.stages);
   const rekindle =
-    draft.state.apart_stage === null && peak !== null && current < peak
+    draft.state.status !== "repairing" &&
+    draft.state.apart_stage === null &&
+    peak !== null &&
+    current < peak
       ? 1 + settings.stages.rekindle.base + settings.stages.rekindle.commitment * c
       : 1;
   draft.setParam(

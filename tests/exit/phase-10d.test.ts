@@ -304,3 +304,26 @@ test("leak canary and side channel: one user's stage work never reaches another 
   expect(coreAfter).not.toContain(canary);
   expect(coreAfter).toBe(coreBefore);
 });
+
+test("inside a crisis window the tick leaves the stage and firsts alone", async () => {
+  const { d } = setup();
+  const u = await user(d, { closeness: 0.7, trust: 0.6 }, "intensifying");
+  await seedIdiolect(d, u, JOKE);
+  await settle(d, u, await talk(d, u, randomUUID()));
+  const runsBefore = (await milestoneRuns(u)).length;
+  d.clock.advance(20 * DAY);
+  const quietUntil = new Date(d.clock.now().getTime() + DAY);
+  await d.db.execute(
+    sql`UPDATE relationship SET crisis_quiet_until = ${quietUntil.toISOString()}::timestamptz,
+        milestones = '{}', peak_stage = 'intensifying' WHERE user_id = ${u}`,
+  );
+  await tickUser(d, u, d.clock.now());
+  expect((await row(u)).apart_stage).toBeNull();
+  expect((await row(u)).peak_stage).toBe("intensifying");
+  expect((await milestoneRuns(u)).length).toBe(runsBefore);
+
+  d.clock.advance(2 * DAY);
+  await tickUser(d, u, d.clock.now());
+  expect((await row(u)).apart_stage).toBe("avoiding");
+  expect(await milestoneRuns(u)).toContain("stage:integrating");
+});

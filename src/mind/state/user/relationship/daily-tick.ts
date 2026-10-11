@@ -87,31 +87,38 @@ export async function tickUser(
       history,
       settings,
     );
-    const staged = restage(
-      transition.state,
-      {
-        params: committed.params,
-        hoursTogether: transition.state.hours_together,
-        establishedIdiolect: history.idiolect,
-        absent: isAbsent(now, row.last_contact, medianGapHours, settings),
-      },
-      settings.stages,
-    );
-    const ended = staged.state.status === "ended_by_user";
-    const firsts = ended
-      ? { all: staged.state.milestones, fired: [] }
-      : newMilestones(
-          staged.state.milestones,
+    // Inside a crisis window the relationship waits: no new stage, no first marked; both settle
+    // on the first tick or exchange after it.
+    const quiet = !!row.crisis_quiet_until && now.getTime() < row.crisis_quiet_until.getTime();
+    const staged = quiet
+      ? { state: transition.state, events: [] }
+      : restage(
+          transition.state,
           {
-            peak: staged.state.peak_stage,
-            apart: staged.state.apart_stage,
-            makeUp: staged.state.make_up_state,
+            params: committed.params,
+            hoursTogether: transition.state.hours_together,
             establishedIdiolect: history.idiolect,
-            maxOpenDepth: history.maxOpenDepth,
-            disclosureReading: null,
+            absent: isAbsent(now, row.last_contact, medianGapHours, settings),
           },
-          deps.config.user_mind.triggers.milestone,
+          settings.stages,
         );
+    const ended = staged.state.status === "ended_by_user";
+    const firsts =
+      ended || quiet
+        ? { all: staged.state.milestones, fired: [] }
+        : newMilestones(
+            staged.state.milestones,
+            {
+              peak: staged.state.peak_stage,
+              apart: staged.state.apart_stage,
+              makeUp: staged.state.make_up_state,
+              hurtCauseFact: staged.state.hurt_cause_fact,
+              establishedIdiolect: history.idiolect,
+              maxOpenDepth: history.maxOpenDepth,
+              disclosureReading: null,
+            },
+            deps.config.user_mind.triggers.milestone,
+          );
     const state = { ...staged.state, milestones: firsts.all };
 
     await relationshipRepo.saveRelationship(tx, userId, { state, params: committed.params });

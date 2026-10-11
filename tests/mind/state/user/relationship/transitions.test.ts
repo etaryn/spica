@@ -966,3 +966,18 @@ test("below the peak, closeness comes back faster; more so with commitment", () 
   expect(committed).toBeGreaterThan(drifted);
   expect(soured).toBeCloseTo(stranger);
 });
+
+test("repair after an ending stays slower than ordinary growth, even below a high peak", () => {
+  const deep = {
+    intimacy: { user_disclosure: 1, user_responsiveness: 1 },
+    herOpenness: { disclosure: 1, responsiveness: 1 },
+  };
+  const gain = (state: RelationshipState, commitment: number) => {
+    const p = withParam(withParam(init(), "commitment", commitment), "closeness", 0.2);
+    return relationshipAfterExchange(state, p, ex(null, deep), cfg).params.closeness.value - 0.2;
+  };
+  const long = { ...fresh(), hours_together: 300 };
+  const ordinary = gain(long, 0);
+  const repairing = gain({ ...long, status: "repairing", peak_stage: "bonding" }, 0.5);
+  expect(repairing).toBeLessThan(ordinary);
+});

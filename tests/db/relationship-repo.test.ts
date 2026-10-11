@@ -5,6 +5,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
+import { insertFact } from "@/db/repos/user/facts";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 
 beforeEach(resetDb);
@@ -215,4 +216,32 @@ test("relationship history counts her open ledger, their established idiolect an
     idiolect: 0,
     episodes: 0,
   });
+});
+
+test("relationship history counts only inside jokes she could use: none born in a crisis", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const joke = (content: string, sensitive: boolean, status: "open" | "superseded") =>
+    insertFact(db, u, {
+      subject: "shared",
+      kind: "idiolect",
+      content,
+      payload: {
+        idiolect: { type: "joke", started_by: "user", established_at: now.toISOString() },
+        ...(sensitive ? { sensitive: true } : {}),
+      },
+      embedding: new Array(loadConfig().embedding.dimensions).fill(0.1),
+      entity_refs: [],
+      created_at: now,
+      salience: 0.6,
+      valence: 0.5,
+      confidence: 0.9,
+      source: "turn",
+      status,
+    });
+  await joke("born in a crisis", true, "open");
+  await joke("replaced since", false, "superseded");
+  expect((await rel.relationshipHistory(db, u)).idiolect).toBe(0);
+  await joke("theirs", false, "open");
+  expect((await rel.relationshipHistory(db, u)).idiolect).toBe(1);
 });

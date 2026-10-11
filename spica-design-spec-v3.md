@@ -933,9 +933,11 @@ the list). The first-time milestone moves to Phase 10's list. Candidates (thresh
 **Built 10d:** `milestone`, a first in the relationship, each fired once per
 user ever (names kept on `relationship.milestones`), riding in the run of the
 exchange or tick that reached it; none in a crisis, for a reach-out alone or
-after an ending. An open list in `milestones.ts`: `stage:<name>` as the peak
+after an ending, and none from a tick inside the crisis quiet window. An open
+list in `milestones.ts`: `stage:<name>` as the peak
 first reaches experimenting, intensifying, integrating or bonding;
-`first_conflict` (an apart stage other than avoiding, or a make-up due);
+`first_conflict` (an apart stage other than avoiding, or a make-up due for a
+hurt they caused, not one absence started);
 `first_inside_joke`; `first_depth:2` and `first_depth:3` (her first open
 ledger row at that depth); `first_their_depth` (a `user_disclosure` reading
 ≥ `user_mind.triggers.milestone.their_depth`, 0.7).
@@ -1517,7 +1519,8 @@ migration 0031. Every number is a first guess (test phase).
   intensifying. The current stage is `apart_stage ?? peak_stage`, or
   `terminating` once the user has ended it. Both are settled in code at the
   end of every cold path with a user turn (not in a crisis) and every daily
-  tick, logged as `stage` events; the hot path reads them stored.
+  tick outside the crisis quiet window, logged as `stage` events; the hot path
+  reads them stored.
 - **Climbing** (`relationship.stages.climb`): the peak rises to the highest
   stage whose own condition holds, passing through (and firing) those below: experimenting at `experimenting_hours` (0.5) together;
   intensifying at closeness `intensifying_closeness` (0.4); integrating at
@@ -1539,15 +1542,16 @@ migration 0031. Every number is a first guess (test phase).
 - **Posture:** "Where you are with them" sits right after "You and them",
   one phrase per stage from `prompts/relationship/stage/v1.md`; none in a
   crisis or before the relationship exists.
-- **Rekindle:** with no apart stage and closeness below the closeness its
-  peak was reached at, closeness gains × `1 + stages.rekindle.base +
+- **Rekindle:** with no apart stage, not repairing after an ending (repair
+  stays slow), and closeness below the closeness its peak was reached at, closeness gains × `1 + stages.rekindle.base +
   stages.rekindle.commitment × commitment` (1, 1).
 - **Commitment (Rusbult)**, a param set by the daily tick (cause
   `commitment`, detail satisfaction and investment): `weights` (0.5 / 0.5)
   of satisfaction, `clamp(0.3 warmth + 0.3 trust + 0.4 affect_valence − 0.5
   hurt − 0.3 tension)`, and investment, the mean of `x / (x + half)` over
   hours together (50), summed open ledger depth (20), established idiolect
-  (3) and episodes (4). Rusbult's alternatives are left out. Never phrased in
+  she could use (3; not sensitive, superseded or stale, so none born in a
+  crisis) and episodes (4). Rusbult's alternatives are left out. Never phrased in
   "You and them" and not a big-event param.
 - **What commitment changes** (`relationship.commitment`): every negative
   move from the user's behaviour (hurt from a signal or absence, tension
@@ -1928,7 +1932,7 @@ two minds or at reply time.
 | 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1095 tests at close |
 | 10b. How deep she goes | Depth on core memories and self lines (migration 0028, backfill by kind), judged by every memory-writing core loop (prompts v2) and snapshot render v2; `depthFor` limits from closeness, reciprocity and chemistry; hint, open and held-back offers; "Who you are lately" trimmed to the usual limit; `session_log.depth`; the `disclosure` ledger via `groundingMatch`; common-ground marks; outreach `too_deep`; reply v13; inspector ledger; exit `tests/exit/phase-10b.test.ts` (the canary); `pnpm exit:disclosure`. `pnpm test` 140 files / 1141 tests at close |
 | 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within the idle gap after her last message) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1167 tests at close |
-| 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1200 tests at close) |
+| 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
@@ -2096,6 +2100,10 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B90.** Bonding reads commitment's baseline, which needs about two weeks
   of daily ticks to climb; check in the `rel-stages` run whether that pace
   feels right. *Tuning.*
+- **B92.** A milestone marked reached in a run that the daily cap records
+  `capped` is never seen by the user loops; a busy first day can swallow a
+  first. Exempt milestone runs from the cap, or mark a name only when its run
+  is pending, if review runs show it. *Tuning.*
 - **B91.** Commitment softens impact (Rusbult's accommodation), against the
   no-forgiveness default (§1); check review runs for her letting a committed
   friend off too lightly. *Tuning.*

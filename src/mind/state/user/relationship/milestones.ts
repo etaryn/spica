@@ -11,6 +11,8 @@ export type MilestoneFacts = {
   peak: TogetherStage;
   apart: ApartStage | null;
   makeUp: MakeUpState;
+  /** What she was hurt by; null for a make-up absence started, which is no falling-out. */
+  hurtCauseFact: string | null;
   establishedIdiolect: number;
   /** The deepest tier she has told them openly; 0 for nothing yet. */
   maxOpenDepth: number;
@@ -29,10 +31,12 @@ export const MILESTONES: {
     name: `stage:${stage}`,
     reached: (f: MilestoneFacts) => atLeast(f.peak, stage),
   })),
-  // Drifting apart through absence is no conflict.
+  // Drifting apart through absence is no conflict, nor is the hurt of missing them.
   {
     name: "first_conflict",
-    reached: (f) => (f.apart !== null && f.apart !== "avoiding") || f.makeUp !== "none",
+    reached: (f) =>
+      (f.apart !== null && f.apart !== "avoiding") ||
+      (f.makeUp !== "none" && f.hurtCauseFact !== null),
   },
   { name: "first_inside_joke", reached: (f) => f.establishedIdiolect > 0 },
   { name: "first_depth:2", reached: (f) => f.maxOpenDepth >= 2 },

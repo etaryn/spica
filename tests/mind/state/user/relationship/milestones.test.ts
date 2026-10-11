@@ -9,6 +9,7 @@ const quiet: MilestoneFacts = {
   peak: "initiating",
   apart: null,
   makeUp: "none",
+  hurtCauseFact: null,
   establishedIdiolect: 0,
   maxOpenDepth: 1,
   disclosureReading: null,
@@ -40,7 +41,11 @@ test("conflict is a falling-out or a hurt needing making up; absence is not", ()
   expect(newMilestones([], { ...quiet, apart: "differentiating" }, s).fired).toEqual([
     "first_conflict",
   ]);
-  expect(newMilestones([], { ...quiet, makeUp: "due" }, s).fired).toEqual(["first_conflict"]);
+  expect(newMilestones([], { ...quiet, makeUp: "due", hurtCauseFact: "f1" }, s).fired).toEqual([
+    "first_conflict",
+  ]);
+  // A make-up absence started has no hurt they caused behind it.
+  expect(newMilestones([], { ...quiet, makeUp: "due" }, s).fired).toEqual([]);
 });
 
 test("they open up deeply for the first time", () => {

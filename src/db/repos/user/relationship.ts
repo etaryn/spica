@@ -293,7 +293,7 @@ export type RelationshipHistory = {
   /** The depths of everything she has told them openly, summed. */
   ledgerDepth: number;
   maxOpenDepth: number;
-  /** Their established inside jokes, nicknames, rituals and references. */
+  /** Their established inside jokes, nicknames, rituals and references she could use. */
   idiolect: number;
   episodes: number;
 };
@@ -307,7 +307,10 @@ export async function relationshipHistory(db: Db, userId: string): Promise<Relat
       (SELECT coalesce(max(depth), 0) FROM disclosure
          WHERE user_id = ${userId} AND level = 'open')::int AS max_open_depth,
       (SELECT count(*) FROM fact WHERE user_id = ${userId} AND kind = 'idiolect'
-         AND (payload->'idiolect'->>'established_at') IS NOT NULL)::int AS idiolect,
+         AND status NOT IN ('superseded', 'stale')
+         AND (payload->'idiolect'->>'established_at') IS NOT NULL
+         -- One born in a crisis is never theirs to build on.
+         AND COALESCE((payload->>'sensitive')::boolean, false) = false)::int AS idiolect,
       (SELECT count(*) FROM fact WHERE user_id = ${userId} AND kind = 'episode')::int AS episodes`);
   const r = res.rows[0] as Record<string, unknown>;
   return {

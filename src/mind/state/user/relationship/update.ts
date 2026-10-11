@@ -136,6 +136,7 @@ export async function updateRelationship(
             peak: staged.state.peak_stage,
             apart: staged.state.apart_stage,
             makeUp: staged.state.make_up_state,
+            hurtCauseFact: staged.state.hurt_cause_fact,
             establishedIdiolect: history.idiolect,
             maxOpenDepth: history.maxOpenDepth,
             disclosureReading: update.intimacy?.user_disclosure ?? null,

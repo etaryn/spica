@@ -47,9 +47,12 @@ export function climb(peak: TogetherStage, f: StageFacts, s: StagesConfig): Toge
     // The baseline is the slow daily average: commitment that has lasted, not one good day.
     bonding: p.commitment.baseline >= c.bonding_commitment,
   };
-  let i = rank(peak);
-  while (i + 1 < TOGETHER.length && reaches[TOGETHER[i + 1]!]) i += 1;
-  return TOGETHER[i]!;
+  // The highest stage that holds; the ones below it count as passed through. Bonding grows out of
+  // being close, so it needs integrating reached first.
+  let top = rank(peak);
+  for (let i = top + 1; i < rank("bonding"); i++) if (reaches[TOGETHER[i]!]) top = i;
+  if (top === rank("integrating") && reaches.bonding) top = rank("bonding");
+  return TOGETHER[top]!;
 }
 
 /**

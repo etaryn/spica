@@ -66,6 +66,14 @@ test("the peak climbs through every stage it qualifies for, in order, and never 
   expect(climb("integrating", facts(params({ closeness: 0.1 })), s)).toBe("integrating");
 });
 
+test("the peak reaches the highest stage that holds, passing through the ones below", () => {
+  const seeded = facts(params({ closeness: 0.45 }), { hoursTogether: 0 });
+  expect(climb("initiating", seeded, s)).toBe("intensifying");
+  // Bonding still needs the peak at integrating first.
+  const committed = facts(params({ closeness: 0.45, commitment: 0.9 }, 0.9));
+  expect(climb("initiating", committed, s)).toBe("intensifying");
+});
+
 test("bonding needs sustained commitment: the baseline, not today's value", () => {
   const f = (baseline: number) =>
     facts(params({ closeness: 0.7, trust: 0.6, commitment: 0.9 }, baseline), {

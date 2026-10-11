@@ -190,6 +190,7 @@ describe("phase 9 exit", () => {
         "crisis_passed",
         "long_conversation",
         "stale_summary",
+        "milestone",
       ]),
     );
   });

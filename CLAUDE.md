@@ -165,9 +165,10 @@ synthetic trigger, through the same hot path.
   `msgs_per_day`, extensible); signals from extraction; hurt → make-up flow
   she initiates; tension separate; absence drifts closeness down; ending only
   by the user; slow repair; crisis suspends. Hurt and tension uncapped in the
-  test phase. New (PROPOSED): intimacy loop, disclosure ledger, bids, common
-  ground, idiolect, stages, closeness by hours, commitment, attachment,
-  theory of mind.
+  test phase. Built in Phase 10: intimacy loop, closeness by hours, disclosure
+  ledger, common ground, bids, idiolect, Knapp stages (a sticky peak plus a
+  coming-apart overlay that gates depth, idiolect and posture), commitment.
+  Still PROPOSED: attachment, theory of mind beyond `user_model`.
 - **World (v3 §8.3):** her own clock (`life.timezone` Asia/Singapore via
   `lifeTimezone`); one shared day plan per her local date (`life_day`,
   `life_plan`). v3 retires the per-user `life_tick` (readers use the plan
@@ -201,15 +202,15 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 7. Mind split | Core scope + core data layer, `core_state`, world reads, core events, user affect params, "what she told this user", persona split, snapshot v0, reply assembly, leak canary |
 | 8. Core loops | Appraisal, goals/needs, world resolution, wander/anticipate/ruminate/reflect/consolidate, snapshot rendering, drift watch, budget |
 | 9. User mind | Big-event triggers, `user_mind_run` and its loops, summary slot, new outreach candidates |
-| 10. Relationship psychology | Disclosure ledger, intimacy loop, bids, common ground, idiolect, stages |
+| 10. Relationship psychology | Disclosure ledger, intimacy loop, bids, common ground, idiolect, stages, commitment |
 | 11. Onboarding | Questionnaire, reveal pacing, results screen |
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 10 (relationship psychology), in slices. 10a (how closeness grows),
-10b (how deep she goes: depth tiers, the disclosure ledger and reciprocity, common ground) and
-10c (bids, idiolect) are built; 10d (stages, commitment, the milestone trigger) is next and
-needs its design doc.** Phases 8 (core loops) and 9 (user mind) are built.
+**Current phase: Phase 10 (relationship psychology) is built: 10a (how closeness grows),
+10b (how deep she goes), 10c (bids, idiolect) and 10d (Knapp stages, commitment, the milestone
+trigger). Next per §20 is Phase 11 (onboarding), which needs its design doc.** Phases 8 (core
+loops) and 9 (user mind) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 

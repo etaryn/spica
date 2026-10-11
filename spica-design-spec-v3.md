@@ -896,7 +896,8 @@ reinforcement and decay (§12). The "what I remember" view was removed in
 **New (PROPOSED):** her feelings toward this user (`affect_valence`,
 `afterglow`), where the cold path's mood nudge now lands (V4); relatedness;
 reciprocity balance; derived relationship stage, commitment and the inferred
-current state of the user (§11.3). **Built 9d:** the inferred current state of the user lives in
+current state of the user (§11.3). **Built 10d:** the stage and commitment
+(§11.3). **Built 9d:** the inferred current state of the user lives in
 her live `model` fact (`how_they_are`, with `what_they_want` and `what_lands`), written by
 `user_model` (§9.5).
 
@@ -928,6 +929,16 @@ the list). The first-time milestone moves to Phase 10's list. Candidates (thresh
   existing fact doesn't count, nor does a fact stored already superseded by a
   newer one.
 - `make_up_done`: a make-up flow completes. Exchange only.
+
+**Built 10d:** `milestone`, a first in the relationship, each fired once per
+user ever (names kept on `relationship.milestones`), riding in the run of the
+exchange or tick that reached it; none in a crisis, for a reach-out alone or
+after an ending. An open list in `milestones.ts`: `stage:<name>` as the peak
+first reaches experimenting, intensifying, integrating or bonding;
+`first_conflict` (an apart stage other than avoiding, or a make-up due);
+`first_inside_joke`; `first_depth:2` and `first_depth:3` (her first open
+ledger row at that depth); `first_their_depth` (a `user_disclosure` reading
+≥ `user_mind.triggers.milestone.their_depth`, 0.7).
 
 Exchange triggers fire only for an exchange with a user turn: a reach-out
 on its own is her words, not an event in the relationship. Afterglow and
@@ -1172,8 +1183,9 @@ when the guard is on.
       (2) established, non-sensitive idiolect facts with similarity ≥
       `idiolect.min_similarity` (0.3) to the reply query, ranked by similarity ×
       salience, each marked *(they started this)* or *(you started this)*.
-      Below closeness `idiolect.min_closeness` (0.4), or with no relationship
-      yet, only what the user started. Empty in a crisis. Items shown join the
+      Which of them she may reuse follows the stage (**Built 10d**, §11.3):
+      none while things are wrong, only what the user started before friends
+      or with no relationship yet, all of it from intensifying. Empty in a crisis. Items shown join the
       cold path's recall write-back. Core retrieval is
       read-only: replies write no recall reinforcement to core memory.
       **Built 8d:** each core candidate's score is multiplied by
@@ -1214,13 +1226,14 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v14.md` (its rules about her own self sit under "Being
+`prompts/reply/v15.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
 hint, held-back and common-ground marks, and that she may deflect, never
 invent, and is always honest that she's an AI; v14 adds "Your things
 together": at most one, when it fits, never explained, answer to a nickname
-they gave you). v11 added the **claim line**
+they gave you; v15 adds following "Where you are with them": how familiar,
+teasing, guarded and firm she is, never named). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1332,6 +1345,8 @@ user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
   a second one or a timeout; retractable; continued contact clears it).
   Repair is slow (reduced gains, minimum days, a closeness threshold).
 - **Crisis:** no signal applied; tension to 0; a quiet window.
+- **Commitment (Built 10d):** softens every negative move from the user's
+  behaviour, slows absence drift and speeds repair (§11.3).
 - **Daily tick** (`relationship_tick`, hourly cron, once per user-local
   date): fade, frequency refresh, absence, baseline sampling, ending
   timeout, repair completion, make-up clearing.
@@ -1358,8 +1373,8 @@ Each mechanic is user-scoped, and each names what it changes.
 | **Common ground** (**Built 10b**) | Clark | What each knows the other knows; checked before she references something |
 | **Idiolect** (**Built 10c**) | — | Inside jokes, nicknames, rituals detected and reused, gated by closeness |
 | **Closeness by time together** (**Built 10a**) | Hall | Closeness growth calibrated to roughly 50 / 90 / 200 hours for casual / friend / close |
-| **Stages** | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
-| **Commitment** | Rusbult | Satisfaction + investment (shared history) |
+| **Stages** (**Built 10d**) | Knapp | A derived stage that gates behaviour (how deep, how teasing) |
+| **Commitment** (**Built 10d**) | Rusbult | Satisfaction + investment (shared history) |
 | **Attachment** | Hazan & Shaver | Her style (fixed, core values) and the user's (measured at onboarding, OPEN) modulate reactions to absence and conflict |
 | **Theory of mind** | — | Beliefs about the user's feelings, wants and current state (`user_model`). **Built 9d:** her live read (`model`) and revisable `belief` facts (§9.5); common ground stays Phase 10 |
 
@@ -1422,9 +1437,10 @@ weight is a first guess (test phase).
 - **Her self is tiered** (§8.5): every core memory and self line carries a
   depth, 1 surface (she'd tell an acquaintance), 2 personal (a friend), 3
   intimate (only someone close).
-- **Allowed depth per reply** (`depthFor`, pure): the usual limit `open` is 1,
-  +1 at closeness ≥ `relationship.depth.bands.personal` (0.4), +1 at ≥
-  `bands.intimate` (0.65). **Reciprocity:** her recent sharing (mean depth of
+- **Allowed depth per reply** (`depthFor`, pure): the usual limit `open` is
+  the stage's (**Built 10d**, `relationship.stages.gates`): 1 before
+  intensifying, 2 at intensifying, 3 at integrating and bonding, less while
+  coming apart. **Reciprocity:** her recent sharing (mean depth of
   the last `reciprocity_window` (10) ledger rows, scaled 0–1) more than
   `reciprocity_gap` (0.35) above their `user_disclosure` drops `open` a tier
   (never below 1). **Chemistry:** her openness disclosure in its high band, or
@@ -1482,13 +1498,71 @@ weight is a first guess (test phase).
   is kept as its own candidate rather than merged away. Missing labels fall
   back to a `reference` the user started.
 - **Reuse** ("Your things together", §10.3): established items only, gated by
-  closeness (`relationship.idiolect`) with the they-started exception;
-  coining new ones is left to the reply model. The first-inside-joke
-  milestone trigger stays with 10d.
+  the stage (**Built 10d**) with the they-started exception; coining new ones
+  is left to the reply model. The first inside joke is a milestone (10d).
 - **Inspector:** idiolect facts (type, who started it, candidate or
   established) on the Relationship tab; bid events in its event list.
 - **Review run:** `pnpm exit:idiolect` runs `rel-idiolect` with real
   extraction.
+
+**Built 10d: stages, commitment, firsts.** Code: `stages.ts`, `commitment.ts`,
+`milestones.ts` and `transitions.ts` in `src/mind/state/user/relationship/`;
+migration 0031. Every number is a first guess (test phase).
+
+- **Stages (Knapp), two fields on `relationship`.** `peak_stage` is how far
+  they have come together (initiating → experimenting → intensifying →
+  integrating → bonding) and only rises; `apart_stage` (differentiating,
+  circumscribing, stagnating, avoiding, or null) lies over it while a bad
+  patch or an absence holds, and only once the peak is at least
+  intensifying. The current stage is `apart_stage ?? peak_stage`, or
+  `terminating` once the user has ended it. Both are settled in code at the
+  end of every cold path with a user turn (not in a crisis) and every daily
+  tick, logged as `stage` events; the hot path reads them stored.
+- **Climbing** (`relationship.stages.climb`): the peak rises to the highest
+  stage whose own condition holds, passing through (and firing) those below: experimenting at `experimenting_hours` (0.5) together;
+  intensifying at closeness `intensifying_closeness` (0.4); integrating at
+  closeness `integrating_closeness` (0.65), trust `integrating_trust` (0.5)
+  and an established inside joke; bonding when commitment's baseline (its
+  slow daily average) reaches `bonding_commitment` (0.7).
+- **Coming apart**, most severe first, each holding until its clear level:
+  avoiding while absent past the absence grace (set by the tick, cleared by
+  their next exchange; it reads warm); stagnating at warmth < 0.3 and
+  `user_disclosure` < 0.15 (clears at warmth 0.35); circumscribing at hurt or
+  tension ≥ 0.5 (clears below 0.3 both); differentiating at tension ≥ 0.3 or
+  trust < 0.3 (clears below 0.2 tension and at 0.35 trust).
+- **Gates** (`relationship.stages.gates`): together stages give depth `open`
+  (1, 1, 2, 3, 3) and idiolect reuse (`theirs` before intensifying, then
+  `all`); apart stages drop from the peak's `open` (differentiating 1,
+  circumscribing 2, stagnating 2, avoiding 1; never below 1) and set reuse
+  (`none` for circumscribing and stagnating); terminating is 1 and `theirs`.
+  Availability stays on closeness.
+- **Posture:** "Where you are with them" sits right after "You and them",
+  one phrase per stage from `prompts/relationship/stage/v1.md`; none in a
+  crisis or before the relationship exists.
+- **Rekindle:** with no apart stage and closeness below the closeness its
+  peak was reached at, closeness gains × `1 + stages.rekindle.base +
+  stages.rekindle.commitment × commitment` (1, 1).
+- **Commitment (Rusbult)**, a param set by the daily tick (cause
+  `commitment`, detail satisfaction and investment): `weights` (0.5 / 0.5)
+  of satisfaction, `clamp(0.3 warmth + 0.3 trust + 0.4 affect_valence − 0.5
+  hurt − 0.3 tension)`, and investment, the mean of `x / (x + half)` over
+  hours together (50), summed open ledger depth (20), established idiolect
+  (3) and episodes (4). Rusbult's alternatives are left out. Never phrased in
+  "You and them" and not a big-event param.
+- **What commitment changes** (`relationship.commitment`): every negative
+  move from the user's behaviour (hurt from a signal or absence, tension
+  gains, warmth and trust drops, bid losses) × `1 − soften × commitment`
+  (0.3), while the trust scar tests the unsoftened hurt; absence drift ×
+  `1 − absence_shield × commitment` (0.5); the repairing gain factor rises
+  toward 1 by `repair_speed × commitment` (0.5); rekindle and bonding.
+- **Never staged:** `milestones` is null on rows from before 10d and on eval
+  seeds; readers derive the peak from the params (no inside joke counted),
+  and the first settlement records every first already reached without
+  firing it. A new relationship starts at `{}`.
+- **Inspector:** stage (current, peak, apart) and milestones in the
+  Relationship tab's state; commitment in its params; stage and commitment
+  events in its list.
+- **Review run:** `pnpm exit:stages` runs `rel-stages` with real extraction.
 
 ---
 
@@ -1854,12 +1928,13 @@ two minds or at reply time.
 | 10a. How closeness grows | Extraction v6 reads the user's disclosure and responsiveness (params `user_disclosure`, `user_responsiveness`); her openness decided in code before every reply and reach-out, stored on `session_log.openness` and phrased in the "How open you feel" slot (reply v12, `prompts/relationship/openness/v1.md`); closeness grows only from intimacy moments under a ceiling set by hours together (migration 0027: `hours_together`, `session`); per-session afterglow and the deep-session boost (B62); `closeness_per_warm_exchange` deleted; inspector hours, ceiling and openness; exit `tests/exit/phase-10a.test.ts` (all three levels with short hours, the canary); `pnpm exit:intimacy`. `pnpm test` 136 files / 1095 tests at close |
 | 10b. How deep she goes | Depth on core memories and self lines (migration 0028, backfill by kind), judged by every memory-writing core loop (prompts v2) and snapshot render v2; `depthFor` limits from closeness, reciprocity and chemistry; hint, open and held-back offers; "Who you are lately" trimmed to the usual limit; `session_log.depth`; the `disclosure` ledger via `groundingMatch`; common-ground marks; outreach `too_deep`; reply v13; inspector ledger; exit `tests/exit/phase-10b.test.ts` (the canary); `pnpm exit:disclosure`. `pnpm test` 140 files / 1141 tests at close |
 | 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within the idle gap after her last message) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1167 tests at close |
+| 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1200 tests at close) |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
-| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; then 10d stages and commitment) | Deterministic assertions per mechanic over scripted signals |
+| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; **10d built:** stages, commitment, the milestone trigger; Phase 10 built) | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
@@ -2017,7 +2092,13 @@ and life tick) were dropped; the replacement is designed fresh.
   stories in the ledger so she stays consistent and can come clean when
   closer, and meets the guard-phase `invented_self` decision (§25.7).
   Honesty about being an AI is never part of it (Ethan, 2026-10-11).
-  *10d or its own slice.*
+  *Its own slice.*
+- **B90.** Bonding reads commitment's baseline, which needs about two weeks
+  of daily ticks to climb; check in the `rel-stages` run whether that pace
+  feels right. *Tuning.*
+- **B91.** Commitment softens impact (Rusbult's accommodation), against the
+  no-forgiveness default (§1); check review runs for her letting a committed
+  friend off too lightly. *Tuning.*
 - **B85.** Review runs pending: `pnpm exit:intimacy`, `pnpm exit:disclosure`
   and `pnpm exit:idiolect` (real extraction) have not been run, so what the
   real extractor reads as disclosure, bids and idiolect is unreviewed.
@@ -2293,3 +2374,6 @@ Ethan, not changed.
 | 2026-10-01 | Pre-v3 cleanup: v2 and the phase 0–6 docs deleted (tag `v2-final`); fresh `DECISIONS.md`; small code debt fixed; open items moved to §25; spec citations removed from code comments | Ethan |
 | 2026-10-01 | v3 builds on the built code and replaces modules from the ground up, deleting the old ones in the same phase (§0.2) | Ethan |
 | 2026-10-02 | Core memory is separate tables (`core_memory`, `core_entity`) behind `CoreMemory` (§21 #5 settled) | Ethan |
+| 2026-10-12 | Knapp's ten stages: a peak that only rises, with a coming-apart stage laid over it; the stage gates depth, idiolect reuse and her posture | Ethan |
+| 2026-10-12 | Commitment (satisfaction + investment) softens the impact of what the user does and speeds recovery and rekindling | Ethan |
+| 2026-10-12 | Milestones fire once per user, ever; the list is open | Ethan |

@@ -132,3 +132,7 @@ code itself.
 | 2026-10-11 | Bid moves use `nudge`, like every signal | Bounded and consistent with signal gains; the configured value shrinks near the bound. |
 | 2026-10-11 | Idiolect is established by a duplicate from a different exchange | A joke becomes theirs when it comes up again, not when repeated in one breath; a retried job never counts. |
 | 2026-10-11 | Idiolect state lives in `fact.payload`, not columns | One fact kind, no migration beyond the enum value. |
+| 2026-10-12 | Commitment leaves out Rusbult's quality of alternatives | Comparing users would break V7/V8, and her own life already competes for her time through availability. |
+| 2026-10-12 | A relationship row from before stages has `milestones` null and reads its peak from its params; its first settlement records what it has reached without firing | No SQL backfill to keep in step with the climb rules, and old friendships don't announce a burst of firsts. |
+| 2026-10-12 | `avoiding` reads warm | Knapp has no stage for drifting apart amicably; with her, a user going quiet is usually just life. |
+| 2026-10-12 | `first_conflict` ignores `avoiding` | Absence is not a falling-out. |

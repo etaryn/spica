@@ -63,6 +63,14 @@ test("an exchange older than last_at never subtracts hours", () => {
   expect(back.session.last_at).toBe(min(30).toISOString());
 });
 
+test("a late exchange from an older session keeps the current session's sums", () => {
+  const live = advanceSession(null, 0, span("b", 200, 230), cfg);
+  const current = { ...live.session, tone_sum: 1.5, tone_n: 3, deep_fired: true };
+  const late = advanceSession(current, live.hours, span("a", 0, 20), cfg);
+  expect(late.session).toEqual(current);
+  expect(late.hours).toBeCloseTo(live.hours + 20 / 60);
+});
+
 test("session hours are its own running time, with the minimum", () => {
   const s = advanceSession(null, 0, span("a", 0, 30, 60, 90), cfg).session;
   expect(sessionHours(s, cfg)).toBeCloseTo(1.5);

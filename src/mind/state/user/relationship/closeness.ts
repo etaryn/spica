@@ -63,6 +63,11 @@ export function advanceSession(
       hours: hours + added,
     };
   }
+  // ponytail: a late exchange from an older session counts its time but keeps the live session;
+  // its tone and moment then join the live session's sums. Track per-session sums if that skews.
+  if (session && lastAt < new Date(session.started_at)) {
+    return { session, hours: hours + activeHours(span.times, settings) };
+  }
   const added = Math.max(
     settings.hours.session_min_minutes / 60,
     activeHours(span.times, settings),

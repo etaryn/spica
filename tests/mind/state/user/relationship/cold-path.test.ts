@@ -245,7 +245,10 @@ function withIntimacy(intimacy: unknown) {
   return deps;
 }
 
-/** Her turn first (a reach-out or an earlier reply), then the user's answer 20 minutes later. */
+/**
+ * Her message first (a reach-out or an earlier reply), the user's answer 20 minutes later, then
+ * her reply a minute after that: the exchange is the answer and her reply.
+ */
 async function exchangeWithOpenness(
   deps: ReturnType<typeof makeTestDeps>,
   userId: string,
@@ -254,14 +257,13 @@ async function exchangeWithOpenness(
 ) {
   const db = getTestDb();
   const session = randomUUID();
-  const her = await insertTurn(db, userId, {
+  await insertTurn(db, userId, {
     id: randomUUID(),
     session_id: session,
     role: "companion",
     text: "i had the strangest week",
     created_at: deps.clock.now(),
     trigger,
-    openness,
   });
   deps.clock.advance(20 * 60_000);
   const ut = await insertTurn(db, userId, {
@@ -271,7 +273,17 @@ async function exchangeWithOpenness(
     text: "honestly i've been scared about my dad's health",
     created_at: deps.clock.now(),
   });
-  return { userId, turnIds: [her.id, ut.id], replyTurnId: her.id, recalled: [] };
+  deps.clock.advance(60_000);
+  const reply = await insertTurn(db, userId, {
+    id: randomUUID(),
+    session_id: session,
+    role: "companion",
+    text: "oh no. what's going on with him?",
+    created_at: deps.clock.now(),
+    reply_to: ut.id,
+    openness,
+  });
+  return { userId, turnIds: [ut.id, reply.id], replyTurnId: reply.id, recalled: [] };
 }
 
 test("an answered reach-out adds its time and credits the moment from its stored openness", async () => {
@@ -284,7 +296,10 @@ test("an answered reach-out adds its time and credits the moment from its stored
     await exchangeWithOpenness(deps, u, { disclosure: 0.7, responsiveness: 0.9 }, "reach_out"),
   );
   const row = (await getRelationshipRow(getTestDb(), u))!;
-  expect(row.hours_together).toBeCloseTo(20 / 60);
+  // Waiting for the answer isn't time together.
+  expect(row.hours_together).toBeCloseTo(
+    Math.max(deps.config.relationship.hours.session_min_minutes, 1) / 60,
+  );
   expect(row.session?.moment_n).toBe(1);
   expect((await getParams(getTestDb(), u)).closeness.value).toBeGreaterThan(before);
 });

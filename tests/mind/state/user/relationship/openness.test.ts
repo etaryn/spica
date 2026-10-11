@@ -90,4 +90,23 @@ test("no relationship yet → null; the latest disclosure reading feeds reciproc
   );
   const after = await loadOpenness(d, u, d.clock.now());
   expect(after!.disclosure).toBeGreaterThan(quiet!.disclosure);
+
+  // The nightly baseline sample is newer but carries no reading; the confiding still counts.
+  d.clock.advance(60_000);
+  await insertRelationshipEvents(
+    d.db,
+    u,
+    [
+      {
+        param: "user_disclosure",
+        before: 0.2,
+        after: 0.21,
+        cause: "baseline",
+        deviation: 0,
+        detail: { sample: 0.44 },
+      },
+    ],
+    { turnId: null, now: d.clock.now() },
+  );
+  expect((await loadOpenness(d, u, d.clock.now()))!.disclosure).toBeCloseTo(after!.disclosure);
 });

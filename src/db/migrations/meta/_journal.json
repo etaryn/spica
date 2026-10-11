@@ -211,6 +211,13 @@
       "when": 1791663805860,
       "tag": "0029_idiolect",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791736185315,
+      "tag": "0030_depth_range",
+      "breakpoints": true
     }
   ]
 }

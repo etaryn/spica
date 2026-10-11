@@ -269,7 +269,14 @@ export async function latestReading(
   const rows = await db
     .select({ detail: relationship_event.detail })
     .from(relationship_event)
-    .where(and(eq(relationship_event.user_id, userId), eq(relationship_event.param, param)))
+    .where(
+      and(
+        eq(relationship_event.user_id, userId),
+        eq(relationship_event.param, param),
+        // Baseline samples and decay carry no reading.
+        eq(relationship_event.cause, "signal"),
+      ),
+    )
     .orderBy(desc(relationship_event.created_at))
     .limit(1);
   const reading = (rows[0]?.detail as { reading?: unknown } | undefined)?.reading;

@@ -404,3 +404,23 @@ test("nightly vectors enforce dimensions and drift rows enforce diagnostic categ
     ),
   ).rejects.toThrow();
 });
+
+test("depth is 1 to 3 on what she tells and the lines of her self", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const disclosure = (depth: number) =>
+    db.insert(s.disclosure).values({
+      user_id: u,
+      ref_kind: "memory",
+      ref_id: "00000000-0000-0000-0000-000000000001",
+      depth,
+      level: "open",
+      created_at: T,
+    });
+  await disclosure(3);
+  await expect(disclosure(4)).rejects.toThrow();
+  await expect(disclosure(0)).rejects.toThrow();
+  await expect(
+    db.insert(s.core_self_line).values({ text: "line", embedding: vec(0.1), depth: 4 }),
+  ).rejects.toThrow();
+});

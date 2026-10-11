@@ -34,7 +34,9 @@ export function snapshotWithin(
   lines: { text: string; depth: number }[],
   max: number,
 ): string {
-  const depth = new Map(lines.map((l) => [l.text, l.depth]));
+  // Lines match by text, so a line stored twice is held to its deeper depth.
+  const depth = new Map<string, number>();
+  for (const l of lines) depth.set(l.text, Math.max(l.depth, depth.get(l.text) ?? 0));
   return blocks(content)
     .map((b) => ({
       heading: b.heading,

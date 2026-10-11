@@ -61,7 +61,7 @@ export async function loadDepth(
   userId: string,
   herOpenness: Openness | null,
   reachOut: boolean,
-  sessionId: string,
+  sessionId: string | null,
 ): Promise<DepthLimits> {
   const settings = deps.config.relationship;
   const row = await relationshipRepo.getRelationshipRow(deps.db, userId);

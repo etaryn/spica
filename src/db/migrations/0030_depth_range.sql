@@ -1,0 +1,2 @@
+ALTER TABLE "core_self_line" ADD CONSTRAINT "core_self_line_depth_range" CHECK ("core_self_line"."depth" BETWEEN 1 AND 3);--> statement-breakpoint
+ALTER TABLE "disclosure" ADD CONSTRAINT "disclosure_depth_range" CHECK ("disclosure"."depth" BETWEEN 1 AND 3);

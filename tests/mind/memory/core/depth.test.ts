@@ -34,3 +34,12 @@ test("seed bullets take their section's depth; an unlisted section is surface", 
     { text: "says ngl", depth: 1 },
   ]);
 });
+
+test("a line stored at two depths is held to the deeper one", () => {
+  const content = "### Lately\n- I miss Alcor.";
+  const lines = [
+    { text: "I miss Alcor.", depth: 3 },
+    { text: "I miss Alcor.", depth: 1 },
+  ];
+  expect(snapshotWithin(content, lines, 1)).toBe("");
+});

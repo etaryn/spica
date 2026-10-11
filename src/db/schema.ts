@@ -435,6 +435,7 @@ export const disclosure = pgTable(
   (t) => [
     index("disclosure_user_created_idx").on(t.user_id, t.created_at),
     index("disclosure_user_ref_idx").on(t.user_id, t.ref_id),
+    check("disclosure_depth_range", sql`${t.depth} BETWEEN 1 AND 3`),
   ],
 );
 
@@ -693,13 +694,17 @@ export const core_snapshot = pgTable("core_snapshot", {
 });
 
 /** Fixed values have no version; other lines belong to one rendered self. */
-export const core_self_line = pgTable("core_self_line", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  version: integer("version").references(() => core_snapshot.version, { onDelete: "cascade" }),
-  text: text("text").notNull(),
-  embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
-  depth: smallint("depth").notNull().default(1),
-});
+export const core_self_line = pgTable(
+  "core_self_line",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    version: integer("version").references(() => core_snapshot.version, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    depth: smallint("depth").notNull().default(1),
+  },
+  (t) => [check("core_self_line_depth_range", sql`${t.depth} BETWEEN 1 AND 3`)],
+);
 
 /** Diagnostic evidence of self drift; a finding never blocks a snapshot. */
 export const drift_log = pgTable(

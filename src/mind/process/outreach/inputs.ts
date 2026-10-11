@@ -16,8 +16,7 @@ import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
-import { recentDisclosureDepths } from "@/db/repos/user/disclosure";
-import { depthFor, FIRST_DEPTH } from "@/mind/state/user/relationship/depth";
+import { loadDepth } from "@/mind/state/user/relationship/depth";
 import { faded } from "@/mind/state/user/relationship/params";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import type { CandidateInputs, GateInputs } from "./types";
@@ -108,24 +107,7 @@ export async function loadCandidateInputs(
     },
     usedTopics: await usedTopics(db, userId),
     // Writing first draws on no live chemistry: her usual limit, never a stretch.
-    depthLimit:
-      relationship && params
-        ? depthFor(
-            {
-              closeness: params.closeness.value,
-              userDisclosure: params.user_disclosure.value,
-              recentDepths: await recentDisclosureDepths(
-                db,
-                userId,
-                config.relationship.depth.reciprocity_window,
-              ),
-              herDisclosure: null,
-              session: null,
-              reachOut: true,
-            },
-            config.relationship,
-          ).open
-        : FIRST_DEPTH.open,
+    depthLimit: (await loadDepth({ db, config }, userId, null, true, null)).open,
   };
 }
 

@@ -390,7 +390,7 @@ Every table here references `user(id) ON DELETE CASCADE`.
   preoccupation) and `life_last_date` went with the per-user ego and life
   tick; the table is gone. Core state (§6.2) and the params above replace it.
 - **`push_subscription`**: one row per browser subscription.
-- **`disclosure`** (**Built 10b**, migration 0028): the ledger of what she
+- **`disclosure`** (**Built 10b**, migration 0028; depth checked 1–3 in the database, migration 0030, as on `core_memory` and `core_self_line`): the ledger of what she
   has actually told this user about herself. `user_id`, `ref_kind`
   (`memory | self_line`), `ref_id` (the core item; no foreign key, since core
   never depends on a user table and core items are never hard-deleted),
@@ -2018,6 +2018,23 @@ and life tick) were dropped; the replacement is designed fresh.
   closer, and meets the guard-phase `invented_self` decision (§25.7).
   Honesty about being an AI is never part of it (Ethan, 2026-10-11).
   *10d or its own slice.*
+- **B85.** Review runs pending: `pnpm exit:intimacy`, `pnpm exit:disclosure`
+  and `pnpm exit:idiolect` (real extraction) have not been run, so what the
+  real extractor reads as disclosure, bids and idiolect is unreviewed.
+  *Tuning.*
+- **B86.** A callback a few minutes after a joke is born can establish it
+  in the same session (a "lol" judged a duplicate from a later exchange).
+  Tune the extraction prompt in the `rel-idiolect` run. *Tuning.*
+- **B87.** A reach-out's depth is checked when the candidate is picked, not
+  again at send (up to the jitter later); the message itself is composed
+  at send under the current limits. A late exchange from an older session
+  folds its tone and moment into the live session's sums. *Tuning.*
+- **B88.** The hot path reads her openness, then her depth limits, one after
+  the other (depth needs openness). Fold them into one read if reply
+  latency matters. *Later.*
+- **B89.** The guard's fact list leaves out the idiolect offered in "Your
+  things together", so a callback could read as an invented memory once
+  the guard is on. *Guard phase.*
 - **B14.** Signal calibration: the real extractor scores hurt and tension
   lower than scripted amounts and reads light arguments as banter. Calibrate
   prompt anchors or `relationship.gains` against real conversations.

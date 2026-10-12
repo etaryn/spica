@@ -144,3 +144,7 @@ code itself.
 | 2026-10-12 | Common topics embed both sides as queries, matched at 0.5 | Measured on voyage-3.5: as documents any two short words score 0.75+ and everything matched; as queries related pairs scored 0.52–0.81 and unrelated 0.26–0.45. |
 | 2026-10-12 | `/api/chat` is not gated on the profile card; only the `/chat` page is | A crisis message must always get through, even from an account that skipped the quiz by calling the API. |
 | 2026-10-12 | A quiz choice can't be changed once picked | Her pick shows the moment you choose; changing after would let you copy her. |
+| 2026-10-12 | Module events are delivered in-process and awaited; durable pg-boss delivery deferred (B97) | No real module exists; the `emit` interface is the same either way, so only the bus changes later. |
+| 2026-10-12 | Module events fire after their write commits and carry ids, never content | An event inside a rolled-back transaction would announce something that never happened; ids keep user text out of modules and logs. |
+| 2026-10-12 | `user_mind.triggered` fires when the run is claimed, not when it is recorded | One place covers every trigger source and the sweep, once per run. |
+| 2026-10-12 | The public persona is her daily life (today's plan, happened events), outward personality (surface self lines, public voice) and AI side (core values); deeper thoughts stay secret (Ethan) | She reads clearly as an AI companion with a life; what her mind made of that life stays private. |

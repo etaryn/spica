@@ -303,7 +303,7 @@ are **the same in kind and differ in cadence and scope.**
 | Models | Behind `LLMProvider`: replies `claude-sonnet-5`; extraction, classifiers, judges, the guard, life and core loops `claude-haiku-4-5`. IDs in config (`models.*`) |
 | Embeddings | Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder` |
 | Auth | Better Auth, email and password, 18+ enforced server-side |
-| Layout | `src/mind`: framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`), organised by engine (`memory`, `state`, `world`, `process`) plus `platform` (LLM, embedder, clock, config, jobs, events, push), each engine split into `core/` and `user/`; an ESLint rule stops core, world and shared code importing user code, process code or the cross-user admin repos, by `@/` or relative path (V2). `src/db`: schema and repos split into `user/` (`userId`-first), `world/` and `admin/` (cross-user, workers and the inspector). `src/runtime`: the Node implementations (pg-boss, Postgres event bus, Web Push). `src/server`: Next server helpers (auth, session, inspector access). `src/app` Next.js; `src/worker` pg-boss, one registration file per engine; `prompts/`; `evals/` |
+| Layout | `src/mind`: framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`), organised by engine (`memory`, `state`, `world`, `process`) plus `platform` (LLM, embedder, clock, config, jobs, events, modules, social, push), each engine split into `core/` and `user/`; an ESLint rule stops core, world and shared code importing user code, process code or the cross-user admin repos, by `@/` or relative path (V2). `src/db`: schema and repos split into `user/` (`userId`-first), `world/` and `admin/` (cross-user, workers and the inspector). `src/runtime`: the Node implementations (pg-boss, Postgres event bus, Web Push). `src/server`: Next server helpers (auth, session, inspector access). `src/app` Next.js; `src/worker` pg-boss, one registration file per engine; `src/modules` the module list; `prompts/`; `evals/` |
 | Time | Every timestamp comes from the injected `Clock`; never `DEFAULT now()` |
 
 Commands: `pnpm typecheck`, `pnpm lint` (ESLint and Prettier), `pnpm format`, `pnpm test`,
@@ -511,6 +511,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
 2. **Self snapshot**: everything else about her current self, versioned and
    rewritten by core loops; free to drift.
 3. **User layer**: user memory and user state, per user.
+
+The persona file may also have a `# Public voice` section, her register with an audience; only
+`publicPersona` reads it (Built 12, §16), never a reply or a core loop.
 
 ### 7.2 Core values (PROPOSED split of persona v2; Ethan confirms)
 
@@ -1759,16 +1762,40 @@ once, after signup; taking it before signup (as a hook) is a later decision.
 
 ---
 
-## 16. Extension points (hooks only)
+## 16. Extension points (hooks only) (Built 12)
 
-Features are modules registering through interfaces: an event bus with typed
-events (`turn.received`, `reply.sent`, `fact.written`,
-`relationship.changed`; **new:** `world.event`, `core.snapshot`,
-`user_mind.triggered`), so adding one doesn't modify the core.
-- **Friend group** (on hold): the `scope` / `space_id` hooks.
-- **Public presence** (the ideal end point): a `SocialChannel` interface and
-  a `public_persona` view. Her public voice draws from **core** only, so it
-  can never leak a user (V2).
+Features are modules registering through interfaces, so adding one doesn't modify the core.
+
+**Built 12: the module bus.** `src/mind/platform/modules.ts`. A module is `{ name, scope, on }`;
+the build's list is `src/modules/index.ts` (empty), registered by `buildRuntime` in both the app
+and the worker. `createModuleBus` refuses a duplicate name and a core module that lists a user
+event; `deps.modules.emit` runs each subscriber in registration order, logs a throwing handler
+(module, event type, error class) and never throws. Core loops get `CoreDeps.emitCore`, which
+takes core events only. Delivery is in-process and awaited (DECIDED 2026-10-12); durable delivery
+is B97. Events carry ids, never content, and fire after their write commits:
+
+| Event | Scope | Payload | From |
+|---|---|---|---|
+| `turn.received` | user | `userId`, `turnId` | `receiveTurn` (not a retried POST) |
+| `reply.sent` | user | `userId`, `turnId`, `part` | `deliverPart`, each bubble |
+| `fact.written` | user | `userId`, `factId`, `kind` | the cold path, `submitCard`, `runUserLoop` |
+| `relationship.changed` | user | `userId`, `params` (names that moved) | the cold path, `tickUser` |
+| `user_mind.triggered` | user | `userId`, `runId`, `triggers` (kinds) | `runUserMind` on claim |
+| `world.event` | core | `eventId`, `outcome` | `core_world_tick` when an event lands |
+| `core.snapshot` | core | `version` | `core_render_snapshot` on a new version |
+
+**Scope rule (V2 for modules):** a `core` module hears core events only and gets `CoreDeps`; a
+`user` module hears both and gets `Deps`.
+
+- **Friend group** (on hold): the `scope` / `space_id` hooks on `fact`; events carry no
+  `space_id` yet (B98).
+- **Public presence** (the ideal end point): `SocialChannel` (`src/mind/platform/social.ts`, a
+  recording implementation only, wired to nothing) and `publicPersona`
+  (`src/mind/process/core/public-persona.ts`): her daily life, outward personality and AI side
+  (Ethan, 2026-10-12): core values, the persona file's `# Public voice`, the fixed self lines and
+  the latest snapshot's depth-1 lines, and today's plan plus the world events that have happened.
+  Her deeper thoughts stay secret: never deeper lines, the snapshot prose, core memories, needs,
+  mood or goals. A public module is a core module, so it can never hear a user (V2).
 - **Comparing Spicas:** nothing beyond the fixed core values.
 
 ---
@@ -1956,6 +1983,7 @@ two minds or at reply time.
 | 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within the idle gap after her last message) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1167 tests at close |
 | 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
 | 11. Onboarding | The profile card swap: quiz file v1 (six friend dimensions, 12 choice and 3 open questions), the `onboarding` table (migration 0032), `submitCard` writing both cards as light memories with the name floor, common topics worked out at submit, the compatibility page, the `/chat` gate, the card mark (reply v16); exit `tests/exit/phase-11.test.ts` (the canary). `pnpm test` 154 files / 1230 tests at close |
+| 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1256 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
@@ -1963,7 +1991,7 @@ two minds or at reply time.
 |---|---|---|
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; **10d built:** stages, commitment, the milestone trigger; Phase 10 built) | Deterministic assertions per mechanic over scripted signals |
 | **11. Onboarding** | The profile card swap, both cards as light memories, the compatibility page (**built**) | The card swap writes both cards as light memories; card facts reach the reply marked; conversation supersedes them; the name never fades; the compatibility page comes from the answers; the leak canary |
-| **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
+| **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs (**built**) | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
 
 Phase directives (PROPOSED): start every new loop at its lowest cadence and
@@ -2395,6 +2423,23 @@ Ethan, not changed.
   crisis her reach-outs read the last pre-crisis summary indefinitely (and
   with no summary before the crisis, none). Add a clear-down rule if
   reach-outs feel out of date. *Tuning.*
+
+### 25.11 Extensions
+- **B97.** Module delivery is in-process and awaited: no retries, a crash loses the event, a slow
+  module slows its caller, and a module's model calls aren't metered against the core budget.
+  Move to one pg-boss job per subscriber, enqueued in the writing transaction, when a module makes
+  slow or model calls, must not miss events, or needs web-process events in the worker. *When a
+  module needs it.*
+- **B98.** Module events carry no `space_id`. *With the friend group.*
+- **B99.** She doesn't remember her posts: the public-presence module writes each post to core
+  memory as her own episode, so "saw your post" lands. *Public presence.*
+- **B100.** Messaging her on a platform reaches your own Spica: a user links a platform account;
+  a DM from it enters that user's `receiveTurn` as a user-scoped turn and the reply goes back the
+  same way (a transport for the user mind, never the public module). Unlinked strangers: OPEN.
+  Platform limits: Discord and Telegram bots DM freely; Instagram and Messenger need Meta app
+  review and a 24-hour reply window; X DMs need a paid API tier. *Public presence.*
+- **B101.** Her product updates and features have no public source: add an Ethan-written file
+  that `publicPersona` reads. *Public presence.*
 
 ---
 

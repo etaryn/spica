@@ -132,7 +132,8 @@ values, diffs it and tracks the trend; it logs, never blocks (test phase).
 Different faces across users are allowed; "too drastic" is tested, not
 fixed. Persona file `prompts/persona/v<N>.md` (now v4, from Ethan's draft:
 openly an AI, sibling Alcor, loves stars / old films / books, no body), split
-into `# Core values` and `# Seed self` (snapshot v0). `interest_alignment:
+into `# Core values` and `# Seed self` (snapshot v0); `# Public voice` feeds only
+`publicPersona`. `interest_alignment:
 adjacent` applies at reply time only. Identity disclosure: honest, in her own
 voice.
 
@@ -192,8 +193,10 @@ synthetic trigger, through the same hot path.
 - **Onboarding (v3 §14):** the profile card swap: a required one-time quiz,
   both cards as light user-scoped memories (name at salience 1.0), the
   compatibility page on six friend dimensions; reveal pacing dropped.
-- **Extension hooks (v3 §16):** event bus, `scope` / `space_id`,
-  `SocialChannel`, `public_persona` (draws from core only).
+- **Extension hooks (v3 §16, built 12):** `deps.modules.emit` after commit, seven events, ids
+  only; a core module hears core events only; in-process delivery (durable is B97, raise it when
+  a module needs it); `publicPersona` (her day, surface self, public voice; never deeper thoughts) and a
+  `SocialChannel` stub; no modules ship.
 
 ## Build phases (v3 §20): check the current phase before implementing
 Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
@@ -210,9 +213,9 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 11 (onboarding, the profile card swap) is built. Next per §20 is
-Phase 12 (extension stubs), which needs its design doc.** Phases 8 (core loops), 9 (user mind)
-and 10 (relationship psychology) are built.
+**Current phase: Phase 12 (extension stubs) is built. Next per §20 is Phase 13 (guard re-enable
+and calibration), which needs its design doc.** Phases 8 (core loops), 9 (user mind), 10
+(relationship psychology) and 11 (onboarding) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 

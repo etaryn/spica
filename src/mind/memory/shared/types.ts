@@ -23,7 +23,7 @@ export type RetrievedFact = {
   depth?: number;
   /** Hers only: hint at it, or they already know it (told, or only hinted before). */
   share?: "hint" | "known" | "hinted";
-  /** Theirs only: from when they first met, or her own guess rather than something they said. */
+  /** Theirs only: from the profile cards you swapped when you met, or her own guess rather than something they said. */
   origin?: "onboarding" | "guess";
 };
 

@@ -137,7 +137,7 @@ const SHARE = {
 };
 /** Whether they told her: common ground from theirs. */
 const ORIGIN = {
-  onboarding: "from when you first met",
+  onboarding: "from their profile card, a first impression",
   guess: "your own guess, they never said this",
 };
 

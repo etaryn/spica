@@ -60,10 +60,13 @@ export async function commonTopics(
   threshold: number,
 ): Promise<Topic[]> {
   const opens = quiz.questions.filter((q) => q.kind === "open");
-  const yours = opens.map((q) => String(answers[q.id] ?? "")).filter((s) => s !== "");
+  const typed = opens.map((q) => String(answers[q.id] ?? "")).filter((s) => s !== "");
+  // The same word in two answers is one topic, not two rows.
+  const yours = typed.filter((s, i) => typed.findIndex((t) => key(t) === key(s)) === i);
   const hers = opens.map((q) => q.her);
   if (yours.length === 0) return [];
-  const vectors = await embedder.embed([...yours, ...hers], "document");
+  // Embedded as queries: as documents, any two short words sit close together and everything matches.
+  const vectors = await embedder.embed([...yours, ...hers], "query");
   const topics: Topic[] = [];
   for (const [i, mine] of yours.entries()) {
     let best: Topic | null = null;

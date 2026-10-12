@@ -32,7 +32,9 @@ and phases this summary compresses.
   never design them out: when cutting a corner, keep the seam (an interface,
   a config key, a `ponytail:` comment or a §25 backlog entry). Prefer the
   simplest code that works; delete before adding. The scope rules and the
-  crisis guardrails still hold.
+  crisis guardrails still hold. **Scale target (v3 §0.3): usable by one
+  user now, never unscalable**: keep rows `user_id`-scoped and work in
+  jobs, and mark one-user-only corners for "before users".
 - Definition of done: compiles, tests pass, the phase's exit test passes,
   **the leak canary passes**, and every new field, job, config key or prompt
   is added back into v3.

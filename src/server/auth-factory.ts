@@ -40,7 +40,8 @@ export function createAuth(
               config.auth.min_age,
             );
             if (!result.ok) throw new APIError("BAD_REQUEST", { message: result.reason });
-            return { data: u };
+            // Stray spaces would show on her side of the card and in every reply.
+            return { data: { ...u, name: u.name.trim() } };
           },
         },
       },

@@ -7,7 +7,9 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeEach, expect, test } from "vitest";
+import { afterAll, beforeEach, expect, test, vi } from "vitest";
+import ChatPage from "@/app/chat/page";
+import OnboardingPage from "@/app/onboarding/page";
 import { adminDecayFacts } from "@/db/repos/admin/decay";
 import { getOnboarding } from "@/db/repos/user/onboarding";
 import { ensureRelationship } from "@/db/repos/user/relationship";
@@ -21,6 +23,21 @@ import { cardView } from "@/mind/process/onboarding/score";
 import { submitCard } from "@/mind/process/onboarding/submit";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+
+// The real pages run with the session and deps swapped for the test user and test deps.
+const page = vi.hoisted(() => ({ user: null as unknown, deps: null as unknown }));
+vi.mock("next/navigation", () => ({
+  redirect: (to: string) => {
+    throw Object.assign(new Error("redirect"), { to });
+  },
+}));
+vi.mock("@/server/session", () => ({ requireUser: async () => page.user }));
+vi.mock("@/server/deps", () => ({ getDeps: () => page.deps, getVapidPublicKey: () => "" }));
+const redirectOf = (render: Promise<unknown>) =>
+  render.then(
+    () => null,
+    (e: { to?: string }) => e.to ?? Promise.reject(e),
+  );
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -185,13 +202,16 @@ test("3: a later conversation fact supersedes a card fact", async () => {
 test("4: the gate opens only once the card exists", async () => {
   const d = setup();
   const u = await createTestUser("Sam");
-  expect(await getOnboarding(d.db, u)).toBeNull(); // /chat redirects to /onboarding
+  Object.assign(page, { user: { id: u, email: "sam@test.local", name: "Sam" }, deps: d });
+  expect(await redirectOf(ChatPage())).toBe("/onboarding");
+  expect(await redirectOf(OnboardingPage())).toBeNull();
   await submitCard(
     d,
     { id: u, name: "Sam" },
     { quiz_version: "v1", answers: answers(0, ["a", "b", "c"]) },
   );
-  expect(await getOnboarding(d.db, u)).not.toBeNull(); // /chat opens; /onboarding redirects back
+  expect(await redirectOf(ChatPage())).toBeNull();
+  expect(await redirectOf(OnboardingPage())).toBe("/chat");
 });
 
 test("5: the compatibility page comes out of the stored answers", async () => {

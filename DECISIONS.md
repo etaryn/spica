@@ -141,3 +141,6 @@ code itself.
 | 2026-10-12 | Her card answers are `self` facts, not disclosure rows | The disclosure ledger tracks core memories and self lines; her quiz answers are neither. |
 | 2026-10-12 | Common topics are stored on the card at submit | Both sides are embedded then, so the results page makes no calls. |
 | 2026-10-12 | Quiz files are kept while any card names their version (an exception to deleting unconfigured prompt versions) | The results page reads a card with the quiz it was taken with; deleting the file would break every older card. |
+| 2026-10-12 | Common topics embed both sides as queries, matched at 0.5 | Measured on voyage-3.5: as documents any two short words score 0.75+ and everything matched; as queries related pairs scored 0.52–0.81 and unrelated 0.26–0.45. |
+| 2026-10-12 | `/api/chat` is not gated on the profile card; only the `/chat` page is | A crisis message must always get through, even from an account that skipped the quiz by calling the API. |
+| 2026-10-12 | A quiz choice can't be changed once picked | Her pick shows the moment you choose; changing after would let you copy her. |

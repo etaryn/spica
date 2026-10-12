@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";
-import { insertOnboarding } from "@/db/repos/user/onboarding";
+import { getOnboarding, insertOnboarding } from "@/db/repos/user/onboarding";
 import type { Deps } from "@/mind/platform/deps";
 import { cardFacts } from "./card-facts";
 import { answersSchema, loadQuiz } from "./quiz";
@@ -29,6 +29,9 @@ export async function submitCard(
   const quiz = loadQuiz(cfg.quiz_version);
   const answers = answersSchema(quiz, cfg.max_answer_chars).safeParse(parsed.data.answers);
   if (!answers.success) return { status: 400, error: "invalid_answers" };
+
+  // Checked again by the insert, for two tabs submitting at once; this only saves the embed calls.
+  if (await getOnboarding(deps.db, user.id)) return { status: 409, error: "already_done" };
 
   // Embedding happens before the transaction so a slow embedder never holds it open.
   const facts = cardFacts(quiz, answers.data, user.name, cfg);

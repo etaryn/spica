@@ -622,7 +622,7 @@
     "neutral_band": 15,
     "click_gap": 20,
     "clash_gap": 50,
-    "topic_similarity": 0.6,
+    "topic_similarity": 0.5,
     "max_answer_chars": 40,
     "max_name_chars": 60
   },

@@ -4,8 +4,6 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { onboarding } from "@/db/schema";
-import type { Answers } from "@/mind/process/onboarding/quiz";
-import type { Topic } from "@/mind/process/onboarding/score";
 
 export type OnboardingRow = typeof onboarding.$inferSelect;
 
@@ -18,7 +16,7 @@ export async function getOnboarding(db: Db, userId: string): Promise<OnboardingR
 export async function insertOnboarding(
   db: Db,
   userId: string,
-  row: { quiz_version: string; answers: Answers; topics: Topic[]; completed_at: Date },
+  row: Omit<typeof onboarding.$inferInsert, "user_id">,
 ): Promise<boolean> {
   const inserted = await db
     .insert(onboarding)

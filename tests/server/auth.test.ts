@@ -37,3 +37,10 @@ test("under-18 sign-up is rejected and nothing is stored", async () => {
 test("missing or malformed date of birth is rejected", async () => {
   await expect(auth.api.signUpEmail({ body: body("not-a-date") })).rejects.toThrow();
 });
+
+test("the name is stored trimmed", async () => {
+  const b = { ...body("1995-04-02"), name: "  Pat  " };
+  await auth.api.signUpEmail({ body: b });
+  const [row] = await getTestDb().select().from(user).where(eq(user.email, b.email));
+  expect(row?.name).toBe("Pat");
+});

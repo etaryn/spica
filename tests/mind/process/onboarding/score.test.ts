@@ -77,6 +77,16 @@ test("topics: exact match ignores case and spacing; unrelated words never match"
   expect(topics).toEqual([{ yours: "Old  Films ", hers: "old films" }]);
 });
 
+test("topics: the same word typed twice is one topic", async () => {
+  const topics = await commonTopics(
+    quiz,
+    { q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, o1: "old films", o2: "Old Films" },
+    new ScriptedEmbedder(1024),
+    0.6,
+  );
+  expect(topics).toEqual([{ yours: "old films", hers: "old films" }]);
+});
+
 test("topics: similar words count at or above the threshold", async () => {
   const embedder = new ScriptedEmbedder(1024)
     .set("astronomy", ScriptedEmbedder.near(1024, 3, 4, 0.7))

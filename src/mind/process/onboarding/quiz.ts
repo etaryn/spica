@@ -52,7 +52,12 @@ const OpenSchema = z.object({
   her_fact: line,
 });
 
-export const normalizeAnswer = (s: string) => s.trim().replace(/\s+/g, " ");
+// Zero-width characters are dropped so an invisible answer counts as blank.
+export const normalizeAnswer = (s: string) =>
+  s
+    .replace(/[\u200b-\u200d\u2060\ufeff]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
 const wordCount = (s: string) => (s === "" ? 0 : s.split(" ").length);
 
 const QuizSchema = z

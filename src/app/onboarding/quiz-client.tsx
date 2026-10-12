@@ -1,17 +1,39 @@
 "use client";
 /**
  * One question at a time: they answer, then her answer shows. Answers stay in the browser until
- * the last question, then go up in one request.
+ * the last question, then go up in one request; a refresh picks up where they left off.
  */
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styles from "./onboarding.module.css";
 
 export type ClientQuestion =
   | { kind: "choice"; id: string; prompt: string; options: string[]; her: number }
   | { kind: "open"; id: string; prompt: string; maxWords: number; her: string };
 
-const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
+// Mirrors the server's normalizing, so what they see accepted is what gets saved.
+const tidy = (s: string) =>
+  s
+    .replace(/[\u200b-\u200d\u2060\ufeff]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+type Progress = { index: number; answers: Record<string, number | string> };
+// Browser storage can be missing or throw (private windows, blocked storage); the quiz works without it.
+function loadProgress(key: string): Progress | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Progress) : null;
+  } catch {
+    return null;
+  }
+}
+function saveProgress(key: string, progress: Progress | null) {
+  try {
+    if (progress) sessionStorage.setItem(key, JSON.stringify(progress));
+    else sessionStorage.removeItem(key);
+  } catch {}
+}
 
 export function QuizClient(props: {
   intro: string;
@@ -26,6 +48,17 @@ export function QuizClient(props: {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const storeKey = `spica-quiz-${props.version}`;
+  useEffect(() => {
+    const saved = loadProgress(storeKey);
+    if (!saved || saved.index >= props.questions.length) return;
+    setAnswers(saved.answers);
+    setIndex(saved.index);
+    setStarted(true);
+  }, [storeKey, props.questions.length]);
+  useEffect(() => {
+    if (started) saveProgress(storeKey, { index, answers });
+  }, [storeKey, started, index, answers]);
   const q = props.questions[index]!;
   const answered = q.id in answers;
   const last = index === props.questions.length - 1;
@@ -35,7 +68,9 @@ export function QuizClient(props: {
     const words = tidy(draft);
     if (!words) return setError("Type a word or two.");
     if (words.split(" ").length > q.maxWords || words.length > props.maxChars)
-      return setError(`One or two words, ${props.maxChars} characters at most.`);
+      return setError(
+        `${q.maxWords === 1 ? "One word" : `Up to ${q.maxWords} words`}, ${props.maxChars} characters at most.`,
+      );
     setError(null);
     setAnswers({ ...answers, [q.id]: words });
   }
@@ -49,11 +84,13 @@ export function QuizClient(props: {
       body: JSON.stringify({ quiz_version: props.version, answers }),
     }).catch(() => null);
     setBusy(false);
-    if (res?.status === 201) return router.push("/onboarding/results");
     const body = res ? await res.json().catch(() => ({})) : {};
-    if (res?.status === 409 && body.error === "already_done")
-      return router.push("/onboarding/results");
-    if (res?.status === 409 && body.error === "stale_quiz") return window.location.reload();
+    const done = res?.status === 201 || (res?.status === 409 && body.error === "already_done");
+    if (done || res?.status === 409 || res?.status === 400) saveProgress(storeKey, null);
+    if (done) return router.push("/onboarding/results");
+    if (res?.status === 401) return router.push("/login");
+    // The quiz changed or the answers no longer fit it: start again on the current quiz.
+    if (res?.status === 409 || res?.status === 400) return window.location.reload();
     setError("Couldn't save your card. Try again.");
   }
 

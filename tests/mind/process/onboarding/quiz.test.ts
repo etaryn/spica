@@ -110,4 +110,7 @@ test("answers: every question once, choice in range, open answers short and norm
 
 test("normalizeAnswer trims and collapses whitespace", () => {
   expect(normalizeAnswer("  a \t b\n")).toBe("a b");
+  // Invisible characters would otherwise pass as a word and store a blank answer.
+  expect(normalizeAnswer("\u200b\u200d\ufeff")).toBe("");
+  expect(normalizeAnswer("st\u200bars")).toBe("stars");
 });

@@ -84,6 +84,14 @@ default unless a reason is documented, MAY is optional.
   test-phase status (§2).
 - The app itself always uses the real reply model, so Ethan's own chats show
   the real voice.
+- **Scale target: one user, never designed out of many.** The product has to
+  be fully usable by one person now. Infrastructure for many users (scaling,
+  database tuning, rate limits, abuse handling, the real framework, security
+  hardening) is deferred, but nothing may be built in a way that rules it
+  out: every row stays `user_id`-scoped, work runs as jobs rather than
+  in-process loops, cost scales with what happens rather than with users,
+  and a corner that only holds for one user is marked (a `ponytail:`
+  comment or a §25 "before users" item) so it can be found later.
 
 ---
 
@@ -2340,6 +2348,10 @@ and life tick) were dropped; the replacement is designed fresh.
   screenshot only for now. *Before users.*
 - **B94.** The profile card quiz before signup, as a hook; answers are already held in the
   browser until submit. *Later.*
+- **B95.** JSON routes (`/api/chat`, `/api/onboarding`) read the whole request body before
+  validating it; cap the body size along with rate limits. *Before users.*
+- **B96.** The quiz and results pages have been checked by request only, not looked at in a
+  browser or at phone width. *Before showing anyone.*
 
 ### 25.10 Stakes (thesis review, 2026-10-09)
 Features that let the user escape consequences or make her over-forgiving

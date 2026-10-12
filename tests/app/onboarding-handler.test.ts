@@ -73,8 +73,10 @@ test("review focus 1: a second submit is 409 and writes nothing more", async () 
   const [a, b] = await Promise.all([h(post(body)), h(post(body))]);
   expect([a.status, b.status].sort()).toEqual([201, 409]);
   const n = await factCount(u.id);
+  const calls = deps.embedder.calls;
   expect((await h(post(body))).status).toBe(409);
   expect(await factCount(u.id)).toBe(n);
+  expect(deps.embedder.calls).toBe(calls); // refused before spending embedding calls
 });
 
 test("review focus 2: an embedder failure is 503, writes nothing, and a retry succeeds", async () => {

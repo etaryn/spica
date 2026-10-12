@@ -13,8 +13,10 @@ import { VoyageEmbedder } from "@/mind/platform/embedder/voyage";
 import { errorName } from "@/mind/platform/errors";
 import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { consoleLogger } from "@/mind/platform/log";
+import { createModuleBus } from "@/mind/platform/modules";
 import { noopPusher } from "@/mind/platform/push";
 import { createDb } from "@/db/client";
+import { modules } from "@/modules";
 import { PgBossQueue } from "./pg-boss-jobs";
 import { vapidPublicKey, type Env } from "./env";
 import { PgEventBus } from "./pg-event-bus";
@@ -67,6 +69,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     log: consoleLogger,
     events: new PgEventBus(db, config.events.channel),
     pusher,
+    modules: createModuleBus(modules, () => deps),
   };
   return { deps, boss };
 }

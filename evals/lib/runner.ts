@@ -11,6 +11,7 @@ import type { Embedder } from "@/mind/platform/embedder/types";
 import { RecordingEventBus } from "@/mind/platform/events";
 import type { LLMProvider } from "@/mind/platform/llm/types";
 import { silentLogger } from "@/mind/platform/log";
+import { createModuleBus } from "@/mind/platform/modules";
 import { seedCore } from "@/mind/memory/core/seed";
 import { decayPass } from "@/mind/memory/user/decay";
 import { RecordingQueue } from "@/mind/platform/jobs";
@@ -397,6 +398,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     embedder: opts.embedder ?? new FakeEmbedder(config.embedding.dimensions),
     events: new RecordingEventBus(),
     pusher,
+    modules: createModuleBus([], () => deps),
   };
   await seedCore(coreDepsOf(deps));
   const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);

@@ -11,6 +11,7 @@ import type { EventBus } from "./events";
 import type { JobQueue } from "./jobs";
 import type { LLMProvider } from "@/mind/platform/llm/types";
 import type { Logger } from "./log";
+import type { CoreEvent, ModuleBus } from "./modules";
 import type { Pusher } from "./push";
 
 export interface Deps {
@@ -24,15 +25,19 @@ export interface Deps {
   log: Logger;
   events: EventBus;
   pusher: Pusher;
+  modules: ModuleBus;
 }
 
 /**
  * What a core loop gets: her own memory, state and world, and the model, but no database, queue
- * or push, so it cannot reach a user's data even by mistake.
+ * or push, so it cannot reach a user's data even by mistake. It can announce her own events to
+ * modules, and nothing about a user.
  */
-export type CoreDeps = Pick<Deps, "core" | "llm" | "embedder" | "clock" | "config" | "log">;
+export type CoreDeps = Pick<Deps, "core" | "llm" | "embedder" | "clock" | "config" | "log"> & {
+  emitCore(event: CoreEvent): Promise<void>;
+};
 
 export function coreDepsOf(deps: Deps): CoreDeps {
   const { core, llm, embedder, clock, config, log } = deps;
-  return { core, llm, embedder, clock, config, log };
+  return { core, llm, embedder, clock, config, log, emitCore: (event) => deps.modules.emit(event) };
 }

@@ -20,10 +20,11 @@ test("no core interface mentions a user id", () => {
   }
 });
 
-test("core loops get no database, queue, push or event bus", () => {
+test("core loops get no database, queue, push, event bus or module bus", () => {
   const core = coreDepsOf(makeTestDeps());
-  for (const key of ["db", "queue", "pusher", "events"]) expect(core).not.toHaveProperty(key);
+  for (const key of ["db", "queue", "pusher", "events", "modules"])
+    expect(core).not.toHaveProperty(key);
   expect(Object.keys(core).sort()).toEqual(
-    ["clock", "config", "core", "embedder", "llm", "log"].sort(),
+    ["clock", "config", "core", "emitCore", "embedder", "llm", "log"].sort(),
   );
 });

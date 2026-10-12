@@ -23,7 +23,17 @@ export type DraftInput = {
 const DraftSchema = z.object({ caption: z.string(), overlay_text: z.string().nullable() });
 const CheckSchema = z.object({ ok: z.boolean(), reason: z.string() });
 
-const tidy = (s: string, max: number) => s.trim().replace(/\s+/g, " ").slice(0, max).trim();
+// Keeps a caption's line breaks (at most one blank line) so a two-line pattern can be honoured.
+const tidy = (s: string, max: number) =>
+  s
+    .replace(/[^\S\n]+/g, " ")
+    .split("\n")
+    .map((l) => l.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max)
+    .trim();
 
 /** Null when the model wrote no caption. Model failures throw; the core loop runner traces them. */
 export async function draftPost(

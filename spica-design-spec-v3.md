@@ -1861,7 +1861,7 @@ post_tick (hourly) <- newest landed browse event
   The craft goal is seeded by persona v6 and created once by title when missing (a database that
   already has `core.goals.max_active` active goals can't take it; skill reads 0 until a slot
   frees, B109). Homemade imperfection (crop offset, tilt, placement jitter) is drawn from
-  `posts.jitter` times `(1 - skill)`, seeded by the post id so renders reproduce.
+  `posts.jitter` times `(1 - skill)`, seeded by the find id so renders reproduce.
 - **`post_tick`** (hourly, `src/worker/world-jobs.ts`; logic in `process/core/post.ts`). Skip
   reasons, logged: `today` (one post per local day), `week` (`max_per_week`), `busy` (busy or quiet
   block), `pending` (`max_pending` drafts waiting), `no_find` (newest landed browse event within
@@ -2559,12 +2559,14 @@ Ethan, not changed.
 - **B103.** The format extractor reads one reference by one vision call; pattern recognition over
   many references (or open statistics) would find trends itself. *Later.*
 - **B104.** Depth masks, so she can stand behind foreground objects in the content. *Later.*
-- **B105.** Object storage for media: it is local disk under `posts.media_dir`. *Before users.*
+- **B105.** Object storage for media: it is local disk under `posts.media_dir`, and
+  `pnpm db:reset-self` leaves media files behind in `.data/media`. *Before users.*
 - **B106.** Platform publishing with AI labels, through `SocialChannel`; posts then need the guard
   or a standing approval rule (§16a). *Publishing phase.*
 - **B107.** Songs: attached in-app at posting until a platform API allows it. *Publishing phase.*
 - **B108.** APOD's US publish date vs her timezone: the fetch uses the day before her local date,
-  so she sees yesterday's picture; consider retrying hourly for today's. *Tuning.*
+  so she sees yesterday's picture; consider retrying hourly for today's. Commons is also fetched for her local date (harmless,
+  retries hourly). *Tuning.*
 - **B109.** The craft goal is created by title when missing, racing a concurrent create
   (`craftSkill`), and can't be created when `core.goals.max_active` active goals are full (skill
   reads 0 until a slot frees). *Tuning.*

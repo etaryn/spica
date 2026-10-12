@@ -75,7 +75,18 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
   const pose = choosePose(loadPoses(cfg.poses_dir), format, seededUnit(`${find.id}:pose`));
   if (!pose) return skip("no_pose");
 
-  const persona = await publicPersona(deps);
+  // Read before drafting: a missing file would otherwise re-spend a draft call every hour.
+  let content: Buffer;
+  let posePng: Buffer;
+  try {
+    content = await readMedia(find.media_path);
+    posePng = await readMedia(path.join(cfg.poses_dir, pose.file));
+  } catch (error) {
+    log.error("post media unreadable", { find: find.id, error: errorName(error) });
+    return skip("render_failed");
+  }
+
+  const persona = await publicPersona(deps, now);
   const drafted = await runCoreLoop<Draft | null>(deps, "post_draft", now, async (ctx) => {
     const draft = await draftPost(ctx.deps, { persona, find, valence, format, skill });
     return {
@@ -95,10 +106,10 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
   let media: string;
   try {
     const image = await renderStill({
-      content: await readMedia(find.media_path),
+      content,
       format,
       pose: {
-        png: await readMedia(path.join(cfg.poses_dir, pose.file)),
+        png: posePng,
         facing: pose.facing,
         anchor: pose.anchor,
       },

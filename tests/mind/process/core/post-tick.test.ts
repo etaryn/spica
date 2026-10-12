@@ -195,3 +195,13 @@ test("a flagged check keeps its reason", async () => {
     check_reason: "mood",
   });
 });
+
+test("an unreadable find image skips before any draft call is spent", async () => {
+  const deps = setup();
+  const findId = await landedFind(deps);
+  const find = (await deps.core.posts.getFind(findId))!;
+  await (await import("node:fs/promises")).rm(find.media_path);
+  const out = await postTick(coreDepsOf(deps), at(9));
+  expect(out).toEqual({ status: "skipped", reason: "render_failed" });
+  expect(deps.llm.structuredCalls.some((c) => c.purpose === "post_draft")).toBe(false);
+});

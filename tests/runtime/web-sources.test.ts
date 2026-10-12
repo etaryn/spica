@@ -2,7 +2,12 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { createWebSources } from "@/runtime/web-sources";
 
-const sources = createWebSources({ nasaApiKey: "K", userAgent: "UA", timeoutMs: 1000 });
+const sources = createWebSources({
+  nasaApiKey: "K",
+  userAgent: "UA",
+  timeoutMs: 1000,
+  maxDownloadBytes: 1000,
+});
 const png = new Uint8Array([137, 80, 78, 71]);
 
 function stub(routes: Record<string, unknown>) {
@@ -100,4 +105,16 @@ test("apod: asks for the previous day, across a month boundary too", async () =>
   });
   await sources.apod!.fetch("2026-03-01");
   expect(fetch.mock.calls[0]![0]).toContain("date=2026-02-28");
+});
+
+test("an image over the download cap throws", async () => {
+  stub({
+    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
+      media_type: "image",
+      title: "T",
+      url: "https://apod.nasa.gov/big.jpg",
+    },
+    "https://apod.nasa.gov/big.jpg": new Uint8Array(2000),
+  });
+  await expect(sources.apod!.fetch("2026-01-05")).rejects.toThrow("too large");
 });

@@ -49,6 +49,13 @@ test("the draft call sees her public self, the find, the valence and the format;
     expect(seen).toContain(s);
 });
 
+test("a two-line caption keeps its line break", async () => {
+  const llm = new FakeLLMProvider();
+  llm.handlers.post_draft = () => ({ caption: "one  line \n\n\n\n two", overlay_text: null });
+  const out = await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 });
+  expect(out!.caption).toBe("one line\n\ntwo");
+});
+
 test("captions and overlays are trimmed; an overlay is dropped when the format has none", async () => {
   const llm = new FakeLLMProvider();
   llm.handlers.post_draft = () => ({

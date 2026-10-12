@@ -786,6 +786,8 @@ const posts = z
     browse_step_minutes: positiveInt,
     sources: z.array(z.object({ name: text, weight: z.number().positive() })),
     fetch_timeout_ms: positiveInt,
+    // Largest image she will download; a full-size original can be tens of megabytes.
+    max_download_bytes: positiveInt,
     user_agent: text,
     // What's built: a medium outside this list is never posted, whatever her skill.
     capabilities: z.array(z.enum(["still"])).min(1),

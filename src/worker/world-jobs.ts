@@ -1,5 +1,6 @@
 /**
- * World jobs: her day plan (`life_plan`) and what happens in her day (`core_world_tick`), and the posts she makes of it (`post_tick`).
+ * World jobs: her day plan (`life_plan`) and what happens in her day (`core_world_tick`), and the
+ * posts she makes of it (`post_tick`).
  */
 import type { PgBoss } from "pg-boss";
 import { coreDepsOf, type Deps } from "@/mind/platform/deps";

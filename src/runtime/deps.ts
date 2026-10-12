@@ -76,6 +76,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
       nasaApiKey: env.NASA_API_KEY ?? "DEMO_KEY",
       userAgent: config.posts.user_agent,
       timeoutMs: config.posts.fetch_timeout_ms,
+      maxDownloadBytes: config.posts.max_download_bytes,
     }),
   };
   return { deps, boss };

@@ -6,7 +6,12 @@
 import { z } from "zod";
 import type { WebItem, WebSource, WebSources } from "@/mind/world/types";
 
-type Options = { nasaApiKey: string; userAgent: string; timeoutMs: number };
+type Options = {
+  nasaApiKey: string;
+  userAgent: string;
+  timeoutMs: number;
+  maxDownloadBytes: number;
+};
 
 async function get(url: string, o: Options): Promise<Response> {
   const res = await fetch(url, {
@@ -17,8 +22,15 @@ async function get(url: string, o: Options): Promise<Response> {
   return res;
 }
 
-const bytes = async (url: string, o: Options) =>
-  new Uint8Array(await (await get(url, o)).arrayBuffer());
+// ponytail: the whole download sits in memory; stream it or ask for a sized thumbnail if the cap
+// ever has to grow.
+async function bytes(url: string, o: Options): Promise<Uint8Array> {
+  const res = await get(url, o);
+  if (Number(res.headers.get("content-length")) > o.maxDownloadBytes) throw new Error("too large");
+  const body = new Uint8Array(await res.arrayBuffer());
+  if (body.byteLength > o.maxDownloadBytes) throw new Error("too large");
+  return body;
+}
 
 const Apod = z.object({
   media_type: z.string(),

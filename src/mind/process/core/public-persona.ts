@@ -22,9 +22,10 @@ export type PublicPersona = {
 
 export async function publicPersona(
   deps: Pick<CoreDeps, "core" | "config" | "clock">,
+  at?: Date,
 ): Promise<PublicPersona> {
   const { memory, world } = deps.core;
-  const now = deps.clock.now();
+  const now = at ?? deps.clock.now();
   const date = lifeDate(deps.config.life, now);
   const version = (await memory.latestSnapshot())?.version ?? null;
   const lines = [

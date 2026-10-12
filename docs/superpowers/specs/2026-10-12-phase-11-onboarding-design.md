@@ -1,6 +1,8 @@
 # Phase 11: Onboarding, the profile card swap — design
 
-Date: 2026-10-12. Status: approved in conversation, awaiting spec review.
+Date: 2026-10-12. Status: built 2026-10-12. Amended to match what was built: common topics are stored in their
+own `topics` column at submit (no stored embeddings, no cached embeddings of hers), and the eval
+profiles keep their wording.
 
 Phase 11 (v3 §14, §20) replaces §14's personality questionnaire with a short quiz framed as how
 Spica meets people. Attachment stays out (§21 #8).

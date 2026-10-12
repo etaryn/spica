@@ -136,3 +136,7 @@ code itself.
 | 2026-10-12 | A relationship row from before stages has `milestones` null and reads its peak from its params; its first settlement records what it has reached without firing | No SQL backfill to keep in step with the climb rules, and old friendships don't announce a burst of firsts. |
 | 2026-10-12 | `avoiding` reads warm | Knapp has no stage for drifting apart amicably; with her, a user going quiet is usually just life. |
 | 2026-10-12 | `first_conflict` ignores `avoiding` | Absence is not a falling-out. |
+| 2026-10-12 | Reveal pacing dropped: card facts are known from day one, lightly | She saw their profile card, the way you'd know a profile; the card mark and low confidence keep it a first impression. |
+| 2026-10-12 | The compatibility page is shared by screenshot only | A public link needs auth and abuse work; backlog, before users. |
+| 2026-10-12 | Her card answers are `self` facts, not disclosure rows | The disclosure ledger tracks core memories and self lines; her quiz answers are neither. |
+| 2026-10-12 | Common topics are stored on the card at submit | Both sides are embedded then, so the results page makes no calls. |

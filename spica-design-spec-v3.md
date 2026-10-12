@@ -316,7 +316,8 @@ Every table here references `user(id) ON DELETE CASCADE`.
   `last_recalled_at`, `recall_count`, `status`
   (`open | resolved | recurring | stale | superseded`), `superseded_by`,
   `salience` (0–1, "weight"), `valence`, `confidence`, `source`
-  (`turn | generated | onboarding | inferred`), `source_ref`, `scope`,
+  (`turn | generated | onboarding | inferred`), `source_ref` (`onboarding:<quiz_version>` for
+  profile card facts), `scope`,
   `space_id`. `payload.sensitive` marks facts from crisis exchanges, and (**Built 9c**)
   any summary or reflection a user loop wrote from one (**Built 9d:** and any read or belief;
   a gist never reads a sensitive fact). The system never
@@ -1175,7 +1176,7 @@ when the guard is on.
       your own life" holds only items at or below the reply's `peek` depth;
       one above `open` is tagged *(only hint at this)*, and the ledger marks
       *(they already know this)* or *(you've hinted at this before)*. Memories
-      about them are marked *(from when you first met)* (onboarding) or
+      about them are marked *(from their profile card, a first impression)* (onboarding) or
       *(your own guess, they never said this)* (inferred, reflections,
       beliefs). "Who you are lately" keeps only the latest snapshot's lines at
       or below `open`. A strong match beyond `peek` adds a "Not ready to
@@ -1228,14 +1229,15 @@ The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v5.md`; the reply prompt is
-`prompts/reply/v15.md` (its rules about her own self sit under "Being
+`prompts/reply/v16.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
 hint, held-back and common-ground marks, and that she may deflect, never
 invent, and is always honest that she's an AI; v14 adds "Your things
 together": at most one, when it fits, never explained, answer to a nickname
 they gave you; v15 adds following "Where you are with them": how familiar,
-teasing, guarded and firm she is, never named). v11 added the **claim line**
+teasing, guarded and firm she is, never named; v16 reads profile card facts as a first
+impression, held loosely and never as something said in chat). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1469,7 +1471,7 @@ weight is a first guess (test phase).
   none. No extra calls.
 - **Common ground:** derived marks, no table: her items by the ledger
   (*they already know this* / *you've hinted at this before*), theirs by
-  source (*from when you first met* / *your own guess*).
+  source (*from their profile card, a first impression* / *your own guess*).
 - **Inspector:** the ledger (when, level, depth, item text) and the last
   reply's limits on the Relationship tab.
 - **Review run:** `pnpm exit:disclosure` runs `rel-disclosure` with real
@@ -1678,20 +1680,30 @@ Code: `src/mind/process/outreach/`.
 
 ---
 
-## 14. Onboarding (New)
+## 14. Onboarding (Built Phase 11)
 
-The test is the product hook: engineered initial attraction, not a lifelong
-match.
-- 10–15 questions, under 3 minutes, preference and scenario mixed.
-- Calibrates the **user**: results become user facts (`source = onboarding`,
-  reduced confidence, moderate salience).
-- **Reveal pacing:** test facts are gated out of retrieval until unlocked
-  (confirmed in conversation, or a closeness or time threshold).
-- **Results screen:** "meet Spica": her, a couple of quirks, one flaw, what
-  she and the user have in common; shareable.
-- How onboarding facts decay (e.g. a floor for identity facts like the
-  user's name) is decided in its phase.
-- Whether the test measures the user's attachment style (§11.3) is OPEN.
+How Spica meets people: before the first chat, the user and Spica swap profile cards, the way
+people meet on social media with an impression first. It's dating apps, but for friends. Required
+once, after signup; taking it before signup (as a hook) is a later decision.
+- A short quiz (`prompts/onboarding/quiz/v<N>.yaml`, `onboarding.quiz_version`): 12 choice and 3
+  open questions. You answer, then see hers: only her pick on a choice question, one or two words
+  on an open one, so she gives away about as much as you do.
+- Six friend dimensions, loosely backed by research (draft, open to tweaks): homebody ↔
+  out-and-about, planner ↔ spontaneous, comfort picks ↔ new things, keep the peace ↔ say it
+  straight, easy banter ↔ deep talk, check in now and then ↔ always texting. No MBTI or Big Five
+  labels: a short quiz can't type anyone honestly.
+- The compatibility page: both cards, a bar per dimension with your position over her fixed
+  marker, a click line under `onboarding.click_gap` and a clash line over `onboarding.clash_gap`,
+  and common topics (exact or embedding similarity ≥ `onboarding.topic_similarity`, worked out at
+  submit), or her `no_common` line. All code, no model call. Shared by screenshot for now.
+- Both cards become user-scoped memories with `source = onboarding`, `source_ref =
+  onboarding:<version>`, confidence `onboarding.confidence` (0.4), salience `onboarding.salience`
+  (0.5): one impression per dimension and one per open answer about them, and her answers as `self`
+  facts (what she told this user). Their name is a fact at salience 1.0, which decay never lowers.
+- **Reveal pacing dropped:** she saw their card, so she knows it from day one, lightly. Replies
+  mark card facts *(from their profile card, a first impression)*; conversation overrides them.
+- Whether the quiz measures attachment style (§11.3) is OPEN (§21 #8); the quiz file can take
+  attachment questions with no schema change.
 
 ---
 
@@ -1933,13 +1945,14 @@ two minds or at reply time.
 | 10b. How deep she goes | Depth on core memories and self lines (migration 0028, backfill by kind), judged by every memory-writing core loop (prompts v2) and snapshot render v2; `depthFor` limits from closeness, reciprocity and chemistry; hint, open and held-back offers; "Who you are lately" trimmed to the usual limit; `session_log.depth`; the `disclosure` ledger via `groundingMatch`; common-ground marks; outreach `too_deep`; reply v13; inspector ledger; exit `tests/exit/phase-10b.test.ts` (the canary); `pnpm exit:disclosure`. `pnpm test` 140 files / 1141 tests at close |
 | 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within the idle gap after her last message) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1167 tests at close |
 | 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
+| 11. Onboarding | The profile card swap: quiz file v1 (six friend dimensions, 12 choice and 3 open questions), the `onboarding` table (migration 0032), `submitCard` writing both cards as light memories with the name floor, common topics worked out at submit, the compatibility page, the `/chat` gate, the card mark (reply v16); exit `tests/exit/phase-11.test.ts` (the canary). `pnpm test` 154 files / 1228 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
 | Phase | Builds | Exit test |
 |---|---|---|
 | **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; **10d built:** stages, commitment, the milestone trigger; Phase 10 built) | Deterministic assertions per mechanic over scripted signals |
-| **11. Onboarding** | Questionnaire, onboarding facts, reveal pacing, results screen | A locked test fact never reaches the reply prompt; unlocking makes it retrievable; the results screen works |
+| **11. Onboarding** | The profile card swap, both cards as light memories, the compatibility page (**built**) | The card swap writes both cards as light memories; card facts reach the reply marked; conversation supersedes them; the name never fades; the compatibility page comes from the answers; the leak canary |
 | **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs | A sample module registers and receives events with no change to the core |
 | **13. Guard re-enable and calibration** | Re-enable the guard, calibrate against the observed range, settle the rule questions (§21) | The guard suite passes against calibrated fixtures |
 
@@ -1963,7 +1976,7 @@ smallest budget; raise only with review-run evidence.
 7. **User-loop outputs to outreach:** settled 2026-10-09: ideas feed
    outreach as `user_idea`; reflections do not.
 8. **Attachment at onboarding:** whether the test measures the user's
-   attachment style.
+   attachment style (the quiz file can take attachment questions with no schema change).
 9. **Phase order:** §20's proposed order, including whether onboarding comes
    before the mind split.
 10. **Irreversibility:** hurt and tension ceilings (test phase: uncapped).
@@ -2009,7 +2022,7 @@ disclosure honest, in her own voice.
 | Backchannel | A tiny "I'm here" reaction mid-story |
 | Hot / cold path | Composing a reply / writing memory after it |
 | Send gate | The rules that can block a reach-out |
-| Reveal pacing | Gating onboarding facts until earned |
+| Profile card swap | How she meets people: a short quiz where each side sees the other's answers |
 | Leak canary | A planted token that must never cross scopes |
 
 ---
@@ -2059,9 +2072,8 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B5.** Reconcile misses low-similarity contradictions (below
   `reconcile.near_match_similarity` nothing is classified). Matters more once
   core memory reconciles core events (it does now). *Tuning.*
-- **B6.** Onboarding facts decay like any other, so even the user's name can
-  go `stale`; decide a floor. Run the `minimal` / `basic` / `rich` profile
-  experiment; cap onboarding facts in the guard input. *Phase 11.*
+- **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
+  the guard input: *guard phase*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
 - **B7.** Concurrency edge cases: concurrent POSTs can overwrite
@@ -2322,6 +2334,10 @@ and life tick) were dropped; the replacement is designed fresh.
   `outer<inner>`.
 - **B49.** `pnpm db:reset-self` checks the URL hostname only and skips
   `pool.end` on a throw (dev tool).
+- **B93.** A public share link for the compatibility page (needs auth and abuse work);
+  screenshot only for now. *Before users.*
+- **B94.** The profile card quiz before signup, as a hook; answers are already held in the
+  browser until submit. *Later.*
 
 ### 25.10 Stakes (thesis review, 2026-10-09)
 Features that let the user escape consequences or make her over-forgiving

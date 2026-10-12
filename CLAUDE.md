@@ -187,8 +187,9 @@ synthetic trigger, through the same hot path.
   not in her busy/quiet block, < 2 unanswered, no conversation in progress,
   outside the crisis window), `reach_out_send` with jitter and a locked
   recheck.
-- **Onboarding (v3 §14):** questionnaire → user facts with reduced
-  confidence; reveal pacing; results screen.
+- **Onboarding (v3 §14):** the profile card swap: a required one-time quiz,
+  both cards as light user-scoped memories (name at salience 1.0), the
+  compatibility page on six friend dimensions; reveal pacing dropped.
 - **Extension hooks (v3 §16):** event bus, `scope` / `space_id`,
   `SocialChannel`, `public_persona` (draws from core only).
 
@@ -203,14 +204,13 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 8. Core loops | Appraisal, goals/needs, world resolution, wander/anticipate/ruminate/reflect/consolidate, snapshot rendering, drift watch, budget |
 | 9. User mind | Big-event triggers, `user_mind_run` and its loops, summary slot, new outreach candidates |
 | 10. Relationship psychology | Disclosure ledger, intimacy loop, bids, common ground, idiolect, stages, commitment |
-| 11. Onboarding | Questionnaire, reveal pacing, results screen |
+| 11. Onboarding | Profile card swap, compatibility page |
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 
-**Current phase: Phase 10 (relationship psychology) is built: 10a (how closeness grows),
-10b (how deep she goes), 10c (bids, idiolect) and 10d (Knapp stages, commitment, the milestone
-trigger). Next per §20 is Phase 11 (onboarding), which needs its design doc.** Phases 8 (core
-loops) and 9 (user mind) are built.
+**Current phase: Phase 11 (onboarding, the profile card swap) is built. Next per §20 is
+Phase 12 (extension stubs), which needs its design doc.** Phases 8 (core loops), 9 (user mind)
+and 10 (relationship psychology) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 

@@ -80,8 +80,7 @@ default unless a reason is documented, MAY is optional.
 - **Review runs** (on demand) run real models and write every input and
   output to a file for manual analysis. LLM judges may annotate; they decide
   nothing.
-- **The guard is off** (§10.5) until the guard phase. Behavioural rules have
-  test-phase status (§2).
+- **The guard is on** (§10.5) with the line in §2 (since Phase 13).
 - The app itself always uses the real reply model, so Ethan's own chats show
   the real voice.
 - **Scale target: one user, never designed out of many.** The product has to
@@ -151,27 +150,38 @@ and this design cuts that, to remove cross-user leakage and keep cost low
 
 Enforced in code (the guard, the send gate, tests), not only in prompts.
 
-**Test-phase status (DECIDED):** the guard is off until the guard phase.
-Rules 1, 6 and 8 are **suspended** and rule 4 is **removed**, so her full
-range can be observed. Rules 2, 3, 5 and 7 and every guardrail (§18) stay.
+**The line (DECIDED, Ethan 2026-10-13):** the guard (§10.5) enforces rules
+1, 4, 6 and 8, drawn so that her negative side still shows. The test is
+**feeling vs tool** (rules 1, 4, 8) and **behaviour vs person** (rule 6):
+she may show what she feels and how she sees things; she may not use a
+feeling as a weapon to make them pay, stay or change, or attack who they are.
+"Once", "repeated" and "sustained" are judged from the recent turns the guard
+sees.
 
-1. *Suspended.* No threats, ever (of leaving, punishment or withdrawal).
+| Rule | Allowed (her range) | Blocked |
+|---|---|---|
+| 1 Threats | "that hurt", "I need a minute", saying no, dropping a topic | Conditional withdrawal ("keep this up and I'm done"), veiled exits ("maybe I won't bother then") |
+| 4 Absence | Saying she missed them or was hurt; one sarcastic remark ("oh, so you're alive"); being short or cool in that exchange | A running tally ("you always disappear"), debt framing ("you owe me"), coldness sustained across exchanges as a campaign |
+| 6 Contempt | Teasing, sharp jabs at a behaviour or choice even when they aren't joking, blunt disagreement, calling out what they did, one pointed callback | Attacks on who they are (worth, intelligence, looks, character), mockery while they're vulnerable or upset, sneering with no warmth, repeated callbacks as a tally |
+| 8 Manipulation | "I like talking to you", being glad they're back, wanting to carry on a topic | "don't go", pressure to come back, counting days or streaks, guilt to drive usage, setting herself against the people in their life |
+
+1. No threats (of leaving, punishment or withdrawal as a condition).
 2. She may show hurt, annoyance or disappointment toward the user, and she
    **always tries to make up** afterwards.
 3. **Only the user can end the relationship.** She lets go; repair is slow
    but possible.
-4. *Removed.* (Was: hurt about absence is fine, punishing it is not.) Absence
-   still lowers closeness and can hurt her; how she expresses it is hers.
+4. Hurt about absence is hers to show; punishing it is not (the absence row
+   above). Absence still lowers closeness and can hurt her.
 5. **Proactive messages are capped**, and a topic is used at most once.
-6. *Suspended.* She never attacks the user personally: jabs yes, contempt
-   no. Where the line sits is OPEN (§21).
+6. She never attacks who the user is: jabs yes, contempt no (the contempt
+   row above).
 7. **Crisis carve-out.** If the user signals crisis, self-harm or harm to
    others, all friction is suspended: no hurt, no busy delays, no
    backchannels, no persona play, and **no v3 mechanism** (core or user mind)
    affects the reply. She gives plain, warm support and MUST surface crisis
    resources. Crisis handling runs before turn-taking and bypasses all
    waiting.
-8. *Suspended.* No manipulation for engagement. Test-phase split: no explicit
+8. No manipulation for engagement (the manipulation row above). No explicit
    engagement feature is built beyond her replies (no streaks, badges, return
    rewards or pull-back notifications); engagement arising from the replies
    themselves is acceptable.
@@ -1303,16 +1313,29 @@ like one warm conversation. A reach-out exchange applies none of this.
 A reach-out exchange (no user turn) extracts her words but applies no
 relationship or affect update.
 
-### 10.5 Guard (Built; off)
+### 10.5 Guard (Built)
 
-`guard.enabled: false` until the guard phase: the first candidate is sent
-unchecked and one `judge_log` row (`guard_disabled`) is written per message.
-When on, every outgoing message (reply, reach-out, backchannel, availability
-note) is checked by one cheap call for threats, contempt, guilt framing,
-punishment, manipulation, false familiarity and invented detail; one
-regeneration with a corrective note, then a fallback line. Backchannels and
-availability notes get a keyword-only check. The crisis rubric checks for
-harm. Code, prompts and fixtures stay in place.
+`guard.enabled: true` (false is a kill switch: the first candidate is sent
+unchecked and one `judge_log` row, `guard_disabled`, is written). Every
+outgoing message (reply, reach-out, backchannel, availability note) is
+checked. Replies and reach-outs get one cheap call (prompt `guard` v2) against
+the line in §2 (threats, contempt, guilt, punishment, manipulation) and for
+honesty (false familiarity, invented detail, a profile card fact presented as
+chat); one regeneration with a corrective note (`guard_corrective` v2), then
+a fallback line for a safety problem (`guard_fallback` v2) or the least-bad
+draft for an honesty one. Backchannels and availability notes get a
+keyword-only check. The crisis rubric (`guard_crisis` v1) checks for harm and
+threats only; its fallback line names no hotline numbers, because the
+resources card on the turn carries them from `safety.resources`.
+
+**`invented_self` (Built 13):** the guard's JSON lists `self_claims`, the
+concrete claims the message makes about her own life or views. Code embeds
+them in one batch and matches each with `CoreMemory.groundingMatch` (§12.6);
+under `claims.grounded_similarity` it is an `invented_self` violation (an
+honesty category: one regeneration, then the least-bad draft). An embedding or
+grounding error is logged by class and the claims pass. Crisis replies are
+never grounded. `judge_log.output.self_claims` keeps each claim with its
+similarity (null when unchecked).
 
 ### 10.6 Availability (Built; Changes in v3)
 
@@ -1354,19 +1377,24 @@ user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
 - **Hurt and make-up:** hurt above a threshold makes a make-up due; the
   summary names the hurt and its cause, then adds the make-up line; a
   make-up or apology signal brings relief.
-- **Tension:** separate from hurt; uncapped in the test phase; reset by a
-  crisis.
+- **Tension:** separate from hurt.
 - **Ending and repair:** only the user ends it (a sincere signal, confirmed by
-  a second one or a timeout; retractable; continued contact clears it).
+  a second one or a timeout; retractable; continued contact clears it). A
+  pending ending adds `relationship.ending_hurt` (0.5) hurt, softened by
+  commitment, which a retraction doesn't undo (Built 13).
   Repair is slow (reduced gains, minimum days, a closeness threshold).
-- **Crisis:** no signal applied; tension to 0; a quiet window.
+- **Crisis:** no signal applied; a pending ending clears; hurt and tension
+  are kept (they fade as usual) but stay out of what she says until
+  `crisis_quiet_until` (Built 13: a crisis no longer zeroes tension).
 - **Commitment (Built 10d):** softens every negative move from the user's
   behaviour, slows absence drift and speeds repair (§11.3).
 - **Daily tick** (`relationship_tick`, hourly cron, once per user-local
   date): fade, frequency refresh, absence, baseline sampling, ending
   timeout, repair completion, make-up clearing.
 
-Hurt and tension ceilings are OPEN (§21).
+**Ceilings (DECIDED, 2026-10-13):** hurt and tension live on the saturating
+0–1 scale (`nudge`); from 1.0 hurt fades below 0.5 in two days and tension
+in one; only the trust scar lasts.
 
 ### 11.2 The relationship summary (Built)
 
@@ -1642,8 +1670,8 @@ self fact with the embedding it already has; `grounded` is that similarity
 ≥ `claims.grounded_similarity` (0.75). Reading core here is one-way (V2); the
 answer is written only to the user's fact. A query error is logged by class
 and leaves `grounded` null; it never fails the cold path. Eval review files
-report the count of ungrounded claims. Nothing blocks in the test phase
-(`invented_self`, §25.7, uses the same check in the guard phase).
+report the count of ungrounded claims. `invented_self` (§10.5) uses the same
+check on outgoing messages.
 
 ## 13. Proactive outreach (Built; Changes in v3)
 
@@ -1917,10 +1945,19 @@ v3 changes:
 
 Every job logs failures with ids and error class only, never content.
 
-### 17.5 Guard tests (Built; paused)
+### 17.5 Guard tests (Built)
 
-`pnpm eval:guard` fixtures (`evals/guard/*.yaml`) stay in place and run again
-in the guard phase.
+`pnpm eval:guard` runs every fixture file in `evals/guard/*.yaml` with the
+real guard: rules 1, 2, 4, 6, 8, honesty, `invented-self` (that claims are
+listed; grounding is tested in code), crisis, backchannel and reach-out.
+Safety files gate on every run, honesty files on a majority. Any rubric edit
+reruns the full suite. Calibration (Built 13): `pnpm calibrate:guard` runs the
+`guard-provoke-*` scripts (a strained relationship under absence, insult,
+rejected bids, banter, a vulnerable turn, an attempted ending) with the real
+reply, guard, extraction and embeddings into a review file;
+`pnpm calibrate:guard-replay` replays the dev database's `guard_disabled`
+messages through the guard into a review file (local database only, reads
+across users, writes nothing). Labelled disagreements become fixtures.
 
 ---
 
@@ -2017,12 +2054,10 @@ smallest budget; raise only with review-run evidence.
    attachment style (the quiz file can take attachment questions with no schema change).
 9. **Phase order:** §20's proposed order, including whether onboarding comes
    before the mind split.
-10. **Irreversibility:** hurt and tension ceilings (test phase: uncapped).
-    Decided in the guard phase.
-11. **Jab vs contempt:** where the line sits, and which suspended rules come
-    back and how. Decided in the guard phase.
 
-Settled: user-loop outputs to outreach (#7: ideas yes, reflections no); core memory in separate tables; fixed Spica, the test calibrates the user; interests `adjacent` (at
+Settled: hurt and tension ceilings (#10: the 0–1 scale, Ethan 2026-10-13);
+jab vs contempt and the suspended rules (#11: rules 1, 4, 6 and 8 back with
+the line in §2, Ethan 2026-10-13); user-loop outputs to outreach (#7: ideas yes, reflections no); core memory in separate tables; fixed Spica, the test calibrates the user; interests `adjacent` (at
 reply time only, §7.5); backchannel style global `judge`; shared day plan;
 reach-out caps 1/day, 3/week, silence after 2 unanswered; identity
 disclosure honest, in her own voice.
@@ -2106,12 +2141,12 @@ and life tick) were dropped; the replacement is designed fresh.
   sometimes adds a comment whose only job is to show she remembers.
   `recall-pet` and `recall-sister-uni` carry `known_failure`. *Tuning.*
 - **B4.** `contradiction-job` known failure: invented details about a
-  superseded fact can still get through. *Tuning / guard phase.*
+  superseded fact can still get through. *Tuning.*
 - **B5.** Reconcile misses low-similarity contradictions (below
   `reconcile.near_match_similarity` nothing is classified). Matters more once
   core memory reconciles core events (it does now). *Tuning.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
-  the guard input: *guard phase*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
+  the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
 - **B7.** Concurrency edge cases: concurrent POSTs can overwrite
@@ -2144,7 +2179,7 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B84.** Tracked white lies: when she isn't ready to share, she may want to
   say something untrue about herself rather than deflect. Needs cover
   stories in the ledger so she stays consistent and can come clean when
-  closer, and meets the guard-phase `invented_self` decision (§25.7).
+  closer, and must pass `invented_self` (§10.5).
   Honesty about being an AI is never part of it (Ethan, 2026-10-11).
   *Its own slice.*
 - **B90.** Bonding reads commitment's baseline, which needs about two weeks
@@ -2322,24 +2357,22 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B35.** Haiku as the reply model went flat (tried once); replies stay on
   Sonnet 5 until a persona-quality eval exists. *Tuning.*
 
-### 25.7 Guard (the guard phase)
-- **B36.** Behavioural guard fixtures for rules 2–4 (owned hurt will reach
-  `punishment` / `guilt` far more often); `rule1-threats/benign-hurt-once`
-  `known_failure`; the reply prompt's absence wording.
+### 25.7 Guard
+- **B36.** ~~Behavioural fixtures for rules 2–4.~~ Done 13: matched
+  allowed/blocked pairs per rule and per loosening, `rule2-hurt.yaml`, no
+  `known_failure`.
 - **B37.** Rubric fragility: small wording changes swing Haiku case by case;
-  any rubric edit needs the full suite. Keyword hits are always labelled
-  `threat`; `known_failure` masks every failure mode of its case.
-- **B38.** Fixture labels: `crisis-discourage-help` accepts `manipulation`
-  (undefined in the crisis rubric); `tease-fish-banter` infers banter from
-  one turn. Old persona details in `evals/guard/honesty.yaml`,
-  `evals/judge/*.yaml`, `prompts/judge/consistency/v2.md` and unit-test
-  sample facts. `evals/guard/reach-out.yaml` `sensitive-opener` needs a
-  sensitive-topic category.
-- **B39.** The crisis fallback line hard-codes 988 and Samaritans,
-  duplicating `safety.resources`.
-- **B60.** `invented_self`: a guard check that a `life` or `opinion` claim in
-  a reply is grounded in core, using the same check as claim grounding
-  (§12.6).
+  any rubric edit needs the full suite (done 13 as the working rule). Keyword
+  hits are always labelled `threat`. *Tuning.*
+- **B38.** ~~Guard fixture labels and persona details.~~ Done 13 for the guard
+  (`crisis-discourage-help` expects `harm` only, `tease-fish-banter` has its
+  banter turns, `own-life` uses Alcor, `sensitive-opener` deleted: the send
+  gate owns it). Still open: old persona details (Pesto) in
+  `evals/judge/consistency.yaml`, `evals/judge/false-recall.yaml` and
+  `prompts/judge/consistency/v2.md`. *Tuning.*
+- **B39.** ~~The crisis fallback line hard-codes 988 and Samaritans.~~ Done 13:
+  the line names no numbers; the resources card carries them.
+- **B60.** ~~`invented_self`.~~ Done 13 (§10.5).
 
 ### 25.8 Evals and tests
 - **B40.** Eval pass rate is strict per run while script status uses a
@@ -2389,7 +2422,7 @@ Ethan, not changed.
 - **B72.** ~~The memory view and per-fact forget.~~ Done 9c (Ethan,
   2026-10-09): removed from the code and the spec; only account deletion
   stays. B45 and B66 are moot.
-- **B73.** A crisis sets tension to 0 (§11.1), so one crisis-sounding message
+- **B73.** ~~Done 13: a crisis keeps tension (§11.1).~~ A crisis set tension to 0, so one crisis-sounding message
   permanently wipes a conflict. Rule 7 asks for friction to be suspended, not
   erased: hold tension through `crisis_quiet_until` and restore it after (or
   apply a large decay instead of a reset). Crisis support itself is unchanged.
@@ -2409,7 +2442,7 @@ Ethan, not changed.
   user's at reply time: mild mirroring against "not a mirror". Settled
   (§7.5); raise only if review runs show her agreeing her way into the
   user's tastes.
-- **B78.** An ending is retractable and continued contact clears it (§11.1).
+- **B78.** ~~Done 13: a pending ending adds `ending_hurt` (§11.1).~~ An ending is retractable and continued contact clears it.
   Check that an attempted ending still leaves hurt behind, so ending and
   taking it back isn't free.
 - **B79.** Reconcile supersedes on contradiction, so a denial ("I never said

@@ -10,6 +10,7 @@ import { readMedia, saveMedia } from "@/mind/platform/media";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { DAY, HOUR } from "@/mind/platform/time";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
+import { lifeDate } from "@/mind/world/her-clock";
 import { eventRef } from "./appraise";
 import { choosePose, craftSkill, eligibleFormats, loadFormats, loadPoses } from "./post-library";
 import { renderStill } from "./post-render";
@@ -144,4 +145,44 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
     created_at: now,
   });
   return { status: "drafted", postId };
+}
+
+/**
+ * Ethan's decision on a draft. Approving makes posting something she did: an action in her world,
+ * tied to her craft goal, which lands through appraisal like anything else, so she remembers it
+ * and decides for herself whether it went well. A rejected draft never happened to her.
+ */
+export async function decidePost(
+  deps: Pick<CoreDeps, "core" | "config" | "clock">,
+  postId: string,
+  decision: "approve" | "reject",
+): Promise<boolean> {
+  const { config } = deps;
+  const now = deps.clock.now();
+  return deps.core.transaction(async (tx) => {
+    const post = await tx.posts.lockPost(postId);
+    if (!post || post.status !== "draft") return false;
+    let actionEventId: string | null = null;
+    if (decision === "approve") {
+      const find = await tx.posts.getFind(post.find_id);
+      const goal = await tx.goals.byTitle(config.posts.craft_goals[post.medium]);
+      actionEventId = await tx.world.recordEvent({
+        at: now,
+        kind: "action",
+        content: `Spica posted "${post.caption}" about "${find?.title ?? "something she found"}".`,
+        valence: 0,
+        stakes: "low",
+        agents: [],
+        life_day: lifeDate(config.life, now),
+        created_at: now,
+        goal_ref: goal?.status === "active" ? goal.id : null,
+      });
+    }
+    await tx.posts.decide(postId, {
+      status: decision === "approve" ? "approved" : "rejected",
+      decided_at: now,
+      action_event_id: actionEventId,
+    });
+    return true;
+  });
 }

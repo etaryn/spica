@@ -756,6 +756,18 @@ const userMind = z.object({
   }),
 });
 
+const onboarding = z.object({
+  quiz_version: promptVersion,
+  confidence: unit,
+  salience: unit,
+  // Points either side of 50 that read as "somewhere between".
+  neutral_band: z.number().min(0).max(50),
+  click_gap: z.number().min(0).max(100),
+  clash_gap: z.number().min(0).max(100),
+  topic_similarity: unit,
+  max_answer_chars: positiveInt,
+});
+
 // ---------- The whole config ----------
 
 export const ConfigSchema = z.object({
@@ -784,6 +796,7 @@ export const ConfigSchema = z.object({
   outreach,
   push,
   user_mind: userMind,
+  onboarding,
   prompts,
 });
 

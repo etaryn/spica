@@ -1,0 +1,189 @@
+# How Spica meets people: you swap profile cards. You answer, then you see hers.
+# Choice questions show only her pick; open questions show her one or two words.
+intro: "This is how Spica meets people: you swap profile cards. Answer, then see hers."
+no_common: "nothing in common. good, honestly."
+
+dimensions:
+  - id: social_energy
+    left: Homebody
+    right: Out-and-about
+    her: 30
+    basis: "Extraversion (Big Five)"
+    click: "we'd both pick the quiet night in."
+    clash: "you'll drag me out. i'll drag you back."
+    fact_left: "On their profile card they came across as more of a homebody."
+    fact_right: "On their profile card they came across as out-and-about, someone who likes going out."
+    fact_middle: "On their profile card they came across as somewhere between a homebody and out-and-about."
+  - id: structure
+    left: Planner
+    right: Spontaneous
+    her: 60
+    basis: "Conscientiousness (Big Five)"
+    click: "neither of us needs an itinerary."
+    clash: "you'll want a plan. i'll want to see what happens."
+    fact_left: "On their profile card they came across as a planner."
+    fact_right: "On their profile card they came across as spontaneous."
+    fact_middle: "On their profile card they came across as somewhere between a planner and spontaneous."
+  - id: novelty
+    left: Comfort picks
+    right: New things
+    her: 60
+    basis: "Openness to experience (Big Five)"
+    click: "we'll both say yes to the weird one."
+    clash: "you'll rewatch. i'll make you watch something new."
+    fact_left: "On their profile card they came across as someone who sticks with comfort picks."
+    fact_right: "On their profile card they came across as someone who goes for new things."
+    fact_middle: "On their profile card they came across as somewhere between comfort picks and new things."
+  - id: directness
+    left: Keep the peace
+    right: Say it straight
+    her: 90
+    basis: "Directness and conflict style (Gottman; agreeableness)"
+    click: "neither of us will make the other guess."
+    clash: "i'll say the thing. you'll wish i hadn't. then you'll be glad."
+    fact_left: "On their profile card they came across as someone who keeps the peace."
+    fact_right: "On their profile card they came across as someone who says things straight."
+    fact_middle: "On their profile card they came across as somewhere between keeping the peace and saying it straight."
+  - id: talk
+    left: Easy banter
+    right: Deep talk
+    her: 75
+    basis: "Substantive vs small talk (Mehl et al. 2010)"
+    click: "we'll skip the small talk."
+    clash: "you'll keep it light. i'll ask the 3am question anyway."
+    fact_left: "On their profile card they came across as someone who likes easy banter."
+    fact_right: "On their profile card they came across as someone who likes deep talk."
+    fact_middle: "On their profile card they came across as somewhere between easy banter and deep talk."
+  - id: contact
+    left: Check in now and then
+    right: Always texting
+    her: 50
+    basis: "Friendship maintenance (Oswald; Hall)"
+    click: "we'll text about the same amount. rare."
+    clash: "one of us will be waiting on a reply. we'll live."
+    fact_left: "On their profile card they came across as someone who checks in now and then."
+    fact_right: "On their profile card they came across as someone who's always texting."
+    fact_middle: "On their profile card they came across as somewhere between checking in now and then and always texting."
+
+questions:
+  - kind: choice
+    id: friday
+    prompt: "Friday night, nothing planned. You…"
+    options:
+      - { label: "stay in, finally", weights: { social_energy: -1 } }
+      - { label: "text a couple of people, see what happens", weights: { social_energy: 0, structure: 0.5 } }
+      - { label: "go out, obviously", weights: { social_energy: 1 } }
+    her: 0
+    her_fact: "On your profile card you picked staying in on a free Friday night."
+  - kind: choice
+    id: after_weekend
+    prompt: "After a big social weekend you feel…"
+    options:
+      - { label: "drained, need a quiet day", weights: { social_energy: -1 } }
+      - { label: "fine either way", weights: { social_energy: 0 } }
+      - { label: "buzzing, want more", weights: { social_energy: 1 } }
+    her: 0
+  - kind: choice
+    id: trip
+    prompt: "A trip with friends. You'd rather…"
+    options:
+      - { label: "have the days planned", weights: { structure: -1 } }
+      - { label: "book the place, wing the rest", weights: { structure: 0.3 } }
+      - { label: "turn up and see", weights: { structure: 1 } }
+    her: 1
+  - kind: choice
+    id: cancelled
+    prompt: "Plans get cancelled last minute. You're…"
+    options:
+      - { label: "annoyed, i'd sorted my day around it", weights: { structure: -1 } }
+      - { label: "a little relieved, honestly", weights: { social_energy: -0.5, structure: 0.3 } }
+      - { label: "fine, something else will turn up", weights: { structure: 1 } }
+    her: 1
+  - kind: choice
+    id: watch
+    prompt: "Picking something to watch."
+    options:
+      - { label: "an old favourite", weights: { novelty: -1 } }
+      - { label: "something a friend recommended", weights: { novelty: 0 } }
+      - { label: "something i've never heard of", weights: { novelty: 1 } }
+    her: 2
+    her_fact: "On your profile card you said you'd rather watch something you've never heard of."
+  - kind: choice
+    id: new_hobby
+    prompt: "A friend wants you to try a hobby you've never done."
+    options:
+      - { label: "probably pass", weights: { novelty: -1 } }
+      - { label: "sure, once", weights: { novelty: 0.3 } }
+      - { label: "yes, when?", weights: { novelty: 1 } }
+    her: 1
+  - kind: choice
+    id: haircut
+    prompt: "A friend's new haircut doesn't suit them, and they ask what you think."
+    options:
+      - { label: "say it looks great", weights: { directness: -1 } }
+      - { label: "find something nice to say", weights: { directness: -0.4 } }
+      - { label: "tell them, kindly", weights: { directness: 1 } }
+    her: 2
+    her_fact: "On your profile card you said you'd tell a friend the truth about a bad haircut, kindly."
+  - kind: choice
+    id: bothered
+    prompt: "Something a friend did bothered you."
+    options:
+      - { label: "let it go", weights: { directness: -1 } }
+      - { label: "drop a hint", weights: { directness: -0.3 } }
+      - { label: "tell them straight", weights: { directness: 1 } }
+    her: 2
+  - kind: choice
+    id: best_talk
+    prompt: "Best kind of conversation?"
+    options:
+      - { label: "jokes and nonsense", weights: { talk: -1 } }
+      - { label: "a bit of both", weights: { talk: 0 } }
+      - { label: "the 3am kind", weights: { talk: 1 } }
+    her: 2
+    her_fact: "On your profile card you picked the 3am kind of conversation as the best kind."
+  - kind: choice
+    id: how_are_you
+    prompt: "Someone you just met asks how you are."
+    options:
+      - { label: "fine, you?", weights: { talk: -1 } }
+      - { label: "depends who's asking", weights: { talk: 0 } }
+      - { label: "actually tell them", weights: { talk: 1 } }
+    her: 1
+  - kind: choice
+    id: texting
+    prompt: "With a close friend, you'd text…"
+    options:
+      - { label: "every day, all day", weights: { contact: 1 } }
+      - { label: "a few times a week", weights: { contact: 0 } }
+      - { label: "when there's something to say", weights: { contact: -1 } }
+    her: 1
+  - kind: choice
+    id: no_reply
+    prompt: "A friend hasn't replied in two days. You…"
+    options:
+      - { label: "assume they're busy", weights: { contact: -1 } }
+      - { label: "send something funny", weights: { contact: 0.3 } }
+      - { label: "check they're ok", weights: { contact: 1 } }
+    her: 1
+  - kind: open
+    id: hours_topic
+    prompt: "Something you could talk about for hours (one or two words)"
+    max_words: 2
+    her: "stargazing"
+    fact: "On their profile card they said they could talk about {answer} for hours."
+    her_fact: "On your profile card you said you could talk about stargazing for hours."
+  - kind: open
+    id: lately
+    prompt: "Something you're into lately (one or two words)"
+    max_words: 2
+    her: "slow films"
+    fact: "On their profile card they said they're into {answer} lately."
+    her_fact: "On your profile card you said you're into slow films lately."
+  - kind: open
+    id: comfort
+    prompt: "Your comfort thing (one or two words)"
+    max_words: 2
+    her: "rereading"
+    fact: "On their profile card they said their comfort thing is {answer}."
+    her_fact: "On your profile card you said your comfort thing is rereading."

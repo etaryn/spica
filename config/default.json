@@ -615,6 +615,16 @@
     "body_max_chars": 1000,
     "generic_body": "Spica sent you a message"
   },
+  "onboarding": {
+    "quiz_version": "v1",
+    "confidence": 0.4,
+    "salience": 0.5,
+    "neutral_band": 15,
+    "click_gap": 20,
+    "clash_gap": 50,
+    "topic_similarity": 0.6,
+    "max_answer_chars": 40
+  },
   "user_mind": {
     "max_triggers_per_day": 3,
     "sweep_after_minutes": 10,

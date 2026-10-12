@@ -18,11 +18,17 @@ function capChars(text: string, max: number): string {
 }
 
 export async function deliverPart(
-  deps: Pick<Deps, "events" | "log" | "pusher" | "config">,
+  deps: Pick<Deps, "events" | "log" | "pusher" | "config" | "modules">,
   userId: string,
   bubble: { turnId: string; part: number; parts: string[]; generic?: boolean },
 ): Promise<void> {
   await emit(deps, userId, { type: "message", turnId: bubble.turnId, part: bubble.part });
+  await deps.modules.emit({
+    type: "reply.sent",
+    userId,
+    turnId: bubble.turnId,
+    part: bubble.part,
+  });
 
   const settings = deps.config.push;
   if (!settings.enabled) return;

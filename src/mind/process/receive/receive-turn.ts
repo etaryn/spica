@@ -13,7 +13,7 @@ export type UserMessageInput = { clientMessageId: string; text: string; timezone
 
 /** `existed` is true when this is a retry of a message already stored. */
 export async function receiveTurn(
-  deps: Pick<Deps, "db" | "clock" | "config">,
+  deps: Pick<Deps, "db" | "clock" | "config" | "modules">,
   userId: string,
   input: UserMessageInput,
 ): Promise<{ turn: Turn; existed: boolean }> {
@@ -38,6 +38,7 @@ export async function receiveTurn(
       text,
       created_at: now,
     });
+    await deps.modules.emit({ type: "turn.received", userId, turnId: turn.id });
     return { turn, existed: false };
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;

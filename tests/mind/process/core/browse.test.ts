@@ -54,9 +54,24 @@ test("browse time: inside the window, never inside a busy or quiet block, stable
 });
 
 test("free licences only", () => {
-  for (const l of ["public domain", "Public domain", "CC0", "CC BY 4.0", "CC BY-SA 3.0"])
+  for (const l of [
+    "public domain",
+    "Public domain",
+    "CC0",
+    "CC BY 4.0",
+    "CC BY-SA 3.0",
+    "cc by-sa 4.0",
+  ])
     expect(isFreeLicence(l)).toBe(true);
-  for (const l of ["copyrighted", "unknown", "CC BY-NC 4.0", "CC BY-ND 4.0"])
+  for (const l of [
+    "copyrighted",
+    "unknown",
+    "CC BY-NC 4.0",
+    "CC BY-ND 4.0",
+    "CC BY NC 4.0",
+    "CC BY ND 4.0",
+    "cc by-nc-sa 4.0",
+  ])
     expect(isFreeLicence(l)).toBe(false);
 });
 

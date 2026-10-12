@@ -19,7 +19,8 @@ import { WORLD_LOCK } from "./thoughts";
 const FREE = /^(public domain|cc0\b|cc[ -]by( |-sa |$|-sa$))/i;
 
 /** Public domain, CC0, CC BY and CC BY-SA; never non-commercial or no-derivatives. */
-export const isFreeLicence = (licence: string) => FREE.test(licence.trim());
+export const isFreeLicence = (licence: string) =>
+  FREE.test(licence.trim()) && !/\b(nc|nd)\b/i.test(licence);
 
 /** A free minute for her `slot`th browse of `day`, stable for the day; null when she has none. */
 export function browseTime(

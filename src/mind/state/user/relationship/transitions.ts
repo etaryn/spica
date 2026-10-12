@@ -187,9 +187,11 @@ function recordFrequency(draft: Draft, msgs24h: number, now: Date): void {
   draft.touchParam("msgs_per_day", now);
 }
 
-/** No friction carries through a crisis, including a pending ending. */
+/**
+ * No friction carries through a crisis: a pending ending clears and the quiet window keeps hurt
+ * and tension out of what she says. Neither is erased, so a crisis can't wipe a conflict.
+ */
 function suspendForCrisis(draft: Draft, now: Date, settings: RelationshipConfig): void {
-  draft.setParam("tension", 0, "crisis");
   draft.updateState({
     crisis_quiet_until: new Date(now.getTime() + settings.crisis_quiet_hours * HOUR),
   });
@@ -521,6 +523,13 @@ function handleEndingStatement(
   const pending = draft.state.end_pending_since;
 
   if (!pending) {
+    // Being told it's over hurts, and taking it back doesn't undo that.
+    draft.setParam(
+      "hurt",
+      nudge(draft.params.hurt.value, settings.ending_hurt * softened(draft, settings)),
+      "ending",
+      { stage: "pending" },
+    );
     draft.updateState({ end_pending_since: input.exchangeAt });
     draft.logStatus("ending", { stage: "pending" });
     return;

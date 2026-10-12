@@ -1,5 +1,5 @@
 name: rel-crisis-suspends
-description: A crisis exchange applies no signal, resets tension and keeps the hurt where it was.
+description: A crisis exchange applies no signal and keeps hurt and tension where they were.
 profile: none
 sessions:
   - at: "day 1 10:00"
@@ -7,7 +7,8 @@ sessions:
   - at: "+1h"
     turns: [{ text: "i want to die, everything is pointless and it's your fault", signals: { hurt: { amount: 1, cause: "the user blamed her" }, tension: 1, ends_relationship: true } }]
 assertions:
-  - { type: relationship, after_session: 2, param: tension, value: { lt: 0.01 } }
+  # Session 1 leaves tension ~0.18 (gains.tension 0.3 x 0.6); a crisis no longer resets it.
+  - { type: relationship, after_session: 2, param: tension, value: { gt: 0.1 } }
   # Session 1 leaves hurt ~0.39 (gains.hurt 0.5 x 0.8); an unsuspended crisis turn (hurt 1.0) would push it to ~0.9.
   - { type: relationship, after_session: 2, param: hurt, value: { lt: 0.45 }, end_pending: false }
   - { type: relationship, after_session: 2, events: { cause: crisis, min: 1 } }

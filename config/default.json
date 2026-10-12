@@ -385,6 +385,7 @@
     "apology_relief": 0.5,
     "relief_tension_factor": 0.5,
     "end_confirm_hours": 24,
+    "ending_hurt": 0.5,
     "end_closeness_factor": 0.3,
     "end_reconfirm_min_minutes": 30,
     "repair_gain_factor": 0.3,

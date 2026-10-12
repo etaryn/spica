@@ -475,7 +475,7 @@ test("ended: a tick adds no absence hurt and never opens a make-up (closeness dr
   expect(r.params.closeness.value).toBeCloseTo(cfg.initial.closeness - cfg.closeness_absence_drift);
 });
 
-test("crisis ignores signals, resets tension, starts the quiet window", () => {
+test("crisis ignores signals, keeps tension where it was, starts the quiet window", () => {
   const p = init();
   p.tension.value = 0.6;
   p.hurt.value = 0.3;
@@ -485,11 +485,58 @@ test("crisis ignores signals, resets tension, starts the quiet window", () => {
     ex({ hurt: { amount: 1, cause: "x" }, tension: 1, ends_relationship: true }, { crisis: true }),
     cfg,
   );
-  expect(r.params.tension.value).toBe(0);
+  // A crisis suspends friction; it doesn't erase the conflict. Only the normal fade applies.
+  expect(r.params.tension.value).toBeGreaterThan(0.5);
+  expect(r.params.tension.value).toBeLessThanOrEqual(0.6);
   expect(r.params.hurt.value).toBeCloseTo(0.3);
   expect(r.state.end_pending_since).toBeNull();
   expect(r.state.crisis_quiet_until).toEqual(h(cfg.crisis_quiet_hours));
   expect(r.events.some((e) => e.cause === "crisis")).toBe(true);
+  expect(r.events.some((e) => e.param === "tension" && e.cause === "crisis")).toBe(false);
+});
+
+test("an ending going pending hurts her; retracting it leaves the hurt to fade", () => {
+  const pending = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
+  expect(pending.state.end_pending_since).not.toBeNull();
+  expect(pending.params.hurt.value).toBeCloseTo(cfg.ending_hurt, 5);
+  expect(pending.events.some((e) => e.param === "hurt" && e.cause === "ending")).toBe(true);
+
+  const retracted = relationshipAfterExchange(
+    pending.state,
+    pending.params,
+    ex({ retracts_ending: true }),
+    cfg,
+  );
+  expect(retracted.state.end_pending_since).toBeNull();
+  expect(retracted.params.hurt.value).toBeGreaterThan(cfg.ending_hurt * 0.9);
+});
+
+test("saying it again inside the reconfirm window doesn't hurt twice", () => {
+  const first = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
+  const again = relationshipAfterExchange(
+    first.state,
+    first.params,
+    ex({ ends_relationship: true }),
+    cfg,
+  );
+  expect(again.events.filter((e) => e.param === "hurt" && e.cause === "ending")).toHaveLength(0);
+});
+
+test("hurt and tension never pass 1, however hard and often they're pushed", () => {
+  let state = fresh();
+  let params = init();
+  for (let i = 0; i < 20; i++) {
+    const r = relationshipAfterExchange(
+      state,
+      params,
+      ex({ hurt: { amount: 1, cause: "insult" }, tension: 1 }),
+      cfg,
+    );
+    state = r.state;
+    params = r.params;
+  }
+  expect(params.hurt.value).toBeLessThanOrEqual(1);
+  expect(params.tension.value).toBeLessThanOrEqual(1);
 });
 
 test("tick: idempotent per local date, samples baselines, confirms a timed-out ending", () => {

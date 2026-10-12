@@ -368,6 +368,7 @@ const relationship = z
     apology_relief: unit,
     relief_tension_factor: unit,
     end_confirm_hours: z.number().positive(),
+    ending_hurt: unit,
     end_closeness_factor: unit,
     end_reconfirm_min_minutes: countFromZero,
     repair_gain_factor: unit,

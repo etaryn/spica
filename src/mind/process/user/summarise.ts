@@ -83,6 +83,7 @@ export async function userSummarise(
     return {
       inputs: { previous_id: previous?.id ?? null, fact_ids: facts.map((f) => f.id) },
       outputs: { summary_id: summaryId },
+      written: [{ id: summaryId, kind: "summary" }],
       promptVersion: config.prompts.user_summarise,
     };
   });

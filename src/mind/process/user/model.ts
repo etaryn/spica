@@ -154,6 +154,10 @@ export async function userModel(
       },
       outputs,
       promptVersion: config.prompts.user_model,
+      written: [
+        { id: outputs.model_id, kind: "model" },
+        ...outputs.belief_ids.map((id) => ({ id, kind: "belief" })),
+      ],
     };
   });
 }

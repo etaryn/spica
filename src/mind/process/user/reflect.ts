@@ -76,6 +76,7 @@ export async function userReflect(
         reflection_ids: earlier.map((r) => r.id),
       },
       outputs: { reflection_id: reflectionId },
+      written: reflectionId ? [{ id: reflectionId, kind: "reflection" }] : [],
       promptVersion: config.prompts.user_reflect,
     };
   });

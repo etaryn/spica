@@ -100,6 +100,7 @@ export async function userIdeate(
         planned_ids: planned.map((i) => i.id),
       },
       outputs: { idea_id: ideaId },
+      written: ideaId ? [{ id: ideaId, kind: "idea" }] : [],
       promptVersion: config.prompts.user_ideate,
     };
   });

@@ -18,7 +18,7 @@ const Body = z.object({ quiz_version: z.string(), answers: z.unknown() });
 class AlreadyDone extends Error {}
 
 export async function submitCard(
-  deps: Pick<Deps, "db" | "config" | "embedder" | "clock">,
+  deps: Pick<Deps, "db" | "config" | "embedder" | "clock" | "modules">,
   user: { id: string; name: string },
   body: unknown,
 ): Promise<SubmitResult> {
@@ -41,6 +41,7 @@ export async function submitCard(
     "document",
   );
   const now = deps.clock.now();
+  const written: { id: string; kind: string }[] = [];
 
   try {
     await deps.db.transaction(async (tx) => {
@@ -52,7 +53,7 @@ export async function submitCard(
       });
       if (!fresh) throw new AlreadyDone();
       for (const [i, f] of facts.entries()) {
-        await insertFact(tx, user.id, {
+        const row = await insertFact(tx, user.id, {
           subject: f.subject,
           kind: f.kind,
           content: f.content,
@@ -66,11 +67,14 @@ export async function submitCard(
           source: "onboarding",
           source_ref: `onboarding:${cfg.quiz_version}`,
         });
+        written.push({ id: row.id, kind: row.kind });
       }
     });
   } catch (e) {
     if (e instanceof AlreadyDone) return { status: 409, error: "already_done" };
     throw e;
   }
+  for (const f of written)
+    await deps.modules.emit({ type: "fact.written", userId: user.id, factId: f.id, kind: f.kind });
   return { status: 201 };
 }

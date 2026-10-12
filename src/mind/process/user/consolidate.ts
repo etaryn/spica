@@ -78,6 +78,7 @@ export async function userConsolidate(
     return {
       inputs: { week: group.week, source_ids: ids },
       outputs: { gist_id: written ? gistId : null },
+      written: written ? [{ id: gistId, kind: "episode" }] : [],
       promptVersion: config.prompts.user_consolidate,
     };
   });

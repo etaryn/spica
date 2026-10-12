@@ -63,11 +63,17 @@ export async function runUserMind(
   // running rows if crashes matter
   const run = await claimRun(deps.db, job.runId);
   if (!run) return "skipped";
-  const { db, embedder, config, clock, log, llm } = deps;
+  await deps.modules.emit({
+    type: "user_mind.triggered",
+    userId: run.user_id,
+    runId: run.id,
+    triggers: (run.triggers as Trigger[]).map((t) => t.kind),
+  });
+  const { db, embedder, config, clock, log, llm, modules } = deps;
   let status: "done" | "failed";
   try {
     const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
-    const loopDeps = { db, embedder, config, clock, log, llm, snapshot };
+    const loopDeps = { db, embedder, config, clock, log, llm, modules, snapshot };
     const inputs = await loadRunInputs(loopDeps, run.user_id);
     // In order, each reading what the one before wrote; a failed loop doesn't stop the next.
     const results = [

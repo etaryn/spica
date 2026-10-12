@@ -1,5 +1,5 @@
 /**
- * `core_world_tick`, every hour: what happens in her life, in two steps.
+ * `core_world_tick`, every hour: what happens in her life, in three steps.
  *
  * Once per her local day, events are generated once for everyone and recorded in her world. A
  * planned one is on her mind from then on: its people join her entities, its thought becomes an
@@ -10,6 +10,8 @@
  * appraisal (a budgeted model call, with a code fallback) writes the episode in its own words,
  * brings a surprise's people into her life, moves her mood and resolves the plan it
  * fulfils. An event generated after its own time lands on the next run.
+ *
+ * Third, once a day she browses: a real find becomes an action that lands on a later run.
  *
  * Model and embedder calls run outside the transactions; each apply holds a global lock and
  * re-checks what it's about to do, so a retry never doubles a day or an event and a failure writes
@@ -37,10 +39,11 @@ import type { WorldEventRow } from "@/mind/world/types";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { proposeResolution, type ResolutionProposal } from "./resolve";
 import { BudgetSpentError, runCoreLoop } from "./runner";
+import { browseIfDue } from "./browse";
 import { WORLD_LOCK } from "./thoughts";
 
 export type WorldTickOptions = { inject?: (day: string) => InjectedEvent | null };
-export type WorldTickResult = { generated: boolean; appraised: number };
+export type WorldTickResult = { generated: boolean; appraised: number; browsed: boolean };
 
 const due = (lastDay: string | null, day: string) => !lastDay || lastDay < day;
 
@@ -65,8 +68,15 @@ export async function coreWorldTick(
     if (!appraisalFailure) throw error;
     deps.log.error("core world tick generation failed", { error: errorName(error) });
   }
+  let browsed = false;
+  try {
+    browsed = await browseIfDue(deps, now);
+  } catch (error) {
+    // A broken browse never stalls her day.
+    deps.log.error("core world tick browse failed", { error: errorName(error) });
+  }
   if (appraisalFailure) throw appraisalFailure.error;
-  return { generated, appraised };
+  return { generated, appraised, browsed };
 }
 
 async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions): Promise<boolean> {

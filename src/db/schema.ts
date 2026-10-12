@@ -296,6 +296,18 @@ export const fact = pgTable(
   ],
 );
 
+/** The profile card they filled in when they met her. One per user; the quiz is taken once. */
+export const onboarding = pgTable("onboarding", {
+  user_id: uuid("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  quiz_version: text("quiz_version").notNull(),
+  answers: jsonb("answers").$type<Record<string, number | string>>().notNull(),
+  // Worked out at submit, when both sides' answers are embedded, so the page makes no calls.
+  topics: jsonb("topics").$type<{ yours: string; hers: string }[]>().notNull(),
+  completed_at: ts("completed_at").notNull(),
+});
+
 /**
  * One batch of her thinking about one user, recorded when a big event happens in their
  * relationship. The row makes the batch run exactly once: written with the exchange, claimed by

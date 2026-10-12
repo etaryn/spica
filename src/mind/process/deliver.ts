@@ -23,12 +23,14 @@ export async function deliverPart(
   bubble: { turnId: string; part: number; parts: string[]; generic?: boolean },
 ): Promise<void> {
   await emit(deps, userId, { type: "message", turnId: bubble.turnId, part: bubble.part });
-  await deps.modules.emit({
+  const announced = deps.modules.emit({
     type: "reply.sent",
     userId,
     turnId: bubble.turnId,
     part: bubble.part,
   });
+  // A crisis reply never waits on a module (emit never rejects).
+  if (!bubble.generic) await announced;
 
   const settings = deps.config.push;
   if (!settings.enabled) return;

@@ -38,7 +38,8 @@ export async function receiveTurn(
       text,
       created_at: now,
     });
-    await deps.modules.emit({ type: "turn.received", userId, turnId: turn.id });
+    // Not awaited: the crisis check comes next and never waits on a module (emit never rejects).
+    void deps.modules.emit({ type: "turn.received", userId, turnId: turn.id });
     return { turn, existed: false };
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;

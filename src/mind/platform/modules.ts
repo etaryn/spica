@@ -57,13 +57,18 @@ export function createModuleBus(modules: readonly Module[], getDeps: () => Deps)
   for (const m of modules) {
     if (names.has(m.name)) throw new Error(`duplicate module ${m.name}`);
     names.add(m.name);
+    // Anything but a known scope fails closed: it would otherwise get a user module's access.
+    const scope: string = m.scope;
+    if (scope !== "core" && scope !== "user")
+      throw new Error(`module ${m.name} has unknown scope ${scope}`);
     // The types already refuse this; a cast could still get past them.
     const leak = m.scope === "core" ? Object.keys(m.on).find((t) => !isCoreType(t)) : undefined;
     if (leak) throw new Error(`core module ${m.name} cannot hear ${leak}`);
   }
   return {
-    // ponytail: in-process and awaited, no retries; a slow module slows its caller and a crash
-    // loses the event. Move to one pg-boss job per subscriber when a module does real work.
+    // ponytail: in-process and awaited (except where a crisis may follow), no retries; a slow
+    // module slows its caller and a crash loses the event. Move to one pg-boss job per
+    // subscriber when a module does real work.
     async emit(event) {
       const deps = getDeps();
       for (const m of modules) {

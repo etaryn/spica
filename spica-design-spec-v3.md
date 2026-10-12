@@ -2428,8 +2428,9 @@ Ethan, not changed.
 - **B97.** Module delivery is in-process and awaited: no retries, a crash loses the event, a slow
   module slows its caller, and a module's model calls aren't metered against the core budget.
   Move to one pg-boss job per subscriber, enqueued in the writing transaction, when a module makes
-  slow or model calls, must not miss events, or needs web-process events in the worker. *When a
-  module needs it.*
+  slow or model calls, must not miss events, or needs web-process events in the worker. A crisis
+  never waits on a module: `turn.received` and a crisis reply's `reply.sent` are not awaited.
+  *When a module needs it.*
 - **B98.** Module events carry no `space_id`. *With the friend group.*
 - **B99.** She doesn't remember her posts: the public-presence module writes each post to core
   memory as her own episode, so "saw your post" lands. *Public presence.*

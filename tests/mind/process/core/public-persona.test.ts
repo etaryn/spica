@@ -43,7 +43,7 @@ test("before any snapshot, only the fixed lines", async () => {
   expect(self.lines).toEqual((await deps.core.memory.selfLines(null)).map((l) => l.text));
 });
 
-test("today: the plan and what has happened, never what's pending or fell through", async () => {
+test("today: the plan and everything that landed, never what's pending or fell through", async () => {
   const deps = coreDepsOf(makeTestDeps());
   const now = deps.clock.now();
   const date = lifeDate(deps.config.life, now);
@@ -59,10 +59,16 @@ test("today: the plan and what has happened, never what's pending or fell throug
     prompt_version: "none",
     generated_at: now,
   });
-  const event = (content: string, at: Date, outcome: "happened" | "fell_through" | null) =>
-    deps.core.world.recordEvent({
-      at,
-      kind: "planned",
+  // As the world tick leaves them: a landed event is appraised; only a plan carries an outcome.
+  const event = async (
+    content: string,
+    kind: "planned" | "surprise" | "resolution",
+    outcome: "happened" | "fell_through" | null,
+    landed: boolean,
+  ) => {
+    const id = await deps.core.world.recordEvent({
+      at: new Date(now.getTime() + (landed ? -hour : hour)),
+      kind,
       content,
       valence: 0,
       stakes: "low",
@@ -71,9 +77,15 @@ test("today: the plan and what has happened, never what's pending or fell throug
       created_at: now,
       outcome,
     });
-  await event("HAPPENED", new Date(now.getTime() - hour), "happened");
-  await event("FELL-THROUGH", new Date(now.getTime() - hour), "fell_through");
-  await event("PENDING", new Date(now.getTime() + hour), null);
+    if (landed) await deps.core.world.markAppraised(id, now);
+  };
+  await event("PLAN-HAPPENED", "planned", "happened", true);
+  await event("SURPRISE", "surprise", null, true);
+  await event("FELL-THROUGH", "planned", "fell_through", true);
+  await event("INSTEAD", "resolution", null, true);
+  await event("PENDING", "planned", null, false);
   const self = await publicPersona(deps);
-  expect(self.today).toEqual({ date, plan, happened: ["HAPPENED"] });
+  expect(self.today.date).toBe(date);
+  expect(self.today.plan).toEqual(plan);
+  expect([...self.today.happened].sort()).toEqual(["INSTEAD", "PLAN-HAPPENED", "SURPRISE"]);
 });

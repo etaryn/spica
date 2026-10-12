@@ -117,3 +117,8 @@ test("core code can announce core events only", async () => {
   await core.emitCore(turn);
   expect(seen).toEqual(["happened"]);
 });
+
+test("a module with any other scope is refused, not treated as a user module", () => {
+  const odd = { name: "odd", scope: "public", on: {} } as unknown as Module;
+  expect(() => makeTestDeps({}, [odd])).toThrow("module odd has unknown scope public");
+});

@@ -30,3 +30,32 @@ test("each delivered bubble is announced with its part", async () => {
     { type: "reply.sent", userId: "u1", turnId: "t1", part: 1 },
   ]);
 });
+
+test("a message and a crisis reply never wait on a module", async () => {
+  const hang = () => new Promise<void>(() => {});
+  const seen: string[] = [];
+  const deps = makeTestDeps({}, [
+    {
+      name: "stuck",
+      scope: "user",
+      on: {
+        "turn.received": async (e) => {
+          seen.push(e.type);
+          await hang();
+        },
+        "reply.sent": async (e) => {
+          seen.push(e.type);
+          await hang();
+        },
+      },
+    },
+  ]);
+  const userId = await createTestUser("Sam");
+  const settled = <T>(p: Promise<T>) =>
+    Promise.race([p.then(() => true), new Promise((r) => setTimeout(() => r(false), 500))]);
+  const input = { clientMessageId: randomUUID(), text: "hey" };
+  expect(await settled(receiveTurn(deps, userId, input))).toBe(true);
+  const crisis = { turnId: "t1", part: 0, parts: ["here for you"], generic: true };
+  expect(await settled(deliverPart(deps, userId, crisis))).toBe(true);
+  expect(seen).toEqual(["turn.received", "reply.sent"]);
+});

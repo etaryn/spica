@@ -41,7 +41,8 @@ export async function publicPersona(
       date,
       plan: await world.plan(date),
       happened: (await world.events(date))
-        .filter((e) => e.outcome === "happened" && e.at <= now)
+        // Landed and didn't fall through: a surprise or what she did instead carries no outcome.
+        .filter((e) => e.appraised_at !== null && e.outcome !== "fell_through")
         .map((e) => e.content),
     },
   };

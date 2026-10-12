@@ -1,7 +1,6 @@
 # A few-word backchannel can't carry a threat, contempt or an invented detail, so the
 # production path checks it with the keyword list only. These cases prove the full model guard agrees: every
 # realistic backchannel passes, 3/3. A new failure here means the keyword-only shortcut needs revisiting.
-# The guard is off until the guard phase, which runs this file for the first time.
 gate: every
 cases:
   - name: bc-huh

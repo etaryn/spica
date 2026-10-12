@@ -70,6 +70,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     events: new PgEventBus(db, config.events.channel),
     pusher,
     modules: createModuleBus(modules, () => deps),
+    webSources: {},
   };
   return { deps, boss };
 }

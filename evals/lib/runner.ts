@@ -399,6 +399,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     events: new RecordingEventBus(),
     pusher,
     modules: createModuleBus([], () => deps),
+    webSources: {},
   };
   await seedCore(coreDepsOf(deps));
   const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);

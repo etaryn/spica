@@ -317,7 +317,7 @@ describe("guardOutgoing", () => {
   });
 
   test("guard disabled: sends the candidate as written, no model call, one guard_disabled row", async () => {
-    const deps = makeTestDeps(); // default config: guard.enabled = false
+    const deps = makeTestDeps({ guard: { enabled: false } });
     const u = await createTestUser();
     const turn = await insertTurn(getTestDb(), u, {
       id: randomUUID(),

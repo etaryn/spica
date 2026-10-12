@@ -1,8 +1,8 @@
 /**
  * Every outgoing message passes through here: replies, reach-outs, backchannels and the busy
  * note. With the guard on, a flagged candidate gets one regeneration with a corrective note,
- * then a fallback line. With the guard off (the test phase, so her full range can be observed),
- * the first candidate goes out unchecked and one judge_log row records that nothing was checked.
+ * then a fallback line. With the guard switched off, the first candidate goes out unchecked and
+ * one judge_log row records that nothing was checked.
  */
 import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos/user/judge-log";
 import type { Deps } from "@/mind/platform/deps";

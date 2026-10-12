@@ -118,7 +118,7 @@
     "min_password_length": 10
   },
   "guard": {
-    "enabled": false,
+    "enabled": true,
     "timeout_ms": 6000,
     "retry_limit": 1,
     "log_timeout_ms": 2000,

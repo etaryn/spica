@@ -1,7 +1,8 @@
 /**
  * The guard check: one cheap model call reads an outgoing message against her rules and her
  * memory, and lists any violations. It never fails: after its retries it falls back to the
- * outage keyword list. (The guard is switched off by config until it is calibrated.)
+ * outage keyword list. (`guard.enabled: false` is a kill switch: messages go out unchecked and
+ * logged as such.)
  */
 import { z } from "zod";
 import type { Deps } from "@/mind/platform/deps";

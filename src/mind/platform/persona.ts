@@ -1,15 +1,17 @@
 /**
  * Her persona file has two parts: the core values, which nothing ever rewrites, and the seed self,
  * her starting snapshot. The split lives in the file's headings, so moving a line from one part
- * to the other is an edit to the prompt file, never to code.
+ * to the other is an edit to the prompt file, never to code. It may also have a public voice, her
+ * register with an audience, read only by the public persona.
  */
 import type { Config } from "./config";
 import { loadPrompt } from "./prompts";
 
-export type Persona = { coreValues: string; seedSelf: string };
+export type Persona = { coreValues: string; seedSelf: string; publicVoice: string | null };
 
 const CORE = "Core values";
 const SEED = "Seed self";
+const PUBLIC = "Public voice";
 const GOALS = "### Goals";
 const GOAL_LINE = /^- (.+?): (.+)$/;
 
@@ -28,7 +30,7 @@ export function parseSeedGoals(seedSelf: string): { title: string; why: string }
   return goals;
 }
 
-/** Splits the file at its top-level `# ` headings; sections other than these two are ignored. */
+/** Splits the file at its top-level `# ` headings; sections other than these three are ignored. */
 export function parsePersona(markdown: string): Persona {
   const sections = new Map<string, string>();
   let current: string | null = null;
@@ -52,7 +54,9 @@ export function parsePersona(markdown: string): Persona {
   const seedSelf = sections.get(SEED);
   if (!coreValues) throw new Error(`persona file has no "# ${CORE}" section`);
   if (!seedSelf) throw new Error(`persona file has no "# ${SEED}" section`);
-  return { coreValues, seedSelf };
+  // The heading may carry a note, as in "# Public voice (reference)".
+  const publicVoice = [...sections].find(([name]) => name.startsWith(PUBLIC))?.[1] || null;
+  return { coreValues, seedSelf, publicVoice };
 }
 
 export function loadPersona(config: Config): Persona {

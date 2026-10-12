@@ -4,7 +4,7 @@ import { loadPersona, parsePersona, parseSeedGoals } from "@/mind/platform/perso
 
 const doc = `# Core values\nYou are Spica.\n\n## Hard boundaries\n- never threaten\n\n# Seed self\n## Lately\n- films\n\n# Public voice (reference)\nposts`;
 
-test("splits core values from the seed self and ignores the public voice", () => {
+test("splits core values from the seed self; the public voice stays out of both", () => {
   const p = parsePersona(doc);
   expect(p.coreValues).toBe("You are Spica.\n\n## Hard boundaries\n- never threaten");
   expect(p.seedSelf).toBe("## Lately\n- films");
@@ -50,4 +50,10 @@ test("seed goals are the bullets under the Goals heading", () => {
 
 test("the shipped persona has seed goals", () => {
   expect(parseSeedGoals(loadPersona(loadConfig()).seedSelf).length).toBeGreaterThan(0);
+});
+
+test("the public voice section is kept, and optional", () => {
+  const doc = "# Core values\nc\n# Seed self\ns\n# Public voice (reference)\ncomposed";
+  expect(parsePersona(doc).publicVoice).toBe("composed");
+  expect(parsePersona("# Core values\nc\n# Seed self\ns").publicVoice).toBeNull();
 });

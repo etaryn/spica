@@ -22,7 +22,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 test("apod: a public-domain image day", async () => {
   const fetch = stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-05": {
+    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
       media_type: "image",
       title: "The Pillars",
       url: "https://apod.nasa.gov/p.jpg",
@@ -43,7 +43,7 @@ test("apod: a public-domain image day", async () => {
 
 test("apod: a copyrighted image is labelled so; a video day is null", async () => {
   stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-05": {
+    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
       media_type: "image",
       title: "T",
       url: "https://apod.nasa.gov/c.jpg",
@@ -56,7 +56,7 @@ test("apod: a copyrighted image is labelled so; a video day is null", async () =
     licence: "copyrighted",
   });
   stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-06": {
+    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-05": {
       media_type: "video",
       title: "T",
       url: "https://youtube.com/x",
@@ -92,4 +92,12 @@ test("commons: the picture of the day with its licence and artist", async () => 
   });
   stub({ "https://api.wikimedia.org/feed/v1/wikipedia/en/featured/2026/01/06": {} });
   expect(await sources.commons_potd!.fetch("2026-01-06")).toBeNull();
+});
+
+test("apod: asks for the previous day, across a month boundary too", async () => {
+  const fetch = stub({
+    "https://api.nasa.gov/planetary/apod": { media_type: "video", title: "T", url: "u" },
+  });
+  await sources.apod!.fetch("2026-03-01");
+  expect(fetch.mock.calls[0]![0]).toContain("date=2026-02-28");
 });

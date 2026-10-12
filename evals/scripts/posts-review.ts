@@ -77,7 +77,7 @@ for (const [name, source] of Object.entries(deps.webSources)) {
       source: name,
       item: find,
       format: format.name,
-      pose: pose.file,
+      pose: pose.name,
       skill,
       draft,
       check,

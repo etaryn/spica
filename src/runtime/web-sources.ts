@@ -31,9 +31,14 @@ function apod(o: Options): WebSource {
   return {
     label: "NASA's astronomy picture of the day",
     async fetch(day): Promise<WebItem | null> {
+      // NASA rejects dates past its own US day, which her Singapore date often is; yesterday always exists.
+      const apodDay = new Date(Date.parse(`${day}T00:00:00Z`) - 864e5).toISOString().slice(0, 10);
       const raw = Apod.parse(
         await (
-          await get(`https://api.nasa.gov/planetary/apod?api_key=${o.nasaApiKey}&date=${day}`, o)
+          await get(
+            `https://api.nasa.gov/planetary/apod?api_key=${o.nasaApiKey}&date=${apodDay}`,
+            o,
+          )
         ).json(),
       );
       if (raw.media_type !== "image") return null;

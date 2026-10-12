@@ -24,8 +24,9 @@ Test phase: functionality over accuracy; every number is a first guess, tuned in
   remark about absence, sharp jabs at a behaviour or choice even outside banter, going short or
   cool in direct response to something hurtful (that exchange), one pointed callback to a past
   slight. (§21 #11 settled.)
-- **Hurt and tension are capped** at a config ceiling; decay is unchanged; no permanent mark
-  beyond the existing trust scar. (§21 #10 settled.)
+- **The ceiling is the existing 0–1 scale.** Every hurt and tension move already goes through the
+  saturating `nudge`, clamped to [0, 1], and both fade within days (48 h and 24 h half-lives);
+  only the trust scar lasts. No new cap, no code. (§21 #10 settled.)
 - **Calibration is provoke and replay**: review-run scripts with the real reply model, plus a
   replay of the logged unguarded messages; Ethan labels the disagreements into fixtures.
 - **In scope from the backlog:** B36–B38 (fixtures and rubric, folded into the rewrite), B39,
@@ -77,19 +78,19 @@ configures them.
   stay keyword-only.
 - `judge_log` output records the claims and their similarities.
 
-**B39:** the `crisis_reply` fallback line no longer names numbers. `fallbackLine` for
-`crisis_reply` appends the lines of `safety.resources.default`, so the hotlines live only in
-config. Fallback prompt v2.
+**B39:** the `crisis_reply` fallback line stops naming numbers and points to the resources
+below it instead. The resources card is attached from the user turn's `safety_flag` on every
+path (POST, SSE, history), so a fallback crisis reply already carries the hotlines from
+`safety.resources`; the numbers then live only in config. Fallback prompt v2, no code.
 
 The outage keyword list (`guard.fallback_keywords`) stays; each entry is checked against the new
 line (they are all tallies, debts or threats, so they stay blocked).
 
 ## 3. Relationship
 
-**Ceilings (§21 #10):** `relationship.ceilings: { hurt: 2.0, tension: 2.0 }`. Hurt and tension
-are clamped where a param value is set (`Draft.setParam`), so every path (signals, sensitisation,
-absence, ending) respects it. At 48 h and 24 h half-lives the ceiling fades below the make-up
-and stage thresholds within days.
+**Ceilings (§21 #10):** settled as the existing scale: `nudge` saturates and clamps hurt and
+tension to [0, 1], and from 1.0 hurt fades below 0.5 in two days, tension in one. Spec and
+`DECISIONS.md` only; a test pins that repeated maximal hurt never exceeds 1.
 
 **B73, a crisis no longer erases a conflict:** `suspendForCrisis` stops setting tension to 0.
 Tension fades on its own half-life; friction stays suspended because the quiet window
@@ -136,16 +137,16 @@ phase's own LLM process).
 
 **Deterministic `tests/exit/phase-13.test.ts`** (fake guard, fake reply, fake embedder):
 - each outgoing kind with the guard on: pass, regeneration, fallback; backchannel and busy note
-  keyword-only; crisis reply with the guard and the resources line from config.
+  keyword-only; crisis reply falling back sends a line with no hotline numbers, and the turn still carries the resources card.
 - `invented_self`: an ungrounded claim regenerates; a grounded one passes; a grounding error
   passes.
-- hurt and tension stop at the ceilings; a crisis leaves tension in place and the summary quiet;
+- repeated maximal hurt and tension stay at or below 1; a crisis leaves tension in place and the summary quiet;
   a pending ending adds hurt that survives retraction.
 - the leak canary: a token planted in user A's data never appears in user B's guard input or in
   core; user A's guarded exchange leaves core state unchanged.
 
 **Spec updates:** §2 (rules restored with the line), §10.5 (guard on, `invented_self`,
-`self_claims`), §11.1 (ceilings, crisis keeps tension, ending hurt), §17.5 (guard tests live,
+`self_claims`), §11.1 (the 0–1 ceiling, crisis keeps tension, ending hurt), §17.5 (guard tests live,
 calibration commands), §20 (Phase 13 built), §21 (#10, #11 settled), §25.7 and §25.10 (B36–B39,
 B60, B73, B78 done), new config keys and prompt versions.
 

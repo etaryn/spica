@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
+import { seededUnit } from "@/mind/platform/seeded-random";
 import type { StillFormat } from "@/mind/process/core/post-library";
 import {
   canvasSize,
@@ -138,4 +139,29 @@ test("overlay text with markup characters renders literally without throwing", a
   };
   const out = await renderStill(await input({ format: f, overlayText: "stars & films <3" }));
   expect((await sharp(out).metadata()).width).toBe(posts.output_width);
+});
+
+test("a tilted render never shows the rotation's black corners", async () => {
+  const f = { ...format, frame: "border" as const };
+  const seed = ["a", "b", "c", "d", "e", "f"]
+    .map((s) => `tilt-${s}`)
+    .find((s) => Math.abs((seededUnit(`${s}:tilt`) * 2 - 1) * posts.jitter.tilt_deg) > 1)!;
+  const out = await sharp(await renderStill(await input({ format: f, skill: 0, seed })))
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width: w, height: h, channels: ch } = out.info;
+  const pts = [
+    [0, 0],
+    [w - 1, 0],
+    [0, h - 1],
+    [w - 1, h - 1],
+    [w >> 1, 0],
+    [w >> 1, h - 1],
+    [0, h >> 1],
+    [w - 1, h >> 1],
+  ];
+  // The picture itself is dark blue (about 55 and up); the wedges would be near 0.
+  for (const [x, y] of pts)
+    for (let c = 0; c < 3; c++) expect(out.data[(y! * w + x!) * ch + c]!).toBeGreaterThan(30);
 });

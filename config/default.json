@@ -659,6 +659,23 @@
       "handwritten": { "file": "assets/fonts/Caveat.ttf", "family": "Caveat" }
     },
     "jitter": { "crop": 0.08, "tilt_deg": 4, "place": 0.05 },
+    "render": {
+      "shadow_blur": 6,
+      "shadow_opacity": 0.45,
+      "shadow_darkness": 0.3,
+      "glow_blur": 8,
+      "band_alpha": 0.45,
+      "label_font_size": 28,
+      "caption_font_size": 36,
+      "text_dpi": 144,
+      "text_width_share": 0.86,
+      "overlay_pad_share": 0.03,
+      "floor_line": 0.8,
+      "foot_left": 0.28,
+      "foot_right": 0.72,
+      "tint_luma_divisor": 140,
+      "tint_brightness": [0.75, 1.15]
+    },
     "recent_limit": 30
   },
   "user_mind": {

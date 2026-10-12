@@ -809,6 +809,24 @@ const posts = z
       tilt_deg: z.number().min(0).max(15),
       place: z.number().min(0).max(0.3),
     }),
+    // The look of a render: shadow, glow, caption band, type and placement.
+    render: z.object({
+      shadow_blur: z.number().positive(),
+      shadow_opacity: unit,
+      shadow_darkness: unit,
+      glow_blur: z.number().positive(),
+      band_alpha: unit,
+      label_font_size: positiveInt,
+      caption_font_size: positiveInt,
+      text_dpi: positiveInt,
+      text_width_share: unit,
+      overlay_pad_share: unit,
+      floor_line: unit,
+      foot_left: unit,
+      foot_right: unit,
+      tint_luma_divisor: z.number().positive(),
+      tint_brightness: z.tuple([z.number().positive(), z.number().positive()]),
+    }),
     recent_limit: positiveInt,
   })
   .refine((p) => p.browse_window[0] < p.browse_window[1], "posts.browse_window must be ordered");

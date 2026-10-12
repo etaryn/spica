@@ -27,7 +27,6 @@ const ASPECT = { "1:1": 1, "4:5": 5 / 4, "9:16": 16 / 9 } as const;
 const BORDER = 0.03;
 const POLAROID_BOTTOM = 4;
 const TITLE_BAR = 0.06;
-const FLOOR_LINE = 0.8;
 
 export const roughness = (skill: number) => clamp(1 - skill, 0, 1);
 
@@ -107,6 +106,7 @@ async function grain(width: number, height: number, amount: number, seed: string
 
 export async function renderStill(input: RenderInput): Promise<Buffer> {
   const { format, posts, seed } = input;
+  const rd = posts.render;
   const rough = roughness(input.skill);
   const u = (key: string) => seededUnit(`${seed}:${key}`);
   const signed = (key: string) => u(key) * 2 - 1;
@@ -133,12 +133,20 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
   const [r, g, b] = stats.channels.map((c) => c.mean);
   const mean = { r: r!, g: g!, b: b! };
   const rim = stats.dominant;
-  const dark = { r: mean.r * 0.3, g: mean.g * 0.3, b: mean.b * 0.3 };
+  const dark = {
+    r: mean.r * rd.shadow_darkness,
+    g: mean.g * rd.shadow_darkness,
+    b: mean.b * rd.shadow_darkness,
+  };
 
   // Her: scaled into the format's range, facing the busier side.
   const [lo, hi] = format.placement.scale;
-  const height = Math.round(H * (lo + (hi - lo) * u("scale")));
   const original = await sharp(input.pose.png).metadata();
+  // A sprite wider than the canvas is scaled down to fit, so placement offsets can't go negative.
+  const height = Math.min(
+    Math.round(H * (lo + (hi - lo) * u("scale"))),
+    Math.floor((W * original.height!) / original.width!),
+  );
   const k = height / original.height!;
   const facing = side === "right" ? "left" : "right";
   let sprite = sharp(input.pose.png).resize({ height });
@@ -151,7 +159,7 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
 
   const luma = 0.299 * mean.r + 0.587 * mean.g + 0.114 * mean.b;
   const tinted = await sharp(her)
-    .modulate({ brightness: clamp(luma / 140, 0.75, 1.15) })
+    .modulate({ brightness: clamp(luma / rd.tint_luma_divisor, ...rd.tint_brightness) })
     .composite([
       { input: await solid(w, height, mean), blend: "soft-light" },
       { input: her, blend: "dest-in" },
@@ -160,16 +168,18 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
     .toBuffer();
   const glow = await sharp(await solid(w, height, rim))
     .composite([{ input: her, blend: "dest-in" }])
-    .blur(8)
+    .blur(rd.glow_blur)
     .png()
     .toBuffer();
 
-  const footX = W * ((side === "right" ? 0.72 : 0.28) + posts.jitter.place * rough * signed("x"));
-  const footY = H * (FLOOR_LINE + posts.jitter.place * rough * signed("y"));
+  const footX =
+    W *
+    ((side === "right" ? rd.foot_right : rd.foot_left) + posts.jitter.place * rough * signed("x"));
+  const footY = H * (rd.floor_line + posts.jitter.place * rough * signed("y"));
   const left = Math.round(clamp(footX - ax, 0, W - w));
   const top = Math.round(clamp(footY - ay, 0, H - height));
   const shadow = Buffer.from(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs><filter id="s"><feGaussianBlur stdDeviation="6"/></filter></defs><ellipse cx="${left + ax}" cy="${top + ay}" rx="${w * 0.35}" ry="${height * 0.025}" fill="rgb(${dark.r | 0},${dark.g | 0},${dark.b | 0})" fill-opacity="0.45" filter="url(#s)"/></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs><filter id="s"><feGaussianBlur stdDeviation="${rd.shadow_blur}"/></filter></defs><ellipse cx="${left + ax}" cy="${top + ay}" rx="${w * 0.35}" ry="${height * 0.025}" fill="rgb(${dark.r | 0},${dark.g | 0},${dark.b | 0})" fill-opacity="${rd.shadow_opacity}" filter="url(#s)"/></svg>`,
   );
 
   const layers: OverlayOptions[] = [
@@ -185,12 +195,26 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
 
   image = await frame(image, format, W, H);
 
-  // Tilt last, then crop back to size, so the rotation never shows its corners.
+  // Tilt last. The rotated picture is scaled up just enough that the centred, original-size
+  // region lies fully inside it, so the rotation never shows its corners.
   const deg = posts.jitter.tilt_deg * rough * signed("tilt");
   if (deg !== 0) {
     const size = framedSize(format, W);
-    image = await sharp(await sharp(image).rotate(deg, { background: "#000" }).png().toBuffer())
-      .resize(size.width, size.height, { fit: "cover" })
+    const rad = (Math.abs(deg) * Math.PI) / 180;
+    const f =
+      Math.cos(rad) + Math.sin(rad) * Math.max(size.width / size.height, size.height / size.width);
+    const rotated = await sharp(image).rotate(deg, { background: "#000" }).png().toBuffer();
+    const rm = await sharp(rotated).metadata();
+    const zw2 = Math.round(rm.width! * f);
+    const zh2 = Math.round(rm.height! * f);
+    image = await sharp(rotated)
+      .resize(zw2, zh2)
+      .extract({
+        left: Math.floor((zw2 - size.width) / 2),
+        top: Math.floor((zh2 - size.height) / 2),
+        width: size.width,
+        height: size.height,
+      })
       .png()
       .toBuffer();
   }
@@ -204,17 +228,18 @@ async function overlay(
   W: number,
   H: number,
 ): Promise<OverlayOptions[]> {
+  const rd = posts.render;
   const font = posts.fonts[format.overlay.style];
   const label = format.overlay.kind === "label";
   const rendered = await sharp({
     text: {
       text: `<span foreground="${label ? "#1b1b24" : "white"}">${pango(text)}</span>`,
-      font: `${font.family} ${label ? 28 : 36}`,
+      font: `${font.family} ${label ? rd.label_font_size : rd.caption_font_size}`,
       fontfile: font.file,
-      width: Math.round(W * 0.86),
+      width: Math.round(W * rd.text_width_share),
       align: "centre",
       rgba: true,
-      dpi: 144,
+      dpi: rd.text_dpi,
     },
   })
     .png()
@@ -222,12 +247,12 @@ async function overlay(
   const m = await sharp(rendered).metadata();
   const tw = Math.min(m.width!, W);
   const th = Math.min(m.height!, H);
-  const pad = Math.round(W * 0.03);
+  const pad = Math.round(W * rd.overlay_pad_share);
   const y = format.overlay.position === "top" ? pad : H - th - pad;
   const text0 = { input: rendered, left: Math.round((W - tw) / 2), top: y };
   if (label) return [text0];
   // A caption in the image sits on a translucent band, the way phone editors do it.
-  const band = await solid(W, th + pad, { r: 0, g: 0, b: 0 }, 0.45);
+  const band = await solid(W, th + pad, { r: 0, g: 0, b: 0 }, rd.band_alpha);
   return [{ input: band, left: 0, top: Math.max(0, y - Math.round(pad / 2)) }, text0];
 }
 

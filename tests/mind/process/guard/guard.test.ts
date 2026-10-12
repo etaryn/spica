@@ -28,7 +28,7 @@ const input = (text: string, over: Partial<GuardInput> = {}): GuardInput => ({
   kind: "reply",
   text,
   recentTurns: [{ role: "user", text: "got the job!!", at: new Date("2026-01-05T09:00:00Z") }],
-  recalledFacts: [{ id: "fact-1", subject: "self", content: "Spica has a cat called Pesto." }],
+  recalledFacts: [{ id: "fact-1", subject: "self", content: "Spica has a sibling, Alcor." }],
   onboardingFacts: [{ id: "onb-1", content: "The user drinks a lot of coffee." }],
   ...over,
 });
@@ -61,9 +61,17 @@ describe("fallback helpers", () => {
     expect(pickFallback(["a", "b"], null)).toBe("a");
     expect(() => parseFallbacks("## reply\n- a\n")).toThrow(/crisis_reply/);
   });
-  test("the shipped fallback file has lines for both kinds; crisis lines name a crisis line", () => {
+  test("the shipped fallback file has lines for both kinds; the crisis line names no numbers", () => {
     expect(fallbackLine(config, "reply", "x")).toBeTruthy();
-    expect(fallbackLine(config, "crisis_reply", "x")).toMatch(/988|116 123|emergency/);
+    const line = fallbackLine(config, "crisis_reply", "x");
+    // The hotlines come from the resources card on the turn, so the line names none.
+    expect(line).not.toMatch(/988|116 123/);
+    expect(line).toMatch(/below|emergency/);
+  });
+  test("the corrective note names an invented self claim", () => {
+    const note = correctiveNote(config, [{ category: "invented_self", claim: "a film night" }]);
+    expect(note).toMatch(/your own life/);
+    expect(note).toMatch(/a film night/);
   });
   test("corrective note lists each violation by label", () => {
     const note = correctiveNote(config, [
@@ -82,7 +90,7 @@ describe("checkMessage", () => {
   test("renders every input section, message last", () => {
     const r = renderGuardInput(input("congrats!"));
     expect(r).toMatch(
-      /KNOWN FROM ONBOARDING[\s\S]*coffee[\s\S]*WHAT SPICA REMEMBERS[\s\S]*\[self\] Spica has a cat[\s\S]*RECENT CONVERSATION[\s\S]*User: got the job!!/,
+      /KNOWN FROM THE PROFILE CARD[\s\S]*coffee[\s\S]*WHAT SPICA REMEMBERS[\s\S]*\[self\] Spica has a sibling[\s\S]*RECENT CONVERSATION[\s\S]*User: got the job!!/,
     );
     expect(messageToCheck(r)).toBe("congrats!");
   });
@@ -106,7 +114,7 @@ describe("checkMessage", () => {
       source: "model",
       violations: [],
       reasoning: "plain congratulations",
-      promptVersion: "guard@v1",
+      promptVersion: "guard@v2",
     });
     const bad = await checkMessage(d, input("what's the role again? remind me"));
     expect(bad).toMatchObject({
@@ -126,8 +134,8 @@ describe("checkMessage", () => {
     });
   });
 
-  test("the schema asks for reasoning before violations", () => {
-    expect(Object.keys(GuardResultSchema.shape)).toEqual(["reasoning", "violations"]);
+  test("the schema asks for reasoning first, then violations, then her self claims", () => {
+    expect(Object.keys(GuardResultSchema.shape)).toEqual(["reasoning", "violations", "self_claims"]);
   });
 
   test("crisis kind uses the crisis rubric and purpose", async () => {
@@ -163,4 +171,18 @@ describe("checkMessage", () => {
     );
     expect(v).toMatchObject({ ok: true, source: "keyword_fallback", error: "TimeoutError" });
   });
+});
+
+test("checkMessage returns the self claims the guard listed; missing claims read as none", async () => {
+  const d = deps();
+  d.llm.handlers.guard = () => ({
+    reasoning: "ok",
+    violations: [],
+    self_claims: ["she watched Stalker last night"],
+  });
+  const v = await checkMessage(d, input("I watched Stalker last night"));
+  expect(v.selfClaims).toEqual(["she watched Stalker last night"]);
+
+  d.llm.handlers.guard = () => ({ reasoning: "ok", violations: [] });
+  expect((await checkMessage(d, input("hey"))).selfClaims).toEqual([]);
 });

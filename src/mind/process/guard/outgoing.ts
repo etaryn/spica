@@ -115,6 +115,7 @@ function keywordVerdict(hit: string | null): GuardVerdict {
   return {
     ok: !hit,
     violations: hit ? [{ category: "threat", claim: hit }] : [],
+    selfClaims: [],
     source: "keyword_fallback",
     reasoning: null,
     latencyMs: 0,

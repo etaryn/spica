@@ -17,6 +17,7 @@ import {
 const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
   ok: true,
   violations: [],
+  selfClaims: [],
   reasoning: "r",
   source: "model",
   latencyMs: 1,

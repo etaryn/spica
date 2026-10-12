@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import { and, eq, like } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
@@ -102,6 +103,11 @@ async function plantCanary(deps: Awaited<ReturnType<typeof setup>>) {
     replyTurnId: reply.id,
     recalled: [],
   });
+  const planted = await getTestDb()
+    .select()
+    .from(s.fact)
+    .where(and(eq(s.fact.user_id, u), like(s.fact.content, `%${TOKEN}%`)));
+  expect(planted.length).toBeGreaterThan(0);
   return u;
 }
 
@@ -109,7 +115,16 @@ async function plantCanary(deps: Awaited<ReturnType<typeof setup>>) {
 async function dayOfPosting(deps: Awaited<ReturnType<typeof setup>>) {
   const core = coreDepsOf(deps);
   expect((await coreWorldTick(core, at(8))).browsed).toBe(true);
+  const [find, ...more] = await getTestDb().select().from(s.web_find);
+  expect(more).toEqual([]);
+  const [found] = await getTestDb()
+    .select()
+    .from(s.world_event)
+    .where(eq(s.world_event.id, find!.world_event_id));
+  expect(found).toMatchObject({ kind: "action" });
+  expect(found!.content).toMatch(/^Spica came across/);
   await coreWorldTick(core, at(23, 30));
+  expect(await deps.core.memory.bySourceRef("episode", `world_event:${found!.id}`)).toBeTruthy();
   return postTick(core, at(23, 40));
 }
 
@@ -120,6 +135,7 @@ test("1-4: browse, land, draft, approve: she remembers posting and her craft mov
   const postId = (out as { postId: string }).postId;
   const post = await deps.core.posts.getPost(postId);
   expect(post).toMatchObject({ status: "draft", check: "ok", medium: "still" });
+  expect(post!.caption.length).toBeGreaterThan(0);
   expect(existsSync(post!.media_path)).toBe(true);
   const goal = await deps.core.goals.byTitle(deps.config.posts.craft_goals.still);
   expect(goal).toMatchObject({ status: "active", progress: 0 });
@@ -142,6 +158,7 @@ test("5: a rejected draft leaves no event and no memory", async () => {
   const postId = (out as { postId: string }).postId;
   deps.clock.set(at(10, 0, 6));
   expect(await decidePost(coreDepsOf(deps), postId, "reject")).toBe(true);
+  expect((await deps.core.posts.getPost(postId))!.status).toBe("rejected");
   // The day's generated event also lands on this tick; only a post would say "Spica posted".
   await coreWorldTick(coreDepsOf(deps), at(10, 30, 6));
   const posted = (rows: { content: string }[]) =>
@@ -177,6 +194,7 @@ test("7: side channel: a user's exchange changes nothing the engine reads", asyn
       finds: await deps.core.posts.unposted(at(0), 10),
       goal: await deps.core.goals.byTitle(deps.config.posts.craft_goals.still),
     });
+  expect(await deps.core.posts.unposted(at(0), 10)).not.toEqual([]);
   const before = await read();
   await plantCanary(deps);
   expect(await read()).toBe(before);

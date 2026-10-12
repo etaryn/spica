@@ -23,6 +23,10 @@ export default async function SettingsPage({
         <p>Signed in as {user.email}</p>
         <SignOutButton pushTimeoutMs={getDeps().config.push.timeout_ms} />
       </section>
+      <section>
+        <h2 style={{ fontSize: 18 }}>Your card</h2>
+        <Link href="/onboarding/results">See the profile cards you and Spica swapped</Link>
+      </section>
       {vapidKey && (
         <section>
           <h2 style={{ fontSize: 18 }}>Notifications</h2>

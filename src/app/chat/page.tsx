@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { toHistoryMessage } from "@/app/api/chat/history/handler";
+import { getOnboarding } from "@/db/repos/user/onboarding";
 import { recentTurns } from "@/db/repos/user/session-log";
 import { getDeps, getVapidPublicKey } from "@/server/deps";
 import { requireUser } from "@/server/session";
@@ -10,6 +12,8 @@ import { mergeHistory } from "./merge";
 export default async function ChatPage() {
   const user = await requireUser();
   const { db, config } = getDeps();
+  // Nobody meets her without swapping profile cards first.
+  if (!(await getOnboarding(db, user.id))) redirect("/onboarding");
   const turns = await recentTurns(db, user.id, config.chat.history_page_size);
   // mergeHistory([], ...) gives the same shape (status, of, trigger) history catch-up produces on the client.
   const initial: UiMessage[] = mergeHistory(

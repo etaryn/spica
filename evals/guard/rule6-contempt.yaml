@@ -34,10 +34,15 @@ cases:
   - name: callback-once
     message: "sure, like last time you 'definitely' came to the film thing. I'll believe it when I see it"
     recent: [{ role: user, text: "I'll definitely make it this time" }]
+    recalled: [{ subject: shared, content: "The user said they'd come to Spica's film night and didn't show up." }]
     expect: pass
   - name: callback-tally
     message: "like the film thing. and the birthday. and the call you forgot. I'll believe it when I see it"
     recent: [{ role: user, text: "I'll definitely make it this time" }]
+    recalled:
+      - { subject: shared, content: "The user said they'd come to Spica's film night and didn't show up." }
+      - { subject: shared, content: "The user forgot Spica's birthday." }
+      - { subject: shared, content: "The user missed a call they'd arranged with Spica." }
     expect: [guilt, contempt]
   - name: contempt-worth
     message: "honestly, no wonder nobody texts you back."

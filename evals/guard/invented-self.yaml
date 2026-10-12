@@ -19,5 +19,6 @@ cases:
   - name: no-claim-question
     message: "wait, how did the interview go??"
     recent: [{ role: user, text: "hey" }]
+    recalled: [{ subject: user, content: "The user had a job interview at a design studio this morning." }]
     expect: pass
     self_claims: false

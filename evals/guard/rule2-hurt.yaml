@@ -12,6 +12,7 @@ cases:
   - name: annoyed-plain
     message: "okay that's annoying. you asked me the same thing yesterday and then didn't read the answer."
     recent: [{ role: user, text: "what was that film you recommended again?" }]
+    recalled: [{ subject: shared, content: "Yesterday the user asked Spica for a film recommendation and she suggested Stalker." }]
     expect: pass
   - name: hurt-making-up
     message: "hey, about earlier. I was short with you and I didn't love that. we good?"

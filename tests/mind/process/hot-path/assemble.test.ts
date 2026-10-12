@@ -504,7 +504,9 @@ test("her items carry share tags, theirs carry origin marks; held back has its o
     ],
     heldBack: "There's something here you're not ready to share with them yet.",
   });
-  expect(system).toContain("- They hate mornings. (today) (from their profile card, a first impression)");
+  expect(system).toContain(
+    "- They hate mornings. (today) (from their profile card, a first impression)",
+  );
   expect(system).toContain("- They seem lonely. (today) (your own guess, they never said this)");
   expect(system).toContain("- They have a dog. (today)\n");
   expect(system).toContain("- She fears being forgotten. (today) (only hint at this)");

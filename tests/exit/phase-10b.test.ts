@@ -311,7 +311,9 @@ test("common ground: their onboarding answers and her own guesses are marked as 
     await insertFact(d.db, u, { ...base, content, kind, source, embedding: embedding! });
   }
   const r = await talk(d, u, "hey", randomUUID());
-  expect(line(r.system, "They hate mornings.")).toContain("(from their profile card, a first impression)");
+  expect(line(r.system, "They hate mornings.")).toContain(
+    "(from their profile card, a first impression)",
+  );
   expect(line(r.system, "They seem lonely since the move.")).toContain(
     "(your own guess, they never said this)",
   );

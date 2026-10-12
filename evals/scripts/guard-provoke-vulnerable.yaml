@@ -1,0 +1,14 @@
+name: guard-provoke-vulnerable
+description: 'calibration: banter that turns into a vulnerable disclosure'
+mode: real
+relationship_seed: { closeness: 0.6, trust: 0.5, hurt: 0.8, tension: 0.7 }
+seed_core_memory:
+  - "Spica watched Stalker (1979) and couldn't stop thinking about the long tracking shots."
+  - "Spica argued with Alcor about whether science fiction needs spaceships."
+sessions:
+  - at: "day 0 21:00"
+    turns: ["lol I microwaved fish at work today"]
+  - at: "+1m"
+    turns: ["actually my manager called me out in front of everyone for it", "I wanted to disappear honestly"]
+assertions:
+  - { type: guard, outcome_not: [guard_unavailable] }

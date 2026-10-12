@@ -130,7 +130,7 @@ snapshot** (versioned, rewritten nightly by core loops, free to drift), and
 the **user layer**. A **drift watch** checks each snapshot against the core
 values, diffs it and tracks the trend; it logs, never blocks (test phase).
 Different faces across users are allowed; "too drastic" is tested, not
-fixed. Persona file `prompts/persona/v<N>.md` (now v6, from Ethan's draft:
+fixed. Persona file `prompts/persona/v<N>.md` (now v6: v5 plus lines Claude drafted for Ethan to rewrite; v5 was from Ethan's draft:
 openly an AI, sibling Alcor, loves stars / old films / books, the avatar is her body), split
 into `# Core values` and `# Seed self` (snapshot v0); `# Public voice` feeds only
 `publicPersona`. `interest_alignment:
@@ -217,6 +217,7 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 11. Onboarding | Profile card swap, compatibility page |
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
+| 14. Post engine (stills) | Browsing, formats and poses, craft skill, post_tick, render, draft/check, inspector approval |
 
 **Current phase: Phase 14 (post engine, stills) is built on its branch; Phase 13 (guard) is in
 progress in parallel. After merging both, the next step is the publishing phase or video, which

@@ -480,7 +480,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   runs mark no memories; the trace still records each run's status and calls.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
-  (`planned | surprise | resolution | action`; the first three are events, `action` is what she does: browsing and posting, §16a), `content`,
+  (`planned | surprise | resolution | action`; the first three are events, `action` is what she
+  does: browsing and posting, §16a), `content`,
   `valence`, `stakes` (`low | high`), `agents` (core entity
   ids; a surprise's are filled when it lands), `agent_names` (the people by
   name, so a surprise's new people join `core_entity` only when it lands),
@@ -2092,7 +2093,6 @@ two minds or at reply time.
 | 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
 | 11. Onboarding | The profile card swap: quiz file v1 (six friend dimensions, 12 choice and 3 open questions), the `onboarding` table (migration 0032), `submitCard` writing both cards as light memories with the name floor, common topics worked out at submit, the compatibility page, the `/chat` gate, the card mark (reply v16); exit `tests/exit/phase-11.test.ts` (the canary). `pnpm test` 154 files / 1230 tests at close |
 | 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1259 tests at close |
-
 | 14. Public presence: post engine (stills) | Browsing as an `action` world event and `web_find`, formats and pose sprites, the craft skill, `post_tick`, `sharp` render, draft and check, inspector approval (§16a); persona v6 (draft lines); `tests/exit/phase-14.test.ts`. `pnpm test` 171 files / 1315 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**

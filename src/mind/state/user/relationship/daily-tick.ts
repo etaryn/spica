@@ -22,6 +22,7 @@ import { applyCommitment } from "./commitment";
 import { newMilestones } from "./milestones";
 import { restage } from "./stages";
 import { isAbsent, relationshipAfterDailyTick } from "./transitions";
+import { movedParams } from "./update";
 import { DAY } from "@/mind/platform/time";
 
 /** Already ticked on `localDate` or later. */
@@ -34,7 +35,7 @@ function alreadyTicked(lastTick: string | null, localDate: string): boolean {
  * under the lock, because a concurrent run may have just ticked this user.
  */
 export async function tickUser(
-  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log">,
+  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log" | "modules">,
   userId: string,
   now: Date,
 ): Promise<void> {
@@ -48,7 +49,7 @@ export async function tickUser(
   const unlocked = await relationshipRepo.getRelationshipRow(deps.db, userId);
   if (!unlocked || alreadyTicked(unlocked.last_tick, localDate)) return;
 
-  const runId = await deps.db.transaction(async (tx) => {
+  const result = await deps.db.transaction(async (tx) => {
     const row = await relationshipRepo.lockRelationship(tx, userId);
     if (alreadyTicked(row.last_tick, localDate)) return null;
 
@@ -129,9 +130,11 @@ export async function tickUser(
       { turnId: null, now },
     );
 
+    const moved = movedParams(params, committed.params);
+
     // Params drifting after the user ended it are no event: nothing is happening between them.
-    if (ended) return null;
-    return recordBigEvents(
+    if (ended) return { runId: null, moved };
+    const runId = await recordBigEvents(
       deps,
       tx,
       userId,
@@ -144,13 +147,16 @@ export async function tickUser(
         source: "tick",
       }).concat(firsts.fired.map((name) => ({ kind: "milestone" as const, name }))),
     );
+    return { runId, moved };
   });
-  if (runId) await enqueueUserMindRun(deps, runId);
+  if (result?.runId) await enqueueUserMindRun(deps, result.runId);
+  if (result?.moved.length)
+    await deps.modules.emit({ type: "relationship.changed", userId, params: result.moved });
 }
 
 /** Every user, each isolated so one failure doesn't stop the rest. Never retried. */
 export async function relationshipDailyTick(
-  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log">,
+  deps: Pick<Deps, "db" | "config" | "clock" | "queue" | "log" | "modules">,
   now: Date,
 ): Promise<{ users: number; failed: number }> {
   const users = await adminListRelationshipUsers(deps.db);

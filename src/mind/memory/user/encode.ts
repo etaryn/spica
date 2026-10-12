@@ -68,6 +68,8 @@ export type EncodeOutcome = {
   factIds: (string | null)[];
   /** Salience of each fact row inserted, for the big-event check. */
   insertedSaliences: number[];
+  /** Every fact row inserted, for announcing after the cold path commits. */
+  written: { id: string; kind: string }[];
 };
 
 type EntitySubject = "user" | "self";
@@ -95,6 +97,7 @@ export async function encodeExtraction(
     recalledUpdated: 0,
     factIds: [],
     insertedSaliences: [],
+    written: [],
   };
 
   const entityIds = await encodeEntities(db, config, input, outcome);
@@ -317,6 +320,7 @@ async function encodeFacts(
         outcome.resolved += 1;
       }
       const inserted = await insertFact(db, userId, { ...row, status: "resolved" });
+      outcome.written.push({ id: inserted.id, kind: inserted.kind });
       outcome.inserted += 1;
       outcome.insertedSaliences.push(fact.salience);
       outcome.factIds.push(inserted.id);
@@ -330,9 +334,11 @@ async function encodeFacts(
           status: "superseded",
           superseded_by: target.id,
         });
+        outcome.written.push({ id: inserted.id, kind: inserted.kind });
         outcome.factIds.push(inserted.id);
       } else {
         const inserted = await insertFact(db, userId, { ...row, status: "open" });
+        outcome.written.push({ id: inserted.id, kind: inserted.kind });
         await setFactStatus(db, userId, target.id, "superseded", inserted.id);
         outcome.factIds.push(inserted.id);
         // Only news that stands counts as salient: an already-overridden fact is no big event.
@@ -344,6 +350,7 @@ async function encodeFacts(
     }
 
     const inserted = await insertFact(db, userId, { ...row, status: "open" });
+    outcome.written.push({ id: inserted.id, kind: inserted.kind });
     outcome.inserted += 1;
     outcome.insertedSaliences.push(fact.salience);
     outcome.factIds.push(inserted.id);

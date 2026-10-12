@@ -18,7 +18,7 @@ import { restage } from "./stages";
 import type { ExchangeSpan } from "./closeness";
 import type { BidResponse, Signals } from "./signals";
 import { relationshipAfterExchange } from "./transitions";
-import type { Intimacy, Openness } from "./types";
+import { PARAM_NAMES, type Intimacy, type Openness, type ParamName, type Params } from "./types";
 import { DAY } from "@/mind/platform/time";
 
 const WEEK = 7 * DAY;
@@ -55,6 +55,11 @@ function exchangeSpan(turns: Turn[]): ExchangeSpan {
     sessionId,
     times: turns.filter((t) => t.session_id === sessionId).map((t) => t.created_at),
   };
+}
+
+/** The params whose value changed, for announcing a relationship change. */
+export function movedParams(before: Params, after: Params): ParamName[] {
+  return PARAM_NAMES.filter((name) => before[name]?.value !== after[name]?.value);
 }
 
 export async function updateRelationship(

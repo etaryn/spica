@@ -26,7 +26,8 @@ import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { exchangeTone } from "@/mind/state/user/relationship/affect";
 import { bidAfter, hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
-import { updateRelationship } from "@/mind/state/user/relationship/update";
+import type { ParamName } from "@/mind/state/user/relationship/types";
+import { movedParams, updateRelationship } from "@/mind/state/user/relationship/update";
 
 export class LockBusyError extends Error {}
 
@@ -34,6 +35,7 @@ export type ColdPathOutcome = {
   status: "done" | "skipped";
   applied?: EncodeOutcome;
   userMindRunId?: string | null;
+  moved?: ParamName[];
 };
 
 type CandidateFact = { fact: ExtractedFact; source: "turn" | "inferred" };
@@ -139,11 +141,29 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
       `exchange:${job.replyTurnId ?? turns.at(-1)!.id}`,
       triggers,
     );
-    return { status: "done", applied, userMindRunId };
+    return {
+      status: "done",
+      applied,
+      userMindRunId,
+      moved: relationship ? movedParams(relationship.before.params, relationship.after.params) : [],
+    };
   });
 
   // Only after commit, so the worker never sees a run the transaction rolled back.
   if (outcome.userMindRunId) await enqueueUserMindRun(deps, outcome.userMindRunId);
+  for (const f of outcome.applied?.written ?? [])
+    await deps.modules.emit({
+      type: "fact.written",
+      userId: job.userId,
+      factId: f.id,
+      kind: f.kind,
+    });
+  if (outcome.moved?.length)
+    await deps.modules.emit({
+      type: "relationship.changed",
+      userId: job.userId,
+      params: outcome.moved,
+    });
   return outcome;
 }
 

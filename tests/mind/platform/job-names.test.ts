@@ -21,6 +21,7 @@ describe("job names", () => {
       "decay_pass",
       "life_plan",
       "outreach_tick",
+      "post_tick",
       "reach_out_send",
       "relationship_tick",
       "turn_backchannel",

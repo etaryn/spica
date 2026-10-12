@@ -17,7 +17,7 @@ export function cardFacts(
   quiz: Quiz,
   answers: Answers,
   name: string,
-  cfg: { neutral_band: number; salience: number },
+  cfg: { neutral_band: number; salience: number; max_name_chars: number },
 ): CardFact[] {
   const theirs = (kind: CardFact["kind"], content: string): CardFact => ({
     subject: "user",
@@ -25,9 +25,11 @@ export function cardFacts(
     content,
     salience: cfg.salience,
   });
-  const facts: CardFact[] = [
-    { subject: "user", kind: "trait", content: `Their name is ${name}.`, salience: 1 },
-  ];
+  // The signup name is unchecked user input, and this fact rides along in every reply for good.
+  const shortName = name.trim().slice(0, cfg.max_name_chars).trim();
+  const facts: CardFact[] = shortName
+    ? [{ subject: "user", kind: "trait", content: `Their name is ${shortName}.`, salience: 1 }]
+    : [];
   for (const d of quiz.dimensions) {
     const you = positionOf(quiz, answers, d.id);
     const content =
@@ -40,7 +42,12 @@ export function cardFacts(
   }
   for (const q of quiz.questions) {
     if (q.kind === "open")
-      facts.push(theirs("preference", q.fact.replace("{answer}", String(answers[q.id]))));
+      facts.push(
+        theirs(
+          "preference",
+          q.fact.replace("{answer}", () => String(answers[q.id])),
+        ),
+      );
   }
   for (const q of quiz.questions) {
     if (q.her_fact)

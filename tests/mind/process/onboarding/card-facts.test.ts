@@ -4,7 +4,7 @@ import { cardFacts } from "@/mind/process/onboarding/card-facts";
 import { loadQuiz } from "@/mind/process/onboarding/quiz";
 
 const quiz = loadQuiz("v1", path.join(process.cwd(), "prompts"));
-const cfg = { neutral_band: 15, salience: 0.5 };
+const cfg = { neutral_band: 15, salience: 0.5, max_name_chars: 60 };
 
 /** Picks option `i` for every choice question and the given words for every open one. */
 function answers(i: number, words: string[]) {
@@ -53,4 +53,19 @@ test("her card: one self fact per open question and per choice question that has
   const expected = quiz.questions.filter((q) => q.her_fact).map((q) => q.her_fact);
   expect(hers.map((f) => f.content)).toEqual(expected);
   expect(hers.every((f) => f.salience === 0.5)).toBe(true);
+});
+
+test("their name is trimmed and capped; a blank name writes no name fact", () => {
+  const capped = { ...cfg, max_name_chars: 10 };
+  const long = cardFacts(quiz, answers(0, ["a", "b", "c"]), `  ${"x".repeat(50)}  `, capped);
+  expect(long[0]!.content).toBe(`Their name is ${"x".repeat(10)}.`);
+  const blank = cardFacts(quiz, answers(0, ["a", "b", "c"]), "   ", capped);
+  expect(blank.some((f) => f.content.startsWith("Their name is"))).toBe(false);
+});
+
+test("an answer with $ patterns is stored as typed", () => {
+  const facts = cardFacts(quiz, answers(0, ["$`$&", "b", "c"]), "Sam", cfg);
+  expect(facts.map((f) => f.content)).toContain(
+    "On their profile card they said they could talk about $`$& for hours.",
+  );
 });

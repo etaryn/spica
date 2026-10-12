@@ -1,7 +1,8 @@
 /**
  * The profile card quiz: how Spica meets people. Its content (the friend dimensions, the
  * questions, her fixed answers and lines) is a versioned file under prompts/, validated here so a
- * broken quiz fails at load instead of mid-signup.
+ * broken quiz fails at load instead of mid-signup. A card keeps the version it was taken with, so
+ * an old quiz file stays as long as any card still names it.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";

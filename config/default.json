@@ -623,7 +623,8 @@
     "click_gap": 20,
     "clash_gap": 50,
     "topic_similarity": 0.6,
-    "max_answer_chars": 40
+    "max_answer_chars": 40,
+    "max_name_chars": 60
   },
   "user_mind": {
     "max_triggers_per_day": 3,

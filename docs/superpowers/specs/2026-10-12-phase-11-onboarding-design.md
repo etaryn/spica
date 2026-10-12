@@ -94,9 +94,10 @@ Night owl ↔ early bird was left out: she has no body or sleep, so her marker w
 ### Storage
 
 One migration adds `onboarding`: `user_id` (primary key, references `user`, cascade on delete),
-`quiz_version` text, `answers` jsonb (question id → option index or answer text), `completed_at`
-(set from the injected clock). Derived values (scores, topics) aren't stored: the results page
-recomputes them from the row and the quiz file. Account deletion removes the row through the
+`quiz_version` text, `answers` jsonb (question id → option index or answer text), `topics` jsonb
+(the common topics, worked out at submit), `completed_at` (set from the injected clock). Scores
+aren't stored: the results page recomputes them from the row and the quiz version it names, so
+quiz files are kept while any card references them. Account deletion removes the row through the
 cascade.
 
 ## 3. Scoring and the compatibility page
@@ -111,9 +112,8 @@ All in code, no model call. `scoreCard(quiz, answers)` is a pure function in
   line, above `onboarding.clash_gap` (50) its `clash` line, and in between nothing.
 - **Common topics.** Each of your open answers is compared with each of her open answers by cosine
   similarity of their embeddings. A pair at or above `onboarding.topic_similarity` (0.6) counts,
-  and an exact match after lowercasing and trimming always counts. Embeddings are computed at
-  submit and stored in `answers` (`{ text, embedding }` for open answers), so the results page
-  makes no calls. Her answers' embeddings are computed once per quiz version and cached in memory.
+  and an exact match after lowercasing and trimming always counts. Both sides are embedded at
+  submit and the matches stored in `topics`, so the results page makes no calls.
 - **No topics in common:** the page shows the quiz file's `no_common` line, in her voice (her
   persona argues that friends don't need common ground), e.g. *"nothing in common. good,
   honestly."*
@@ -140,7 +140,8 @@ Written in the submit transaction, user-scoped (V2, V7). Nothing touches core.
 - One `preference` fact per open answer, from the question's `fact` template.
 - Confidence `onboarding.confidence` (0.4), salience `onboarding.salience` (0.5). These facts
   decay and get superseded by conversation like any other.
-- **Name floor (B6):** one `trait` fact `"Their name is {user.name}."` at salience 1.0. Decay
+- **Name floor (B6):** one `trait` fact `"Their name is {user.name}."` at salience 1.0, the name
+  trimmed and capped at `onboarding.max_name_chars` (60); a blank name writes none. Decay
   leaves salience 1 unchanged, so it never goes `stale`. No decay code changes.
 
 **Her card** (`subject: self`, `source: onboarding`): one fact per open question from its
@@ -175,7 +176,8 @@ stays in tuning.
   "click_gap": 20,
   "clash_gap": 50,
   "topic_similarity": 0.6,
-  "max_answer_chars": 40
+  "max_answer_chars": 40,
+  "max_name_chars": 60
 }
 ```
 

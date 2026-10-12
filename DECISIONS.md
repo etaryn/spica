@@ -140,3 +140,4 @@ code itself.
 | 2026-10-12 | The compatibility page is shared by screenshot only | A public link needs auth and abuse work; backlog, before users. |
 | 2026-10-12 | Her card answers are `self` facts, not disclosure rows | The disclosure ledger tracks core memories and self lines; her quiz answers are neither. |
 | 2026-10-12 | Common topics are stored on the card at submit | Both sides are embedded then, so the results page makes no calls. |
+| 2026-10-12 | Quiz files are kept while any card names their version (an exception to deleting unconfigured prompt versions) | The results page reads a card with the quiz it was taken with; deleting the file would break every older card. |

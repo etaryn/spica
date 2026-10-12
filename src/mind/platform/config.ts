@@ -766,6 +766,7 @@ const onboarding = z.object({
   clash_gap: z.number().min(0).max(100),
   topic_similarity: unit,
   max_answer_chars: positiveInt,
+  max_name_chars: positiveInt,
 });
 
 // ---------- The whole config ----------

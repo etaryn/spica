@@ -18,7 +18,7 @@ export async function truncateAll(db: Db, url: string): Promise<void> {
   assertDisposableDatabase(url);
   // Every domain table cascades from "user"; the rest hold no user data and are listed by name.
   await db.execute(
-    sql`TRUNCATE "user", verification, life_day, core_memory, core_entity, core_state, core_goal, core_snapshot, world_event, life_event_log, core_loop_trace, core_budget_day CASCADE`,
+    sql`TRUNCATE "user", verification, life_day, core_memory, core_entity, core_state, core_goal, core_snapshot, world_event, web_find, post, life_event_log, core_loop_trace, core_budget_day CASCADE`,
   );
 }
 

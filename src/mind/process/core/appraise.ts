@@ -53,7 +53,7 @@ export type Appraisal = {
 };
 export type LandingEvent = {
   worldEventId: string;
-  kind: "planned" | "surprise" | "resolution";
+  kind: "planned" | "surprise" | "resolution" | "action";
   content: string;
   valence: number;
   stakes: "low" | "high";

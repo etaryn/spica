@@ -3,6 +3,7 @@
  * Core loops get only this (never the database), so they can't read user data even by mistake.
  */
 import type { CoreMemory } from "@/mind/memory/core/types";
+import type { Posts } from "@/mind/world/types";
 import type { CoreGoals, CoreState } from "@/mind/state/core/types";
 import type { World } from "@/mind/world/types";
 
@@ -62,6 +63,7 @@ export interface CoreScope {
   state: CoreState;
   goals: CoreGoals;
   world: World;
+  posts: Posts;
   traces: CoreTraces;
   drift: CoreDrift;
   /** A transaction-scoped advisory lock; only meaningful inside `transaction`. */

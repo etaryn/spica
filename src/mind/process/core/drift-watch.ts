@@ -5,19 +5,8 @@ import type { LoopStatus } from "@/mind/platform/core";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { cosine } from "@/mind/platform/math";
 import { runCoreLoop } from "./runner";
-
-function cosineDistance(a: number[], b: number[]): number {
-  let dot = 0;
-  let aa = 0;
-  let bb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i]! * b[i]!;
-    aa += a[i]! * a[i]!;
-    bb += b[i]! * b[i]!;
-  }
-  return 1 - dot / Math.sqrt(aa * bb);
-}
 
 export async function coreDriftWatch(
   deps: CoreDeps,
@@ -45,7 +34,7 @@ export async function coreDriftWatch(
         value: null,
         excerpt: `${changed}/${names.size} sections changed (${Math.round((changed / names.size) * 100)}%)`,
         verdict: null,
-        score: cosineDistance(current.embedding, previous.embedding),
+        score: 1 - cosine(current.embedding, previous.embedding),
         created_at: now,
       });
     }
@@ -57,7 +46,7 @@ export async function coreDriftWatch(
         value: null,
         excerpt: null,
         verdict: null,
-        score: cosineDistance(current.embedding, seed.embedding),
+        score: 1 - cosine(current.embedding, seed.embedding),
         created_at: now,
       });
     }

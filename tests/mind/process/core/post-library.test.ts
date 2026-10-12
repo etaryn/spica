@@ -87,8 +87,7 @@ test("a pose comes from the format's tags, or none", () => {
   expect(choosePose(poses, { ...base, poses: ["flying"] }, 0.1)).toBeNull();
 });
 
-// enabled in the persona task
-test.skip("craft skill: created once from her persona, then read from the goal", async () => {
+test("craft skill: created once from her persona, then read from the goal", async () => {
   const deps = coreDepsOf(makeTestDeps());
   const first = await craftSkill(deps, "still");
   expect(first.skill).toBe(0);
@@ -99,8 +98,7 @@ test.skip("craft skill: created once from her persona, then read from the goal",
   expect((await craftSkill(deps, "still")).skill).toBe(0.4);
 });
 
-// enabled in the persona task
-test.skip("craft skill: done reads 1, dropped keeps its progress, neither is recreated", async () => {
+test("craft skill: done reads 1, dropped keeps its progress, neither is recreated", async () => {
   const deps = coreDepsOf(makeTestDeps());
   const { goalId } = await craftSkill(deps, "still");
   await deps.core.goals.setProgress(goalId!, 0.3, deps.clock.now());
@@ -114,8 +112,7 @@ test.skip("craft skill: done reads 1, dropped keeps its progress, neither is rec
   expect((await deps2.core.goals.active()).length).toBe(0);
 });
 
-// enabled in the persona task
-test.skip("craft skill: no room for another active goal reads 0 and creates nothing", async () => {
+test("craft skill: no room for another active goal reads 0 and creates nothing", async () => {
   const deps = coreDepsOf(makeTestDeps({ core: { goals: { max_active: 1 } } }));
   await deps.core.goals.insert({
     title: "Something else",

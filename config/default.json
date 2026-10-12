@@ -169,7 +169,7 @@
   "prompts": {
     "reply": "v16",
     "crisis_classifier": "v2",
-    "persona": "v5",
+    "persona": "v6",
     "extract": "v7",
     "reconcile": "v1",
     "judge_recall": "v3",

@@ -1779,7 +1779,7 @@ is B97. Events carry ids, never content, and fire after their write commits:
 | `turn.received` | user | `userId`, `turnId` | `receiveTurn` (not a retried POST) |
 | `reply.sent` | user | `userId`, `turnId`, `part` | `deliverPart`, each bubble |
 | `fact.written` | user | `userId`, `factId`, `kind` | the cold path, `submitCard`, `runUserLoop` |
-| `relationship.changed` | user | `userId`, `params` (names that moved) | the cold path, `tickUser` |
+| `relationship.changed` | user | `userId`, `params` (names that moved) | the cold path, `tickUser` (not once the user ended it) |
 | `user_mind.triggered` | user | `userId`, `runId`, `triggers` (kinds) | `runUserMind` on claim |
 | `world.event` | core | `eventId`, `outcome` | `core_world_tick` when an event lands |
 | `core.snapshot` | core | `version` | `core_render_snapshot` on a new version |
@@ -1983,7 +1983,7 @@ two minds or at reply time.
 | 10c. Bids and idiolect | `fact_kind` gains `idiolect`, `relationship_cause` gains `bid` (migration 0029); extraction v7 reads `bid_response` (kept only within the idle gap after her last message) and idiolect facts with their type and who started them; `relationship.bids.effects` moves warmth and trust; idiolect established by a duplicate from a later exchange; "Your things together" slot gated by `relationship.idiolect`; reply v14; inspector idiolect table; exit `tests/exit/phase-10c.test.ts` (the canary); `pnpm exit:idiolect`. `pnpm test` 145 files / 1167 tests at close |
 | 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
 | 11. Onboarding | The profile card swap: quiz file v1 (six friend dimensions, 12 choice and 3 open questions), the `onboarding` table (migration 0032), `submitCard` writing both cards as light memories with the name floor, common topics worked out at submit, the compatibility page, the `/chat` gate, the card mark (reply v16); exit `tests/exit/phase-11.test.ts` (the canary). `pnpm test` 154 files / 1230 tests at close |
-| 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1258 tests at close |
+| 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1259 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 

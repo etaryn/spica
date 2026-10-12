@@ -1,11 +1,17 @@
 /**
  * The cold path announces the facts it wrote and the params that moved, after its commit and
- * once; a module that throws changes nothing it wrote. The daily tick announces moved params.
+ * once; a module that throws changes nothing it wrote. The daily tick announces moved params, unless the user ended it.
  */
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { ensureRelationship, getParams } from "@/db/repos/user/relationship";
+import {
+  ensureRelationship,
+  getParams,
+  getRelationshipRow,
+  saveRelationship,
+  toRelationshipState,
+} from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import type { Module } from "@/mind/platform/modules";
@@ -134,4 +140,20 @@ test("the daily tick announces what moved, once per day", async () => {
   expect(rec.of("relationship.changed")).toEqual(expected);
   await tickUser(deps, u, later);
   expect(rec.of("relationship.changed")).toEqual(expected);
+});
+
+test("the daily tick announces nothing once the user has ended it", async () => {
+  const rec = recordingModule();
+  const deps = makeTestDeps({}, [rec.module]);
+  const u = await createTestUser("Sam");
+  await ensureRelationship(deps.db, u, deps.clock.now(), deps.config.relationship);
+  const state = toRelationshipState((await getRelationshipRow(deps.db, u))!);
+  await saveRelationship(deps.db, u, {
+    state: { ...state, status: "ended_by_user", ended_at: deps.clock.now() },
+    params: await getParams(deps.db, u),
+  });
+  const before = await getParams(deps.db, u);
+  await tickUser(deps, u, new Date("2026-01-08T12:00:00Z"));
+  expect(movedParams(before, await getParams(deps.db, u)).length).toBeGreaterThan(0);
+  expect(rec.of("relationship.changed")).toEqual([]);
 });

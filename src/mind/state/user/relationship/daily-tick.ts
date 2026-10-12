@@ -130,10 +130,9 @@ export async function tickUser(
       { turnId: null, now },
     );
 
-    const moved = movedParams(params, committed.params);
-
     // Params drifting after the user ended it are no event: nothing is happening between them.
-    if (ended) return { runId: null, moved };
+    if (ended) return { runId: null, moved: [] };
+    const moved = movedParams(params, committed.params);
     const runId = await recordBigEvents(
       deps,
       tx,

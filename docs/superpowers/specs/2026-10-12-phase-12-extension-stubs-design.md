@@ -39,15 +39,19 @@ is empty.
 
 ### Where it lives
 
-- `src/mind/platform/modules.ts`: the event types, the `Module` shape, `ModuleRegistry`.
+- `src/mind/platform/modules.ts`: the event types, the `Module` shape, and
+  `createModuleBus(modules, getDeps)`, which checks the modules (registration) and returns the
+  `ModuleBus` (`emit`). The deps getter lets the bus be built inside `Deps`, so emit sites need
+  only `deps.modules`.
 - `src/modules/index.ts`: the production module list (`[]`).
 - `buildRuntime` (`src/runtime/deps.ts`, shared by the web app and the worker) builds the registry
   from that list, so both processes register the same modules. `makeTestDeps` takes an optional
   module list.
-- `Deps` gains `modules: ModuleRegistry`.
+- `Deps` gains `modules: ModuleBus`.
 - `CoreDeps` gains `emitCore: (event: CoreEvent) => Promise<void>` (bound from the registry by
   `coreDepsOf`). Core code can announce core events and nothing else; it still can't reach a
-  user.
+  user. A core module's handler gets `coreDepsOf(deps)`, so its model calls are not metered
+  against a core loop's budget (fine for stubs; a real module meters its own).
 
 ### Events
 
@@ -55,9 +59,9 @@ is empty.
 |---|---|---|---|
 | `turn.received` | user | `userId`, `turnId` | `receiveTurn` after the turn is stored |
 | `reply.sent` | user | `userId`, `turnId`, `part` | `deliverPart` after a part is delivered |
-| `fact.written` | user | `userId`, `factId`, `kind` | each function that inserts a user fact, after its commit: `encodeExtraction`, onboarding `submitCard`, `user_summarise`, `user_reflect`, `user_ideate`, `user_consolidate`, `user_model` |
+| `fact.written` | user | `userId`, `factId`, `kind` | after commit: the cold path (from `encodeExtraction`'s inserted rows), onboarding `submitCard`, and `runUserLoop` for the five user loops (each loop returns the rows it wrote) |
 | `relationship.changed` | user | `userId`, `params` (names that moved) | `updateRelationship` and the daily `tickUser`, only when a value moved |
-| `user_mind.triggered` | user | `userId`, `runId`, `triggers` | `enqueueUserMindRun` after the run is enqueued |
+| `user_mind.triggered` | user | `userId`, `runId`, `triggers` (kinds) | `runUserMind` when it claims the run: one place covering every trigger source and the sweep, once per run |
 | `world.event` | core | `eventId`, `outcome` (`happened` / `fell_through`) | `core_world_tick` when an event lands, not when it's planned |
 | `core.snapshot` | core | `version` | `core_render_snapshot` after a new version commits |
 
@@ -94,11 +98,10 @@ type Module = CoreModule | UserModule;
 ### Rules
 
 - **Scope (V2 applied to modules).** A core module may subscribe to core events only: the handler
-  map's type rejects user events at compile time, and `register` throws if a core module lists one
-  (the runtime backstop). A user module may hear both kinds (core to user is allowed).
+  map's type rejects user events at compile time, and `createModuleBus` throws if a core module
+  lists one (the runtime backstop). A user module may hear both kinds (core to user is allowed).
 - Handlers get their own scope's deps: a core module gets `CoreDeps`, a user module gets `Deps`.
-  The registry is built before deps exist, so `emit` takes the deps to pass.
-- `register` rejects a duplicate module name.
+- `createModuleBus` rejects a duplicate module name.
 - `emit` runs subscribed handlers in registration order, awaiting each. A throwing handler is logged
   with the module name, event type and error class (never content); the next handler still runs.
   `emit` never throws, so a module can never fail a reply, a write or a tick.
@@ -143,7 +146,7 @@ and `space_id` on events (add with the friend group).
 
 ### Unit (`tests/mind/platform/modules.test.ts`, no database)
 
-- `register` throws for a core module that lists a user event, and for a duplicate name.
+- `createModuleBus` throws for a core module that lists a user event, and for a duplicate name.
 - `emit` reaches only subscribers of that event type, in registration order.
 - A throwing handler is logged (module, type, error class only); the next still runs; `emit`
   resolves.

@@ -287,7 +287,15 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       promptVersion: config.prompts.core_appraise,
     };
   });
-  return run.outputs?.landed.length ?? 0;
+  const landed = run.outputs?.landed ?? [];
+  for (const id of landed)
+    await deps.emitCore({
+      type: "world.event",
+      eventId: id,
+      // A resolution replaced the plan only when it fell through.
+      outcome: resolutions.has(id) ? "fell_through" : "happened",
+    });
+  return landed.length;
 }
 
 const landing = (e: WorldEventRow, resolution?: ResolutionProposal): LandingEvent => ({

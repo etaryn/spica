@@ -121,5 +121,8 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       };
     });
   });
+  const version = run.outputs?.version;
+  if (version !== null && version !== undefined)
+    await deps.emitCore({ type: "core.snapshot", version });
   return run.status;
 }

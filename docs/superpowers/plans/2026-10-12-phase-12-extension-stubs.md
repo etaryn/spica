@@ -1073,23 +1073,42 @@ git commit -m "feat(modules): announce world.event and core.snapshot from core l
 ### Task 6: `publicPersona` and `SocialChannel`
 
 **Files:**
+- Modify: `src/mind/platform/persona.ts` (keep the `# Public voice` section)
+- Modify: `tests/mind/platform/persona.test.ts`
 - Create: `src/mind/process/core/public-persona.ts`
 - Create: `src/mind/platform/social.ts`
 - Test: `tests/mind/process/core/public-persona.test.ts`
 
 **Interfaces:**
-- Produces: `publicPersona(deps: Pick<CoreDeps, "core" | "config">): Promise<PublicPersona>` with `PublicPersona = { coreValues: string; version: number | null; lines: string[] }`; `interface SocialChannel { name: string; post(text: string): Promise<void> }`; `class RecordingSocialChannel` with `posts: string[]`.
+- Produces: `Persona` gains `publicVoice: string | null`; `publicPersona(deps: Pick<CoreDeps, "core" | "config" | "clock">): Promise<PublicPersona>` with `PublicPersona = { coreValues: string; publicVoice: string | null; version: number | null; lines: string[]; today: { date: string; plan: LifePlan | null; happened: string[] } }`; `interface SocialChannel { name: string; post(text: string): Promise<void> }`; `class RecordingSocialChannel` with `posts: string[]`.
 
-- [ ] **Step 1: Write the failing test**
+What goes public (Ethan, 2026-10-12): her daily life, her outward personality and the AI side of
+her; her deeper thoughts (core memories, snapshot prose, needs, mood, goals) stay secret.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/mind/platform/persona.test.ts`:
+
+```ts
+test("the public voice section is kept, and optional", () => {
+  const doc = "# Core values\nc\n# Seed self\ns\n# Public voice (reference)\ncomposed";
+  expect(parsePersona(doc).publicVoice).toBe("composed");
+  expect(parsePersona("# Core values\nc\n# Seed self\ns").publicVoice).toBeNull();
+});
+```
 
 `tests/mind/process/core/public-persona.test.ts`:
 
 ```ts
-/** Her public self is her core values and her surface lines only, never a deeper one. */
+/**
+ * Her public self is her values, her public voice, her surface lines and her day as it went;
+ * never a deeper line or an event that hasn't happened.
+ */
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
 import { seedSnapshot } from "@/mind/memory/core/seed";
+import { lifeDate } from "@/mind/world/her-clock";
 import { publicPersona } from "@/mind/process/core/public-persona";
 import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
@@ -1097,7 +1116,7 @@ import { makeTestDeps } from "../../../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-test("core values, the fixed lines and the latest snapshot's surface lines only", async () => {
+test("core values, public voice, the fixed lines and the latest snapshot's surface lines only", async () => {
   const deps = coreDepsOf(makeTestDeps());
   await seedSnapshot(deps);
   await deps.core.memory.insertSelfLines([
@@ -1106,7 +1125,10 @@ test("core values, the fixed lines and the latest snapshot's surface lines only"
     { version: 0, text: "INTIMATE-LINE", depth: 3, embedding: vec() },
   ]);
   const self = await publicPersona(deps);
-  expect(self.coreValues).toBe(loadPersona(deps.config).coreValues);
+  const persona = loadPersona(deps.config);
+  expect(self.coreValues).toBe(persona.coreValues);
+  expect(self.publicVoice).toBe(persona.publicVoice);
+  expect(self.publicVoice).not.toBeNull();
   expect(self.version).toBe(0);
   const fixed = (await deps.core.memory.selfLines(null)).map((l) => l.text);
   expect(fixed.length).toBeGreaterThan(0);
@@ -1124,44 +1146,113 @@ test("before any snapshot, only the fixed lines", async () => {
   expect(self.version).toBeNull();
   expect(self.lines).toEqual((await deps.core.memory.selfLines(null)).map((l) => l.text));
 });
+
+test("today: the plan and what has happened, never what's pending or fell through", async () => {
+  const deps = coreDepsOf(makeTestDeps());
+  const now = deps.clock.now();
+  const date = lifeDate(deps.config.life, now);
+  const hour = 60 * 60 * 1000;
+  const plan = {
+    blocks: [{ start: "09:00", end: "12:00", kind: "busy" as const, busy: 0.5, label: "reading" }],
+  };
+  await deps.core.world.insertPlan({
+    date,
+    plan,
+    source: "scripted",
+    model: "none",
+    prompt_version: "none",
+    generated_at: now,
+  });
+  const event = (content: string, at: Date, outcome: "happened" | "fell_through" | null) =>
+    deps.core.world.recordEvent({
+      at,
+      kind: "planned",
+      content,
+      valence: 0,
+      stakes: "low",
+      agents: [],
+      life_day: date,
+      created_at: now,
+      outcome,
+    });
+  await event("HAPPENED", new Date(now.getTime() - hour), "happened");
+  await event("FELL-THROUGH", new Date(now.getTime() - hour), "fell_through");
+  await event("PENDING", new Date(now.getTime() + hour), null);
+  const self = await publicPersona(deps);
+  expect(self.today).toEqual({ date, plan, happened: ["HAPPENED"] });
+});
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+- [ ] **Step 2: Run them to see them fail**
 
-Run: `pnpm vitest run tests/mind/process/core/public-persona.test.ts`
-Expected: FAIL (module not found).
+Run: `pnpm vitest run tests/mind/platform/persona.test.ts tests/mind/process/core/public-persona.test.ts`
+Expected: FAIL (`publicVoice` undefined; module not found).
 
-- [ ] **Step 3: Write `publicPersona`**
+- [ ] **Step 3: Keep the public voice, write `publicPersona`**
+
+In `src/mind/platform/persona.ts`: the type becomes
+`export type Persona = { coreValues: string; seedSelf: string; publicVoice: string | null };`,
+add `const PUBLIC = "Public voice";`, change the `parsePersona` doc comment to "sections other
+than these three are ignored", and end it with:
+
+```ts
+  // The heading may carry a note, as in "# Public voice (reference)".
+  const publicVoice = [...sections].find(([name]) => name.startsWith(PUBLIC))?.[1] || null;
+  return { coreValues, seedSelf, publicVoice };
+```
+
+Update the file header: the persona file also has a public voice, her register with an audience,
+read only by the public persona.
 
 `src/mind/process/core/public-persona.ts`:
 
 ```ts
 /**
- * Who she is in public: her core values and the surface lines of her self, what she'd tell an
- * acquaintance. Read from core only, so nothing public can carry a user; never the snapshot prose
- * or her memories, which hold more than she'd say to a stranger.
+ * Who she is in public: her daily life, her outward personality and the AI side of her, so she
+ * reads as what she is. Her deeper thoughts stay hers: never her memories, the snapshot prose,
+ * her needs, mood or goals. Read from core only, so nothing public can carry a user.
  */
+import type { LifePlan } from "@/db/schema";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
+import { lifeDate } from "@/mind/world/her-clock";
 
 /** The shallowest of the three depths (surface, personal, intimate). */
 const SURFACE = 1;
 
-export type PublicPersona = { coreValues: string; version: number | null; lines: string[] };
+export type PublicPersona = {
+  coreValues: string;
+  publicVoice: string | null;
+  version: number | null;
+  lines: string[];
+  /** Her day as it went: the plan and what has happened so far, nothing pending. */
+  today: { date: string; plan: LifePlan | null; happened: string[] };
+};
 
 export async function publicPersona(
-  deps: Pick<CoreDeps, "core" | "config">,
+  deps: Pick<CoreDeps, "core" | "config" | "clock">,
 ): Promise<PublicPersona> {
-  const { memory } = deps.core;
+  const { memory, world } = deps.core;
+  const now = deps.clock.now();
+  const date = lifeDate(deps.config.life, now);
   const version = (await memory.latestSnapshot())?.version ?? null;
   const lines = [
     ...(await memory.selfLines(null)),
     ...(version === null ? [] : await memory.selfLines(version)),
   ];
+  const persona = loadPersona(deps.config);
   return {
-    coreValues: loadPersona(deps.config).coreValues,
+    coreValues: persona.coreValues,
+    publicVoice: persona.publicVoice,
     version,
     lines: lines.filter((l) => l.depth <= SURFACE).map((l) => l.text),
+    today: {
+      date,
+      plan: await world.plan(date),
+      happened: (await world.events(date))
+        .filter((e) => e.outcome === "happened" && e.at <= now)
+        .map((e) => e.content),
+    },
   };
 }
 ```
@@ -1188,18 +1279,16 @@ export class RecordingSocialChannel implements SocialChannel {
 }
 ```
 
-- [ ] **Step 4: Run the test, typecheck and lint**
+- [ ] **Step 4: Run the tests, typecheck and lint**
 
-Run: `pnpm vitest run tests/mind/process/core/public-persona.test.ts` (expected: 2 passed), then `pnpm typecheck && pnpm lint`.
+Run: `pnpm vitest run tests/mind/platform/persona.test.ts tests/mind/process/core/public-persona.test.ts` (expected: all pass, 3 in `public-persona`), then `pnpm typecheck && pnpm lint`. If `config.life` isn't the settings type `lifeDate` takes, pass what `core_world_tick` passes.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mind/process/core/public-persona.ts src/mind/platform/social.ts tests/mind/process/core/public-persona.test.ts
-git commit -m "feat(modules): public persona from surface self lines, SocialChannel stub"
+git add src/mind/platform/persona.ts tests/mind/platform/persona.test.ts src/mind/process/core/public-persona.ts src/mind/platform/social.ts tests/mind/process/core/public-persona.test.ts
+git commit -m "feat(modules): public persona (her day, surface self, public voice), SocialChannel stub"
 ```
-
----
 
 ### Task 7: Phase 12 exit test
 
@@ -1487,9 +1576,11 @@ is B97. Events carry ids, never content, and fire after their write commits:
   `space_id` yet (B98).
 - **Public presence** (the ideal end point): `SocialChannel` (`src/mind/platform/social.ts`, a
   recording implementation only, wired to nothing) and `publicPersona`
-  (`src/mind/process/core/public-persona.ts`): core values plus the fixed self lines and the
-  latest snapshot's depth-1 lines, never deeper lines, the snapshot prose or core memories. A
-  public module is a core module, so it can never hear a user (V2).
+  (`src/mind/process/core/public-persona.ts`): her daily life, outward personality and AI side
+  (Ethan, 2026-10-12): core values, the persona file's `# Public voice`, the fixed self lines and
+  the latest snapshot's depth-1 lines, and today's plan plus the world events that have happened.
+  Her deeper thoughts stay secret: never deeper lines, the snapshot prose, core memories, needs,
+  mood or goals. A public module is a core module, so it can never hear a user (V2).
 - **Comparing Spicas:** nothing beyond the fixed core values.
 ```
 
@@ -1500,7 +1591,7 @@ In the §5 Layout row, change `plus \`platform\` (LLM, embedder, clock, config, 
 In §20, add a row after `| 11. Onboarding | ... |` in the Built table:
 
 ```markdown
-| 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (surface lines only) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` <FILES> files / <TESTS> tests at close |
+| 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` <FILES> files / <TESTS> tests at close |
 ```
 
 with `<FILES>` and `<TESTS>` replaced by the counts printed in Task 7 Step 3, and in the Next phases table change the Phase 12 Builds cell to end with `(**built**)`.
@@ -1517,6 +1608,15 @@ Add after §25.10 (before `## 26.`):
   slow or model calls, must not miss events, or needs web-process events in the worker. *When a
   module needs it.*
 - **B98.** Module events carry no `space_id`. *With the friend group.*
+- **B99.** She doesn't remember her posts: the public-presence module writes each post to core
+  memory as her own episode, so "saw your post" lands. *Public presence.*
+- **B100.** Messaging her on a platform reaches your own Spica: a user links a platform account;
+  a DM from it enters that user's `receiveTurn` as a user-scoped turn and the reply goes back the
+  same way (a transport for the user mind, never the public module). Unlinked strangers: OPEN.
+  Platform limits: Discord and Telegram bots DM freely; Instagram and Messenger need Meta app
+  review and a 24-hour reply window; X DMs need a paid API tier. *Public presence.*
+- **B101.** Her product updates and features have no public source: add an Ethan-written file
+  that `publicPersona` reads. *Public presence.*
 ```
 
 - [ ] **Step 4: `DECISIONS.md` and `CLAUDE.md`**
@@ -1527,7 +1627,7 @@ Append to `DECISIONS.md`:
 | 2026-10-12 | Module events are delivered in-process and awaited; durable pg-boss delivery deferred (B97) | No real module exists; the `emit` interface is the same either way, so only the bus changes later. |
 | 2026-10-12 | Module events fire after their write commits and carry ids, never content | An event inside a rolled-back transaction would announce something that never happened; ids keep user text out of modules and logs. |
 | 2026-10-12 | `user_mind.triggered` fires when the run is claimed, not when it is recorded | One place covers every trigger source and the sweep, once per run. |
-| 2026-10-12 | The public persona is the surface (depth 1) self lines only | The public sees what she'd tell an acquaintance; the depth scale already marks it. |
+| 2026-10-12 | The public persona is her daily life (today's plan, happened events), outward personality (surface self lines, public voice) and AI side (core values); deeper thoughts stay secret (Ethan) | She reads clearly as an AI companion with a life; what her mind made of that life stays private. |
 ```
 
 In `CLAUDE.md`, replace the current-phase paragraph with:
@@ -1543,7 +1643,8 @@ and in "Modules in brief" add:
 ```markdown
 - **Extension hooks (v3 §16, built 12):** `deps.modules.emit` after commit, seven events, ids
   only; a core module hears core events only; in-process delivery (durable is B97, raise it when
-  a module needs it); `publicPersona` (surface lines) and a `SocialChannel` stub; no modules ship.
+  a module needs it); `publicPersona` (her day, surface self, public voice; never deeper thoughts) and a
+  `SocialChannel` stub; no modules ship.
 ```
 
 replacing the existing `- **Extension hooks (v3 §16):** ...` line.

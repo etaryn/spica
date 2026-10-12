@@ -112,19 +112,32 @@ type Module = CoreModule | UserModule;
 
 ### `public_persona`
 
-`publicPersona(deps: Pick<CoreDeps, "core" | "config">)` in
+`publicPersona(deps: Pick<CoreDeps, "core" | "config" | "clock">)` in
 `src/mind/process/core/public-persona.ts`. A pure read: no table, no prompt, no model call.
-Returns:
 
-- `coreValues`: from the persona file (`loadPersona`).
+What goes public (Ethan, 2026-10-12): her **daily life**, her **outward personality** and the
+**AI side of her** (what she is, her nature, the meta part of her existence), so she reads clearly
+as an AI companion. Her **deeper thoughts stay secret**. Returns:
+
+- `coreValues`: from the persona file (`loadPersona`). This already says plainly that she is an AI.
+- `publicVoice`: the persona file's `# Public voice` section (her public register, including how
+  she talks about her own nature), or `null` when the file has none. `parsePersona` keeps it
+  instead of ignoring it.
 - `version`: the latest snapshot's version, or `null` before any snapshot.
 - `lines`: the **surface** self lines only (depth 1, what she'd tell an acquaintance): the fixed
   lines (`version: null`, always depth 1: an AI, Alcor, what she loves) plus the latest snapshot's
   depth-1 lines. Depth 2 and 3 never go public.
+- `today`: her local date, that day's plan (`world.plan`) and the content of the day's world
+  events that have **happened** by now (`outcome = "happened"`, `at <= now`). Planned-but-pending
+  and fallen-through events stay out: the public sees her day as it went.
 
-It never reads the snapshot prose (which can hold deeper material) or core memories: a public post
-shouldn't surface her private life. It takes core only, so it cannot name a user. The spec's
-"view" is a function, not a database view, because its only reader is code.
+The secret part is everything her mind made of her life: core memories (episodes with her
+appraisal, thoughts, rumination, reflections, the narrative), the snapshot prose, needs, mood and
+goals. It takes core only, so it cannot name a user. The spec's "view" is a function, not a
+database view, because its only reader is code.
+
+Her product updates and features (release notes) have no source in the mind yet; the
+public-presence phase adds one (backlog). Nothing in this phase invents them.
 
 ### `SocialChannel`
 
@@ -139,8 +152,20 @@ Not in `Deps`, no posting job, no compose prompt, no real platform. A future pub
 module is a core module holding a channel, building posts from `publicPersona` and core events;
 by the scope rule it can't hear a user event.
 
-Skipped until the public-presence phase: cadence, a public voice prompt, moderation, rate limits,
-and `space_id` on events (add with the friend group).
+Skipped until the public-presence phase (each a §25 entry):
+
+- **She remembers what she posted** (Ethan, 2026-10-12): each post is written to core memory as
+  her own episode, so a user saying "saw your post" lands. Core writing core, so V2 holds.
+- **Messaging her on a platform reaches your own Spica** (Ethan, 2026-10-12): a user links a
+  platform account to their Spica account; a DM from a linked account enters that user's normal
+  chat pipeline (`receiveTurn`) as a user-scoped turn, and her reply goes back out the same way.
+  It's a transport for the user mind, not part of the public module, so the public module still
+  never hears a user. Unlinked strangers get no reply until that's decided. Platform APIs limit
+  this: bot DMs are easy on Discord and Telegram; Instagram and Messenger need Meta app review and
+  only allow replies within 24 hours of the user's message; X DMs need a paid API tier.
+- **Product updates and features** as a public source (an Ethan-written file).
+- Cadence, a public compose prompt, moderation, rate limits, and `space_id` on events (add with
+  the friend group).
 
 ## 3. Testing
 
@@ -154,8 +179,9 @@ and `space_id` on events (add with the friend group).
 
 ### `public_persona` (`tests/mind/process/core/public-persona.test.ts`)
 
-Against the test database's core layer: it returns the core values, the fixed lines and the latest
-snapshot's depth-1 lines, and no depth-2 or depth-3 line.
+Against the test database's core layer: it returns the core values, the public voice, the fixed
+lines and the latest snapshot's depth-1 lines, and no depth-2 or depth-3 line; `today` holds the
+plan and a happened event, never a pending or fallen-through one, nor any core memory text.
 
 ### Exit (`tests/exit/phase-12.test.ts`, all fake)
 

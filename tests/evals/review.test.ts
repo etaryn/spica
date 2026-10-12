@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { renderReview } from "../../evals/lib/review";
+import { decisionLine, renderReview } from "../../evals/lib/review";
 
 test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
   const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
@@ -120,4 +120,23 @@ test("lists ungrounded self claims and every core-loop model call with its promp
   expect(md).toContain("ungrounded self claims (life/opinion): 2");
   expect(md).toContain("what is on her mind");
   expect(md).toContain("the Pleiades");
+});
+
+test("a guard row shows her self claims with their grounding similarity", () => {
+  const line = decisionLine({
+    kind: "guard",
+    turn_id: null,
+    source: "model",
+    outcome: "passed",
+    for: "reply",
+    output: {
+      reasoning: "ok",
+      violations: [],
+      self_claims: [
+        { claim: "she watched Stalker", similarity: 0.42 },
+        { claim: "she read Solaris", similarity: null },
+      ],
+    },
+  });
+  expect(line).toContain("self claims: she watched Stalker (0.42); she read Solaris (unchecked)");
 });

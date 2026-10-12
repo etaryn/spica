@@ -12,6 +12,7 @@ import { hasSafety } from "./categories";
 import { correctiveNote, fallbackLine } from "./fallback";
 import { checkMessage, type GuardInput, type GuardVerdict } from "./guard";
 import { matchKeyword } from "./keywords";
+import { groundSelfClaims, isUngrounded, type GroundedClaim } from "./self-claims";
 
 export type OutgoingArgs = {
   userId: string;
@@ -26,8 +27,8 @@ export type OutgoingArgs = {
 /** `writeLog` is deferred: the caller writes judge_log after the message is sent. */
 export type OutgoingResult = { text: string; outcome: GuardOutcome; writeLog: () => Promise<void> };
 
-type Checked = { text: string; verdict: GuardVerdict };
-type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log">;
+type Checked = { text: string; verdict: GuardVerdict; claims: GroundedClaim[] };
+type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log" | "embedder" | "core">;
 
 export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promise<OutgoingResult> {
   if (!deps.config.guard.enabled) {
@@ -37,8 +38,15 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
 
   const checked: Checked[] = [];
   const check = async (text: string) => {
-    const verdict = await checkMessage(deps, { ...args.input, text });
-    checked.push({ text, verdict });
+    const raw = await checkMessage(deps, { ...args.input, text });
+    const claims = await groundSelfClaims(deps, args.input.kind, raw.selfClaims);
+    const invented = claims
+      .filter((c) => isUngrounded(c, deps.config.claims.grounded_similarity))
+      .map((c) => ({ category: "invented_self" as const, claim: c.claim }));
+    const verdict = invented.length
+      ? { ...raw, ok: false, violations: [...raw.violations, ...invented] }
+      : raw;
+    checked.push({ text, verdict, claims });
     return verdict;
   };
   const send = (text: string, outcome: GuardOutcome): OutgoingResult => ({
@@ -59,7 +67,7 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   if (args.input.kind === "backchannel" || args.input.kind === "availability") {
     const text = args.first.trim();
     const hit = matchKeyword(text, deps.config.guard.fallback_keywords);
-    checked.push({ text, verdict: keywordVerdict(hit) });
+    checked.push({ text, verdict: keywordVerdict(hit), claims: [] });
     return hit ? send("", "fallback") : send(text, "passed");
   }
 
@@ -154,7 +162,11 @@ async function writeLog(
     input: logInput(args.input, candidate.text),
     output:
       candidate.verdict.source === "model"
-        ? { reasoning: candidate.verdict.reasoning, violations: candidate.verdict.violations }
+        ? {
+            reasoning: candidate.verdict.reasoning,
+            violations: candidate.verdict.violations,
+            self_claims: candidate.claims,
+          }
         : { error: candidate.verdict.error, keyword_violations: candidate.verdict.violations },
     outcome: i === checked.length - 1 ? outcome : null,
     source: candidate.verdict.source,

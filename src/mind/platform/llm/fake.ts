@@ -48,6 +48,13 @@ export class FakeLLMProvider implements LLMProvider {
     // The keyword cue check stands in for the turn judge.
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
     life_plan: () => structuredClone(FAKE_DAY_PLAN),
+    // A plain caption about the find, with a short overlay only when the format asks for one.
+    post_draft: (input: string) => {
+      const title = /What you found: "([^"]*)"/.exec(input)?.[1] ?? "something";
+      const overlay = !/overlay: none/.test(input);
+      return { caption: `came across ${title} today`, overlay_text: overlay ? "look" : null };
+    },
+    post_check: () => ({ ok: true, reason: "fine" }),
     // Goal identity comes from code; fake content stays stable across fresh goal row IDs.
     life_event: () => ({ ...structuredClone(FAKE_DAY_EVENT), goal_ref: "model-id-ignored" }),
     // Reflects its input so the leak canary can see what reached the prompt.

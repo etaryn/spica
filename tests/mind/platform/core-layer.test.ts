@@ -25,6 +25,6 @@ test("core loops get no database, queue, push, event bus or module bus", () => {
   for (const key of ["db", "queue", "pusher", "events", "modules"])
     expect(core).not.toHaveProperty(key);
   expect(Object.keys(core).sort()).toEqual(
-    ["clock", "config", "core", "emitCore", "embedder", "llm", "log"].sort(),
+    ["clock", "config", "core", "emitCore", "embedder", "llm", "log", "webSources"].sort(),
   );
 });

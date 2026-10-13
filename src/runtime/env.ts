@@ -8,6 +8,7 @@ import { parseConfigOverrides } from "@/mind/platform/config";
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   VOYAGE_API_KEY: z.string().min(1).optional(),
+  NASA_API_KEY: z.string().min(1).optional(),
   SPICA_CONFIG: z.string().optional(),
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),

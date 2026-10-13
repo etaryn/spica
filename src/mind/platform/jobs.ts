@@ -17,6 +17,7 @@ export const CORE_STATE_TICK_QUEUE = "core_state_tick";
 export const CORE_MIND_TICK_QUEUE = "core_mind_tick";
 export const CORE_NIGHTLY_QUEUE = "core_nightly";
 export const OUTREACH_TICK_QUEUE = "outreach_tick";
+export const POST_TICK_QUEUE = "post_tick";
 export const REACH_OUT_SEND_QUEUE = "reach_out_send";
 export const USER_MIND_RUN_QUEUE = "user_mind_run";
 export const USER_MIND_TICK_QUEUE = "user_mind_tick";

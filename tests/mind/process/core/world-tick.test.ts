@@ -23,8 +23,8 @@ const H = 3_600_000;
 type TestDeps = ReturnType<typeof makeTestDeps>;
 const rows = async (deps: TestDeps, table: typeof world_event | typeof core_memory) =>
   (await deps.db.select({ n: count() }).from(table))[0]!.n;
-const done = { generated: true, appraised: 0 };
-const idle = { generated: false, appraised: 0 };
+const done = { generated: true, appraised: 0, browsed: false };
+const idle = { generated: false, appraised: 0, browsed: false };
 
 const spontaneous = {
   content: "She found an old film.",
@@ -73,6 +73,7 @@ test("generates once per her day, however many users and however many runs", asy
   expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + H))).toEqual({
     generated: false,
     appraised: 1,
+    browsed: false,
   });
   expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + 2 * H))).toEqual(idle);
   expect(await rows(deps, world_event)).toBe(1);
@@ -146,6 +147,7 @@ test("over budget the day is marked done with no event and no model call", async
   expect(await coreWorldTick(coreDepsOf(deps), new Date(at.getTime() + H))).toEqual({
     generated: false,
     appraised: 0,
+    browsed: false,
   });
 });
 
@@ -371,6 +373,7 @@ test("events that landed overnight are episodes before today's generation reads 
   expect(await coreWorldTick(coreDepsOf(deps), new Date("2026-01-06T00:10:00Z"))).toEqual({
     generated: true,
     appraised: 1,
+    browsed: false,
   });
   const calls = deps.llm.structuredCalls.filter((c) => c.purpose === "life_event");
   expect(calls[1]!.input).toContain("Spica found a comet in an old photo.");
@@ -416,6 +419,7 @@ test("a planned event's thought is on her mind at once: retrievable and outreach
   expect(await coreWorldTick(coreDepsOf(deps), morning)).toEqual({
     generated: true,
     appraised: 0,
+    browsed: false,
   });
   const [event] = await deps.db.select().from(world_event);
   expect(event!.appraised_at).toBeNull();
@@ -478,6 +482,7 @@ test("at its time a later hourly run writes the episode and the mood nudge, and 
   expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
     generated: false,
     appraised: 1,
+    browsed: false,
   });
   const all = await memories(deps);
   const episode = all.find((m) => m.kind === "episode")!;
@@ -514,6 +519,7 @@ test("each event is appraised once, however many runs follow", async () => {
   expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
     generated: false,
     appraised: 1,
+    browsed: false,
   });
   expect(await coreWorldTick(coreDepsOf(deps), new Date(landed.getTime() + H))).toEqual(idle);
   expect((await memories(deps)).filter((m) => m.kind === "episode")).toHaveLength(1);
@@ -544,6 +550,7 @@ test("an appraisal failure writes nothing and the next run lands the event", asy
   expect(await coreWorldTick(coreDepsOf(deps), landed)).toEqual({
     generated: false,
     appraised: 1,
+    browsed: false,
   });
 });
 
@@ -560,7 +567,11 @@ test("appraisal runs every hour, whether or not today's generation is due", asyn
     life_day: "2026-01-05",
     created_at: morning,
   });
-  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual({ generated: false, appraised: 1 });
+  expect(await coreWorldTick(coreDepsOf(deps), at)).toEqual({
+    generated: false,
+    appraised: 1,
+    browsed: false,
+  });
 });
 
 test("a failed appraisal call still lands the event and traces fallback", async () => {

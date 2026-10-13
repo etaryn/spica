@@ -35,6 +35,8 @@ export interface CoreGoals {
   active(): Promise<CoreGoal[]>;
   get(id: string): Promise<CoreGoal | null>;
   count(): Promise<number>;
+  /** The newest goal with this exact title, in any status. */
+  byTitle(title: string): Promise<CoreGoal | null>;
   insert(goal: NewCoreGoal): Promise<string>;
   setProgress(id: string, progress: number, now: Date): Promise<void>;
   /** Terminal transitions only apply while active; true means the transition won. */

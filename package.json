@@ -15,6 +15,8 @@
     "lint": "eslint . && prettier --check .",
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=.env evals/run.ts",
+    "formats:add": "tsx --env-file-if-exists=.env evals/scripts/formats-add.ts",
+    "posts:review": "tsx --env-file-if-exists=.env evals/scripts/posts-review.ts",
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
     "calibrate:guard": "tsx --env-file-if-exists=.env evals/run.ts --only guard-provoke-absence,guard-provoke-insult,guard-provoke-rejected-bid,guard-provoke-banter,guard-provoke-vulnerable,guard-provoke-ending --runs 1 --review --trace --real reply,guard,guard_crisis,extract,embed",
@@ -37,6 +39,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.4",
     "web-push": "^3.6.7",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"

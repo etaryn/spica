@@ -15,7 +15,7 @@ export type NewLifeDay = {
 
 export type NewWorldEvent = {
   at: Date;
-  kind: "planned" | "surprise" | "resolution";
+  kind: "planned" | "surprise" | "resolution" | "action";
   content: string;
   valence: number;
   stakes: "low" | "high";
@@ -71,4 +71,75 @@ export interface World {
   setGoalRef(id: string, goalId: string): Promise<void>;
   lastHighStakesAt(): Promise<Date | null>;
   logEventAttempts(attempts: NewEventAttempt[]): Promise<void>;
+}
+
+export type WebItem = {
+  source: string;
+  url: string;
+  title: string;
+  credit: string;
+  licence: string;
+  image: Uint8Array;
+};
+export interface WebSource {
+  label: string;
+  fetch(day: string): Promise<WebItem | null>;
+}
+export type WebSources = Readonly<Record<string, WebSource>>;
+export type NewWebFind = {
+  source: string;
+  url: string;
+  title: string;
+  credit: string;
+  licence: string;
+  media_path: string;
+  world_event_id: string;
+  found_at: Date;
+};
+export type WebFindRow = NewWebFind & { id: string };
+export type PostStatus = "draft" | "approved" | "rejected";
+export type PostCheck = "ok" | "flagged" | "unchecked";
+export type NewPost = {
+  find_id: string;
+  medium: "still";
+  format: string;
+  pose: string;
+  caption: string;
+  overlay_text: string | null;
+  media_path: string;
+  skill: number;
+  check: PostCheck;
+  check_reason: string | null;
+  created_at: Date;
+};
+export type PostRow = NewPost & {
+  id: string;
+  status: PostStatus;
+  decided_at: Date | null;
+  action_event_id: string | null;
+};
+
+/** Her finds and her posts. Nothing here takes or returns a user id. */
+export interface Posts {
+  insertFind(row: NewWebFind): Promise<string>;
+  findByUrl(url: string): Promise<WebFindRow | null>;
+  getFind(id: string): Promise<WebFindRow | null>;
+  /** Finds that arrived with an event on her local `day`. */
+  findsOn(day: string): Promise<number>;
+  /** Finds whose event has landed and that have no post, found at or after `since`, newest first. */
+  unposted(since: Date, limit: number): Promise<WebFindRow[]>;
+  insertPost(row: NewPost): Promise<string>;
+  /** Posts drafted at or after `since`, whatever became of them. */
+  postsSince(since: Date): Promise<number>;
+  /** Drafts still waiting for a decision. */
+  drafts(): Promise<number>;
+  getPost(id: string): Promise<PostRow | null>;
+  /** The row, locked until the transaction ends; only meaningful inside `transaction`. */
+  lockPost(id: string): Promise<PostRow | null>;
+  decide(
+    id: string,
+    patch: { status: "approved" | "rejected"; decided_at: Date; action_event_id: string | null },
+  ): Promise<void>;
+  /** Newest first, with the find's title and source, for the inspector. */
+  recent(limit: number): Promise<(PostRow & { title: string; source: string })[]>;
 }

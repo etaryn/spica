@@ -21,6 +21,8 @@ export default async function InspectCore() {
   return (
     <>
       <Link href="/inspector">← users</Link>
+      <br />
+      <Link href="/inspector/posts">her posts →</Link>
       <h1>Her core mind</h1>
 
       <h3>Budget today</h3>

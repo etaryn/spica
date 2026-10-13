@@ -8,6 +8,7 @@ import type { Db } from "@/db/client";
 import type { CoreLayer, CoreScope } from "@/mind/platform/core";
 import { coreMemoryRepo } from "./memory";
 import { coreGoalsRepo } from "./goals";
+import { postsRepo } from "./posts";
 import { coreStateRepo } from "./state";
 import { coreTracesRepo } from "./traces";
 import { worldRepo } from "./world";
@@ -18,6 +19,7 @@ function scope(db: Db): CoreScope {
     state: coreStateRepo(db),
     goals: coreGoalsRepo(db),
     world: worldRepo(db),
+    posts: postsRepo(db),
     traces: coreTracesRepo(db),
     drift: {
       async insert(row) {

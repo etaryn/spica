@@ -135,8 +135,8 @@ snapshot** (versioned, rewritten nightly by core loops, free to drift), and
 the **user layer**. A **drift watch** checks each snapshot against the core
 values, diffs it and tracks the trend; it logs, never blocks (test phase).
 Different faces across users are allowed; "too drastic" is tested, not
-fixed. Persona file `prompts/persona/v<N>.md` (now v4, from Ethan's draft:
-openly an AI, sibling Alcor, loves stars / old films / books, no body), split
+fixed. Persona file `prompts/persona/v<N>.md` (now v6: v5 plus lines Claude drafted for Ethan to rewrite; v5 was from Ethan's draft:
+openly an AI, sibling Alcor, loves stars / old films / books, the avatar is her body), split
 into `# Core values` and `# Seed self` (snapshot v0); `# Public voice` feeds only
 `publicPersona`. `interest_alignment:
 adjacent` applies at reply time only. Identity disclosure: honest, in her own
@@ -203,6 +203,11 @@ synthetic trigger, through the same hot path.
   only; a core module hears core events only; in-process delivery (durable is B97, raise it when
   a module needs it); `publicPersona` (her day, surface self, public voice; never deeper thoughts) and a
   `SocialChannel` stub; no modules ship.
+- **Post engine (v3 §16a, built 14):** she browses one free-licence image a day (an `action`
+  event that lands through appraisal); hourly `post_tick` gates in code, picks a reviewed format
+  (`formats/stills/`) and a pose sprite (`assets/poses/`) within her craft skill (a core goal),
+  makes one draft and one check call (optional loops) and renders with sharp; drafts wait in the
+  inspector Posts tab; approving records an `action` event. `pnpm formats:add`, `pnpm posts:review`.
 
 ## Build phases (v3 §20): check the current phase before implementing
 Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 13)
@@ -218,9 +223,12 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 
 | 11. Onboarding | Profile card swap, compatibility page |
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
+| 14. Post engine (stills) | Browsing, formats and poses, craft skill, post_tick, render, draft/check, inspector approval |
 
-**Current phase: Phase 13 (guard re-enable and calibration) is built: every proposed phase in
-§20 is built. Next is the tuning backlog (v3 §25).** Phases 8 (core loops), 9 (user mind), 10
+**Current phase: Phases 13 (guard re-enable and calibration) and 14 (post engine, stills) are
+built and merged. Next is the publishing phase or video, which needs its design doc.** Persona
+v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's
+rewrite. Phases 8 (core loops), 9 (user mind), 10
 (relationship psychology), 11 (onboarding) and 12 (extension stubs) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).

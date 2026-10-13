@@ -9,3 +9,5 @@ next-env.d.ts
 .superpowers/
 .worktrees/
 .pnpm-store/
+
+.data/

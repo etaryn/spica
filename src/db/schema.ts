@@ -196,7 +196,14 @@ export const coreMemoryKind = pgEnum("core_memory_kind", [
   "agent_note",
 ]);
 export const coreMemorySource = pgEnum("core_memory_source", ["world", "loop"]);
-export const worldEventKind = pgEnum("world_event_kind", ["planned", "surprise", "resolution"]);
+export const worldEventKind = pgEnum("world_event_kind", [
+  "planned",
+  "surprise",
+  "resolution",
+  "action",
+]);
+export const postStatus = pgEnum("post_status", ["draft", "approved", "rejected"]);
+export const postCheck = pgEnum("post_check", ["ok", "flagged", "unchecked"]);
 export const eventStakes = pgEnum("event_stakes", ["low", "high"]);
 export const coreLoopStatus = pgEnum("core_loop_status", [
   "done",
@@ -803,6 +810,56 @@ export const world_event = pgTable(
   (t) => [
     index("world_event_life_day_idx").on(t.life_day),
     check("world_event_valence_range", sql`${t.valence} BETWEEN -1 AND 1`),
+  ],
+);
+
+/** Something real she came across while browsing: the item and its cached image. Core only. */
+export const web_find = pgTable(
+  "web_find",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: text("source").notNull(),
+    url: text("url").notNull().unique(),
+    title: text("title").notNull(),
+    credit: text("credit").notNull(),
+    licence: text("licence").notNull(),
+    media_path: text("media_path").notNull(),
+    world_event_id: uuid("world_event_id")
+      .notNull()
+      .references(() => world_event.id, { onDelete: "cascade" }),
+    found_at: ts("found_at").notNull(),
+  },
+  (t) => [index("web_find_found_idx").on(t.found_at)],
+);
+
+/** A post she drafted from a find; Ethan approves or rejects it. Core only. */
+export const post = pgTable(
+  "post",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    find_id: uuid("find_id")
+      .notNull()
+      .unique()
+      .references(() => web_find.id, { onDelete: "cascade" }),
+    medium: text("medium").$type<"still">().notNull(),
+    format: text("format").notNull(),
+    pose: text("pose").notNull(),
+    caption: text("caption").notNull(),
+    overlay_text: text("overlay_text"),
+    media_path: text("media_path").notNull(),
+    skill: real("skill").notNull(),
+    check: postCheck("check").notNull(),
+    check_reason: text("check_reason"),
+    status: postStatus("status").notNull().default("draft"),
+    decided_at: ts("decided_at"),
+    action_event_id: uuid("action_event_id").references(() => world_event.id, {
+      onDelete: "set null",
+    }),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [
+    index("post_status_created_idx").on(t.status, t.created_at),
+    check("post_skill_range", sql`${t.skill} BETWEEN 0 AND 1`),
   ],
 );
 

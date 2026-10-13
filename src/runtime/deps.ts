@@ -21,6 +21,7 @@ import { PgBossQueue } from "./pg-boss-jobs";
 import { vapidPublicKey, type Env } from "./env";
 import { PgEventBus } from "./pg-event-bus";
 import { WebPushPusher } from "./web-push";
+import { createWebSources } from "./web-sources";
 
 /** Production wiring shared by the Next.js server and the worker. */
 export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
@@ -70,6 +71,13 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     events: new PgEventBus(db, config.events.channel),
     pusher,
     modules: createModuleBus(modules, () => deps),
+    // DEMO_KEY is rate-limited per IP, which one browse a day stays well under.
+    webSources: createWebSources({
+      nasaApiKey: env.NASA_API_KEY ?? "DEMO_KEY",
+      userAgent: config.posts.user_agent,
+      timeoutMs: config.posts.fetch_timeout_ms,
+      maxDownloadBytes: config.posts.max_download_bytes,
+    }),
   };
   return { deps, boss };
 }

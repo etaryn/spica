@@ -39,7 +39,7 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   const checked: Checked[] = [];
   const check = async (text: string) => {
     const raw = await checkMessage(deps, { ...args.input, text });
-    const claims = await groundSelfClaims(deps, args.input.kind, raw.selfClaims);
+    const claims = await groundSelfClaims(deps, args.input, raw.selfClaims);
     // Its own threshold: a claim said in passing paraphrases the memory loosely, so it matches
     // lower than the cold path's stored facts do.
     const invented = claims

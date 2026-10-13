@@ -21,6 +21,8 @@ export type GuardInput = {
   recentTurns: GuardTurn[];
   recalledFacts: { id: string; subject: string; content: string }[];
   onboardingFacts: { id: string; content: string }[];
+  /** What the reply was told about her own day and state, so a claim drawn from it counts as true. */
+  ownContext?: string[];
 };
 
 export type Violation = { category: Category; claim: string };

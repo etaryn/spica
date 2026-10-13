@@ -450,6 +450,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
       recalledFacts: guardFacts(retrieval, herMemories),
       onboardingFacts: await onboarding,
+      ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
     },
   });
 

@@ -97,6 +97,7 @@ const guard = z.object({
   retry_limit: countFromZero,
   log_timeout_ms: positiveInt,
   self_claim_similarity: unit,
+  grounding_timeout_ms: positiveInt,
   fallback_keywords: z.array(text).min(1),
 });
 

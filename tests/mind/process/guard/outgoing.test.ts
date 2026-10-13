@@ -424,6 +424,50 @@ describe("invented_self", () => {
     expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
   });
 
+  test("a hung embedder hits the grounding deadline and the message goes out", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true, grounding_timeout_ms: 50 } });
+    claiming(deps);
+    deps.embedder.embed = () => new Promise(() => {});
+    const error = vi.spyOn(deps.log, "error");
+    const u = await createTestUser();
+    const regen = vi.fn();
+    const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
+    expect(r.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
+  });
+
+  test("a claim matching what the reply was told about her (her day, a recalled self fact) is grounded", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    grounding(deps, 0); // nothing in core memory
+    const u = await createTestUser();
+    const regen = vi.fn();
+    // The fake embedder gives identical text identical vectors.
+    const day = await guardOutgoing(deps, {
+      ...args(u, "I am at the observatory tonight.", regen),
+      input: {
+        kind: "reply",
+        recentTurns: [],
+        recalledFacts: [],
+        onboardingFacts: [],
+        ownContext: ["I am at the observatory tonight."],
+      },
+    });
+    expect(day.outcome).toBe("passed");
+    const told = await guardOutgoing(deps, {
+      ...args(u, "I told you about Alcor's band.", regen),
+      input: {
+        kind: "reply",
+        recentTurns: [],
+        recalledFacts: [{ id: "f1", subject: "self", content: "I told you about Alcor's band." }],
+        onboardingFacts: [],
+      },
+    });
+    expect(told.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+  });
+
   test("no claims listed (older output): no grounding call", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     deps.llm.handlers.guard = () => ({ reasoning: "ok", violations: [] });

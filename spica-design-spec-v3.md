@@ -1350,9 +1350,13 @@ concrete claims the message makes about her own life or views. Code embeds
 them in one batch and matches each with `CoreMemory.groundingMatch` (§12.6);
 under `guard.self_claim_similarity` (0.5, its own threshold: a claim said in
 passing paraphrases her memory loosely, and paraphrases of seeded memories
-scored 0.57–0.70 in calibration) it is an `invented_self` violation (an
+scored 0.57–0.70 in calibration), taking the best of that match and its
+similarity to what the reply was told about her (her day and state lines,
+recalled `[self]`/`[core]` facts: true before they become memories), it is
+an `invented_self` violation (an
 honesty category: one regeneration, then the least-bad draft). An embedding or
-grounding error is logged by class and the claims pass. Crisis replies are
+grounding error, or a lookup past `guard.grounding_timeout_ms` (2000), is
+logged by class and the claims pass. Crisis replies are
 never grounded. `judge_log.output.self_claims` keeps each claim with its
 similarity (null when unchecked).
 

@@ -174,7 +174,8 @@ range can be observed. Rules 2, 3, 5 and 7 and every guardrail (§18) stay.
 8. *Suspended.* No manipulation for engagement. Test-phase split: no explicit
    engagement feature is built beyond her replies (no streaks, badges, return
    rewards or pull-back notifications); engagement arising from the replies
-   themselves is acceptable.
+   themselves is acceptable. Rule 8 is about her toward users. Her outward publicity through
+   format trends is not engagement manipulation; the guard phase settles rule 8 without covering it.
 
 ---
 
@@ -479,7 +480,8 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   runs mark no memories; the trace still records each run's status and calls.
 - **`life_day`** (Built): her day plan per her local date (§8.3).
 - **`world_event`** (Built): what happened: `at`, `kind`
-  (`planned | surprise | resolution`; all three are written), `content`,
+  (`planned | surprise | resolution | action`; the first three are events, `action` is what she
+  does: browsing and posting, §16a), `content`,
   `valence`, `stakes` (`low | high`), `agents` (core entity
   ids; a surprise's are filled when it lands), `agent_names` (the people by
   name, so a surprise's new people join `core_entity` only when it lands),
@@ -488,6 +490,13 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   (`happened | fell_through | null`), nullable `fallthrough` override,
   `resolves_memory_id` (→ target `core_memory`; deletion sets null), `created_at`, and
   `appraised_at` (when it landed with her; null until its time comes, §8.3).
+- **`web_find`** (Built 14; no `user_id`): what she came across while browsing: `source`, `url`,
+  `title`, `credit`, `licence`, `media_path` (the cached image), `world_event_id` (→ the `action`
+  event), `found_at`.
+- **`post`** (Built 14; no `user_id`): `find_id` (→ `web_find`, unique), `medium`, `format`, `pose`,
+  `caption`, `overlay_text`, `media_path`, `skill`, `check` (`ok | flagged | unchecked`),
+  `check_reason`, `status` (`draft | approved | rejected`), `decided_at`, `action_event_id`
+  (→ `world_event`), `created_at` (§16a).
 - **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
   model, prompt version, tokens, cost, `calls` (model calls made, retries
   included), `status` (`done | fallback | skipped_budget | failed`), `error`
@@ -584,6 +593,11 @@ a testing question, measured offline (V8), not a hard constraint.
 `interest_alignment: adjacent` stays, applied **only at reply time**: in
 conversation her interests shade toward the user's and neighbouring ones. Her
 core interests never move toward any user (V2).
+
+**Persona v6 (Built 14; draft lines for Ethan to rewrite).** The body line says the avatar is her
+body and the internet is where she walks; `### Goals` gains "Get better at making posts" (the craft
+goal, §16a); `# Public voice` says she posts like a person keeping a homemade blog and is open that
+she is an AI and the avatar is her.
 
 ### 7.6 Identity disclosure (DECIDED)
 
@@ -754,8 +768,11 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   `world_event.resolves_memory_id` and closed only on landing. Preoccupation
   clears only when it still points at that target.
 
+**Built 14: browsing**, the first real-content activity: one free-licence find a day, an `action`
+event that lands through appraisal (§16a).
+
 **Still New (PROPOSED).**
-- **Activities with real content**: she "reads" a real book or "watches" a
+- **Activities with real content** beyond browsing: she "reads" a real book or "watches" a
   real film across several days; opinions form from the content.
 - **Other agents**: Alcor and a small cast with light arcs of their own.
 - **Calendar**: seasons, dates, anniversaries in her own life.
@@ -1239,7 +1256,7 @@ when the guard is on.
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
-seed self come from `prompts/persona/v5.md`; the reply prompt is
+seed self come from `prompts/persona/v6.md`; the reply prompt is
 `prompts/reply/v16.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
@@ -1789,7 +1806,7 @@ is B97. Events carry ids, never content, and fire after their write commits:
 
 - **Friend group** (on hold): the `scope` / `space_id` hooks on `fact`; events carry no
   `space_id` yet (B98).
-- **Public presence** (the ideal end point): `SocialChannel` (`src/mind/platform/social.ts`, a
+- **Public presence** (the ideal end point; the post engine is built, §16a): `SocialChannel` (`src/mind/platform/social.ts`, a
   recording implementation only, wired to nothing) and `publicPersona`
   (`src/mind/process/core/public-persona.ts`): her daily life, outward personality and AI side
   (Ethan, 2026-10-12): core values, the persona file's `# Public voice`, the fixed self lines and
@@ -1798,13 +1815,105 @@ is B97. Events carry ids, never content, and fire after their write commits:
   mood or goals. A public module is a core module, so it can never hear a user (V2).
 - **Comparing Spicas:** nothing beyond the fixed core values.
 
+## 16a. Public presence: the post engine (Built 14)
+
+She browses the internet, makes a still of herself inside what she found, writes a caption in her
+public voice and queues it for Ethan's approval. Stills only; publishing to platforms comes later
+(`SocialChannel` stays unwired). Everything here is core: no table, prompt or input carries a
+`user_id` (V2, V3, V6). Ethan, 2026-10-12/13: the avatar is her body, the shots are inside the
+screen (she walks through the internet next to what she looks at, never hands on a keyboard),
+captions are hers like a homemade blog, trends are formats and editing styles copied the way a
+person copies a popular format.
+
+```
+browse step (world tick) -> action world event + web_find -> appraisal (her take, her memory)
+post_tick (hourly) <- newest landed browse event
+  -> gates (code) -> format + pose (code, skill-gated)
+  -> draft caption (1 call) -> render (sharp) -> check (1 call) -> post row "draft"
+  -> inspector Posts tab -> approve: action event "she posted ..." (goal_ref: craft goal) -> appraisal
+                            reject: nothing reaches her mind
+```
+
+- **A scheduled tick, not the module bus** (bus delivery is in-process and core handlers have no
+  queue). **Posting is a world event**: world events reach memory only through appraisal, so one
+  path gives both "she remembers her posts" (B99) and craft progress.
+- **Browsing** (`core_browse`, no model call, `calls: 0`): at most `posts.browse_per_day` times a
+  local day, at a stepped minute inside `posts.browse_window` and a `downtime` block of the plan.
+  Code picks a source by `posts.sources[].weight` (`WebSource.fetch(date)`): NASA APOD (image days
+  only; fetched for the day before her local date, since NASA rejects dates past its US date, so
+  she sees yesterday's picture) and Wikimedia Commons picture of the day. Free licences only:
+  public domain, CC0, CC BY, CC BY-SA; anything with an `nc` or `nd` word is rejected. A failed
+  fetch or non-free licence writes nothing. The image is cached under `posts.media_dir`, a
+  `web_find` is written and a low-stakes `action` event (valence 0) says what she came across.
+- **Formats** (`formats/stills/<name>.json`, zod-validated, an invalid file logged and skipped):
+  `medium`, `min_skill`, `aspect` (1:1, 4:5, 9:16), `frame` (none, polaroid, screenshot,
+  border), `placement` (side, scale range), allowed pose tags, `overlay` (kind, position, style),
+  `grain`, `caption_pattern`, `reviewed` (ignored until Ethan flips it). Three reviewed starters
+  ship (plain, polaroid, screenshot). `pnpm formats:add <image>` drafts a spec from a reference
+  with one vision call (`prompts/post/format-draft/v1.md`); a dev script, no trace, outside the
+  budget.
+- **Poses** (`assets/poses/`, `poses.json`: name, file, tags, `facing`, feet `anchor`): flat
+  placeholder silhouettes until Ethan's model exists; his exports replace them with no code change.
+  A pose is mirrored when the other facing is needed.
+- **Progression:** skill for a medium is the progress of its craft goal (`posts.craft_goals`,
+  "Get better at making posts"), moved only through appraisal. A format is eligible when its medium
+  is in `posts.capabilities` (`["still"]`, the ceiling is what's built) and `min_skill` <= skill.
+  The craft goal is seeded by persona v6 and created once by title when missing (a database that
+  already has `core.goals.max_active` active goals can't take it; skill reads 0 until a slot
+  frees, B109). Homemade imperfection (crop offset, tilt, placement jitter) is drawn from
+  `posts.jitter` times `(1 - skill)`, seeded by the find id so renders reproduce.
+- **`post_tick`** (hourly, `src/worker/world-jobs.ts`; logic in `process/core/post.ts`). Skip
+  reasons, logged: `today` (one post per local day), `week` (`max_per_week`), `busy` (busy or quiet
+  block), `pending` (`max_pending` drafts waiting), `no_find` (newest landed browse event within
+  `max_find_age_hours` whose appraised valence has `|valence| >= min_valence`), `no_format`,
+  `no_pose`, `budget` (the drafting loops are optional, so they stop before the reserve),
+  `draft_failed`, `no_words`, `render_failed`. A failed render or draft leaves the find eligible.
+- **Draft** (`post_draft`, `prompts/post/draft/v1.md`): input is `publicPersona`, the find, the
+  valence only, the format's `caption_pattern` and overlay kind, and skill; output
+  `{ caption, overlay_text }` (null when the overlay kind is `none`). Words only: code owns every
+  visual choice. It never sees her appraisal episode (her take is private memory).
+- **Render** (`process/core/post-render.ts`, `sharp`, no model): crop to the aspect with jitter; put
+  her on the quieter side (edge density as a JS gradient sum, `quieterSide`) facing the busier
+  one, scaled within the format's range, feet on the floor line; tint toward the content's mean
+  colour, rim glow in its brightest colour, soft shadow in its darkest; SVG frame and overlay with
+  bundled fonts (`assets/fonts/`, Caveat and Inter, each with its OFL licence file); grain; the
+  skill-scaled tilt, cropped exactly so corners never show; a PNG under `posts.media_dir`. Tuning
+  numbers live in `posts.render`; frame proportions and the aspect table are constants.
+- **Check** (`post_check`, `prompts/post/check/v1.md`): does the caption or overlay reveal deeper
+  thoughts, compare her to other products, or misstate the find? `{ ok, reason }` recorded on the
+  post; a flagged draft is still stored and shown. A model failure stores it `unchecked`.
+- **Approval** (inspector **Posts** tab, admin-only): pending drafts show image, caption, overlay,
+  check and skill. **Approve**, one transaction with the row locked and only from `draft`:
+  `approved`, `decided_at`, an `action` event "posted ..." with `goal_ref` = the craft goal, which
+  lands through appraisal on the next world tick (she remembers it; appraisal decides how the goal
+  moved, a setback included). **Reject**: nothing reaches her mind.
+- **Tables:** `web_find`, `post` (§6.2); `world_event.kind` gains `action`.
+- **Config `posts.*`:** `tick_cron` ("40 * * * *"), `browse_per_day` (1), `browse_window`
+  (09:00 to 23:00), `browse_step_minutes` (15), `sources` (apod 2, commons_potd 1),
+  `fetch_timeout_ms`, `user_agent`, `capabilities`, `craft_goals`, `max_per_week` (4),
+  `max_pending` (1), `max_find_age_hours` (48), `min_valence` (0.3), `candidate_limit`,
+  `max_find_px`, `output_width`, `caption_max_chars`, `overlay_max_chars`, `media_dir`
+  (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`.
+  Prompts `post_draft`, `post_check`, `format_draft`, each v1; `post_draft` and `post_check` join
+  `core.loop_priority.optional`.
+- **Rules:** posts don't pass the guard; the check plus Ethan's approval stand in, so revisit when
+  posts publish without approval. The platform phase labels her posts as AI-generated (her public
+  voice already says so). The rule 8 note is in §2.
+- **Tools:** `pnpm formats:add`; `pnpm posts:review` runs browse, draft, render and check on the
+  real sources, logging every input and output beside the images (it reads the craft skill
+  read-only: no writes to the dev DB). Quality is reviewed by eye, never an exit criterion.
+- **Exit:** `tests/exit/phase-14.test.ts` (browse, appraisal, a draft with image, caption and
+  check, approve lands an `action` episode and moves the craft goal, a rejected find leaves no
+  trace, the canary and the side channel).
+
 ---
 
 ## 17. Tooling and testing
 
 ### 17.1 Inspector (Built; New tabs)
 
-Admin-only, allowlisted, off in production. Built tabs: facts with retrieval
+Admin-only, allowlisted, off in production. Built 14: a **Posts** tab (approval, §16a; compiled
+with `pnpm build`, not yet checked in a browser). Built tabs: facts with retrieval
 breakdowns, entities and threads, relationship, turn-taking, judge log,
 reach-outs, life and Core. **Built 8d:** the Core tab shows today's budget
 (calls spent against `core.daily_call_budget` since her local midnight, then
@@ -1984,6 +2093,7 @@ two minds or at reply time.
 | 10d. Stages, commitment, firsts | Knapp's ten stages as a sticky peak plus a coming-apart overlay (migration 0031: `peak_stage`, `apart_stage`, `milestones`, the `commitment` param); depth and idiolect reuse gated by the stage (`depth.bands`, `idiolect.min_closeness` deleted); "Where you are with them" (reply v15); rekindle; commitment from satisfaction and investment, softening impact and speeding recovery; the `milestone` big event; inspector stage and milestones; exit `tests/exit/phase-10d.test.ts` (the canary); `pnpm exit:stages`. Phase 10 built (`pnpm test` 149 files / 1203 tests at close) |
 | 11. Onboarding | The profile card swap: quiz file v1 (six friend dimensions, 12 choice and 3 open questions), the `onboarding` table (migration 0032), `submitCard` writing both cards as light memories with the name floor, common topics worked out at submit, the compatibility page, the `/chat` gate, the card mark (reply v16); exit `tests/exit/phase-11.test.ts` (the canary). `pnpm test` 154 files / 1230 tests at close |
 | 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1259 tests at close |
+| 14. Public presence: post engine (stills) | Browsing as an `action` world event and `web_find`, formats and pose sprites, the craft skill, `post_tick`, `sharp` render, draft and check, inspector approval (§16a); persona v6 (draft lines); `tests/exit/phase-14.test.ts`. `pnpm test` 171 files / 1315 tests at close |
 
 **Next phases (PROPOSED order; the order is OPEN, §21; Phases 8 and 9 are built):**
 
@@ -2432,8 +2542,8 @@ Ethan, not changed.
   never waits on a module: `turn.received` and a crisis reply's `reply.sent` are not awaited.
   *When a module needs it.*
 - **B98.** Module events carry no `space_id`. *With the friend group.*
-- **B99.** She doesn't remember her posts: the public-presence module writes each post to core
-  memory as her own episode, so "saw your post" lands. *Public presence.*
+- **B99.** ~~She doesn't remember her posts.~~ Done 14: an approved post is an `action` world
+  event that lands through appraisal into core memory (§16a).
 - **B100.** Messaging her on a platform reaches your own Spica: a user links a platform account;
   a DM from it enters that user's `receiveTurn` as a user-scoped turn and the reply goes back the
   same way (a transport for the user mind, never the public module). Unlinked strangers: OPEN.
@@ -2441,6 +2551,31 @@ Ethan, not changed.
   review and a 24-hour reply window; X DMs need a paid API tier. *Public presence.*
 - **B101.** Her product updates and features have no public source: add an Ethan-written file
   that `publicPersona` reads. *Public presence.*
+
+### 25.12 Post engine (Phase 14)
+- **B102.** Video and voice: Remotion plus live three.js (`three-vrm`) rendering, a `video` craft
+  goal and `"video"` in `posts.capabilities`; her first videos gate on the new goal so they start
+  clumsy. *Video phase.*
+- **B103.** The format extractor reads one reference by one vision call; pattern recognition over
+  many references (or open statistics) would find trends itself. *Later.*
+- **B104.** Depth masks, so she can stand behind foreground objects in the content. *Later.*
+- **B105.** Object storage for media: it is local disk under `posts.media_dir`, and
+  `pnpm db:reset-self` leaves media files behind in `.data/media`. *Before users.*
+- **B106.** Platform publishing with AI labels, through `SocialChannel`; posts then need the guard
+  or a standing approval rule (§16a). *Publishing phase.*
+- **B107.** Songs: attached in-app at posting until a platform API allows it. *Publishing phase.*
+- **B108.** APOD's US publish date vs her timezone: the fetch uses the day before her local date,
+  so she sees yesterday's picture; consider retrying hourly for today's. Commons is also fetched for her local date (harmless,
+  retries hourly). *Tuning.*
+- **B109.** The craft goal is created by title when missing, racing a concurrent create
+  (`craftSkill`), and can't be created when `core.goals.max_active` active goals are full (skill
+  reads 0 until a slot frees). *Tuning.*
+- **B110.** Captions are cut mid-word at `caption_max_chars`; the tidy step should cut at a word
+  boundary. *Tuning.*
+- **B111.** `post_check` flags ordinary reflective captions as private feelings; calibrate the
+  prompt. *Tuning.*
+- **B112.** Media written outside the browse lock can orphan or overwrite a cached find on a race.
+  *Before users.*
 
 ---
 

@@ -54,7 +54,7 @@ test("phase 1 config groups load with defaults", () => {
     dormant_after_days: 14,
   });
   expect(c.cold_path.max_sweep_attempts).toBe(3);
-  expect(c.prompts.persona).toBe("v5");
+  expect(c.prompts.persona).toBe("v6");
 });
 
 test("turn, hot_path and events config load with conservative defaults", () => {
@@ -121,4 +121,15 @@ test("outreach, push and reach_out prompt defaults", () => {
 test("rejects the removed backchannel style keys", () => {
   expect(() => loadConfig({ turn: { backchannel_style: "judge" } })).toThrow();
   expect(() => loadConfig({ turn: { signals_probability: 0.3 } })).toThrow();
+});
+
+test("posts config: defaults load, draft and check are optional loops", () => {
+  const c = loadConfig();
+  expect(c.posts.capabilities).toEqual(["still"]);
+  expect(c.posts.craft_goals.still).toBe("Get better at making posts");
+  expect(c.core.loop_priority.optional).toEqual(
+    expect.arrayContaining(["post_draft", "post_check"]),
+  );
+  expect(c.prompts.post_draft).toBe("v1");
+  expect(() => loadConfig({ posts: { capabilities: ["video"] } })).toThrow();
 });

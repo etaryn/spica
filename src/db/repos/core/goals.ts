@@ -1,7 +1,7 @@
 /**
  * Her goals in Postgres: the core_goal table. No query here takes or returns a user id.
  */
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, desc, eq } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_goal } from "@/db/schema";
 import type { CoreGoal, CoreGoals } from "@/mind/state/core/types";
@@ -14,6 +14,17 @@ function toGoal(r: typeof core_goal.$inferSelect): CoreGoal {
 
 export function coreGoalsRepo(db: Db): CoreGoals {
   return {
+    async byTitle(title) {
+      const row = (
+        await db
+          .select()
+          .from(core_goal)
+          .where(eq(core_goal.title, title))
+          .orderBy(desc(core_goal.started_at))
+          .limit(1)
+      )[0];
+      return row ? toGoal(row) : null;
+    },
     async active() {
       const rows = await db
         .select()

@@ -40,7 +40,7 @@ test("seed backfills historical v0 and fixed lines once without replacing conten
     source_ids: [],
     rendered_at: now,
     model: "seed",
-    prompt_version: "v5",
+    prompt_version: "v6",
   });
   expect(await seedSnapshot(deps)).toBe(false);
   const before = await deps.core.memory.snapshot(0);

@@ -9,10 +9,15 @@ import { createModuleBus, type Module } from "@/mind/platform/modules";
 import { RecordingPusher } from "@/mind/platform/push";
 import { RecordingQueue } from "@/mind/platform/jobs";
 import { createCoreLayer } from "@/db/repos/core";
+import type { WebSources } from "@/mind/world/types";
 import { getTestDb } from "./db";
 
 /** Handlers get this object, so a copy spread from it doesn't reach them. */
-export function makeTestDeps(configOverrides: unknown = {}, modules: readonly Module[] = []) {
+export function makeTestDeps(
+  configOverrides: unknown = {},
+  modules: readonly Module[] = [],
+  webSources: WebSources = {},
+) {
   const config = loadConfig(configOverrides);
   const ref: { deps?: Deps } = {};
   const deps = {
@@ -27,6 +32,7 @@ export function makeTestDeps(configOverrides: unknown = {}, modules: readonly Mo
     events: new RecordingEventBus(),
     pusher: new RecordingPusher(),
     modules: createModuleBus(modules, () => ref.deps!),
+    webSources,
   } satisfies Deps;
   ref.deps = deps;
   return deps;

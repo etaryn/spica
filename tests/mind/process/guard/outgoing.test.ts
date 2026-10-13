@@ -377,6 +377,18 @@ describe("invented_self", () => {
     });
   });
 
+  test("a paraphrase of a real memory passes at the guard's own threshold", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    // Paraphrases of seeded memories scored 0.57-0.70 against the cold path's 0.75.
+    grounding(deps, 0.6);
+    const u = await createTestUser();
+    const regen = vi.fn();
+    const r = await guardOutgoing(deps, args(u, "I watched Stalker last night.", regen));
+    expect(r.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+  });
+
   test("a grounded claim passes", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     claiming(deps);

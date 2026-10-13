@@ -40,8 +40,10 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   const check = async (text: string) => {
     const raw = await checkMessage(deps, { ...args.input, text });
     const claims = await groundSelfClaims(deps, args.input.kind, raw.selfClaims);
+    // Its own threshold: a claim said in passing paraphrases the memory loosely, so it matches
+    // lower than the cold path's stored facts do.
     const invented = claims
-      .filter((c) => isUngrounded(c, deps.config.claims.grounded_similarity))
+      .filter((c) => isUngrounded(c, deps.config.guard.self_claim_similarity))
       .map((c) => ({ category: "invented_self" as const, claim: c.claim }));
     const verdict = invented.length
       ? { ...raw, ok: false, violations: [...raw.violations, ...invented] }

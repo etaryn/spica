@@ -122,6 +122,7 @@
     "timeout_ms": 6000,
     "retry_limit": 1,
     "log_timeout_ms": 2000,
+    "self_claim_similarity": 0.5,
     "fallback_keywords": [
       "i'll leave you if",
       "i'm done with you",

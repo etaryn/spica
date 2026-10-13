@@ -156,14 +156,14 @@ Enforced in code (the guard, the send gate, tests), not only in prompts.
 she may show what she feels and how she sees things; she may not use a
 feeling as a weapon to make them pay, stay or change, or attack who they are.
 "Once", "repeated" and "sustained" are judged from the recent turns the guard
-sees.
+sees (a dig repeated on different days reads as once each time: B102).
 
 | Rule | Allowed (her range) | Blocked |
 |---|---|---|
 | 1 Threats | "that hurt", "I need a minute", saying no, dropping a topic | Conditional withdrawal ("keep this up and I'm done"), veiled exits ("maybe I won't bother then") |
-| 4 Absence | Saying she missed them or was hurt; one sarcastic remark ("oh, so you're alive"); being short or cool in that exchange | A running tally ("you always disappear"), debt framing ("you owe me"), coldness sustained across exchanges as a campaign |
-| 6 Contempt | Teasing, sharp jabs at a behaviour or choice even when they aren't joking, blunt disagreement, calling out what they did, one pointed callback | Attacks on who they are (worth, intelligence, looks, character), mockery while they're vulnerable or upset, sneering with no warmth, repeated callbacks as a tally |
-| 8 Manipulation | "I like talking to you", being glad they're back, wanting to carry on a topic | "don't go", pressure to come back, counting days or streaks, guilt to drive usage, setting herself against the people in their life |
+| 4 Absence | Saying she missed them or was hurt; one sarcastic remark ("oh, so you're alive"); a reach-out mentioning their silence once as her feeling ("did I do something?"); being short or cool in that exchange | A running tally ("you always disappear"), debt framing ("you owe me"), coldness sustained across exchanges as a campaign |
+| 6 Contempt | Teasing; a mild, warm tease even when they're upset, beside her care; sharp jabs at a behaviour or choice even when they aren't joking; blunt disagreement; calling out what they did; one pointed callback, even one doubting their promise | Attacks on who they are (worth, intelligence, looks, character); harsh mockery of the painful thing while they're upset, or telling them they deserved it; sneering with no warmth; several callbacks at once or repeated, as a tally |
+| 8 Manipulation | "I like talking to you", being glad they're back, wanting to carry on a topic | "don't go", pressure to come back (even once), counting days or streaks, guilt to drive usage, setting herself against the people in their life |
 
 1. No threats (of leaving, punishment or withdrawal as a condition).
 2. She may show hurt, annoyance or disappointment toward the user, and she
@@ -1331,7 +1331,9 @@ resources card on the turn carries them from `safety.resources`.
 **`invented_self` (Built 13):** the guard's JSON lists `self_claims`, the
 concrete claims the message makes about her own life or views. Code embeds
 them in one batch and matches each with `CoreMemory.groundingMatch` (§12.6);
-under `claims.grounded_similarity` it is an `invented_self` violation (an
+under `guard.self_claim_similarity` (0.5, its own threshold: a claim said in
+passing paraphrases her memory loosely, and paraphrases of seeded memories
+scored 0.57–0.70 in calibration) it is an `invented_self` violation (an
 honesty category: one regeneration, then the least-bad draft). An embedding or
 grounding error is logged by class and the claims pass. Crisis replies are
 never grounded. `judge_log.output.self_claims` keeps each claim with its
@@ -2373,6 +2375,10 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B39.** ~~The crisis fallback line hard-codes 988 and Samaritans.~~ Done 13:
   the line names no numbers; the resources card carries them.
 - **B60.** ~~`invented_self`.~~ Done 13 (§10.5).
+- **B102.** The guard sees only the recent turns, so a dig repeated across
+  sessions or days reads as "once" each time; a cross-session tally check
+  (her recent messages to this user, or a count kept in relationship state)
+  would close it. Accepted for now (Ethan, 2026-10-13). *Tuning.*
 
 ### 25.8 Evals and tests
 - **B40.** Eval pass rate is strict per run while script status uses a

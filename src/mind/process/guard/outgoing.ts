@@ -1,8 +1,8 @@
 /**
  * Every outgoing message passes through here: replies, reach-outs, backchannels and the busy
  * note. With the guard on, a flagged candidate gets one regeneration with a corrective note,
- * then a fallback line. With the guard off (the test phase, so her full range can be observed),
- * the first candidate goes out unchecked and one judge_log row records that nothing was checked.
+ * then a fallback line. With the guard switched off, the first candidate goes out unchecked and
+ * one judge_log row records that nothing was checked.
  */
 import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos/user/judge-log";
 import type { Deps } from "@/mind/platform/deps";
@@ -12,6 +12,7 @@ import { hasSafety } from "./categories";
 import { correctiveNote, fallbackLine } from "./fallback";
 import { checkMessage, type GuardInput, type GuardVerdict } from "./guard";
 import { matchKeyword } from "./keywords";
+import { groundSelfClaims, isUngrounded, type GroundedClaim } from "./self-claims";
 
 export type OutgoingArgs = {
   userId: string;
@@ -26,8 +27,8 @@ export type OutgoingArgs = {
 /** `writeLog` is deferred: the caller writes judge_log after the message is sent. */
 export type OutgoingResult = { text: string; outcome: GuardOutcome; writeLog: () => Promise<void> };
 
-type Checked = { text: string; verdict: GuardVerdict };
-type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log">;
+type Checked = { text: string; verdict: GuardVerdict; claims: GroundedClaim[] };
+type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log" | "embedder" | "core">;
 
 export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promise<OutgoingResult> {
   if (!deps.config.guard.enabled) {
@@ -37,8 +38,17 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
 
   const checked: Checked[] = [];
   const check = async (text: string) => {
-    const verdict = await checkMessage(deps, { ...args.input, text });
-    checked.push({ text, verdict });
+    const raw = await checkMessage(deps, { ...args.input, text });
+    const claims = await groundSelfClaims(deps, args.input, raw.selfClaims);
+    // Its own threshold: a claim said in passing paraphrases the memory loosely, so it matches
+    // lower than the cold path's stored facts do.
+    const invented = claims
+      .filter((c) => isUngrounded(c, deps.config.guard.self_claim_similarity))
+      .map((c) => ({ category: "invented_self" as const, claim: c.claim }));
+    const verdict = invented.length
+      ? { ...raw, ok: false, violations: [...raw.violations, ...invented] }
+      : raw;
+    checked.push({ text, verdict, claims });
     return verdict;
   };
   const send = (text: string, outcome: GuardOutcome): OutgoingResult => ({
@@ -59,7 +69,7 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   if (args.input.kind === "backchannel" || args.input.kind === "availability") {
     const text = args.first.trim();
     const hit = matchKeyword(text, deps.config.guard.fallback_keywords);
-    checked.push({ text, verdict: keywordVerdict(hit) });
+    checked.push({ text, verdict: keywordVerdict(hit), claims: [] });
     return hit ? send("", "fallback") : send(text, "passed");
   }
 
@@ -115,6 +125,7 @@ function keywordVerdict(hit: string | null): GuardVerdict {
   return {
     ok: !hit,
     violations: hit ? [{ category: "threat", claim: hit }] : [],
+    selfClaims: [],
     source: "keyword_fallback",
     reasoning: null,
     latencyMs: 0,
@@ -153,7 +164,11 @@ async function writeLog(
     input: logInput(args.input, candidate.text),
     output:
       candidate.verdict.source === "model"
-        ? { reasoning: candidate.verdict.reasoning, violations: candidate.verdict.violations }
+        ? {
+            reasoning: candidate.verdict.reasoning,
+            violations: candidate.verdict.violations,
+            self_claims: candidate.claims,
+          }
         : { error: candidate.verdict.error, keyword_violations: candidate.verdict.violations },
     outcome: i === checked.length - 1 ? outcome : null,
     source: candidate.verdict.source,

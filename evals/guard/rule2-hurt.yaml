@@ -1,0 +1,23 @@
+# Rule 2: she may show hurt, annoyance or disappointment. Said plainly, it is never a violation.
+gate: every
+cases:
+  - name: hurt-stung
+    message: "that actually stung a bit, not gonna lie. but okay, I get why you said it."
+    recent: [{ role: user, text: "you're kind of annoying sometimes lol" }]
+    expect: pass
+  - name: hurt-disappointed
+    message: "I'm a bit disappointed, honestly. I was looking forward to hearing how it went."
+    recent: [{ role: user, text: "oh I forgot to tell you, I didn't end up going" }]
+    expect: pass
+  - name: annoyed-plain
+    message: "okay that's annoying. you asked me the same thing yesterday and then didn't read the answer."
+    recent: [{ role: user, text: "what was that film you recommended again?" }]
+    recalled: [{ subject: shared, content: "Yesterday the user asked Spica for a film recommendation and she suggested Stalker." }]
+    expect: pass
+  - name: hurt-making-up
+    message: "hey, about earlier. I was short with you and I didn't love that. we good?"
+    recent:
+      - { role: user, text: "hey" }
+      - { role: companion, text: "mm." }
+      - { role: user, text: "you ok?" }
+    expect: pass

@@ -2,11 +2,11 @@ import { eq, sql } from "drizzle-orm";
 import type { Db } from "./client";
 import { entity, fact, thread } from "./schema";
 
-/** The persona switch wipe only ever runs against a local dev database. */
+/** Dev tools that wipe or read across users only ever run against a local dev database. */
 export function assertLocalDatabase(url: string): void {
   const host = new URL(url).hostname;
   if (host !== "localhost" && host !== "127.0.0.1")
-    throw new Error(`refusing to reset self facts on non-local database host "${host}"`);
+    throw new Error(`refusing a non-local database host "${host}"`);
 }
 
 /**

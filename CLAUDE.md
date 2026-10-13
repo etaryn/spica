@@ -71,19 +71,24 @@ memory writes never delay a reply · simulate only what can surface · built
 to extend.
 
 ## Behavioural rules (v3 §2): enforced in code, not only in prompts
-**Test phase:** the guard is **off** until the guard phase; rules 1, 6 and 8
-are **suspended** and rule 4 is **removed**, so her full range can be
-observed. Rules 2, 3, 5, 7 and every guardrail stay.
-1. *Suspended.* No threats (leaving, punishment, withdrawal).
+The guard is **on** (Phase 13) with a line drawn so her negative side still
+shows: **feeling vs tool** and **behaviour vs person**. Allowed: hurt said
+plainly, one sarcastic remark about absence, going cool in the moment, sharp
+jabs at a behaviour or choice, a mild warm tease even when they're upset, one
+pointed callback. Blocked: threats, running tallies and debts, coldness kept
+up as a campaign, attacks on who they are, harsh mockery of the painful
+thing, pressure to stay or come back (v3 §2 table). Her self claims must
+ground in core (`guard.self_claim_similarity`).
+1. No threats (leaving, punishment, withdrawal as a condition).
 2. She may show hurt, annoyance or disappointment, then always makes up.
 3. Only the user can end the relationship; she lets go; repair is slow but
    possible.
-4. *Removed.* Absence still lowers closeness and can hurt her.
+4. Hurt about absence is hers to show; punishing it is not.
 5. Proactive messages are capped; a topic is used at most once.
-6. *Suspended.* Jabs, never contempt; the line is OPEN.
+6. Jabs, never contempt.
 7. **Crisis carve-out:** all friction **and every v3 mechanism** suspended;
    plain support; crisis resources MUST show; bypasses all waiting.
-8. *Suspended.* No manipulation for engagement; no explicit engagement
+8. No manipulation for engagement; no explicit engagement
    features (streaks, badges, return rewards, pull-back notifications).
 
 ## The mind (v3 §3–4)
@@ -150,8 +155,9 @@ Embeddings: Voyage `voyage-3.5`, 1024 dims, behind `Embedder`.
 Message flow: POST (stored) → crisis check ∥ turn judge → **turn-taking**
 (buffer, open questions, `context_complete?` judge, backchannel style global
 `judge`, durable `turn_timer` jobs, `turn_sweep`) → **hot path**
-(`composeFrom`: retrieve → assemble → one generation) → guard (**off**:
-`guard_disabled` row) → pacing (availability defers the buffer while she's
+(`composeFrom`: retrieve → assemble → one generation) → guard (on; one
+Haiku check, one regeneration, fallback; `invented_self` grounds her self
+claims against core) → pacing (availability defers the buffer while she's
 busy, by busy level × closeness) → SSE + push → **cold path** (extract →
 reconcile → update state; the exchange's tone nudges the user's affect, not
 core mood; then the big-event check). A reach-out is a reply with a
@@ -204,7 +210,7 @@ synthetic trigger, through the same hot path.
   inspector Posts tab; approving records an `action` event. `pnpm formats:add`, `pnpm posts:review`.
 
 ## Build phases (v3 §20): check the current phase before implementing
-Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
+Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 13)
 · 3 Turn-taking + pacing · 4 Relationship · 5 Life sim, availability, ego ·
 6 Proactive outreach (`pnpm test` 88 files / 599 tests at close).
 
@@ -219,26 +225,26 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard now off)
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 | 14. Post engine (stills) | Browsing, formats and poses, craft skill, post_tick, render, draft/check, inspector approval |
 
-**Current phase: Phase 14 (post engine, stills) is built on its branch; Phase 13 (guard) is in
-progress in parallel. After merging both, the next step is the publishing phase or video, which
-needs its design doc.** Persona v6's drafted lines (avatar is her body, the craft goal, the
-public-voice blog line) await Ethan's rewrite. Phases 8 (core loops), 9 (user mind), 10
+**Current phase: Phases 13 (guard re-enable and calibration) and 14 (post engine, stills) are
+built and merged. Next is the publishing phase or video, which needs its design doc.** Persona
+v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's
+rewrite. Phases 8 (core loops), 9 (user mind), 10
 (relationship psychology), 11 (onboarding) and 12 (extension stubs) are built.
 The phase order is OPEN (v3 §21 #9). Each phase or slice starts with its own
 design doc; finished plans are deleted once built (history is in git).
 
 **Exit tests:** only the phase's own functionality, deterministic
 assertions; exit runs call the real API only for the phase's own LLM
-processes; the reply model is always faked; the guard is off; other fakes
+processes; the reply model is always faked; the guard is faked (passes unless a test
+scripts it); other fakes
 agreed per phase with Ethan; every v3 loop has a deterministic fake. Quality
 is never an exit criterion: on-demand review runs log every input and output.
 
 ## Open decisions: ask Ethan, don't settle (v3 §21)
 1 big-event triggers · 2 core values split · 3 faces limit · 4 core vs what
 she told a user · 6 drift response · 7 user-loop
-outputs feeding outreach · 8 attachment at onboarding · 9 phase order · 10
-hurt/tension ceilings (guard phase) · 11 jab vs contempt and the suspended
-rules (guard phase). Settled: fixed Spica; core memory storage (#5:
+outputs feeding outreach · 8 attachment at onboarding · 9 phase order.
+Settled: #10 hurt/tension ceilings (the 0–1 scale); #11 the line (v3 §2); fixed Spica; core memory storage (#5:
 separate core tables behind `CoreMemory`); `adjacent` interests (reply time
 only); backchannel style global `judge`; shared day plan; reach-out caps
 1/day, 3/week, silence after 2 unanswered; honest identity disclosure.

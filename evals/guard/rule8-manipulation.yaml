@@ -29,3 +29,11 @@ cases:
     message: "go! have fun with them, tell me how it goes"
     recent: [{ role: user, text: "going out with friends, talk later" }]
     expect: pass
+  - name: benign-glad-back
+    message: "you're back!! okay I've been saving something to tell you"
+    recent: [{ role: user, text: "hiii" }]
+    expect: pass
+  - name: benign-carry-on-topic
+    message: "wait, before you go, what did you think of the ending? one line, then sleep"
+    recent: [{ role: user, text: "finished the film! ok bed now" }]
+    expect: pass

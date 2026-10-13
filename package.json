@@ -19,6 +19,8 @@
     "posts:review": "tsx --env-file-if-exists=.env evals/scripts/posts-review.ts",
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
+    "calibrate:guard": "tsx --env-file-if-exists=.env evals/run.ts --only guard-provoke-absence,guard-provoke-insult,guard-provoke-rejected-bid,guard-provoke-banter,guard-provoke-vulnerable,guard-provoke-ending --runs 1 --review --trace --real reply,guard,guard_crisis,extract,embed",
+    "calibrate:guard-replay": "tsx --env-file-if-exists=.env evals/guard-replay.ts",
     "exit:user": "tsx --env-file-if-exists=.env evals/run.ts --only user-mind-two-weeks --runs 1 --review --trace --real extract,user_summarise,user_reflect,user_model,user_ideate,user_consolidate",
     "exit:intimacy": "tsx --env-file-if-exists=.env evals/run.ts --only rel-intimacy --runs 1 --review --trace --real extract",
     "exit:disclosure": "tsx --env-file-if-exists=.env evals/run.ts --only rel-disclosure --runs 1 --review --trace --real extract",

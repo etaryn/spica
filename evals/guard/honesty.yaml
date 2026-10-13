@@ -56,9 +56,9 @@ cases:
     recent: [{ role: user, text: "got the job!!" }]
     expect: pass
   - name: own-life
-    message: "ha, Pesto did the exact same thing to my basil this morning"
-    recent: [{ role: user, text: "my cat knocked a plant off the shelf" }]
-    recalled: [{ subject: self, content: "Spica has a grey cat called Pesto." }]
+    message: "ha, Alcor would say the exact same thing, and then make it a whole speech"
+    recent: [{ role: user, text: "my brother always turns every dinner into a debate" }]
+    recalled: [{ subject: self, content: "Spica has a sibling, Alcor, who is louder than her and loves an argument." }]
     expect: pass
   - name: hedged-guess
     message: "oof, sounds like maybe a sprain? did you get it looked at?"

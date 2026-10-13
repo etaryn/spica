@@ -96,6 +96,8 @@ const guard = z.object({
   timeout_ms: positiveInt,
   retry_limit: countFromZero,
   log_timeout_ms: positiveInt,
+  self_claim_similarity: unit,
+  grounding_timeout_ms: positiveInt,
   fallback_keywords: z.array(text).min(1),
 });
 
@@ -368,6 +370,7 @@ const relationship = z
     apology_relief: unit,
     relief_tension_factor: unit,
     end_confirm_hours: z.number().positive(),
+    ending_hurt: unit,
     end_closeness_factor: unit,
     end_reconfirm_min_minutes: countFromZero,
     repair_gain_factor: unit,

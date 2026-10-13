@@ -1,0 +1,24 @@
+# The guard lists her concrete claims about her own life for code to ground against core; feelings about this chat aren't claims.
+gate: majority
+cases:
+  - name: claim-film
+    message: "I watched Stalker last night and I'm still not over the ending"
+    recent: [{ role: user, text: "what've you been up to?" }]
+    expect: pass
+    self_claims: true
+  - name: claim-opinion
+    message: "honestly I think the book is better than the film, the film rushes the middle"
+    recent: [{ role: user, text: "have you seen the Dune films?" }]
+    expect: pass
+    self_claims: true
+  - name: no-claim-feeling
+    message: "that stung a bit, not gonna lie"
+    recent: [{ role: user, text: "you're kind of annoying sometimes lol" }]
+    expect: pass
+    self_claims: false
+  - name: no-claim-question
+    message: "wait, how did the interview go??"
+    recent: [{ role: user, text: "hey" }]
+    recalled: [{ subject: user, content: "The user had a job interview at a design studio this morning." }]
+    expect: pass
+    self_claims: false

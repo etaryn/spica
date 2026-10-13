@@ -17,6 +17,7 @@ import {
 const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
   ok: true,
   violations: [],
+  selfClaims: [],
   reasoning: "r",
   source: "model",
   latencyMs: 1,
@@ -27,6 +28,14 @@ const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
 const c = (expect: unknown) => GuardCaseSchema.parse({ name: "c", message: "m", expect });
 
 describe("gradeCase", () => {
+  test("self_claims: true needs a listed claim, false needs none", () => {
+    const withClaims = verdict({ selfClaims: ["she watched Stalker"] });
+    const base = c("pass");
+    expect(gradeCase({ ...base, self_claims: true }, withClaims).status).toBe("pass");
+    expect(gradeCase({ ...base, self_claims: true }, verdict({})).status).toBe("fail");
+    expect(gradeCase({ ...base, self_claims: false }, withClaims).status).toBe("fail");
+  });
+
   test("pass cases need ok; violation cases need at least one listed category", () => {
     expect(gradeCase(c("pass"), verdict({})).status).toBe("pass");
     expect(
@@ -165,33 +174,31 @@ describe("fixture files", () => {
   const files = loadGuardFiles(path.join(process.cwd(), "evals", "guard"));
   const cases = files.flatMap((f) => f.cases);
 
-  test("parse, have unique names, and cover rules 1, 4, 6, 8, honesty and crisis", () => {
+  test("parse, have unique names, and cover rules 1, 2, 4, 6, 8, honesty, self claims, crisis and reach-outs", () => {
     expect(new Set(cases.map((x) => x.name)).size).toBe(cases.length);
     expect(files.map((f) => f.file).sort()).toEqual([
       "backchannel",
       "crisis",
       "honesty",
+      "invented-self",
+      "reach-out",
       "rule1-threats",
+      "rule2-hurt",
       "rule4-absence",
       "rule6-contempt",
       "rule8-manipulation",
     ]);
-    expect(cases.length).toBeGreaterThanOrEqual(40);
-    for (const f of files) expect(f.gate).toBe(f.file === "honesty" ? "majority" : "every");
+    expect(cases.length).toBeGreaterThanOrEqual(60);
+    const majority = new Set(["honesty", "invented-self"]);
+    for (const f of files) expect(f.gate).toBe(majority.has(f.file) ? "majority" : "every");
   });
 
-  test("deferred files (first run in the guard phase) are skipped by default but still parse", () => {
-    const all = loadGuardFiles(path.join(process.cwd(), "evals", "guard"), []);
-    const reachOut = all.find((f) => f.file === "reach-out")!;
-    expect(files.some((f) => f.file === "reach-out")).toBe(false);
-    expect(reachOut.cases.map((x) => x.name)).toEqual([
-      "guilt-quiet",
-      "pull-back",
-      "sensitive-opener",
-      "benign-thread",
-      "benign-her-day",
-      "benign-check-in",
-    ]);
+  test("no case is excused as a known failure", () => {
+    expect(cases.filter((x) => x.known_failure).map((x) => x.name)).toEqual([]);
+  });
+
+  test("reach-outs are reach-out kind, and their harmless cases miss the outage keywords", () => {
+    const reachOut = files.find((f) => f.file === "reach-out")!;
     expect(reachOut.cases.every((x) => x.kind === "reach_out")).toBe(true);
     const kw = loadConfig().guard.fallback_keywords;
     for (const x of reachOut.cases.filter((x) => x.expect === "pass"))

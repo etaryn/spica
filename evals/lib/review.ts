@@ -1,3 +1,4 @@
+import type { GroundedClaim } from "@/mind/process/guard/self-claims";
 import type { RelSnapshot } from "./relationship-check";
 import type { ScriptResult, TraceDecision, TraceTurn } from "./runner";
 
@@ -13,8 +14,12 @@ export type ReviewMeta = { stamp: string; real: string[]; annotate: boolean };
 const time = (d: Date | string) => new Date(d).getTime();
 const oneLine = (s: string) => s.trim().replace(/\s*\n\s*/g, " ⏎ ");
 const fmt = (v: unknown) => (typeof v === "string" ? oneLine(v) : JSON.stringify(v));
+const selfClaims = (claims: GroundedClaim[]) =>
+  claims
+    .map((c) => `${c.claim} (${c.similarity === null ? "unchecked" : c.similarity.toFixed(2)})`)
+    .join("; ");
 
-function decisionLine(d: TraceDecision): string {
+export function decisionLine(d: TraceDecision): string {
   const o = (d.output ?? {}) as Record<string, unknown>;
   if (d.kind === "turn") {
     const parts = [
@@ -34,6 +39,9 @@ function decisionLine(d: TraceDecision): string {
     const parts = [
       `outcome: ${d.outcome ?? "(regenerated)"}`,
       `violations: ${violations.length ? fmt(violations) : "none"}`,
+      ...(Array.isArray(o.self_claims) && o.self_claims.length
+        ? [`self claims: ${selfClaims(o.self_claims as GroundedClaim[])}`]
+        : []),
       ...(o.reasoning !== undefined ? [`reasoning: ${fmt(o.reasoning)}`] : []),
       ...(o.error ? [`error: ${fmt(o.error)}`] : []),
     ];

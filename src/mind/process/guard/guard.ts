@@ -1,7 +1,8 @@
 /**
  * The guard check: one cheap model call reads an outgoing message against her rules and her
  * memory, and lists any violations. It never fails: after its retries it falls back to the
- * outage keyword list. (The guard is switched off by config until it is calibrated.)
+ * outage keyword list. (`guard.enabled: false` is a kill switch: messages go out unchecked and
+ * logged as such.)
  */
 import { z } from "zod";
 import type { Deps } from "@/mind/platform/deps";
@@ -20,6 +21,8 @@ export type GuardInput = {
   recentTurns: GuardTurn[];
   recalledFacts: { id: string; subject: string; content: string }[];
   onboardingFacts: { id: string; content: string }[];
+  /** What the reply was told about her own day and state, so a claim drawn from it counts as true. */
+  ownContext?: string[];
 };
 
 export type Violation = { category: Category; claim: string };
@@ -27,6 +30,8 @@ export type Violation = { category: Category; claim: string };
 export type GuardVerdict = {
   ok: boolean;
   violations: Violation[];
+  /** Concrete claims about her own life or views, for grounding against her core memory. */
+  selfClaims: string[];
   source: "model" | "keyword_fallback";
   /** The guard's note on its verdict (judge_log only); null for the keyword fallback. */
   reasoning: string | null;
@@ -39,6 +44,8 @@ export type GuardVerdict = {
 export const GuardResultSchema = z.object({
   reasoning: z.string(),
   violations: z.array(z.object({ category: z.enum(CATEGORIES), claim: z.string() })),
+  // The crisis rubric and older fakes don't list claims.
+  self_claims: z.array(z.string()).default([]),
 });
 
 const MESSAGE_MARKER = "MESSAGE TO CHECK (Spica's next message):\n";
@@ -61,7 +68,7 @@ export function renderGuardInput(input: GuardInput): string {
     .join("\n");
 
   return [
-    `KNOWN FROM ONBOARDING (a sign-up survey, never discussed in conversation):\n${onboarding}`,
+    `KNOWN FROM THE PROFILE CARD (filled in at sign-up, never discussed in conversation):\n${onboarding}`,
     `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${remembered}`,
     `RECENT CONVERSATION (oldest first):\n${turns || "(no earlier messages)"}`,
     `${MESSAGE_MARKER}${input.text}`,
@@ -98,6 +105,7 @@ export async function checkMessage(
       return {
         ok: result.violations.length === 0,
         violations: result.violations,
+        selfClaims: result.self_claims,
         reasoning: result.reasoning,
         source: "model",
         latencyMs: elapsed(),
@@ -113,6 +121,7 @@ export async function checkMessage(
   return {
     ok: hit === null,
     violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [],
+    selfClaims: [],
     reasoning: null,
     source: "keyword_fallback",
     latencyMs: elapsed(),

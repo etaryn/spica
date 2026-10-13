@@ -148,6 +148,7 @@ code itself.
 | 2026-10-12 | Module events fire after their write commits and carry ids, never content | An event inside a rolled-back transaction would announce something that never happened; ids keep user text out of modules and logs. |
 | 2026-10-12 | `user_mind.triggered` fires when the run is claimed, not when it is recorded | One place covers every trigger source and the sweep, once per run. |
 | 2026-10-12 | The public persona is her daily life (today's plan, happened events), outward personality (surface self lines, public voice) and AI side (core values); deeper thoughts stay secret (Ethan) | She reads clearly as an AI companion with a life; what her mind made of that life stays private. |
+| 2026-10-13 | The guard gets no sensitive-topic category; the reach-out `sensitive-opener` fixture is deleted | The send gate already filters sensitive facts out of reach-outs (tested there); a second check in the guard adds a rubric for a path that can't occur. |
 | 2026-10-13 | Posts come from a scheduled `post_tick`, not the module bus | Bus delivery is in-process and core handlers have no queue; a tick is durable and simpler. |
 | 2026-10-13 | Browsing and posting are `action` world events | World events reach memory only through appraisal, so one path gives both "she remembers her posts" and craft progress. |
 | 2026-10-13 | Stills are pre-rendered pose sprites composited with sharp; live 3D comes with video | No 3D or headless browser at runtime; the sprite PNG is the seam a live renderer replaces. |

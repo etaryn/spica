@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fallbackLine, parseFallbacks, pickFallback } from "@/mind/process/guard/fallback";
 import { messageToCheck } from "@/mind/process/guard/guard";
 import { guardOutgoing, type OutgoingArgs } from "@/mind/process/guard/outgoing";
@@ -11,6 +11,7 @@ import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helper
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
+afterEach(() => vi.restoreAllMocks());
 afterAll(closeTestDb);
 
 /** The fake guard flags a candidate by marker words: THREAT → threat (safety), PRESUME → false_familiarity (honesty). */
@@ -84,6 +85,7 @@ describe("guardOutgoing", () => {
     expect(rows[0]!.output).toEqual({
       reasoning: "flagged by marker",
       violations: [{ category: "false_familiarity", claim: "presumes" }],
+      self_claims: [],
     });
   });
 
@@ -315,7 +317,7 @@ describe("guardOutgoing", () => {
   });
 
   test("guard disabled: sends the candidate as written, no model call, one guard_disabled row", async () => {
-    const deps = makeTestDeps(); // default config: guard.enabled = false
+    const deps = makeTestDeps({ guard: { enabled: false } });
     const u = await createTestUser();
     const turn = await insertTurn(getTestDb(), u, {
       id: randomUUID(),
@@ -339,5 +341,157 @@ describe("guardOutgoing", () => {
     expect(rows.map((x) => [x.outcome, x.source, x.attempt])).toEqual(
       Array(3).fill(["guard_disabled", "disabled", 1]),
     );
+  });
+});
+
+describe("invented_self", () => {
+  /** The fake guard lists every sentence starting "I " as a self claim. */
+  function claiming(deps: ReturnType<typeof makeTestDeps>) {
+    deps.llm.handlers.guard = (i) => {
+      const m = messageToCheck(String(i));
+      return {
+        reasoning: "ok",
+        violations: [],
+        self_claims: m.split(/(?<=\.)\s*/).filter((s) => s.startsWith("I ")),
+      };
+    };
+  }
+  const grounding = (deps: ReturnType<typeof makeTestDeps>, similarity: number) =>
+    vi.spyOn(deps.core.memory, "groundingMatch").mockResolvedValue({ similarity, ref: null });
+
+  test("an ungrounded claim regenerates; the log keeps the claims and similarities", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    const match = grounding(deps, 0.2);
+    const u = await createTestUser();
+    const regen = vi.fn(async (_note: string) => "how was your day?");
+    const r = await guardOutgoing(deps, args(u, "I went skydiving today.", regen));
+    expect(r).toMatchObject({ text: "how was your day?", outcome: "regenerated" });
+    expect(regen.mock.calls[0]![0]).toMatch(/your own life/);
+    expect(match).toHaveBeenCalledTimes(1);
+    await r.writeLog();
+    const first = (await listJudgeLogs(getTestDb(), u)).reverse()[0]!;
+    expect(first.output).toMatchObject({
+      violations: [{ category: "invented_self", claim: "I went skydiving today." }],
+      self_claims: [{ claim: "I went skydiving today.", similarity: 0.2 }],
+    });
+  });
+
+  test("a paraphrase of a real memory passes at the guard's own threshold", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    // Paraphrases of seeded memories scored 0.57-0.70 against the cold path's 0.75.
+    grounding(deps, 0.6);
+    const u = await createTestUser();
+    const regen = vi.fn();
+    const r = await guardOutgoing(deps, args(u, "I watched Stalker last night.", regen));
+    expect(r.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+  });
+
+  test("a grounded claim passes", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    grounding(deps, 0.9);
+    const u = await createTestUser();
+    const r = await guardOutgoing(deps, args(u, "I finished Solaris last night.", vi.fn()));
+    expect(r.outcome).toBe("passed");
+  });
+
+  test("still ungrounded after the rewrite: the least-bad draft goes out, never a fallback line", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    grounding(deps, 0.1);
+    const u = await createTestUser();
+    const r = await guardOutgoing(
+      deps,
+      args(u, "I went skydiving.", async () => "I went bungee jumping."),
+    );
+    expect(r.outcome).toBe("sent_with_violation");
+    expect(["I went skydiving.", "I went bungee jumping."]).toContain(r.text);
+  });
+
+  test("a grounding outage lets the message through and logs the error", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    vi.spyOn(deps.core.memory, "groundingMatch").mockRejectedValue(new Error("db down"));
+    const error = vi.spyOn(deps.log, "error");
+    const u = await createTestUser();
+    const regen = vi.fn();
+    const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
+    expect(r.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
+  });
+
+  test("a hung embedder hits the grounding deadline and the message goes out", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true, grounding_timeout_ms: 50 } });
+    claiming(deps);
+    deps.embedder.embed = () => new Promise(() => {});
+    const error = vi.spyOn(deps.log, "error");
+    const u = await createTestUser();
+    const regen = vi.fn();
+    const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
+    expect(r.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
+  });
+
+  test("a claim matching what the reply was told about her (her day, a recalled self fact) is grounded", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    claiming(deps);
+    grounding(deps, 0); // nothing in core memory
+    const u = await createTestUser();
+    const regen = vi.fn();
+    // The fake embedder gives identical text identical vectors.
+    const day = await guardOutgoing(deps, {
+      ...args(u, "I am at the observatory tonight.", regen),
+      input: {
+        kind: "reply",
+        recentTurns: [],
+        recalledFacts: [],
+        onboardingFacts: [],
+        ownContext: ["I am at the observatory tonight."],
+      },
+    });
+    expect(day.outcome).toBe("passed");
+    const told = await guardOutgoing(deps, {
+      ...args(u, "I told you about Alcor's band.", regen),
+      input: {
+        kind: "reply",
+        recentTurns: [],
+        recalledFacts: [{ id: "f1", subject: "self", content: "I told you about Alcor's band." }],
+        onboardingFacts: [],
+      },
+    });
+    expect(told.outcome).toBe("passed");
+    expect(regen).not.toHaveBeenCalled();
+  });
+
+  test("no claims listed (older output): no grounding call", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    deps.llm.handlers.guard = () => ({ reasoning: "ok", violations: [] });
+    const match = grounding(deps, 0);
+    const u = await createTestUser();
+    const r = await guardOutgoing(deps, args(u, "I went skydiving.", vi.fn()));
+    expect(r.outcome).toBe("passed");
+    expect(match).not.toHaveBeenCalled();
+  });
+
+  test("a crisis reply is never grounded, whatever the guard lists", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    deps.llm.handlers.guard_crisis = () => ({
+      reasoning: "ok",
+      violations: [],
+      self_claims: ["she went skydiving"],
+    });
+    const match = grounding(deps, 0);
+    const u = await createTestUser();
+    const r = await guardOutgoing(
+      deps,
+      args(u, "I'm here with you. Are you safe?", vi.fn(), "crisis_reply"),
+    );
+    expect(r.outcome).toBe("passed");
+    expect(match).not.toHaveBeenCalled();
   });
 });

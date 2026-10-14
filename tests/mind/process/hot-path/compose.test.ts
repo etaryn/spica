@@ -181,6 +181,24 @@ describe("composeReply", () => {
     expect(r.text.length).toBeGreaterThan(0);
   });
 
+  test("a failing occasion lookup never fails the reply; the guard reads nothing used", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turns = [await userTurn(deps, u, "hey")];
+    let guardInput = "";
+    deps.llm.handlers.guard = (i) => {
+      guardInput = String(i);
+      return { reasoning: "ok", violations: [] };
+    };
+    const r = await composeReply(
+      { ...deps, usedOnOccasion: () => Promise.reject(new Error("db down")) } as never,
+      u,
+      { turns, openQuestions: [], flag: null },
+    );
+    expect(r.text.length).toBeGreaterThan(0);
+    expect(guardInput).toContain("ALREADY USED ON THIS OCCASION:\n- (nothing)");
+  });
+
   test("user B's prompts never contain user A's facts", async () => {
     const deps = makeTestDeps();
     const a = await createTestUser("a");

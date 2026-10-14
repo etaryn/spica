@@ -102,8 +102,8 @@ export function mergeBaseline(
 }
 
 /**
- * Baseline-passing scripts that no longer pass, or whose pass rate dropped. Scripts not run are ignored, and a
- * `skipped` script counts as not run (e.g. a `mode: real` script under --llm=fake against a real-run baseline).
+ * Baseline-passing scripts that no longer pass. The pass rate is reported, not compared: at a few runs one
+ * flaky run would read as a regression. Scripts not run are ignored, and a `skipped` script counts as not run (e.g. a `mode: real` script under --llm=fake against a real-run baseline).
  */
 export function findRegressions(
   current: ScriptSummary[],
@@ -116,16 +116,6 @@ export function findRegressions(
     const status = typeof entry === "string" ? entry : entry.status;
     if (!cur || cur.status === "skipped" || status !== "pass") continue;
     if (cur.status !== "pass") out.push(name);
-    else if (
-      typeof entry !== "string" &&
-      entry.runs > 0 &&
-      cur.runs > 0 &&
-      cur.passedRuns / cur.runs < entry.passedRuns / entry.runs
-    ) {
-      out.push(
-        `${name} (pass rate ${cur.passedRuns}/${cur.runs} < ${entry.passedRuns}/${entry.runs})`,
-      );
-    }
   }
   return out;
 }

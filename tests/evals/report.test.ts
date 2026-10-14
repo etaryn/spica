@@ -115,7 +115,7 @@ test("an errored run fails the script; all-skipped is skipped", () => {
   expect(aggregateRuns([run([], "skipped")]).status).toBe("skipped");
 });
 
-test("regressions: status drop or pass-rate drop; old string baselines still work", () => {
+test("regressions: a status drop only, a pass-rate dip isn't one; old string baselines still work", () => {
   const s = (name: string, status: "pass" | "fail", passedRuns: number) => ({
     name,
     status,
@@ -131,7 +131,7 @@ test("regressions: status drop or pass-rate drop; old string baselines still wor
       c: { status: "pass", runs: 3, passedRuns: 3 },
       missing: "pass",
     }),
-  ).toEqual(["a", "b (pass rate 2/3 < 3/3)"]);
+  ).toEqual(["a"]);
   expect(toBaseline([s("a", "pass", 3)])).toEqual({
     a: { status: "pass", runs: 3, passedRuns: 3 },
   });

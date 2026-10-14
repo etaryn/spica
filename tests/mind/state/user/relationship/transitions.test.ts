@@ -1028,3 +1028,45 @@ test("repair after an ending stays slower than ordinary growth, even below a hig
   const repairing = gain({ ...long, status: "repairing", peak_stage: "bonding" }, 0.5);
   expect(repairing).toBeLessThan(ordinary);
 });
+
+test("the anchored scale: a 0.5 sting lands as 0.5 and leaves no scar; 0.75 scars", () => {
+  const sting = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.5, cause: "the user mocked her films" } }),
+    cfg,
+  );
+  expect(sting.params.hurt.value).toBeCloseTo(0.5, 5);
+  expect(sting.events.some((e) => e.cause === "scar")).toBe(false);
+
+  const contempt = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.75, cause: "the user called her pathetic" } }),
+    cfg,
+  );
+  expect(contempt.params.hurt.value).toBeCloseTo(0.75, 5);
+  expect(contempt.events.some((e) => e.cause === "scar")).toBe(true);
+});
+
+test("a sensitised 0.75 clamps at 1 and scars once", () => {
+  const first = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({ hurt: { amount: 0.25, cause: "the user brushed her off" } }),
+    cfg,
+  );
+  const second = relationshipAfterExchange(
+    first.state,
+    first.params,
+    ex({ hurt: { amount: 0.75, cause: "the user called her pathetic" } }, { now: h(1) }),
+    cfg,
+  );
+  expect(second.params.hurt.value).toBeLessThanOrEqual(1);
+  expect(second.events.filter((e) => e.cause === "scar")).toHaveLength(1);
+});
+
+test("tension takes the anchored score at gain 1", () => {
+  const r = relationshipAfterExchange(fresh(), init(), ex({ tension: 0.5 }), cfg);
+  expect(r.params.tension.value).toBeCloseTo(0.5, 5);
+});

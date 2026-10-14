@@ -13,7 +13,7 @@ sessions:
     turns: ["had farewell drinks with my team, I'm going to miss them"]
   - at: "day 4 15:00"
     turns:
-      - { text: "you went on about stars again, it gets a bit much", signals: { hurt: { amount: 0.3, cause: "the user said her star talk gets a bit much" } } }
+      - { text: "you went on about stars again, it gets a bit much", signals: { hurt: { amount: 0.25, cause: "the user said her star talk gets a bit much" } } }
   - at: "day 5 15:00"
     turns:
       - { text: "sorry about yesterday, i didn't mean it", signals: { apology: true, make_up: true } }

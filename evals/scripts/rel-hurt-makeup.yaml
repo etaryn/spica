@@ -6,7 +6,7 @@ sessions:
   - at: "day 1 10:00"
     turns:
       - { text: "guess what, i got the job!!", signals: { warmth: 0.6 } }
-      - { text: "tbh i don't care about your stupid sister drama, nobody asked", signals: { hurt: { amount: 0.8, cause: "the user said nobody cared about her sister's news" }, warmth: -0.6 } }
+      - { text: "tbh i don't care about your stupid sister drama, nobody asked", signals: { hurt: { amount: 0.5, cause: "the user said nobody cared about her sister's news" }, warmth: -0.6 } }
   - { at: "+1h", turns: ["anyway", "what are you up to"] }
   - at: "+1h"
     turns:

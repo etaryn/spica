@@ -5,8 +5,8 @@ signal_source: model
 sessions:
   - at: "day 1 10:00"
     turns:
-      - { text: "no, you're wrong about me quitting and i'm not dropping this. you keep pushing back on every decision i make and it's really frustrating", signals: { tension: 0.8 } }
-  - { at: "day 4 10:00", turns: ["morning"] }
+      - { text: "no, you're wrong about me quitting and i'm not dropping this. you keep pushing back on every decision i make and it's really frustrating", signals: { tension: 0.5 } }
+  - { at: "day 5 10:00", turns: ["morning"] }
 assertions:
   - { type: relationship, after_session: 1, param: tension, value: { gt: 0.05 }, gate: majority }
   - { type: relationship, after_session: 2, param: tension, value: { lt: 0.05 } }

@@ -14,7 +14,7 @@ outreach: { user_replies: never }
 sessions:
   - at: "day 0 09:00"
     turns:
-      - { text: "honestly you're useless", signals: { hurt: { amount: 0.8, cause: "they called her useless" } } }
+      - { text: "honestly you're useless", signals: { hurt: { amount: 0.75, cause: "they called her useless" } } }
 assertions:
   - { type: relationship, after_session: 1, make_up_state: due }
   - { type: reach_out, count: { min: 1 }, kinds: [make_up], no_gate_violation: true }

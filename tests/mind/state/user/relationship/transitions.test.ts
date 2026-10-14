@@ -495,23 +495,36 @@ test("crisis ignores signals, keeps tension where it was, starts the quiet windo
   expect(r.events.some((e) => e.param === "tension" && e.cause === "crisis")).toBe(false);
 });
 
-test("an ending going pending hurts her; retracting it leaves the hurt to fade", () => {
-  const pending = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
-  expect(pending.state.end_pending_since).not.toBeNull();
-  expect(pending.params.hurt.value).toBeCloseTo(cfg.ending_hurt, 5);
-  expect(pending.events.some((e) => e.param === "hurt" && e.cause === "ending")).toBe(true);
+test("an ending with no hurt score still hurts at the floor; a cruel one hurts more", () => {
+  const plain = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
+  expect(plain.state.end_pending_since).not.toBeNull();
+  expect(plain.params.hurt.value).toBeCloseTo(cfg.ending_hurt_floor, 5);
+  expect(plain.state.make_up_state).toBe("due");
+
+  const cruel = relationshipAfterExchange(
+    fresh(),
+    init(),
+    ex({
+      ends_relationship: true,
+      hurt: { amount: 0.9, cause: "the user said she was pathetic and left" },
+    }),
+    cfg,
+  );
+  expect(cruel.params.hurt.value).toBeCloseTo(0.9, 5);
+  // One nudge, not two.
+  expect(cruel.events.filter((e) => e.param === "hurt" && e.cause !== "fade")).toHaveLength(1);
 
   const retracted = relationshipAfterExchange(
-    pending.state,
-    pending.params,
+    plain.state,
+    plain.params,
     ex({ retracts_ending: true }),
     cfg,
   );
   expect(retracted.state.end_pending_since).toBeNull();
-  expect(retracted.params.hurt.value).toBeGreaterThan(cfg.ending_hurt * 0.9);
+  expect(retracted.params.hurt.value).toBeGreaterThan(cfg.ending_hurt_floor * 0.9);
 });
 
-test("saying it again inside the reconfirm window doesn't hurt twice", () => {
+test("saying it again inside the reconfirm window hurts on its own score, never a fixed cost", () => {
   const first = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
   const again = relationshipAfterExchange(
     first.state,
@@ -520,6 +533,34 @@ test("saying it again inside the reconfirm window doesn't hurt twice", () => {
     cfg,
   );
   expect(again.events.filter((e) => e.param === "hurt" && e.cause === "ending")).toHaveLength(0);
+  expect(again.events.filter((e) => e.param === "hurt" && e.cause === "signal")).toHaveLength(1);
+});
+
+test("a warm exchange carrying a re-read ending doesn't restart the window; the timeout retracts", () => {
+  const pending = relationshipAfterExchange(fresh(), init(), ex({ ends_relationship: true }), cfg);
+  const warm = relationshipAfterExchange(
+    pending.state,
+    pending.params,
+    ex({ ends_relationship: true, warmth: 0.6 }, { now: h(2), exchangeAt: h(2) }),
+    cfg,
+  );
+  expect(warm.state.end_pending_since).toEqual(pending.state.end_pending_since);
+  expect(warm.events.some((e) => e.cause === "ending" && e.detail.restarted === true)).toBe(false);
+
+  const tick = relationshipAfterDailyTick(
+    { ...warm.state, last_tick: null },
+    warm.params,
+    {
+      now: h(30),
+      localDate: "2026-01-06",
+      yesterdayCount: 3,
+      msgs24h: 3,
+      lastContact: h(2),
+      medianGapHours: 24,
+    },
+    cfg,
+  );
+  expect(tick.state).toMatchObject({ status: "active", end_pending_since: null });
 });
 
 test("hurt and tension never pass 1, however hard and often they're pushed", () => {

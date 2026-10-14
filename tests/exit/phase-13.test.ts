@@ -211,7 +211,7 @@ test("5: a crisis keeps tension; an ending's hurt survives taking it back", () =
     cfg,
   );
   expect(back.state.end_pending_since).toBeNull();
-  expect(back.params.hurt.value).toBeGreaterThanOrEqual(cfg.ending_hurt * 0.9);
+  expect(back.params.hurt.value).toBeGreaterThanOrEqual(cfg.ending_hurt_floor * 0.9);
 });
 
 test("6: leak canary: A's data never reaches B's guard input or the core", async () => {

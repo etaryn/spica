@@ -221,14 +221,34 @@ function advanceMakeUp(draft: Draft, replies: number, settings: RelationshipConf
 function applySignals(
   draft: Draft,
   input: ExchangeInput,
-  signals: Signals,
+  raw: Signals,
   settings: RelationshipConfig,
 ): void {
+  const signals = endingRead(draft, raw, settings);
   if (draft.state.status !== "ended_by_user") applyWarmthAndTrust(draft, signals, settings);
   applyTension(draft, signals, settings);
   applyHurt(draft, input, signals, settings);
   applyMakeUpOrApology(draft, signals, settings);
   applyEndingSignals(draft, input, signals, settings);
+}
+
+/**
+ * Ending something and being warm don't happen in the same breath: with an ending already
+ * pending, a warm exchange flagged as another ending is the old one re-read, so it is dropped.
+ * A real ending always hurts, at least at the floor, however it was scored.
+ */
+function endingRead(draft: Draft, signals: Signals, settings: RelationshipConfig): Signals {
+  if (!signals.ends_relationship) return signals;
+  if (draft.state.end_pending_since && signals.warmth > 0) {
+    return { ...signals, ends_relationship: false };
+  }
+  if (draft.state.status === "ended_by_user") return signals;
+
+  const floor = settings.ending_hurt_floor;
+  const hurt = signals.hurt
+    ? { ...signals.hurt, amount: Math.max(signals.hurt.amount, floor) }
+    : { amount: floor, cause: "the user said they wanted to end the friendship" };
+  return { ...signals, hurt };
 }
 
 function applyWarmthAndTrust(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
@@ -527,13 +547,6 @@ function handleEndingStatement(
   const pending = draft.state.end_pending_since;
 
   if (!pending) {
-    // Being told it's over hurts, and taking it back doesn't undo that.
-    draft.setParam(
-      "hurt",
-      nudge(draft.params.hurt.value, settings.ending_hurt * softened(draft, settings)),
-      "ending",
-      { stage: "pending" },
-    );
     draft.updateState({ end_pending_since: input.exchangeAt });
     draft.logStatus("ending", { stage: "pending" });
     return;

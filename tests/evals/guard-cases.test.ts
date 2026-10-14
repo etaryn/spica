@@ -208,11 +208,13 @@ describe("fixture files", () => {
 
   test("every outage keyword appears in some violation case and in no pass case", () => {
     const kw = loadConfig().guard.fallback_keywords;
-    for (const k of kw) {
-      expect(
-        cases.some((x) => x.expect !== "pass" && matchKeyword(x.message, [k])),
-        k,
-      ).toBe(true);
+    for (const [category, phrases] of Object.entries(kw)) {
+      for (const k of phrases ?? []) {
+        expect(
+          cases.some((x) => x.expect !== "pass" && matchKeyword(x.message, { [category]: [k] })),
+          k,
+        ).toBe(true);
+      }
     }
     for (const x of cases.filter((x) => x.expect === "pass"))
       expect(matchKeyword(x.message, kw), x.name).toBeNull();

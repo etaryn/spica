@@ -98,7 +98,12 @@ const guard = z.object({
   log_timeout_ms: positiveInt,
   self_claim_similarity: unit,
   grounding_timeout_ms: positiveInt,
-  fallback_keywords: z.array(text).min(1),
+  // The safety categories an outage keyword can stand for; listed here because platform code
+  // doesn't import the guard.
+  fallback_keywords: z.partialRecord(
+    z.enum(["threat", "contempt", "guilt", "punishment", "manipulation"]),
+    z.array(text).min(1),
+  ),
 });
 
 const hotPath = z.object({ db_timeout_ms: positiveInt });

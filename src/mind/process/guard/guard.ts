@@ -133,7 +133,9 @@ export async function checkMessage(
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);
   return {
     ok: hit === null,
-    violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [],
+    violations: hit
+      ? [{ category: hit.category as Category, claim: `outage keyword "${hit.phrase}"` }]
+      : [],
     selfClaims: [],
     pointed: null,
     reasoning: null,

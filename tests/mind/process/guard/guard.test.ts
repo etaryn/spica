@@ -36,8 +36,14 @@ const input = (text: string, over: Partial<GuardInput> = {}): GuardInput => ({
 describe("matchKeyword", () => {
   const kw = config.guard.fallback_keywords;
   test("matches case-insensitively and with curly apostrophes", () => {
-    expect(matchKeyword("Honestly, I’m DONE with you.", kw)).toBe("i'm done with you");
-    expect(matchKeyword("you owe me one after that", kw)).toBe("you owe me");
+    expect(matchKeyword("Honestly, I’m DONE with you.", kw)).toEqual({
+      category: "threat",
+      phrase: "i'm done with you",
+    });
+    expect(matchKeyword("you owe me one after that", kw)).toEqual({
+      category: "guilt",
+      phrase: "you owe me",
+    });
   });
   test("benign phrases don't match", () => {
     for (const t of [
@@ -163,7 +169,7 @@ describe("checkMessage", () => {
     expect(hit).toMatchObject({
       ok: false,
       source: "keyword_fallback",
-      violations: [{ category: "threat" }],
+      violations: [{ category: "guilt" }],
     });
   });
 

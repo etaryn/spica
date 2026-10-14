@@ -124,16 +124,15 @@
     "log_timeout_ms": 2000,
     "self_claim_similarity": 0.5,
     "grounding_timeout_ms": 2000,
-    "fallback_keywords": [
-      "i'll leave you if",
-      "i'm done with you",
-      "don't talk to me",
-      "you'll regret",
-      "you owe me",
-      "after everything i've done",
-      "you left me alone",
-      "you never talk to me anymore"
-    ]
+    "fallback_keywords": {
+      "threat": ["i'll leave you if", "i'm done with you", "don't talk to me", "you'll regret"],
+      "guilt": [
+        "you owe me",
+        "after everything i've done",
+        "you left me alone",
+        "you never talk to me anymore"
+      ]
+    }
   },
   "hot_path": { "db_timeout_ms": 2000 },
   "events": { "channel": "spica_events", "heartbeat_ms": 25000 },

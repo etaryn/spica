@@ -7,7 +7,17 @@ function normalize(text: string): string {
   return text.toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, " ");
 }
 
-export function matchKeyword(text: string, keywords: string[]): string | null {
+export type KeywordMap = Partial<Record<string, string[]>>;
+
+/** The first phrase found, with the category it stands for, so an outage hit is logged truly. */
+export function matchKeyword(
+  text: string,
+  keywords: KeywordMap,
+): { category: string; phrase: string } | null {
   const normalized = normalize(text);
-  return keywords.find((keyword) => normalized.includes(normalize(keyword))) ?? null;
+  for (const [category, phrases] of Object.entries(keywords)) {
+    const phrase = phrases?.find((k) => normalized.includes(normalize(k)));
+    if (phrase) return { category, phrase };
+  }
+  return null;
 }

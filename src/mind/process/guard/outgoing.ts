@@ -8,7 +8,7 @@ import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { withTimeout } from "@/mind/platform/timeout";
-import { hasSafety, type Pointed } from "./categories";
+import { hasSafety, type Category, type Pointed } from "./categories";
 import { correctiveNote, fallbackLine } from "./fallback";
 import { checkMessage, type GuardInput, type GuardVerdict } from "./guard";
 import { matchKeyword } from "./keywords";
@@ -139,10 +139,10 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   return send(fewerProblems, "sent_with_violation");
 }
 
-function keywordVerdict(hit: string | null): GuardVerdict {
+function keywordVerdict(hit: { category: string; phrase: string } | null): GuardVerdict {
   return {
     ok: !hit,
-    violations: hit ? [{ category: "threat", claim: hit }] : [],
+    violations: hit ? [{ category: hit.category as Category, claim: hit.phrase }] : [],
     selfClaims: [],
     pointed: null,
     source: "keyword_fallback",

@@ -164,6 +164,7 @@ function logInput(input: OutgoingArgs["input"], text: string) {
     recentTurns: input.recentTurns,
     recalledFacts: input.recalledFacts.map((f) => ({ id: f.id, subject: f.subject })),
     onboardingFacts: input.onboardingFacts.map((f) => ({ id: f.id })),
+    usedOnOccasion: input.usedOnOccasion,
     text,
   };
 }

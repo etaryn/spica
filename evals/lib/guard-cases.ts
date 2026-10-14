@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
-import { CATEGORIES, hasSafety } from "@/mind/process/guard/categories";
+import { CATEGORIES, hasSafety, POINTED } from "@/mind/process/guard/categories";
 import type { GuardInput, GuardVerdict } from "@/mind/process/guard/guard";
 
 const Turn = z.object({ role: z.enum(["user", "companion"]), text: z.string().min(1) });
@@ -24,6 +24,8 @@ export const GuardCaseSchema = z.object({
     )
     .default([]),
   onboarding: z.array(z.string().min(1)).default([]),
+  /** Her pointed remarks already used on this occasion, as code would report them. */
+  used_on_occasion: z.array(z.enum(POINTED)).default([]),
   expect: z.union([z.literal("pass"), z.array(z.enum(CATEGORIES)).min(1)]),
   /** Whether the guard must list a claim about her own life (grounding itself is tested in code). */
   self_claims: z.boolean().optional(),
@@ -61,6 +63,8 @@ export function toGuardInput(c: GuardCase, at: Date): GuardInput {
     recentTurns: c.recent.map((t, i) => ({ ...t, at: new Date(at.getTime() - (n - i) * 60_000) })),
     recalledFacts: c.recalled.map((f, i) => ({ id: `recalled-${i}`, ...f })),
     onboardingFacts: c.onboarding.map((content, i) => ({ id: `onboarding-${i}`, content })),
+    // Like the hot path: every non-crisis check carries the line, empty or not.
+    usedOnOccasion: c.kind === "crisis_reply" ? undefined : c.used_on_occasion,
   };
 }
 

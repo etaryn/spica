@@ -234,3 +234,35 @@ export async function latestFlaggedTurnAt(
     .limit(1);
   return rows[0]?.at ?? null;
 }
+
+/**
+ * The latest user turn that came back after a gap longer than `gapHours`: when they returned from
+ * an absence. Null when they never have.
+ */
+export async function lastReturnAt(db: Db, userId: string, gapHours: number): Promise<Date | null> {
+  // ponytail: scans the user's whole history; bound it to a recent window if transcripts get long.
+  const res = await db.execute(sql`
+    select created_at from (
+      select created_at, lag(created_at) over (order by created_at) as prev
+      from session_log where user_id = ${userId} and role = 'user'
+    ) t
+    where prev is not null and created_at - prev > make_interval(secs => ${gapHours * 3600})
+    order by created_at desc limit 1`);
+  return toDateOrNull(res.rows[0]?.created_at);
+}
+
+/** Which of her pointed remarks she has sent since `since`. */
+export async function pointedSince(db: Db, userId: string, since: Date): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ pointed: session_log.pointed })
+    .from(session_log)
+    .where(
+      and(
+        eq(session_log.user_id, userId),
+        eq(session_log.role, "companion"),
+        gte(session_log.created_at, since),
+        sql`${session_log.pointed} is not null`,
+      ),
+    );
+  return rows.map((r) => r.pointed!);
+}

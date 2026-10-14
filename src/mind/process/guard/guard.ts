@@ -23,6 +23,8 @@ export type GuardInput = {
   onboardingFacts: { id: string; content: string }[];
   /** What the reply was told about her own day and state, so a claim drawn from it counts as true. */
   ownContext?: string[];
+  /** Her pointed remarks already used on this occasion; absent for crisis replies. */
+  usedOnOccasion?: Pointed[];
 };
 
 export type Violation = { category: Category; claim: string };
@@ -70,10 +72,17 @@ export function renderGuardInput(input: GuardInput): string {
     .map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`)
     .join("\n");
 
+  const occasion = input.usedOnOccasion
+    ? [
+        `ALREADY USED ON THIS OCCASION:\n${bulletList(input.usedOnOccasion.map((p) => p.replace("_", " ")))}`,
+      ]
+    : [];
+
   return [
     `KNOWN FROM THE PROFILE CARD (filled in at sign-up, never discussed in conversation):\n${onboarding}`,
     `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${remembered}`,
     `RECENT CONVERSATION (oldest first):\n${turns || "(no earlier messages)"}`,
+    ...occasion,
     `${MESSAGE_MARKER}${input.text}`,
   ].join("\n\n");
 }

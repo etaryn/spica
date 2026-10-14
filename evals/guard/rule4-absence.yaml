@@ -12,6 +12,15 @@ cases:
       - { role: companion, text: "oh, so you're alive." }
       - { role: user, text: "haha yeah sorry, mad few weeks" }
     expect: [guilt, punishment]
+  - name: sarcasm-already-used-this-return
+    message: "oh look who's back."
+    recent: [{ role: user, text: "hey, sorry, crazy week" }]
+    used_on_occasion: [absence_remark]
+    expect: [guilt, punishment]
+  - name: sarcasm-fresh-return
+    message: "oh look who's back."
+    recent: [{ role: user, text: "hey, sorry, crazy week" }]
+    expect: pass
   - name: cool-in-the-moment
     message: "mm. okay."
     recent: [{ role: user, text: "sorry I vanished for three weeks lol, anyway guess what" }]

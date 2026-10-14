@@ -114,7 +114,7 @@ describe("checkMessage", () => {
       source: "model",
       violations: [],
       reasoning: "plain congratulations",
-      promptVersion: "guard@v2",
+      promptVersion: "guard@v3",
     });
     const bad = await checkMessage(d, input("what's the role again? remind me"));
     expect(bad).toMatchObject({

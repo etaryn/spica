@@ -30,6 +30,7 @@ import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
+import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
 import { ideaCutoff } from "@/mind/process/user/ideate";
@@ -226,6 +227,10 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     [] as { id: string; content: string }[],
   );
   const relationshipLinePromise = loadRelationshipLine(deps, userId, input.anchor);
+  // What she has already said on this occasion; a crisis reply is checked without it.
+  const occasion = inCrisis
+    ? Promise.resolve(undefined)
+    : usedOnOccasion(deps, userId, input.reachOut ? "reach_out" : "reply");
   // A crisis reply carries no relationship friction, no mood colouring, and never mentions being
   // busy.
   const relationshipSummary = inCrisis
@@ -490,6 +495,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       ],
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
+      usedOnOccasion: await occasion,
     },
   });
 

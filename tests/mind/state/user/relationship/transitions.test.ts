@@ -1121,3 +1121,14 @@ test("tension takes the anchored score at gain 1", () => {
   const r = relationshipAfterExchange(fresh(), init(), ex({ tension: 0.5 }), cfg);
   expect(r.params.tension.value).toBeCloseTo(0.5, 5);
 });
+
+test("a scar is judged on the hurt itself, not on how much room was left", () => {
+  const residue = withParam(init(), "hurt", 0.004);
+  const r = relationshipAfterExchange(
+    fresh(),
+    residue,
+    ex({ hurt: { amount: 0.75, cause: "the user called her pathetic" } }),
+    cfg,
+  );
+  expect(r.events.some((e) => e.cause === "scar")).toBe(true);
+});

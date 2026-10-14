@@ -438,8 +438,9 @@ function applyHurt(
   });
   draft.updateState({ last_hurt_at: input.now });
 
-  // A scar is judged on the hurt itself: commitment softens the sting, not the wound.
-  if (nudge(before, amount) - before >= settings.scar_threshold) leaveScar(draft, settings);
+  // A scar is judged on the hurt itself, not on how much room was left: commitment softens the
+  // sting, not the wound, and an old hurt still fading doesn't shield a new one.
+  if (amount >= settings.scar_threshold) leaveScar(draft, settings);
 
   if (
     draft.state.status !== "ended_by_user" &&

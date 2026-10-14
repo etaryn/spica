@@ -58,6 +58,16 @@ export function decisionLine(d: TraceDecision): string {
   return `${d.kind} (${d.source}): ${fmt(d.output)}`;
 }
 
+/** The extractor's raw hurt and tension readings, so a review can check them against the scale. */
+export function signalsLine(
+  events: { cause: string; param: string | null; detail: Record<string, unknown> }[],
+): string {
+  const readings = events
+    .filter((e) => e.cause === "signal" && (e.param === "hurt" || e.param === "tension"))
+    .map((e) => `${e.param} ${String(e.detail.signal)}`);
+  return `Signals: ${readings.join(" · ") || "none"}`;
+}
+
 /** The relationship snapshot right after a session: state, params and event counts. No pass/fail. */
 function renderRelationship(snap: RelSnapshot): string[] {
   const counts = new Map<string, number>();
@@ -75,6 +85,7 @@ function renderRelationship(snap: RelSnapshot): string[] {
     ),
     "",
     `Events by cause: ${eventsLine}`,
+    signalsLine(snap.events),
   ];
 }
 

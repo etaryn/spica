@@ -425,3 +425,11 @@ export function loadScripts(dir: string): Script[] {
       }
     });
 }
+
+/** `--only`: comma-separated names; a trailing `*` matches a prefix (`signal-*`). */
+export function matchesOnly(name: string, only: string | undefined): boolean {
+  if (!only) return true;
+  return only
+    .split(",")
+    .some((p) => (p.endsWith("*") ? name.startsWith(p.slice(0, -1)) : name === p));
+}

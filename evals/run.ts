@@ -16,7 +16,7 @@ import { resolveProfile } from "./lib/profile";
 import { renderReview, type ReviewRun } from "./lib/review";
 import { RoutingLLM } from "./lib/routing-llm";
 import { runScript } from "./lib/runner";
-import { loadProfiles, loadScripts } from "./lib/script";
+import { loadProfiles, loadScripts, matchesOnly } from "./lib/script";
 import { UsageTally } from "./lib/usage";
 
 const { values: args } = parseArgs({
@@ -86,7 +86,7 @@ await runMigrations(db);
 // `--profile <name>` runs the suite with one onboarding profile (the "how much profile data" experiment);
 // scripts that opt out with `profile: none` stay cold.
 const scripts = loadScripts(path.join(root, "scripts"))
-  .filter((s) => !args.only || args.only.split(",").includes(s.name))
+  .filter((s) => matchesOnly(s.name, args.only))
   .map((s) => (args.profile && s.profile !== "none" ? { ...s, profile: args.profile } : s));
 if (scripts.length === 0)
   throw new Error(args.only ? `no script named ${args.only}` : "no eval scripts found");

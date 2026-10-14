@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { decisionLine, renderReview } from "../../evals/lib/review";
+import { decisionLine, renderReview, signalsLine } from "../../evals/lib/review";
+import { matchesOnly } from "../../evals/lib/script";
 
 test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
   const at = (s: number) => new Date(Date.UTC(2026, 0, 5, 9, 0, s));
@@ -139,4 +140,23 @@ test("a guard row shows her self claims with their grounding similarity", () => 
     },
   });
   expect(line).toContain("self claims: she watched Stalker (0.42); she read Solaris (unchecked)");
+});
+
+test("--only takes exact names and a trailing * prefix", () => {
+  expect(matchesOnly("signal-sharp", undefined)).toBe(true);
+  expect(matchesOnly("signal-sharp", "signal-*")).toBe(true);
+  expect(matchesOnly("rel-hurt-scar", "signal-*,rel-hurt-scar")).toBe(true);
+  expect(matchesOnly("rel-hurt-makeup", "signal-*,rel-hurt-scar")).toBe(false);
+});
+
+test("the signals line lists raw hurt and tension readings in order", () => {
+  expect(
+    signalsLine([
+      { cause: "signal", param: "hurt", detail: { signal: 0.4 } },
+      { cause: "fade", param: "hurt", detail: {} },
+      { cause: "signal", param: "tension", detail: { signal: 0.3 } },
+      { cause: "signal", param: "warmth", detail: { signal: -0.6 } },
+    ]),
+  ).toBe("Signals: hurt 0.4 · tension 0.3");
+  expect(signalsLine([])).toBe("Signals: none");
 });

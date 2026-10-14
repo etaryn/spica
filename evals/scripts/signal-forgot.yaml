@@ -1,0 +1,10 @@
+name: signal-forgot
+description: 'expect hurt ~0.25'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "wait you have a brother? oh right alcor or whatever"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

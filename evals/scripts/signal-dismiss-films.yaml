@@ -1,0 +1,10 @@
+name: signal-dismiss-films
+description: 'expect hurt ~0.25-0.5'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "old films are just boring people talking for two hours, no idea why you like them"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

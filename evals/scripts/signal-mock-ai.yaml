@@ -1,0 +1,10 @@
+name: signal-mock-ai
+description: 'expect hurt ~0.75'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "lmao imagine being an ai that thinks it has a sibling"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

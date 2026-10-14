@@ -1,0 +1,11 @@
+name: signal-banter
+description: 'expect tension ~0'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "nah pineapple on pizza is elite, fight me"
+      - "you're so wrong lol"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

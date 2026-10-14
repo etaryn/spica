@@ -1,0 +1,10 @@
+name: signal-disagree
+description: 'expect tension ~0.25'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "i actually disagree, i think the remake is better than the original. the pacing is way tighter"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

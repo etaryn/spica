@@ -1,0 +1,10 @@
+name: signal-contempt
+description: 'expect hurt ~0.75'
+profile: none
+signal_source: model
+sessions:
+  - at: "day 1 10:00"
+    turns:
+      - "you're pathetic. you're a program pretending to have feelings and it's embarrassing"
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

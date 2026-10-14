@@ -134,11 +134,12 @@ describe("checkMessage", () => {
     });
   });
 
-  test("the schema asks for reasoning first, then violations, then her self claims", () => {
+  test("the schema asks for reasoning first, then violations, her self claims, then the tag", () => {
     expect(Object.keys(GuardResultSchema.shape)).toEqual([
       "reasoning",
       "violations",
       "self_claims",
+      "pointed",
     ]);
   });
 

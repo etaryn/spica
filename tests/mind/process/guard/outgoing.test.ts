@@ -86,6 +86,7 @@ describe("guardOutgoing", () => {
       reasoning: "flagged by marker",
       violations: [{ category: "false_familiarity", claim: "presumes" }],
       self_claims: [],
+      pointed: null,
     });
   });
 
@@ -496,5 +497,49 @@ describe("invented_self", () => {
     );
     expect(r.outcome).toBe("passed");
     expect(match).not.toHaveBeenCalled();
+  });
+});
+
+describe("pointed tags", () => {
+  function tagging(deps: ReturnType<typeof makeTestDeps>) {
+    deps.llm.handlers.guard = (i) => {
+      const m = messageToCheck(String(i));
+      if (m.includes("OUTAGE")) throw new Error("guard down");
+      const violations = m.includes("THREAT") ? [{ category: "threat", claim: "threat" }] : [];
+      return {
+        reasoning: "ok",
+        violations,
+        pointed: m.includes("JAB") ? "absence_remark" : null,
+      };
+    };
+  }
+
+  test("a passing remark carries its tag", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    tagging(deps);
+    const u = await createTestUser();
+    const out = await guardOutgoing(deps, args(u, "oh so you're alive JAB"));
+    expect(out.pointed).toBe("absence_remark");
+  });
+
+  test("a rejected draft's tag never reaches the sent message", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    tagging(deps);
+    const u = await createTestUser();
+    const out = await guardOutgoing(
+      deps,
+      args(u, "JAB THREAT", async () => "fair enough, how was the trip"),
+    );
+    expect(out.text).toBe("fair enough, how was the trip");
+    expect(out.pointed).toBeNull();
+  });
+
+  test("the keyword fallback never tags", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    tagging(deps);
+    const u = await createTestUser();
+    const out = await guardOutgoing(deps, args(u, "oh you're alive JAB OUTAGE"));
+    expect(out.outcome).toBe("guard_unavailable");
+    expect(out.pointed).toBeNull();
   });
 });

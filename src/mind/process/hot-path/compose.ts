@@ -29,6 +29,7 @@ import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
+import type { Pointed } from "@/mind/process/guard/categories";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate } from "@/mind/process/outreach/types";
 import { ideaCutoff } from "@/mind/process/user/ideate";
@@ -77,6 +78,8 @@ export type Composed = {
   depth: DepthRecord;
   /** Her ideas shown in this reply: each gets one chance, so the cold path retires them. */
   offeredIdeas: string[];
+  /** The allowed negative this reply carries, stored so the guard counts it once per occasion. */
+  pointed: Pointed | null;
   writeGuardLog: () => Promise<void>;
 };
 
@@ -519,6 +522,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     openness: herOpenness,
     depth: { ...allowed, held_back: heldBack },
     offeredIdeas: shownIdeas.map((i) => i.id),
+    pointed: inCrisis ? null : guarded.pointed,
     writeGuardLog: guarded.writeLog,
   };
 }

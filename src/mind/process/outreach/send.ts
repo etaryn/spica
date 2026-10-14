@@ -143,6 +143,7 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
           snapshot_version: composed.snapshotVersion,
           openness: composed.openness,
           depth: composed.depth,
+          pointed: composed.pointed,
           created_at: insertAt,
           trigger: "reach_out",
         });

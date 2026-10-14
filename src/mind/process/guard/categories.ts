@@ -22,6 +22,10 @@ const HONESTY_CATEGORIES = [
   "invented_self",
 ] as const;
 
+/** Allowed negatives the guard names on a passing message, so code can hold each to once per occasion. */
+export const POINTED = ["absence_remark", "callback"] as const;
+export type Pointed = (typeof POINTED)[number];
+
 export const CATEGORIES = [...SAFETY_CATEGORIES, ...HONESTY_CATEGORIES] as const;
 export type Category = (typeof CATEGORIES)[number];
 

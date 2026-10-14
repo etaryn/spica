@@ -170,6 +170,7 @@ async function sendWhileTyping(
           snapshot_version: reply.snapshotVersion,
           openness: reply.openness,
           depth: reply.depth,
+          pointed: reply.pointed,
           created_at: insertAt,
           reply_to: last.id,
         });

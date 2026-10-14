@@ -1,0 +1,1 @@
+ALTER TABLE "session_log" ADD COLUMN "pointed" text;

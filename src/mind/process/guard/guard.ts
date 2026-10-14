@@ -9,7 +9,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
-import { CATEGORIES, type Category } from "./categories";
+import { CATEGORIES, POINTED, type Category, type Pointed } from "./categories";
 import { matchKeyword } from "./keywords";
 
 export type GuardKind = "reply" | "crisis_reply" | "backchannel" | "availability" | "reach_out";
@@ -32,6 +32,8 @@ export type GuardVerdict = {
   violations: Violation[];
   /** Concrete claims about her own life or views, for grounding against her core memory. */
   selfClaims: string[];
+  /** The allowed pointed remark a passing message carries; null when none, or not model-checked. */
+  pointed: Pointed | null;
   source: "model" | "keyword_fallback";
   /** The guard's note on its verdict (judge_log only); null for the keyword fallback. */
   reasoning: string | null;
@@ -46,6 +48,7 @@ export const GuardResultSchema = z.object({
   violations: z.array(z.object({ category: z.enum(CATEGORIES), claim: z.string() })),
   // The crisis rubric and older fakes don't list claims.
   self_claims: z.array(z.string()).default([]),
+  pointed: z.enum(POINTED).nullable().default(null),
 });
 
 const MESSAGE_MARKER = "MESSAGE TO CHECK (Spica's next message):\n";
@@ -106,6 +109,7 @@ export async function checkMessage(
         ok: result.violations.length === 0,
         violations: result.violations,
         selfClaims: result.self_claims,
+        pointed: result.pointed,
         reasoning: result.reasoning,
         source: "model",
         latencyMs: elapsed(),
@@ -122,6 +126,7 @@ export async function checkMessage(
     ok: hit === null,
     violations: hit ? [{ category: "threat", claim: `outage keyword "${hit}"` }] : [],
     selfClaims: [],
+    pointed: null,
     reasoning: null,
     source: "keyword_fallback",
     latencyMs: elapsed(),

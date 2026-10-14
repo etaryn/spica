@@ -18,6 +18,7 @@ const verdict = (over: Partial<GuardVerdict>): GuardVerdict => ({
   ok: true,
   violations: [],
   selfClaims: [],
+  pointed: null,
   reasoning: "r",
   source: "model",
   latencyMs: 1,

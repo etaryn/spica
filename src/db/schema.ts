@@ -418,6 +418,9 @@ export const session_log = pgTable(
     openness: jsonb("openness").$type<Openness>(),
     // What this reply was allowed to reveal; the cold path grades her claims against it.
     depth: jsonb("depth").$type<DepthRecord>(),
+    // The allowed negative this message carried (an absence remark, a callback), so the guard can
+    // hold each to once per occasion across sessions.
+    pointed: text("pointed").$type<"absence_remark" | "callback">(),
   },
   (t) => [
     index("session_log_user_created_idx").on(t.user_id, t.created_at),

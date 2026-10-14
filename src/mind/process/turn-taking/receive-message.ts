@@ -375,6 +375,7 @@ async function sendCrisisReply(
       snapshot_version: composed.snapshotVersion,
       openness: composed.openness,
       depth: composed.depth,
+      pointed: composed.pointed,
       created_at: clock.now(),
       reply_to: replyTo,
       safety_flag: flag,

@@ -8,7 +8,7 @@ import { insertJudgeLogs, type GuardOutcome, type NewJudgeLog } from "@/db/repos
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { withTimeout } from "@/mind/platform/timeout";
-import { hasSafety } from "./categories";
+import { hasSafety, type Pointed } from "./categories";
 import { correctiveNote, fallbackLine } from "./fallback";
 import { checkMessage, type GuardInput, type GuardVerdict } from "./guard";
 import { matchKeyword } from "./keywords";
@@ -25,7 +25,13 @@ export type OutgoingArgs = {
 };
 
 /** `writeLog` is deferred: the caller writes judge_log after the message is sent. */
-export type OutgoingResult = { text: string; outcome: GuardOutcome; writeLog: () => Promise<void> };
+export type OutgoingResult = {
+  text: string;
+  outcome: GuardOutcome;
+  /** The allowed pointed remark the sent message carries, stored so it counts once per occasion. */
+  pointed: Pointed | null;
+  writeLog: () => Promise<void>;
+};
 
 type Checked = { text: string; verdict: GuardVerdict; claims: GroundedClaim[] };
 type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log" | "embedder" | "core">;
@@ -33,7 +39,12 @@ type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log" | "embedde
 export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promise<OutgoingResult> {
   if (!deps.config.guard.enabled) {
     const text = args.first.trim();
-    return { text, outcome: "guard_disabled", writeLog: () => writeDisabledLog(deps, args, text) };
+    return {
+      text,
+      outcome: "guard_disabled",
+      pointed: null,
+      writeLog: () => writeDisabledLog(deps, args, text),
+    };
   }
 
   const checked: Checked[] = [];
@@ -57,6 +68,10 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   const send = (text: string, outcome: GuardOutcome): OutgoingResult => ({
     text,
     outcome,
+    // Only the sent candidate's own model verdict may tag it; a fallback line or an outage tags nothing.
+    pointed:
+      checked.findLast((c) => c.text === text && c.verdict.source === "model")?.verdict.pointed ??
+      null,
     writeLog: () => writeLog(deps, args, checked, outcome),
   });
   const fallback = () =>
@@ -129,6 +144,7 @@ function keywordVerdict(hit: string | null): GuardVerdict {
     ok: !hit,
     violations: hit ? [{ category: "threat", claim: hit }] : [],
     selfClaims: [],
+    pointed: null,
     source: "keyword_fallback",
     reasoning: null,
     latencyMs: 0,
@@ -171,6 +187,7 @@ async function writeLog(
             reasoning: candidate.verdict.reasoning,
             violations: candidate.verdict.violations,
             self_claims: candidate.claims,
+            pointed: candidate.verdict.pointed,
           }
         : { error: candidate.verdict.error, keyword_violations: candidate.verdict.violations },
     outcome: i === checked.length - 1 ? outcome : null,

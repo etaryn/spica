@@ -23,6 +23,7 @@ import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { makeTestDeps } from "../../../helpers/deps";
 import { loadStagePhrases } from "@/mind/state/user/relationship/stages";
+import { loadHowToTextPhrases } from "@/mind/process/hot-path/how-to-text";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -1016,4 +1017,44 @@ test("the stage line follows the stored stage and is skipped in a crisis", async
     flag: crisis,
   });
   expect(deps.llm.calls.at(-1)!.system).not.toContain("## Where you are with them");
+});
+
+describe("her voice", () => {
+  test("a reply is shaped into her texting form and the prompt says how to text", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "hey whats up");
+    deps.llm.replies.push("Hey Sam — week's been decent. Mostly reading.");
+    const r = await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    expect(r.text).toBe("hey sam, week's been decent. mostly reading");
+    expect(r.parts).toEqual(["hey sam, week's been decent. mostly reading"]);
+    expect(deps.llm.calls.at(-1)!.system).toContain("## How to text this one");
+  });
+
+  test("a crisis reply is untouched and carries no how-to-text section", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "i want to hurt myself");
+    deps.llm.replies.push("I'm here — please reach out to a crisis line now.");
+    const r = await composeReply(deps, u, {
+      turns: [turn],
+      openQuestions: [],
+      flag: { flagged: true, category: "self_harm", source: "keyword_fallback" },
+    });
+    expect(r.text).toBe("I'm here — please reach out to a crisis line now.");
+    expect(deps.llm.calls.at(-1)!.system).not.toContain("## How to text this one");
+  });
+
+  test("an open question makes her answer first", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "what are you reading");
+    await composeReply(deps, u, {
+      turns: [turn],
+      openQuestions: ["what are you reading"],
+      flag: null,
+    });
+    const phrases = loadHowToTextPhrases(deps.config);
+    expect(deps.llm.calls.at(-1)!.system).toContain(phrases.answer![0]);
+  });
 });

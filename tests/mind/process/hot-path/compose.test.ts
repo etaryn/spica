@@ -1045,6 +1045,17 @@ describe("her voice", () => {
     expect(deps.llm.calls.at(-1)!.system).not.toContain("## How to text this one");
   });
 
+  test("the reply prompt carries the texting and recall rules", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const turn = await userTurn(deps, u, "hey");
+    await composeReply(deps, u, { turns: [turn], openQuestions: [], flag: null });
+    const system = deps.llm.calls.at(-1)!.system;
+    expect(system).toContain("Bring up at most one memory in a reply.");
+    expect(system).toContain('"How to text this one"');
+    expect(system).toContain("Never comment on how they're texting");
+  });
+
   test("an open question makes her answer first", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();

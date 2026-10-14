@@ -7,7 +7,7 @@ test("loads persona, reply rules, extraction, reconcile and crisis prompts", () 
   const c = loadConfig();
   expect(loadPrompt("persona", c.prompts.persona)).toMatch(/You are Spica/);
   const reply = loadPrompt("reply", c.prompts.reply);
-  expect(reply).toMatch(/at most one or two/i);
+  expect(reply).toMatch(/at most one memory/i);
   expect(reply).toMatch(/crisis|988|emergency/i);
   // The resources card appears only when the app detects risk, so the prompt must not promise it unconditionally.
   expect(reply).not.toMatch(/The app shows them crisis resources alongside your message/);
@@ -56,7 +56,7 @@ test("persona v6 is the configured persona", () => {
 
 test("the configured reply prompt tells her the feeling and day lines are her own state", () => {
   const c = loadConfig();
-  expect(c.prompts.reply).toBe("v16");
+  expect(c.prompts.reply).toBe("v17");
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/"Your day" are your own state/);
 });
 

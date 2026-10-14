@@ -340,3 +340,12 @@ test("her depth limit for writing first is her usual one: a stranger 1, a close 
   await seedStageFor(deps.db, close, 0.8);
   expect((await loadCandidateInputs(deps, close, now)).depthLimit).toBe(3);
 });
+
+test("no make-up reach-out while their ending is pending: she lets go, she doesn't chase", async () => {
+  const { deps, u } = await setup();
+  await deps.db
+    .update(relationship)
+    .set({ make_up_state: "due", last_hurt_at: ago(2), end_pending_since: ago(2) })
+    .where(eq(relationship.user_id, u));
+  expect((await loadCandidateInputs(deps, u, now)).makeUp.due).toBe(false);
+});

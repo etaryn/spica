@@ -91,7 +91,12 @@ export async function loadCandidateInputs(
       sensitive: thread.sensitive,
     })),
     makeUp: {
-      due: relationship?.status !== "ended_by_user" && relationship?.make_up_state === "due",
+      // While their "we're done" is pending she lets go: writing first to make up would be
+      // pressure to stay.
+      due:
+        relationship?.status !== "ended_by_user" &&
+        !relationship?.end_pending_since &&
+        relationship?.make_up_state === "due",
       hurt,
       causeFactId: relationship?.hurt_cause_fact ?? null,
       causeText: cause?.content ?? null,

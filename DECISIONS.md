@@ -162,7 +162,8 @@ code itself.
 | 2026-10-15 | `relationship.scar_threshold` 0.375 → 0.75 with gains at 1 | Keeps scars where they were on the raw scale: "aimed at who she is" and worse. |
 | 2026-10-15 | An absence remark's occasion is the latest return (a user turn after a gap past `absence_grace_factor` × their median gap); a reach-out's is the absence still going on | Same rule that already decides absence; a reach-out speaks into the silence, so their return opens a fresh occasion. |
 | 2026-10-15 | A callback's occasion is `relationship.last_hurt_at` | Every new hurt is a new slight; no extra state. |
-| 2026-10-15 | An ending with no hurt score gets the floor with the cause "the user said they wanted to end the friendship" | The make-up and summary need a cause; this is what happened. |
+| 2026-10-15 | An ending with no hurt score gets the floor; its cause text ("the user said they wanted to end the friendship") is never stored, so the make-up and summary see no cause | The cause fact comes from the extractor's own hurt; a floor-only ending has none to point to. |
+| 2026-10-15 | No make-up reach-out while an ending is pending | Every ending now makes a make-up due; writing first then would be pressure to stay. |
 | 2026-10-15 | The keyword categories are listed in the config schema, not imported from the guard | Platform code doesn't import process code. |
 | 2026-10-15 | Guard eval cases carry the occasion line on every non-crisis case (empty by default) | Mirrors the hot path, so a case reads like production. |
 | 2026-10-15 | Thresholds on the hurt and tension values re-anchored to the gain-1 scale: make-up at 0.5 (clear 0.2), differentiating at tension 0.5 (clear 0.25), circumscribing at 0.75 (clear 0.5) | They were sized for gains 0.5 and 0.3; left alone, one friendly disagreement or one real sting would start coming apart. |

@@ -8,8 +8,8 @@ import { wordCount } from "./texting-shape";
 
 export type ShapeLimits = { maxWords: number; formal: boolean };
 
-/** A dash between digits is a range ("3–5") and stays. */
-const DASH = /(?<!\d)\s*[—–]\s*(?!\d)/g;
+/** A dash between two numbers is a range ("3 – 5" reads "3–5"); any other dash is a pause. */
+const DASH = /(\d?)\s*([—–])\s*(\d?)/g;
 const SENTENCE_BREAK = /(?<=[.!?])\s+/;
 /** Capitalised words ("Hey", "I", "I'm", "Sam's"); all-caps words like "GPS" don't match. */
 const CAPITALISED = /\b[A-Z][a-z']*\b/g;
@@ -18,7 +18,9 @@ const CLOSING_STOP = /(?<!\.)\.$/;
 
 function undash(bubble: string): string {
   return bubble
-    .replace(DASH, ", ")
+    .replace(DASH, (_, a: string, dash: string, b: string) =>
+      a && b ? `${a}${dash}${b}` : `${a}, ${b}`,
+    )
     .replace(/,\s*([,.!?])/g, "$1")
     .replace(/^,\s*/, "")
     .replace(/,\s*$/, "");

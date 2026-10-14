@@ -26,7 +26,8 @@ export function howToText(
     input.shape.formal ? line("formal") : null,
     input.shape.emoji ? line("emoji") : null,
     input.mustAnswer ? line("answer") : null,
-    input.move ? line(`move ${input.move}`) : null,
+    // "Just react" would forbid the answer they asked for, so a question to answer drops it.
+    input.move && !(input.mustAnswer && input.move === "react") ? line(`move ${input.move}`) : null,
   ]
     .filter((l): l is string => !!l)
     .join("\n");

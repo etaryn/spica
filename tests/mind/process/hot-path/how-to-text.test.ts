@@ -35,6 +35,12 @@ test("a question to answer comes before the move; formal and emoji only when the
   expect(text).toContain(phrases.emoji![0]);
 });
 
+test("a question to answer drops the react move, which would forbid answering with her news", () => {
+  const text = howToText({ shape, move: "react", mustAnswer: true }, phrases);
+  expect(text).toContain(phrases.answer![0]);
+  expect(text).not.toContain(phrases["move react"]![0]);
+});
+
 test("no move: no move line (reach-outs)", () => {
   const text = howToText({ shape, move: null, mustAnswer: false }, phrases);
   for (const m of ["react", "share", "ask"]) expect(text).not.toContain(phrases[`move ${m}`]![0]);

@@ -30,6 +30,15 @@ test("acronyms, numbers, ranges, urls and ellipses survive", () => {
   expect(out.startsWith("i read")).toBe(true);
 });
 
+test("a dash between numbers stays a range; a dash beside one number becomes a clean comma", () => {
+  expect(shapeText("Takes 3 – 5 days.", casual, 4)).toBe("takes 3–5 days");
+  expect(shapeText("From 2010 — 2015 I lived there.", casual, 4)).toBe(
+    "from 2010—2015 i lived there",
+  );
+  expect(shapeText("I had 5 — no, 6 — cats.", casual, 4)).toBe("i had 5, no, 6, cats");
+  expect(shapeText("maybe 3–5 more", casual, 4)).toBe("maybe 3–5 more");
+});
+
 test("a long bubble splits at sentence ends into bubbles that fit", () => {
   const text =
     "I watched an old film last night. It was slow but I loved it. The ending got me. Have you seen anything good lately?";

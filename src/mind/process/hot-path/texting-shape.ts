@@ -40,7 +40,8 @@ export function textingShape(messages: string[], cfg: VoiceConfig, bandShift = 0
   const words = cfg.base_words_per_bubble + (theirs - cfg.base_words_per_bubble) * weight;
 
   const share = (n: number) => (recent.length ? (n / recent.length) * weight : 0);
-  const tidy = recent.filter((m) => /^\p{Lu}/u.test(m.trim()) || /[^.]\.$/.test(m.trim())).length;
+  // Only a closing full stop counts: phone keyboards capitalise the first letter for everyone.
+  const tidy = recent.filter((m) => /[^.]\.$/.test(m.trim())).length;
   const emoji = recent.reduce((n, m) => n + (m.match(EMOJI)?.length ?? 0), 0);
 
   return {

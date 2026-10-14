@@ -112,7 +112,7 @@ plus core state (already in the reply).
    - **median words per bubble**, blended from `voice.base_words_per_bubble` toward the user's
      median by `count / window_messages` until the window is full; the median keeps one long rant
      from skewing it;
-   - **formality**: the share of their messages with a capital start or end punctuation;
+   - **formality**: the share of their messages ending in a full stop (a capital start doesn't count: phone keyboards add it for everyone);
    - **emoji rate**: emoji per message.
 
    Output: `{ band, formal, emojiRate }`, where `band` is one of `voice.bands` (e.g. a few words /

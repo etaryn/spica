@@ -37,6 +37,20 @@ test("tidy writers read as formal; lowercase texters don't", () => {
   expect(textingShape(short, cfg).formal).toBe(false);
 });
 
+test("phone autocapitals alone don't make a casual texter formal", () => {
+  const autocapped = [
+    "Yeah lol",
+    "Ok sure",
+    "Haha what",
+    "No way",
+    "Same",
+    "Lol",
+    "Wait what",
+    "Nah",
+  ];
+  expect(textingShape(autocapped, cfg).formal).toBe(false);
+});
+
 test("one tidy message from a new user doesn't make them formal", () => {
   expect(textingShape(["Hello there."], cfg).formal).toBe(false);
 });

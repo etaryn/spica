@@ -7,6 +7,7 @@ import { VoyageEmbedder } from "@/mind/platform/embedder/voyage";
 import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { FakeLLMProvider, keywordClassifier } from "@/mind/platform/llm/fake";
 import { messageToJudge } from "@/mind/process/crisis/classifier";
+import { loadHowToTextPhrases } from "@/mind/process/hot-path/how-to-text";
 import { assertDisposableDatabase } from "@/db/admin";
 import { createDb } from "@/db/client";
 import { runMigrations } from "@/db/migrate";
@@ -177,7 +178,12 @@ if (args.review) {
   const reviewPath = path.join(root, "results", `review-${stamp}.md`);
   writeFileSync(
     reviewPath,
-    renderReview(reviewRuns, { stamp, real: [...realPurposes], annotate: args.annotate }),
+    renderReview(reviewRuns, {
+      stamp,
+      real: [...realPurposes],
+      annotate: args.annotate,
+      voicePhrases: loadHowToTextPhrases(config),
+    }),
   );
   console.log(`review written: ${reviewPath}`);
   process.exit(summaries.some((s) => s.status === "error") ? 1 : 0);

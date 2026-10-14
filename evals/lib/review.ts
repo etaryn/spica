@@ -1,6 +1,8 @@
+import type { Phrases } from "@/mind/platform/phrases";
 import type { GroundedClaim } from "@/mind/process/guard/self-claims";
 import type { RelSnapshot } from "./relationship-check";
 import type { ScriptResult, TraceDecision, TraceTurn } from "./runner";
+import { renderVoiceReport } from "./voice-report";
 
 export type ReviewRun = {
   script: string;
@@ -9,7 +11,13 @@ export type ReviewRun = {
   description?: string;
   profile?: string;
 };
-export type ReviewMeta = { stamp: string; real: string[]; annotate: boolean };
+export type ReviewMeta = {
+  stamp: string;
+  real: string[];
+  annotate: boolean;
+  /** The how-to-text phrases, to read each reply's band and move back out of its prompt. */
+  voicePhrases?: Phrases;
+};
 
 const time = (d: Date | string) => new Date(d).getTime();
 const oneLine = (s: string) => s.trim().replace(/\s*\n\s*/g, " ⏎ ");
@@ -141,6 +149,15 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
         out.push("");
         const snap = trace?.relationship?.[user]?.[session - 1];
         if (snap) out.push(...renderRelationship(snap), "");
+      }
+      const calls = trace?.voice?.[user] ?? [];
+      if (calls.length && meta.voicePhrases) {
+        const finals = turns
+          .filter(
+            (t) => t.role === "companion" && (t.trigger === null || t.trigger === "reach_out"),
+          )
+          .map((t) => t.text);
+        out.push(...renderVoiceReport(calls, finals, meta.voicePhrases));
       }
       const loose = decisions.filter((d) => !d.turn_id || !known.has(d.turn_id));
       if (loose.length)

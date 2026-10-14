@@ -127,7 +127,8 @@ plus core state (already in the reply).
    `voice.moves.bias` (per state key, a multiplier per move). `mustAnswer` (they asked her
    something, or open questions are pending) yields "answer, then the drawn move".
 
-3. **"How to text this one"** (new prompt section, assembled after "How open you feel"). Code
+3. **"How to text this one"** (new prompt section, the last before "Why you're writing", so it
+   sits closest to the conversation). Code
    phrases the band, their register (formal or not, emoji rate) and the move from
    `prompts/voice/how-to-text/v1.md`. The model sees words, never numbers.
 
@@ -144,9 +145,10 @@ plus core state (already in the reply).
    history and SSE split stored text the same way. Bracketed stage directions are left to the
    prompt and counted in the voice report: removing them would cut content.
 
-5. **Feeling lines.** `core-state/line` and `relationship/summary` lines are ranked by deviation
-   and capped at `voice.feeling_max_lines` (one shared cap over both sections); the
-   below-baseline hurt and tension keys are deleted.
+5. **Feeling lines.** Her feeling line ("How you're feeling") keeps her emotion first, ranks the
+   rest by distance past their band and is capped at `voice.feeling_max_lines`. "You and them"
+   already ranks by deviation under its own cap (`relationship.summary_max_lines`); its
+   below-baseline hurt and tension phrases are deleted, so they never show.
 
 6. **Backchannel rules** in `turn_backchannel`: drop the judge's text when every buffered message
    matches `turn.greeting_words` (normalised, punctuation and repeated letters stripped: "hiii!"

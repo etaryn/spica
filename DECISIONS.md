@@ -154,3 +154,8 @@ code itself.
 | 2026-10-13 | Stills are pre-rendered pose sprites composited with sharp; live 3D comes with video | No 3D or headless browser at runtime; the sprite PNG is the seam a live renderer replaces. |
 | 2026-10-13 | The draft call never sees her appraisal episode, only its valence | Her take is private memory; a post is written fresh in her public voice. |
 | 2026-10-13 | Only public-domain, CC0, CC BY and CC BY-SA finds are kept | She may post what she finds. |
+| 2026-10-15 | Her feeling line has its own cap (`voice.feeling_max_lines`); "You and them" keeps `relationship.summary_max_lines` | The summary already ranked and capped; one shared cap would have tied two sections together for no gain. |
+| 2026-10-15 | `shapeText` lowercases every capitalised word for a non-formal user, names and titles included; all-caps words stay | Code can't tell a name from a sentence start; all lowercase is her base, and acronyms and shouting keep their meaning. |
+| 2026-10-15 | Bracketed stage directions are left to the prompt and counted in the voice report, not removed in code | Removing them would cut content after the guard approved it. |
+| 2026-10-15 | "How to text this one" is the last section before "Why you're writing" | Closest to the conversation, where instructions are followed best. |
+| 2026-10-15 | The reply prompt's recall examples use names no fixture uses ("otis", "wren") | Eval leak checks match names case-insensitively across every prompt. |

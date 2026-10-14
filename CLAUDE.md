@@ -224,9 +224,14 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 
 | 12. Extension stubs | Event bus, module registration, social stubs |
 | 13. Guard re-enable | Re-enable and calibrate the guard; settle the suspended rules |
 | 14. Post engine (stills) | Browsing, formats and poses, craft skill, post_tick, render, draft/check, inspector approval |
+| 15. Tuning | Every §25 *Tuning* item in slices: 15a voice, 15b negative situations, 15c memory/relationship/user mind, 15d world/outreach/posts |
 
-**Current phase: Phases 13 (guard re-enable and calibration) and 14 (post engine, stills) are
-built and merged. Next is the publishing phase or video, which needs its design doc.** Persona
+**Current phase: Phase 15 (tuning) is under way. 15a (her voice: texting shape, move, "How to
+text this one", `shapeText`, reply v17, backchannel rules, quieter feeling lines, voice report,
+`pnpm review:voice`) is built. Next is 15b (negative situations), which opens with an
+item-by-item discussion with Ethan before any design.** Tuning sets base Spica; no external
+samples; each user's own messages bring their bias. Publishing, video and a frontend phase (B34)
+come later. Persona
 v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's
 rewrite. Phases 8 (core loops), 9 (user mind), 10
 (relationship psychology), 11 (onboarding) and 12 (extension stubs) are built.

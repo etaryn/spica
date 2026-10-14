@@ -668,7 +668,9 @@ preoccupation expiry, event nudges. Keys moved from `ego.*` to
 an event's feeling must be to take over her mind), `event_gain` and
 `event_arousal_gain` (how far an event moves mood), and `bands` (the ranges
 that turn values into the phrases of the "How you're feeling" line, from
-`prompts/core-state/line/v3.md`).
+`prompts/core-state/line/v4.md`). **Built 15a:** the line keeps her emotion first, ranks
+the rest by how far past its band each value sits, and is capped at `voice.feeling_max_lines`
+(2); the phrases read as background, not topics.
 
 **Built: needs and emotion.** `needs` start at `needs_baseline` and deplete
 by `need_decay_per_day` (spread hourly by the state tick); appraisal feeds
@@ -1163,7 +1165,12 @@ She does not answer one message at a time. Code: `src/mind/process/turn-taking/`
   `turn.timer_job_retry_limit` times, `turn.timer_job_retry_delay_seconds`
   apart), recovered by `turn_sweep`.
 - **Backchannels:** style `judge` (global): the judge may write a tiny
-  reaction, at most one per buffer and rate-limited.
+  reaction, at most one per buffer and rate-limited. **Built 15a:** code
+  decides whether one fires from a fixed rule list (`usableBackchannel`):
+  only mid-thought, at most `turn.backchannel_max_words`, never when every
+  buffered word is in `turn.greeting_words` (stretched letters folded, so
+  "hiii" is "hi"), and never when every word of it repeats the user's own;
+  `prompts/turn-judge/v2.md` says the same.
 - **Commit and reply:** the timer commits the buffer, composes one reply to
   all of it, paces it (read delay by length, typing time per character,
   gaps between bubbles) and sends over SSE. Version and epoch checks make
@@ -1258,16 +1265,48 @@ when the guard is on.
       "[You wrote to them first]" user line; a reach-out after days of silence
       keeps only her unanswered reach-outs. A reach-out's "Where things stand with them" reads the
       newest non-sensitive summary (§9.5)
-3. **Generate** with the reply model. She uses at most one or two memories
-   per reply, only when natural.
-4. **Guard** (off in the test phase, §10.5).
-5. **Pace and send** (§10.1); enqueue the cold path.
+3. **Generate** with the reply model. She uses at most one memory per reply,
+   only when natural.
+4. **Guard** (§10.5).
+5. **Shape** (Built 15a): `shapeText` puts the guarded reply into her texting
+   form; form only, every word kept, so the guard's verdict holds. Dashes
+   become commas (a range like "3–5" stays); unless the user is formal,
+   capitalised words go lowercase (all-caps words stay) and each text loses a
+   closing full stop; a text over `band.max_words × voice.split_tolerance`
+   (1.5) splits at sentence ends, up to `chat.max_parts`, and a single long
+   sentence stays whole. The shaped text is what's stored, so `splitParts`
+   stays the only splitter. A crisis reply is not shaped.
+6. **Pace and send** (§10.1); enqueue the cold path.
+
+**Her voice (Built 15a).** Before assembly, code works out how she texts this
+reply, all from data the reply already reads:
+
+- **Texting shape** (`textingShape`): from the user's last
+  `voice.window_messages` (8) messages, the median words per text, blended
+  from `voice.base_words_per_bubble` (8) toward theirs by how full the window
+  is, picks a band from `voice.bands` (few ≤5, sentence ≤14, couple ≤30
+  words); `formal` when the window-weighted share of their messages ending in a
+  full stop reaches `voice.formal_threshold` (0.6; a capital start doesn't count, phones add it);
+  `emoji` when their window-weighted emoji rate reaches `voice.emoji_rate`
+  (0.3). Nothing is stored. Base Spica is the same for everyone; each user's
+  own messages bring their shape, user-scoped (V5, V7).
+- **Move** (`pickMove`): `react`, `share` or `ask`, a weighted draw over
+  `voice.moves.weights` (0.4/0.3/0.3) seeded by the anchor turn id, so a
+  retry draws the same. **Mood keys** ("energy low", "mood_valence high",
+  "hurt above" and so on, from core state bands and this user's hurt and
+  tension past `relationship.summary_min_effect`) multiply the weights and
+  can shift the band (`voice.moves.bias`, e.g. energy low: more react, one
+  band shorter). A reach-out has no move; when the user asked something
+  (open questions, or a buffered message ending in "?") she answers first.
+- **"How to text this one"**: the band, register extras (formal, emoji) and
+  move phrased from `prompts/voice/how-to-text/v1.md`, the last section
+  before "Why you're writing". Skipped in a crisis.
 
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
 seed self come from `prompts/persona/v6.md`; the reply prompt is
-`prompts/reply/v16.md` (its rules about her own self sit under "Being
+`prompts/reply/v17.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
 hint, held-back and common-ground marks, and that she may deflect, never
@@ -1275,7 +1314,10 @@ invent, and is always honest that she's an AI; v14 adds "Your things
 together": at most one, when it fits, never explained, answer to a nickname
 they gave you; v15 adds following "Where you are with them": how familiar,
 teasing, guarded and firm she is, never named; v16 reads profile card facts as a first
-impression, held loosely and never as something said in chat). v11 added the **claim line**
+impression, held loosely and never as something said in chat; v17 follows "How to text this
+one", says feelings short and in the moment, asks about their mood instead of commenting on how
+they text, writes lowercase with no closing full stop or dashes unless told it can be tidier, and
+names a remembered detail when it's the topic, at most one memory per reply). v11 added the **claim line**
 under "What's yours to claim": her life comes only from the sections about
 her in front of her and she never promises anything about her own life; her
 opinions are hers at full strength, with first impressions held lightly on
@@ -1671,8 +1713,11 @@ once weights are proven reliable.
 
 ### 12.5 Recall etiquette
 
-At most one or two memories per reply, only when natural; never claiming to
-remember something not said. **Changed 9c (Ethan, 2026-10-09):** the "what
+At most one memory per reply, only when natural; never claiming to
+remember something not said. **Changed 15a:** a memory about what they're
+saying now is used by name or detail, in passing; one not tied to it comes up
+only as something she'd really ask about, never to show she remembers;
+callbacks to their things together stay. **Changed 9c (Ethan, 2026-10-09):** the "what
 I remember" page and per-fact forget are removed. Users cannot edit her mind,
 core or user side: a direct edit would let them escape consequences (§1).
 Account deletion removes everything.
@@ -2138,6 +2183,7 @@ two minds or at reply time.
 | 12. Extension stubs | The module bus (`deps.modules`, `CoreDeps.emitCore`) with the seven events after commit, the scope rule (a core module hears core events only), in-process delivery; `publicPersona` (her day, surface self, public voice; no deeper thoughts) and the `SocialChannel` stub; an empty module list; exit `tests/exit/phase-12.test.ts` (sample modules in the test only, the canary). `pnpm test` 161 files / 1259 tests at close |
 | 13. Guard re-enable and calibration | The line in §2 (rules 1, 4, 6 and 8 back, settling §21 #10 and #11); `guard.enabled: true`; guard prompt v2 with `self_claims`, corrective v2, fallback v2 (no hotline numbers); `invented_self` grounded against core at `guard.self_claim_similarity`; a crisis keeps tension (B73); a pending ending adds `relationship.ending_hurt` (B78); fixtures rewritten as allowed/blocked pairs, `rule2-hurt` and `invented-self` files, reach-out file live (B36–B39, B60); calibration with `pnpm calibrate:guard` and `pnpm calibrate:guard-replay`, labelled with Ethan; `pnpm eval:guard` 85/85 on the calibrated run (single boundary cases vary 2/3 run to run, B37); exit `tests/exit/phase-13.test.ts` (the canary). `pnpm test` 172 files / 1339 tests after merging Phase 14 |
 | 14. Public presence: post engine (stills) | Browsing as an `action` world event and `web_find`, formats and pose sprites, the craft skill, `post_tick`, `sharp` render, draft and check, inspector approval (§16a); persona v6 (draft lines); `tests/exit/phase-14.test.ts`. `pnpm test` 171 files / 1315 tests at close |
+| 15a. Tuning: her voice | `textingShape` (bubble length, formality and emoji from the user's last `voice.window_messages` messages, blended from base Spica), `pickMove` (react/share/ask by seeded weighted chance, tilted by mood keys), the "How to text this one" section (`prompts/voice/how-to-text/v1.md`), `shapeText` after the guard (form only), reply v17 (texting rhythm, short feelings, named recall, one memory), turn-judge v2 and the backchannel rule list, `core-state/line` v4 capped and ranked, `relationship/summary` v3, the voice report and `pnpm review:voice` (blind X/Y), `voice-texting-styles` review script; B3, B32, B33, B57 done, B35 in part, B34 to *Frontend*; exit `tests/exit/phase-15a.test.ts` (the canary). `pnpm test` 180 files / 1395 tests at close |
 
 **Next (every proposed phase above is built; the order is OPEN, §21):**
 
@@ -2145,7 +2191,8 @@ two minds or at reply time.
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
-| **Tuning** | The §25 items marked *Tuning*, worked together with review runs | §25 |
+| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (B14, B91, B115, B15, B113, B37, B40), **15c memory, relationship, user mind** (B4, B5, B41, B38, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
 
@@ -2255,9 +2302,9 @@ and life tick) were dropped; the replacement is designed fresh.
   or drop user facts whose content appears only in her turns. *Phase 11.*
 - **B2.** ~~Stale and deleted facts stay reachable through the recent-turns
   window.~~ Done 9c: the window drops turns before a 72-hour gap (§10.3).
-- **B3.** Recall style: she often uses a memory without naming it, and
-  sometimes adds a comment whose only job is to show she remembers.
-  `recall-pet` and `recall-sister-uni` carry `known_failure`. *Tuning.*
+- **B3.** ~~Recall style.~~ Done 15a: reply v17 names a memory that's the topic, brings up an
+  unrelated one only as a real follow-up, at most one per reply; `recall-pet` and
+  `recall-sister-uni` lose their `known_failure`.
 - **B4.** `contradiction-job` known failure: invented details about a
   superseded fact can still get through. *Tuning.*
 - **B5.** Reconcile misses low-similarity contradictions (below
@@ -2379,8 +2426,9 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B55.** Core loops should run on a separate Postgres role with no grants on
   user tables, so the scope rule holds in the database as well as in code.
   *Before users.*
-- **B57.** The `core-state/line` and `relationship/summary` phrase files
-  (including the affect phrases) need a pass. *Tuning.*
+- **B57.** ~~Phrase file pass.~~ Done 15a: `core-state/line` v4 (capped at
+  `voice.feeling_max_lines`, ranked, background wording) and `relationship/summary` v3 (no
+  hurt or tension below-baseline lines). The affect phrases are unchanged.
 - **B58.** ~~Appraise events at their `occurred_at`, not at the 00:10 world
   tick.~~ **Done** (planned vs spontaneous events, §8.3): events are
   appraised by the first hourly world tick after their time.
@@ -2463,16 +2511,17 @@ and life tick) were dropped; the replacement is designed fresh.
   leaves the switch stale. *Before users.*
 
 ### 25.6 Voice and reply model
-- **B32.** Register: her sentences run long against short user messages,
-  with formal punctuation and no slang or omission; length and register
-  should follow the user's own style within her fixed voice. *Tuning.*
-- **B33.** The turn judge echoes a greeting as a backchannel ("hey" →
-  "hey"). *Tuning.*
+- **B32.** ~~Register.~~ Done 15a (§10.3 her voice): the texting shape, the move, "How to
+  text this one", `shapeText` and reply v17. Slang only through idiolect, never copied.
+- **B33.** ~~Greeting echo.~~ Done 15a: the backchannel rule list (§10.1) and turn-judge v2.
 - **B34.** `POST /api/chat` takes ~2 s (crisis check and judge in the
   request); the client shows the message pending meanwhile. After a reload
-  mid-reply, catch-up shows unsent bubbles at once. *Tuning.*
-- **B35.** Haiku as the reply model went flat (tried once); replies stay on
-  Sonnet 5 until a persona-quality eval exists. *Tuning.*
+  mid-reply, catch-up shows unsent bubbles at once (history returns stored
+  parts before their paced send time). *Frontend* (Ethan, 2026-10-14).
+- **B35.** Haiku as the reply model went flat (tried once). Partly done 15a: every review run
+  prints a voice report (`evals/lib/voice-report.ts`), and `pnpm review:voice` runs the voice
+  scripts on two reply models and saves blind X/Y review files with a separate key. Replies stay
+  on Sonnet 5 until Ethan reads a comparison and chooses. *Tuning.*
 
 ### 25.7 Guard
 - **B36.** ~~Behavioural fixtures for rules 2–4.~~ Done 13: matched

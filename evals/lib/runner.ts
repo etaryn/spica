@@ -47,6 +47,7 @@ import { checkCore, checkLife, coreHistory, lifeSnapshot, type LifeSnapshot } fr
 import { makeLifeLoop } from "./life-loop";
 import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
 import { RecordingLLM, type CoreCall } from "./recording-llm";
+import type { VoiceCall } from "./voice-report";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
 import { drainUserMind, runAllJobs, runDueJobs } from "./scheduler";
 import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script";
@@ -117,6 +118,8 @@ export type RunTrace = {
   coreTraces?: CoreTrace[];
   /** Every core-loop model call (prompt input and parsed output), in order. */
   coreCalls?: CoreCall[];
+  /** Per user: every reply prompt and draft, for the voice report. */
+  voice?: Record<string, VoiceCall[]>;
 };
 export type CoreTrace = Pick<
   typeof core_loop_trace.$inferSelect,
@@ -448,13 +451,16 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const relSnaps: Record<string, (RelSnapshot | null)[]> = {};
   const lines: Record<string, SessionLine[]> = {};
   const prompts: Record<string, string[]> = {};
+  const voice: Record<string, VoiceCall[]> = {};
   const sessionStarts: Date[] = [];
   const sessionOf = (d: Date) => sessionOfAt(sessionStarts, d);
   /** Runs `fn` and attributes the reply prompts it produced to `user`. */
   const recording = async (user: string, fn: () => Promise<unknown>) => {
     const before = llm.prompts.length;
+    const repliesBefore = llm.replies.length;
     await fn();
     (prompts[user] ??= []).push(...llm.prompts.slice(before));
+    (voice[user] ??= []).push(...llm.replies.slice(repliesBefore));
   };
   let known: string[] = [];
   try {
@@ -675,6 +681,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       outreach: await outreachSnaps().catch(() => undefined),
       coreTraces: await coreTraces().catch(() => undefined),
       coreCalls: llm.coreCalls,
+      voice,
     };
     return {
       name: script.name,
@@ -946,6 +953,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       outreach: await outreachSnaps(),
       coreTraces: await coreTraces(),
       coreCalls: llm.coreCalls,
+      voice,
     },
   };
 }

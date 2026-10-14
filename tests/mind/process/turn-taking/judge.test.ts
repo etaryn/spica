@@ -124,7 +124,7 @@ test("logTurnDecision writes one kind=turn row with ids and the verdict, and nev
     source: "model" as const,
     latencyMs: 5,
     error: null,
-    promptVersion: "turn-judge@v1",
+    promptVersion: "turn-judge@v2",
   };
   await logTurnDecision(deps, u, {
     turnId: turn.id,
@@ -140,7 +140,7 @@ test("logTurnDecision writes one kind=turn row with ids and the verdict, and nev
     attempt: 1,
     outcome: null,
     source: "model",
-    prompt_version: "turn-judge@v1",
+    prompt_version: "turn-judge@v2",
   });
   expect(rows[0]!.input).toEqual({ buffer_turn_ids: [turn.id], open_questions: [] });
   expect(rows[0]!.output).toMatchObject({ complete: true, wait_ms: 4000, reasoning: "done" });

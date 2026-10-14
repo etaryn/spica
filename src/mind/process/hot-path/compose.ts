@@ -1,8 +1,8 @@
 /**
  * The hot path: composes one reply from both minds: her core values and snapshot, her state and
  * her day, the relationship, her memories of them and of her own life, and the live conversation.
- * It retrieves memory, loads those side by side, assembles the prompt, makes one generation, and
- * runs the guard. Read-only: the caller inserts and sends the reply, enqueues the cold path, then
+ * It retrieves memory, loads those side by side, assembles the prompt, makes one generation, runs
+ * the guard, and puts the reply into her texting form. Read-only: the caller inserts and sends the reply, enqueues the cold path, then
  * calls `writeGuardLog`. Serves normal replies, the crisis path, and reach-outs.
  */
 import { listOnboardingFacts } from "@/db/repos/user/facts";
@@ -51,7 +51,11 @@ import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure"
 import { sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
 import { z } from "zod";
 import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
+import { howToText, loadHowToTextPhrases } from "./how-to-text";
+import { bandShiftOf, biasesFor, loadMoodKeys, pickMove } from "./move";
+import { shapeText } from "./shape-text";
 import { splitParts } from "./split-parts";
+import { textingShape } from "./texting-shape";
 import { loadYourDayLine } from "./your-day-line";
 
 const summaryPayload = z.object({
@@ -263,6 +267,17 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         null,
       );
 
+  // How she texts follows her mood and how she feels about them; a crisis reply has none of it.
+  const moods = inCrisis
+    ? Promise.resolve([] as string[])
+    : bounded(
+        deps,
+        "mood keys",
+        userId,
+        () => loadMoodKeys(deps, userId, clock.now()),
+        [] as string[],
+      );
+
   // Embedded once for both minds' retrieval; a failure leaves both with nothing ranked.
   const queryText = replyQuery(input, config.retrieval.context_turns);
   const queryVector = embedQuery(deps, queryText).catch((e) => {
@@ -401,6 +416,20 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       ? crisisOpennessLine(opennessPhrases)
       : opennessLine(herOpenness, opennessPhrases, config.relationship);
 
+  const biases = biasesFor(await moods, config.voice);
+  const shape = textingShape(
+    recent.filter((t) => t.role === "user").map((t) => t.text),
+    config.voice,
+    bandShiftOf(biases),
+  );
+  // A reach-out already knows what it's doing; a reply draws its move, seeded by the turn so a
+  // retry draws the same one.
+  const move = input.reachOut
+    ? null
+    : pickMove(`move:${input.anchor.id}`, config.voice.moves.weights, biases);
+  const mustAnswer =
+    input.openQuestions.length > 0 || input.answering.some((t) => t.text.trim().endsWith("?"));
+
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     // The snapshot never stretches: only her memories can be drawn out as a hint.
@@ -424,6 +453,9 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
+    howToText: inCrisis
+      ? null
+      : howToText({ shape, move, mustAnswer }, loadHowToTextPhrases(config)),
     reachOut: input.reachOut
       ? renderReachOut(loadPrompt("reach-out", config.prompts.reach_out), input.reachOut)
       : null,
@@ -458,9 +490,18 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     },
   });
 
+  // Shaping only changes form, so it runs after the guard; a crisis reply goes out as written.
+  const text = inCrisis
+    ? guarded.text
+    : shapeText(
+        guarded.text,
+        { maxWords: shape.band.max_words * config.voice.split_tolerance, formal: shape.formal },
+        config.chat.max_parts,
+      );
+
   return {
-    text: guarded.text,
-    parts: splitParts(guarded.text, config.chat.max_parts),
+    text,
+    parts: splitParts(text, config.chat.max_parts),
     // What she was offered of their things together is reinforced like any recalled memory.
     recalled: [
       ...retrieval.recalled,

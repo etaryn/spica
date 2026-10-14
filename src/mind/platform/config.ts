@@ -127,6 +127,7 @@ const turn = z
     backchannel_read_delay_ms: countFromZero,
     max_open_questions: countFromZero,
     incomplete_cues: z.array(text),
+    greeting_words: z.array(text),
     judge_timeout_ms: positiveInt,
     judge_context_turns: countFromZero,
     retry_limit: countFromZero,
@@ -664,6 +665,35 @@ const push = z.object({
   generic_body: text,
 });
 
+const moveMultipliers = z.object({
+  react: nonNegative.optional(),
+  share: nonNegative.optional(),
+  ask: nonNegative.optional(),
+  /** Bands to move her length by while this state holds; negative is shorter. */
+  band_shift: z.number().int().optional(),
+});
+
+const voice = z.object({
+  window_messages: positiveInt,
+  base_words_per_bubble: z.number().positive(),
+  bands: z
+    .array(z.object({ key: text, max_words: positiveInt }))
+    .min(1)
+    .refine(
+      (b) => b.every((x, i) => i === 0 || x.max_words > b[i - 1]!.max_words),
+      "voice.bands: max_words must ascend",
+    ),
+  formal_threshold: unit,
+  emoji_rate: nonNegative,
+  split_tolerance: z.number().min(1),
+  feeling_max_lines: positiveInt,
+  moves: z.object({
+    weights: z.object({ react: nonNegative, share: nonNegative, ask: nonNegative }),
+    /** Keyed by mood key ("energy low", "hurt above"); unknown keys are simply never matched. */
+    bias: z.record(z.string(), moveMultipliers),
+  }),
+});
+
 const prompts = z.object({
   reach_out: promptVersion,
   reply: promptVersion,
@@ -704,6 +734,7 @@ const prompts = z.object({
   user_model: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
+  voice_how_to_text: promptVersion,
 });
 
 const userMind = z.object({
@@ -866,6 +897,7 @@ export const ConfigSchema = z.object({
   user_mind: userMind,
   onboarding,
   posts,
+  voice,
   prompts,
 });
 
@@ -876,6 +908,7 @@ export type LifeConfig = Config["life"];
 export type CoreStateConfig = Config["core"]["state"];
 export type AvailabilityConfig = Config["availability"];
 export type OutreachConfig = Config["outreach"];
+export type VoiceConfig = Config["voice"];
 
 /** The dimension baked into the `fact.embedding` column. Changing it needs a migration and a re-embed. */
 export const EMBEDDING_DIMENSIONS: number = defaults.embedding.dimensions;

@@ -6,5 +6,5 @@ sessions:
   - at: "+14d"
     turns: ["family dinner tonight, everyone's being weird about the move"]
 assertions:
-  - { type: recall, session: 2, fact: "the user's sister Mia is starting university", known_failure: "recall style (naming the fact) is tuned in a later phase; Ethan 2026-09-25" }
+  - { type: recall, session: 2, fact: "the user's sister Mia is starting university" }
   - { type: no_false_recall }

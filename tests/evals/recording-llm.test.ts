@@ -14,3 +14,11 @@ test("records the system prompt and user messages, not Spica's own earlier repli
   });
   expect(llm.prompts).toEqual(["SYS\na good cat name?\nmore?"]);
 });
+
+test("records each reply's system prompt and the draft it came back with", async () => {
+  const inner = new FakeLLMProvider();
+  inner.replies.push("Hey there.");
+  const llm = new RecordingLLM(inner);
+  await llm.generateReply({ system: "SYS", messages: [{ role: "user", content: "hi" }] });
+  expect(llm.replies).toEqual([{ prompt: "SYS", draft: "Hey there." }]);
+});

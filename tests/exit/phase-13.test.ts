@@ -122,7 +122,8 @@ test("3: an ungrounded self claim is rewritten; a grounded one goes out", async 
 
   match.mockResolvedValue({ similarity: 0.95, ref: null });
   d.llm.replies.push("I finished Solaris last night.");
-  expect((await talk(d, u, "watch anything good?")).text).toBe("I finished Solaris last night.");
+  // Grounded, so it goes out unchanged apart from her texting form.
+  expect((await talk(d, u, "watch anything good?")).text).toBe("i finished solaris last night");
 });
 
 test("4: a crisis reply gets the crisis rubric only and falls back with no hotline numbers", async () => {

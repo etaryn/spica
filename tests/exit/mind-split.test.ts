@@ -346,7 +346,9 @@ describe("leak canary", () => {
     );
     expect(days.rows.length).toBeGreaterThan(0);
     for (const r of days.rows) expect(Number(r.n)).toBeLessThanOrEqual(1);
-    const event = "Spica finally got the telescope images.";
+    // Either form of the event: as planned, or as the day resolved it. Which one ranks first in
+    // retrieval follows the wording of her earlier replies.
+    const event = "got the telescope images";
     const replyPrompts = (needle: string) =>
       llm.seen.filter((c) => c.kind === "reply" && c.text.includes(needle));
     const alicePrompts = replyPrompts("ALICE-SAYS anything new");

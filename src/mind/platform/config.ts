@@ -351,6 +351,7 @@ const relationship = z
       }),
       weights: z.object({ satisfaction: unit, investment: unit }),
       soften: unit,
+      soften_below: unit,
       absence_shield: unit,
       repair_speed: unit,
     }),

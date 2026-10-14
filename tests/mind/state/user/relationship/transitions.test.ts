@@ -957,7 +957,7 @@ const withParam = (p: Params, name: keyof Params, value: number): Params => ({
   [name]: { ...p[name], value },
 });
 
-test("commitment softens a hurt, but a large one still scars", () => {
+test("commitment cushions a slight but not contempt, and a large hurt still scars", () => {
   const hurt = (commitment: number, amount: number) =>
     relationshipAfterExchange(
       fresh(),
@@ -965,10 +965,20 @@ test("commitment softens a hurt, but a large one still scars", () => {
       ex({ hurt: { amount, cause: "x" } }),
       cfg,
     );
-  expect(hurt(1, 0.5).params.hurt.value).toBeLessThan(hurt(0, 0.5).params.hurt.value);
-  expect(hurt(1, 0.5).params.hurt.value).toBeCloseTo(
-    nudge(0, cfg.gains.hurt * 0.5 * (1 - cfg.commitment.soften)),
+  expect(hurt(1, 0.25).params.hurt.value).toBeCloseTo(
+    nudge(0, cfg.gains.hurt * 0.25 * (1 - cfg.commitment.soften)),
+    6,
   );
+  expect(hurt(1, 0.75).params.hurt.value).toBeCloseTo(hurt(0, 0.75).params.hurt.value, 6);
+
+  const sharp = relationshipAfterExchange(
+    fresh(),
+    withParam(init(), "commitment", 1),
+    ex({ tension: 0.5 }),
+    cfg,
+  );
+  expect(sharp.params.tension.value).toBeCloseTo(0.5, 6);
+
   const scarred = (commitment: number) =>
     hurt(commitment, 1).events.some((e) => e.cause === "scar");
   expect(scarred(0)).toBe(true);

@@ -123,8 +123,12 @@ export function makeUpLineDue(state: RelationshipState, settings: RelationshipCo
   return state.make_up_state === "due" && state.make_up_replies >= settings.make_up_delay_replies;
 }
 
-/** What they do to her lands softer the more she is committed to them. */
-function softened(draft: Draft, settings: RelationshipConfig): number {
+/**
+ * What they do to her lands softer the more she is committed to them, but only a slight: contempt
+ * and betrayal land in full however close they are.
+ */
+function softened(draft: Draft, settings: RelationshipConfig, amount?: number): number {
+  if (amount !== undefined && amount >= settings.commitment.soften_below) return 1;
   return 1 - settings.commitment.soften * draft.params.commitment.value;
 }
 
@@ -381,7 +385,7 @@ function recordSessionTone(draft: Draft, tone: number | null): void {
 function applyTension(draft: Draft, signals: Signals, settings: RelationshipConfig): void {
   if (Math.abs(signals.tension) < settings.signal_deadzone) return;
 
-  const factor = signals.tension > 0 ? softened(draft, settings) : 1;
+  const factor = signals.tension > 0 ? softened(draft, settings, signals.tension) : 1;
   const value = nudge(
     draft.params.tension.value,
     settings.gains.tension * signals.tension * factor,
@@ -408,7 +412,7 @@ function applyHurt(
   );
 
   const before = draft.params.hurt.value;
-  draft.setParam("hurt", nudge(before, amount * softened(draft, settings)), "signal", {
+  draft.setParam("hurt", nudge(before, amount * softened(draft, settings, hurt.amount)), "signal", {
     signal: hurt.amount,
     sensitised,
   });

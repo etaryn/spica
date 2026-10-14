@@ -408,6 +408,7 @@
       "investment": { "hours": 50, "ledger_depth": 20, "idiolect": 3, "episodes": 4 },
       "weights": { "satisfaction": 0.5, "investment": 0.5 },
       "soften": 0.3,
+      "soften_below": 0.5,
       "absence_shield": 0.5,
       "repair_speed": 0.5
     },

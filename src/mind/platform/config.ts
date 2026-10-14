@@ -734,6 +734,7 @@ const prompts = z.object({
   user_model: promptVersion,
   life_availability: promptVersion,
   core_state_line: promptVersion,
+  voice_how_to_text: promptVersion,
 });
 
 const userMind = z.object({

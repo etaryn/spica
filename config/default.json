@@ -227,6 +227,7 @@
     "life_event": "v4",
     "life_availability": "v1",
     "core_state_line": "v3",
+    "voice_how_to_text": "v1",
     "core_appraise": "v2",
     "core_anticipate": "v2",
     "core_ruminate": "v2",

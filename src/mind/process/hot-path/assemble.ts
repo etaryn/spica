@@ -4,7 +4,7 @@
  * with them (the stage), how open she feels, where things
  * stand with them (her latest summary), her read on them, what she remembers (about them, between you, what she has told them, from her own life, each
  * marked with what they already know), your things together, what she isn't ready to share, things to ask
- * about, unanswered questions, things she wants to bring up, and why she is writing (for a reach-out). The live conversation
+ * about, unanswered questions, things she wants to bring up, how to text this one, and why she is writing (for a reach-out). The live conversation
  * follows as the messages.
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
@@ -56,6 +56,8 @@ export interface AssembleInput {
   ideas?: string[];
   /** Why she's writing first, and the trailing user-role cue the model answers. */
   reachOut?: { slot: string; cue: string } | null;
+  /** How long her texts run with them and what she does this time; none in a crisis. */
+  howToText?: string | null;
 }
 
 export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
@@ -100,6 +102,8 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     section("Things you might naturally ask about", dueThreadList(input.retrieval)),
     section("They asked and you haven't answered yet", questionList(input.openQuestions)),
     section("Things you want to bring up", questionList(input.ideas)),
+    // Last before why she's writing, so it sits closest to the conversation.
+    section("How to text this one", input.howToText ?? null),
     // A reach-out always gets its heading, even when the slot text is empty.
     input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
   ].filter((s): s is string => s !== null);

@@ -533,3 +533,20 @@ test("where you are with them sits right after you and them, before how open you
   expect(at).toBeGreaterThan(system.indexOf("## You and them"));
   expect(at).toBeLessThan(system.indexOf("## How open you feel"));
 });
+
+test("how to text this one is the last section before why you're writing", () => {
+  const { system } = assemblePrompt({
+    ...base,
+    recentTurns: [{ role: "user", text: "hi" }],
+    openQuestions: ["what are you reading"],
+    howToText: "Keep each text short.",
+    reachOut: { slot: "topic", cue: "cue" },
+  });
+  expect(system).toContain("## How to text this one\nKeep each text short.");
+  expect(system.indexOf("## How to text this one")).toBeLessThan(
+    system.indexOf("## Why you're writing"),
+  );
+  expect(system.indexOf("## How to text this one")).toBeGreaterThan(
+    system.indexOf("## They asked and you haven't answered yet"),
+  );
+});

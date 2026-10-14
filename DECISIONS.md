@@ -159,3 +159,10 @@ code itself.
 | 2026-10-15 | Bracketed stage directions are left to the prompt and counted in the voice report, not removed in code | Removing them would cut content after the guard approved it. |
 | 2026-10-15 | "How to text this one" is the last section before "Why you're writing" | Closest to the conversation, where instructions are followed best. |
 | 2026-10-15 | The reply prompt's recall examples use names no fixture uses ("otis", "wren") | Eval leak checks match names case-insensitively across every prompt. |
+| 2026-10-15 | `relationship.scar_threshold` 0.375 → 0.75 with gains at 1 | Keeps scars where they were on the raw scale: "aimed at who she is" and worse. |
+| 2026-10-15 | An absence remark's occasion is the latest return (a user turn after a gap past `absence_grace_factor` × their median gap); a reach-out's is the absence still going on | Same rule that already decides absence; a reach-out speaks into the silence, so their return opens a fresh occasion. |
+| 2026-10-15 | A callback's occasion is `relationship.last_hurt_at` | Every new hurt is a new slight; no extra state. |
+| 2026-10-15 | An ending with no hurt score gets the floor with the cause "the user said they wanted to end the friendship" | The make-up and summary need a cause; this is what happened. |
+| 2026-10-15 | The keyword categories are listed in the config schema, not imported from the guard | Platform code doesn't import process code. |
+| 2026-10-15 | Guard eval cases carry the occasion line on every non-crisis case (empty by default) | Mirrors the hot path, so a case reads like production. |
+| 2026-10-15 | Thresholds on the hurt and tension values re-anchored to the gain-1 scale: make-up at 0.5 (clear 0.2), differentiating at tension 0.5 (clear 0.25), circumscribing at 0.75 (clear 0.5) | They were sized for gains 0.5 and 0.3; left alone, one friendly disagreement or one real sting would start coming apart. |

@@ -375,12 +375,12 @@
         "bonding_commitment": 0.7
       },
       "differentiating": {
-        "tension": 0.3,
+        "tension": 0.5,
         "trust": 0.3,
-        "clear_tension": 0.2,
+        "clear_tension": 0.25,
         "clear_trust": 0.35
       },
-      "circumscribing": { "hurt": 0.5, "tension": 0.5, "clear_hurt": 0.3, "clear_tension": 0.3 },
+      "circumscribing": { "hurt": 0.75, "tension": 0.75, "clear_hurt": 0.5, "clear_tension": 0.5 },
       "stagnating": { "warmth": 0.3, "disclosure": 0.15, "clear_warmth": 0.35 },
       "gates": {
         "initiating": { "open": 1, "idiolect": "theirs" },
@@ -421,8 +421,8 @@
     "closeness_absence_drift": 0.01,
     "absence_hurt_effect": -0.6,
     "absence_hurt_gain": 0.1,
-    "make_up_threshold": 0.25,
-    "make_up_clear_threshold": 0.1,
+    "make_up_threshold": 0.5,
+    "make_up_clear_threshold": 0.2,
     "make_up_delay_replies": 1,
     "make_up_relief": 0.4,
     "apology_relief": 0.5,

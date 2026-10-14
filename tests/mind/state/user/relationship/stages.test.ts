@@ -84,10 +84,10 @@ test("bonding needs sustained commitment: the baseline, not today's value", () =
 });
 
 test("near-strangers don't come apart; friends do, most severe first", () => {
-  const sore = params({ hurt: 0.6, tension: 0.6 });
+  const sore = params({ hurt: 0.8, tension: 0.8 });
   expect(apartStage("experimenting", null, facts(sore), s)).toBeNull();
   expect(apartStage("intensifying", null, facts(sore), s)).toBe("circumscribing");
-  expect(apartStage("intensifying", null, facts(params({ tension: 0.35 })), s)).toBe(
+  expect(apartStage("intensifying", null, facts(params({ tension: 0.55 })), s)).toBe(
     "differentiating",
   );
   expect(
@@ -97,7 +97,7 @@ test("near-strangers don't come apart; friends do, most severe first", () => {
 });
 
 test("a coming-apart stage holds until its clear threshold, not its enter threshold", () => {
-  const between = params({ tension: 0.25 });
+  const between = params({ tension: 0.4 });
   expect(apartStage("intensifying", null, facts(between), s)).toBeNull();
   expect(apartStage("intensifying", "differentiating", facts(between), s)).toBe("differentiating");
   expect(

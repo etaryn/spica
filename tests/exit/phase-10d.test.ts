@@ -204,7 +204,7 @@ test("a bad patch narrows depth and their things; clearing it restores the peak"
   await seedIdiolect(d, u, JOKE);
   const session = randomUUID();
   await d.db.execute(
-    sql`UPDATE relationship_param SET value = 0.6 WHERE user_id = ${u} AND name = 'tension'`,
+    sql`UPDATE relationship_param SET value = 0.85 WHERE user_id = ${u} AND name = 'tension'`,
   );
   await settle(d, u, await talk(d, u, session, "whatever"));
   expect((await row(u)).apart_stage).toBe("circumscribing");
@@ -244,7 +244,7 @@ test("the same hurt lands softer with a committed friend", async () => {
   const { d, next } = setup();
   const hurtAfter = async (commitment: number) => {
     const u = await user(d, { commitment }, "intensifying");
-    next.relationship = sore(0.5);
+    next.relationship = sore(0.25);
     await settle(d, u, await talk(d, u, randomUUID(), "you're useless"));
     next.relationship = null;
     return (await getParams(d.db, u)).hurt.value;

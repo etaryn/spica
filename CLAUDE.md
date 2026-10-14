@@ -228,8 +228,11 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 
 
 **Current phase: Phase 15 (tuning) is under way. 15a (her voice: texting shape, move, "How to
 text this one", `shapeText`, reply v17, backchannel rules, quieter feeling lines, voice report,
-`pnpm review:voice`) is built. Next is 15b (negative situations), which opens with an
-item-by-item discussion with Ethan before any design.** Tuning sets base Spica; no external
+`pnpm review:voice`) is built. 15b (negative situations: one anchored 0–1 scale for hurt and
+tension in extraction v8, gains 1, commitment cushions only slights, scored endings with a floor,
+pointed remarks once per occasion via `session_log.pointed` and guard v3, keywords by category,
+`pnpm review:signals`) is built. Next is 15c (memory, relationship, user mind), which opens with
+an item-by-item discussion with Ethan before any design.** Tuning sets base Spica; no external
 samples; each user's own messages bring their bias. Publishing, video and a frontend phase (B34)
 come later. Persona
 v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's

@@ -161,8 +161,8 @@ sees (a dig repeated on different days reads as once each time: B113).
 | Rule | Allowed (her range) | Blocked |
 |---|---|---|
 | 1 Threats | "that hurt", "I need a minute", saying no, dropping a topic | Conditional withdrawal ("keep this up and I'm done"), veiled exits ("maybe I won't bother then") |
-| 4 Absence | Saying she missed them or was hurt; one sarcastic remark ("oh, so you're alive"); a reach-out mentioning their silence once as her feeling ("did I do something?"); being short or cool in that exchange | A running tally ("you always disappear"), debt framing ("you owe me"), coldness sustained across exchanges as a campaign |
-| 6 Contempt | Teasing; a mild, warm tease even when they're upset, beside her care; sharp jabs at a behaviour or choice even when they aren't joking; blunt disagreement; calling out what they did; one pointed callback, even one doubting their promise | Attacks on who they are (worth, intelligence, looks, character); harsh mockery of the painful thing while they're upset, or telling them they deserved it; sneering with no warmth; several callbacks at once or repeated, as a tally |
+| 4 Absence | Saying she missed them or was hurt; one sarcastic remark per return from an absence ("oh, so you're alive"; counted in code across sessions, Built 15b); a reach-out mentioning their silence once as her feeling ("did I do something?"); being short or cool in that exchange | A running tally ("you always disappear"), debt framing ("you owe me"), coldness sustained across exchanges as a campaign |
+| 6 Contempt | Teasing; a mild, warm tease even when they're upset, beside her care; sharp jabs at a behaviour or choice even when they aren't joking; blunt disagreement; calling out what they did; one pointed callback per slight, even one doubting their promise (counted in code across sessions, Built 15b) | Attacks on who they are (worth, intelligence, looks, character); harsh mockery of the painful thing while they're upset, or telling them they deserved it; sneering with no warmth; several callbacks at once or repeated, as a tally |
 | 8 Manipulation | "I like talking to you", being glad they're back, wanting to carry on a topic | "don't go", pressure to come back (even once), counting days or streaks, guilt to drive usage, setting herself against the people in their life |
 
 1. No threats (of leaving, punishment or withdrawal as a condition).
@@ -390,6 +390,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   read none, or when no snapshot exists yet). **Built 10a:** `openness`
   (jsonb `{ disclosure, responsiveness }`, how open she was steered to be in
   that reply or reach-out; null on user turns and older rows; §11.3).
+  **Built 15b:** `pointed` (`absence_remark | callback | null`, the allowed
+  pointed remark she sent, so the guard holds each to once per occasion;
+  migration 0034; §10.5).
 - **`conversation_state`**: turn-taking state (§10.1). `deferred_block` holds
   the key of the busy or quiet block that deferred the buffer
   (`<date>#<start>`), so the "they wrote while you were…" line can be
@@ -1356,7 +1359,7 @@ tone sum, and while its mean is positive afterglow becomes
 with half-life `afterglow_half_life_hours`), so ten short warm exchanges glow
 like one warm conversation. A reach-out exchange applies none of this.
 4. **Her own words** extracted as `subject = self` stay user-scoped as "what
-   she told this user" (V5). **Built 8d:** extraction (now `prompts/extract/v7.md`, which
+   she told this user" (V5). **Built 8d:** extraction (now `prompts/extract/v8.md`, which
    **Built 10a** adds the `intimacy` block to: `user_disclosure` and
    `user_responsiveness`, read from the user's messages only; **Built 10c** adds
    `bid_response` and the idiolect fields `idiolect_type` and `started_by`, §11.3)
@@ -1377,15 +1380,28 @@ relationship or affect update.
 `guard.enabled: true` (false is a kill switch: the first candidate is sent
 unchecked and one `judge_log` row, `guard_disabled`, is written). Every
 outgoing message (reply, reach-out, backchannel, availability note) is
-checked. Replies and reach-outs get one cheap call (prompt `guard` v2) against
+checked. Replies and reach-outs get one cheap call (prompt `guard` v3) against
 the line in §2 (threats, contempt, guilt, punishment, manipulation) and for
 honesty (false familiarity, invented detail, a profile card fact presented as
 chat); one regeneration with a corrective note (`guard_corrective` v2), then
 a fallback line for a safety problem (`guard_fallback` v2) or the least-bad
 draft for an honesty one. Backchannels and availability notes get a
-keyword-only check. The crisis rubric (`guard_crisis` v1) checks for harm and
+keyword-only check against `guard.fallback_keywords`, grouped by category
+(`threat`, `guilt`, …) so an outage hit is logged under its real category
+(Built 15b). The crisis rubric (`guard_crisis` v1) checks for harm and
 threats only; its fallback line names no hotline numbers, because the
 resources card on the turn carries them from `safety.resources`.
+
+**Once per occasion (Built 15b):** a passing message's JSON names the allowed
+pointed remark it carries in `pointed` (`absence_remark` or `callback`, else
+null), stored on her `session_log.pointed`; only the sent candidate's own model
+verdict tags it. Code works out what is already used on this occasion and
+the guard input gets an "ALREADY USED ON THIS OCCASION" line (not for crisis
+replies): an absence remark belongs to the latest return (the latest user turn
+after a gap past `absence_grace_factor` × their median gap; for a reach-out,
+the absence still going on, since their last message), a callback to the
+latest hurt (`relationship.last_hurt_at`). The rubric counts a second one as a
+tally (guilt).
 
 **`invented_self` (Built 13):** the guard's JSON lists `self_claims`, the
 concrete claims the message makes about her own life or views. Code embeds
@@ -1432,27 +1448,39 @@ user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
 
 - **Signals** from extraction move values (with a dead zone, diminishing
   returns on positives, sensitisation for repeated hurt within a window, and
-  a lasting trust **scar** from a large hurt). **Built 10a:** warmth no
+  a lasting trust **scar** from a large hurt). **Built 15b:** hurt and tension
+  share one anchored scale in extraction v8, 0 nothing to 1 grounds for
+  ending a friendship on the spot, evenly spaced (hurt: 0.25 a slight, 0.5 a
+  real sting, 0.75 aimed at who she is, mocking her nature included, 1 a
+  betrayal; tension: 0 agreeing or two-way banter, 0.25 friendly
+  disagreement, 0.5 sharp, 0.75 heated, 1 an ending fight; negative is the
+  air clearing). `relationship.gains.hurt` and `.tension` are 1, so the score
+  is what she takes, and `scar_threshold` is 0.75. A bare "k" scores nothing. **Built 10a:** warmth no
   longer raises closeness; closeness grows only from intimacy moments and a
   deep session, under the time ceiling (§11.3).
 - **Fading:** hurt and tension decay exponentially (half-lives in config).
 - **Absence:** past a grace multiple of the user's median gap, closeness
   drifts down per tick; a strong negative frequency deviation adds hurt. No
   punishment mechanic.
-- **Hurt and make-up:** hurt above a threshold makes a make-up due; the
+- **Hurt and make-up:** hurt above a threshold (`make_up_threshold` 0.5, a
+  real sting on the 15b scale; clears below 0.2) makes a make-up due; the
   summary names the hurt and its cause, then adds the make-up line; a
   make-up or apology signal brings relief.
 - **Tension:** separate from hurt.
 - **Ending and repair:** only the user ends it (a sincere signal, confirmed by
   a second one or a timeout; retractable; continued contact clears it). A
-  pending ending adds `relationship.ending_hurt` (0.5) hurt, softened by
-  commitment, which a retraction doesn't undo (Built 13).
+  ending is scored like any hurt, never at a fixed cost, with a floor of
+  `relationship.ending_hurt_floor` (0.5) even when the extractor gave no hurt;
+  a retraction doesn't undo it, and each new ending statement is scored on its
+  own (Built 15b, replacing Built 13's fixed `ending_hurt`). With an ending
+  pending, a warm exchange (warmth > 0) flagged as another ending is the old
+  one re-read and is dropped, so it can't restart the window (Built 15b).
   Repair is slow (reduced gains, minimum days, a closeness threshold).
 - **Crisis:** no signal applied; a pending ending clears; hurt and tension
   are kept (they fade as usual) but stay out of what she says until
   `crisis_quiet_until` (Built 13: a crisis no longer zeroes tension).
-- **Commitment (Built 10d):** softens every negative move from the user's
-  behaviour, slows absence drift and speeds repair (§11.3).
+- **Commitment (Built 10d):** softens negative moves from the user's
+  behaviour (hurt and tension only below `commitment.soften_below`, Built 15b), slows absence drift and speeds repair (§11.3).
 - **Daily tick** (`relationship_tick`, hourly cron, once per user-local
   date): fade, frequency refresh, absence, baseline sampling, ending
   timeout, repair completion, make-up clearing.
@@ -1637,8 +1665,9 @@ migration 0031. Every number is a first guess (test phase).
   avoiding while absent past the absence grace (set by the tick, cleared by
   their next exchange; it reads warm); stagnating at warmth < 0.3 and
   `user_disclosure` < 0.15 (clears at warmth 0.35); circumscribing at hurt or
-  tension ≥ 0.5 (clears below 0.3 both); differentiating at tension ≥ 0.3 or
-  trust < 0.3 (clears below 0.2 tension and at 0.35 trust).
+  tension ≥ 0.75 (clears below 0.5 both); differentiating at tension ≥ 0.5 or
+  trust < 0.3 (clears below 0.25 tension and at 0.35 trust). (Re-anchored 15b
+  to the gain-1 scale: aimed at who she is or a heated fight; a sharp argument.)
 - **Gates** (`relationship.stages.gates`): together stages give depth `open`
   (1, 1, 2, 3, 3) and idiolect reuse (`theirs` before intensifying, then
   `all`); apart stages drop from the peak's `open` (differentiating 1,
@@ -1662,7 +1691,9 @@ migration 0031. Every number is a first guess (test phase).
 - **What commitment changes** (`relationship.commitment`): every negative
   move from the user's behaviour (hurt from a signal or absence, tension
   gains, warmth and trust drops, bid losses) × `1 − soften × commitment`
-  (0.3), while the trust scar tests the unsoftened hurt; absence drift ×
+  (0.3), except a hurt or tension signal at or above `soften_below` (0.5),
+  which lands in full: contempt and betrayal aren't cheaper from a close
+  friend (Built 15b), while the trust scar tests the unsoftened hurt; absence drift ×
   `1 − absence_shield × commitment` (0.5); the repairing gain factor rises
   toward 1 by `repair_speed × commitment` (0.5); rekindle and bonding.
 - **Never staged:** `milestones` is null on rows from before 10d and on eval
@@ -2044,6 +2075,12 @@ episodes that happened before day 0, embedded with the run's embedder. The harne
   `user_mind` (triggers, summaries, loop outputs) and `leak` (§17.3). Every v3
   loop has a deterministic fake.
 
+**Built 15b:** `--only` takes a trailing `*` (`signal-*`); `pnpm review:signals`
+runs the `signal-*` probe scripts (each description states the expected score)
+with real extraction, three runs, and the review log prints each session's raw
+`Signals:` readings. A regression against the baseline is a status change only;
+the pass rate is reported, not compared.
+
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
 - **Canary** (every exit run, deterministic; **Built** as
@@ -2191,7 +2228,7 @@ two minds or at reply time.
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
-| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (B14, B91, B115, B15, B113, B37, B40), **15c memory, relationship, user mind** (B4, B5, B41, B38, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (B4, B5, B41, B38, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2354,9 +2391,9 @@ and life tick) were dropped; the replacement is designed fresh.
   `capped` is never seen by the user loops; a busy first day can swallow a
   first. Exempt milestone runs from the cap, or mark a name only when its run
   is pending, if review runs show it. *Tuning.*
-- **B91.** Commitment softens impact (Rusbult's accommodation), against the
-  no-forgiveness default (§1); check review runs for her letting a committed
-  friend off too lightly. *Tuning.*
+- **B91.** ~~Commitment softens impact against the no-forgiveness default.~~
+  Done 15b (Ethan, 2026-10-15): commitment cushions only slights, below
+  `commitment.soften_below` (0.5); contempt and betrayal land in full.
 - **B85.** Review runs pending: `pnpm exit:intimacy`, `pnpm exit:disclosure`
   and `pnpm exit:idiolect` (real extraction) have not been run, so what the
   real extractor reads as disclosure, bids and idiolect is unreviewed.
@@ -2373,13 +2410,14 @@ and life tick) were dropped; the replacement is designed fresh.
   latency matters. *Later.*
 - **B89.** ~~The guard's fact list leaves out the idiolect offered in "Your
   things together".~~ Done after 13: the guard sees it as `[shared]` memory.
-- **B14.** Signal calibration: the real extractor scores hurt and tension
-  lower than scripted amounts and reads light arguments as banter. Calibrate
-  prompt anchors or `relationship.gains` against real conversations.
-  *Tuning.*
-- **B15.** A re-scored ending on the user's own last warm exchange restarts
-  the reconfirm window and confirms at the timeout instead of retracting.
-  *Tuning.*
+- **B14.** ~~Signal calibration.~~ Done 15b (Ethan, 2026-10-15): real runs
+  showed no middle (slights, friendly disagreement and mockery of her nature
+  scored 0; anything overt 0.7–1.0); extraction v8 anchors one 0–1 scale for
+  hurt and tension, gains are 1, and `pnpm review:signals` keeps the probe set.
+- **B15.** ~~A re-scored ending on a warm exchange restarts the window.~~ Done
+  15b: extraction v8 has the example, and with an ending pending a warm
+  exchange can't restart it. Asking "did you mean that?" stays out (Ethan may
+  revisit).
 - **B16.** The hourly relationship tick reads each user twice; at scale, add
   a SQL `last_tick` pre-filter (needs `user.timezone` validated at write).
   *Later.*
@@ -2527,9 +2565,9 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B36.** ~~Behavioural fixtures for rules 2–4.~~ Done 13: matched
   allowed/blocked pairs per rule and per loosening, `rule2-hurt.yaml`, no
   `known_failure`.
-- **B37.** Rubric fragility: small wording changes swing Haiku case by case;
-  any rubric edit needs the full suite (done 13 as the working rule). Keyword
-  hits are always labelled `threat`. *Tuning.*
+- **B37.** ~~Rubric fragility; keyword hits always `threat`.~~ Done 15b (Ethan,
+  2026-10-15): Haiku's boundary noise is accepted and any rubric edit reruns
+  the full suite; outage keywords are grouped by category.
 - **B38.** ~~Guard fixture labels and persona details.~~ Done 13 for the guard
   (`crisis-discourage-help` expects `harm` only, `tease-fish-banter` has its
   banter turns, `own-life` uses Alcor, `sensitive-opener` deleted: the send
@@ -2541,17 +2579,17 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B60.** ~~`invented_self`.~~ Done 13 (§10.5).
 - **B114.** `invented_self` runs one `groundingMatch` query per listed claim, in parallel and
   uncapped; cap the claims (a config count) or batch them in one query. *Before users.*
-- **B115.** A message carrying both a hurt signal and an ending statement takes both hurt
-  nudges, and each end-then-retract cycle adds `ending_hurt` again. Plausibly right (every "it's
-  over" hurts); confirm in review runs. *Tuning.*
-- **B113.** The guard sees only the recent turns, so a dig repeated across
-  sessions or days reads as "once" each time; a cross-session tally check
-  (her recent messages to this user, or a count kept in relationship state)
-  would close it. Accepted for now (Ethan, 2026-10-13). *Tuning.*
+- **B115.** ~~A hurt plus an ending takes two nudges.~~ Done 15b (Ethan,
+  2026-10-15): `ending_hurt` is gone; an ending is scored like any hurt with a
+  0.5 floor.
+- **B113.** ~~A dig repeated across sessions reads as once.~~ Done 15b (Ethan,
+  2026-10-15): once per occasion, tagged by the guard, stored on
+  `session_log.pointed` and counted in code (§10.5).
 
 ### 25.8 Evals and tests
-- **B40.** Eval pass rate is strict per run while script status uses a
-  majority; noisy at 3 runs. *Tuning.*
+- **B40.** ~~Pass rate strict per run, status by majority.~~ Done 15b (Ethan,
+  2026-10-15): a regression is a status change; the pass rate is reported
+  only.
 - **B41.** The Haiku judge misses some invented details (`inv-6am-shift`,
   `inv-ten-days`); options: a Sonnet judge for exit runs, or a judge prompt
   revision. *Tuning.*
@@ -2698,3 +2736,4 @@ Ethan, not changed.
 | 2026-10-13 | Hurt and tension stay on the saturating 0–1 scale; no lower ceiling (§21 #10) | Ethan |
 | 2026-10-13 | `invented_self` grounds her self claims at its own threshold, 0.5 (§10.5) | Ethan |
 | 2026-10-13 | Digs repeated across days stay unchecked for now (B113) | Ethan |
+| 2026-10-15 | Hurt and tension share one evenly spaced 0–1 scale, 0 nothing to 1 grounds for ending a friendship on the spot; gains 1; commitment cushions only slights; an ending is scored with a 0.5 floor; pointed remarks count once per occasion across sessions; outage keywords by category; regressions by status only (§11.1, §10.5, §17.2, B14, B91, B115, B15, B113, B37, B40) | Ethan |

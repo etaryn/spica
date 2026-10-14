@@ -31,6 +31,7 @@ test("neutral state → no line; non-neutral dimensions → one phrase each, no 
       c.core.state,
       phrases,
       "s",
+      c.voice.feeling_max_lines,
     ),
   ).toBeNull();
   const line = coreStateLine(
@@ -44,6 +45,7 @@ test("neutral state → no line; non-neutral dimensions → one phrase each, no 
     c.core.state,
     phrases,
     "s",
+    c.voice.feeling_max_lines,
   )!;
   expect(phrases["energy low"]!.some((p) => line.includes(p))).toBe(true);
   expect(phrases["mood_valence high"]!.some((p) => line.includes(p))).toBe(true);
@@ -80,6 +82,7 @@ test("a current emotion is in the line, with what it's about", () => {
     c.core.state,
     phrases,
     "s",
+    c.voice.feeling_max_lines,
   )!;
   expect(line).toContain("giddy");
   expect(line).toContain("the telescope images");
@@ -91,6 +94,33 @@ test("a low need gets its phrase", () => {
     c.core.state,
     phrases,
     "s",
+    c.voice.feeling_max_lines,
   )!;
   expect(phrases["autonomy low"]!.some((p) => line.includes(p))).toBe(true);
+});
+
+test("the line is capped, emotion first, then the state furthest past its band", () => {
+  const line = coreStateLine(
+    {
+      mood_valence: -0.9,
+      mood_arousal: 0.75,
+      energy: 0.3,
+      needs: { autonomy: 0.1, competence: 0.1 },
+      emotion: {
+        label: "flat",
+        valence: -0.5,
+        arousal: 0.2,
+        phrase: null,
+        about: null,
+        since: "2026-01-05T00:00:00Z",
+      },
+    },
+    c.core.state,
+    phrases,
+    "s",
+    2,
+  )!;
+  expect(line.startsWith("You're feeling flat.")).toBe(true);
+  expect(phrases["mood_valence low"]!.some((p) => line.includes(p))).toBe(true);
+  expect(phrases["energy low"]!.some((p) => line.includes(p))).toBe(false);
 });

@@ -9,8 +9,11 @@ import {
   type RelationshipState,
 } from "@/mind/state/user/relationship/types";
 
-const cfg = loadConfig().relationship;
-const phrases = parseSummaryPhrases(loadPrompt("relationship/summary", "v2"));
+const config = loadConfig();
+const cfg = config.relationship;
+const phrases = parseSummaryPhrases(
+  loadPrompt("relationship/summary", config.prompts.relationship_summary),
+);
 const now = new Date("2026-01-05T10:00:00Z");
 const init = (): Params =>
   Object.fromEntries(
@@ -43,12 +46,14 @@ const fresh = (): RelationshipState => ({
 });
 
 test("phrases file has every key the summary can ask for", () => {
-  // Afterglow only ever sits above its baseline, so it has no "below" lines. The user's openness
+  // Afterglow only ever sits above its baseline, so it has no "below" lines; hurt and tension below
+  // baseline mean nothing is wrong, which goes unsaid. The user's openness
   // reaches her through how open she feels, not through "You and them".
   for (const p of PARAM_NAMES) {
     // Commitment is never phrased: the stage line carries how she is with them.
     if (p === "user_disclosure" || p === "user_responsiveness" || p === "commitment") continue;
-    for (const dir of p === "afterglow" ? ["above"] : ["above", "below"])
+    const quietBelow = p === "afterglow" || p === "hurt" || p === "tension";
+    for (const dir of quietBelow ? ["above"] : ["above", "below"])
       for (const band of ["strong", "mild"])
         expect(phrases[`${p} ${dir} ${band}`]?.length, `${p} ${dir} ${band}`).toBeGreaterThan(0);
   }
@@ -146,4 +151,14 @@ test("a param with no phrase for its deviation never takes a line slot", () => {
   p.trust.value = p.trust.baseline - 0.3;
   const lines = summaryLines({ state: fresh(), params: p, cause: null }, now, cfg, phrases);
   expect(lines).toHaveLength(2);
+});
+
+test("no line ever says nothing is wrong", () => {
+  for (const key of [
+    "hurt below strong",
+    "hurt below mild",
+    "tension below strong",
+    "tension below mild",
+  ])
+    expect(phrases[key], key).toBeUndefined();
 });

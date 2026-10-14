@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { insertJudgeLogs } from "@/db/repos/user/judge-log";
+import type { TurnConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { loadPrompt } from "@/mind/platform/prompts";
@@ -127,7 +128,11 @@ export async function judgeTurn(
     return {
       complete: verdict.complete,
       open_questions: verdict.open_questions.slice(0, config.turn.max_open_questions),
-      backchannel: usableBackchannel(verdict, config.turn.backchannel_max_words),
+      backchannel: usableBackchannel(
+        verdict,
+        input.buffer.map((m) => m.text),
+        config.turn,
+      ),
       reasoning: verdict.reasoning,
       source: "model",
       latencyMs: elapsed(),
@@ -152,14 +157,36 @@ export async function judgeTurn(
   }
 }
 
-/** A backchannel only makes sense mid-thought, and only if it's tiny. */
-function usableBackchannel(
+/**
+ * A backchannel is a tiny "I'm listening" mid-story: never once they've finished, never on a
+ * greeting with nothing yet to react to, and never their own words handed back.
+ */
+export function usableBackchannel(
   verdict: { complete: boolean; backchannel: string | null },
-  maxWords: number,
+  buffer: string[],
+  turn: Pick<TurnConfig, "backchannel_max_words" | "greeting_words">,
 ): string | null {
   const text = verdict.backchannel?.trim() ?? "";
   if (verdict.complete || !text) return null;
-  return text.split(/\s+/).length <= maxWords ? text : null;
+  if (text.split(/\s+/).length > turn.backchannel_max_words) return null;
+
+  const greetings = new Set(turn.greeting_words.flatMap(plainWords));
+  const theirs = buffer.flatMap(plainWords);
+  if (theirs.every((w) => greetings.has(w))) return null;
+
+  const said = new Set(theirs);
+  const mine = plainWords(text);
+  return mine.length && mine.every((w) => said.has(w)) ? null : text;
+}
+
+/** Lowercase letters and digits only, with stretched letters folded ("hiii" is "hi"). */
+function plainWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.replace(/(.)\1+/g, "$1"));
 }
 
 /** One judge_log row per decision: ids and question text only. Bounded in time; never rejects. */

@@ -219,7 +219,7 @@
     "guard_crisis": "v1",
     "guard_corrective": "v2",
     "guard_fallback": "v2",
-    "turn_judge": "v1",
+    "turn_judge": "v2",
     "relationship_summary": "v2",
     "relationship_openness": "v1",
     "relationship_stage": "v1",

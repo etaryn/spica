@@ -21,11 +21,13 @@ export async function usedOnOccasion(
   const gapHours =
     settings.absence_grace_factor * (cadence.median_gap_hours ?? settings.default_median_gap_hours);
 
-  // A reach-out speaks into the absence still going on; a reply follows their latest return.
-  const absenceSince =
-    kind === "reach_out"
-      ? ((await lastUserTurn(db, userId))?.created_at ?? null)
-      : await lastReturnAt(db, userId, gapHours);
+  // A reach-out speaks into the absence still going on, so only her earlier reach-outs in it count;
+  // a reply she sent before the silence belonged to the last occasion. A reply follows their latest
+  // return.
+  const reachOut = kind === "reach_out";
+  const absenceSince = reachOut
+    ? ((await lastUserTurn(db, userId))?.created_at ?? null)
+    : await lastReturnAt(db, userId, gapHours);
   const since: Record<Pointed, Date | null> = {
     absence_remark: absenceSince,
     callback: row?.last_hurt_at ?? null,
@@ -34,7 +36,8 @@ export async function usedOnOccasion(
   const used: Pointed[] = [];
   for (const p of POINTED) {
     const from = since[p];
-    if (from && (await pointedSince(db, userId, from)).includes(p)) used.push(p);
+    const onlyReachOuts = reachOut && p === "absence_remark";
+    if (from && (await pointedSince(db, userId, from, onlyReachOuts)).includes(p)) used.push(p);
   }
   return used;
 }

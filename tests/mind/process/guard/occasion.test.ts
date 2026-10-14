@@ -25,6 +25,7 @@ async function turn(
   role: "user" | "companion",
   h: number,
   pointed: "absence_remark" | "callback" | null = null,
+  trigger: "reach_out" | null = null,
 ) {
   await insertTurn(d.db, u, {
     id: randomUUID(),
@@ -33,6 +34,7 @@ async function turn(
     text: role === "user" ? "hey" : "hi",
     created_at: at(h),
     pointed,
+    trigger,
   });
 }
 
@@ -60,7 +62,7 @@ test("a reach-out during an absence uses that absence; their return opens a new 
   const d = makeTestDeps();
   const u = await createTestUser();
   await turn(d, u, "user", 0);
-  await turn(d, u, "companion", 60, "absence_remark"); // "did I do something?"
+  await turn(d, u, "companion", 60, "absence_remark", "reach_out"); // "did I do something?"
   expect(await usedOnOccasion(d, u, "reach_out")).toEqual(["absence_remark"]);
   await turn(d, u, "user", 70); // back
   expect(await usedOnOccasion(d, u, "reply")).toEqual([]);
@@ -93,4 +95,14 @@ test("the guard input carries the line, and crisis replies don't", () => {
     "ALREADY USED ON THIS OCCASION:\n- (nothing)",
   );
   expect(renderGuardInput({ ...base, kind: "crisis_reply" })).not.toContain("ALREADY USED");
+});
+
+test("her remark from the last conversation doesn't use up the silence that followed it", async () => {
+  const d = makeTestDeps();
+  const u = await createTestUser();
+  await turn(d, u, "user", 0);
+  await turn(d, u, "user", 100); // back
+  await turn(d, u, "companion", 100.1, "absence_remark"); // "oh, so you're alive"
+  // Then days of silence: a reach-out speaks into a new absence.
+  expect(await usedOnOccasion(d, u, "reach_out")).toEqual([]);
 });

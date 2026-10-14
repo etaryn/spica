@@ -251,8 +251,13 @@ export async function lastReturnAt(db: Db, userId: string, gapHours: number): Pr
   return toDateOrNull(res.rows[0]?.created_at);
 }
 
-/** Which of her pointed remarks she has sent since `since`. */
-export async function pointedSince(db: Db, userId: string, since: Date): Promise<string[]> {
+/** Which of her pointed remarks she has sent since `since`; `reachOutsOnly` counts only reach-outs. */
+export async function pointedSince(
+  db: Db,
+  userId: string,
+  since: Date,
+  reachOutsOnly = false,
+): Promise<string[]> {
   const rows = await db
     .selectDistinct({ pointed: session_log.pointed })
     .from(session_log)
@@ -262,6 +267,7 @@ export async function pointedSince(db: Db, userId: string, since: Date): Promise
         eq(session_log.role, "companion"),
         gte(session_log.created_at, since),
         sql`${session_log.pointed} is not null`,
+        reachOutsOnly ? eq(session_log.trigger, "reach_out") : undefined,
       ),
     );
   return rows.map((r) => r.pointed!);

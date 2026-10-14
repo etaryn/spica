@@ -242,9 +242,9 @@ is never an exit criterion: on-demand review runs log every input and output.
 
 ## Open decisions: ask Ethan, don't settle (v3 §21)
 1 big-event triggers · 2 core values split · 3 faces limit · 4 core vs what
-she told a user · 6 drift response · 7 user-loop
-outputs feeding outreach · 8 attachment at onboarding · 9 phase order.
-Settled: #10 hurt/tension ceilings (the 0–1 scale); #11 the line (v3 §2); fixed Spica; core memory storage (#5:
+she told a user · 6 drift response · 8 attachment at onboarding · 9 phase order.
+Settled: #7 user-loop outputs to outreach (ideas yes, reflections no); #10 hurt/tension
+ceilings (the 0–1 scale); #11 the line (v3 §2); fixed Spica; core memory storage (#5:
 separate core tables behind `CoreMemory`); `adjacent` interests (reply time
 only); backchannel style global `judge`; shared day plan; reach-out caps
 1/day, 3/week, silence after 2 unanswered; honest identity disclosure.

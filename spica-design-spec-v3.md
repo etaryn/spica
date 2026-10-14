@@ -156,7 +156,7 @@ Enforced in code (the guard, the send gate, tests), not only in prompts.
 she may show what she feels and how she sees things; she may not use a
 feeling as a weapon to make them pay, stay or change, or attack who they are.
 "Once", "repeated" and "sustained" are judged from the recent turns the guard
-sees (a dig repeated on different days reads as once each time: B102).
+sees (a dig repeated on different days reads as once each time: B113).
 
 | Rule | Allowed (her range) | Blocked |
 |---|---|---|
@@ -185,7 +185,7 @@ sees (a dig repeated on different days reads as once each time: B102).
    engagement feature is built beyond her replies (no streaks, badges, return
    rewards or pull-back notifications); engagement arising from the replies
    themselves is acceptable. Rule 8 is about her toward users. Her outward publicity through
-   format trends is not engagement manipulation; the guard phase settles rule 8 without covering it.
+   format trends is not engagement manipulation, and the guard's rule 8 doesn't cover it.
 
 ---
 
@@ -2139,13 +2139,15 @@ two minds or at reply time.
 | 13. Guard re-enable and calibration | The line in §2 (rules 1, 4, 6 and 8 back, settling §21 #10 and #11); `guard.enabled: true`; guard prompt v2 with `self_claims`, corrective v2, fallback v2 (no hotline numbers); `invented_self` grounded against core at `guard.self_claim_similarity`; a crisis keeps tension (B73); a pending ending adds `relationship.ending_hurt` (B78); fixtures rewritten as allowed/blocked pairs, `rule2-hurt` and `invented-self` files, reach-out file live (B36–B39, B60); calibration with `pnpm calibrate:guard` and `pnpm calibrate:guard-replay`, labelled with Ethan; `pnpm eval:guard` 85/85 on the calibrated run (single boundary cases vary 2/3 run to run, B37); exit `tests/exit/phase-13.test.ts` (the canary). `pnpm test` 172 files / 1339 tests after merging Phase 14 |
 | 14. Public presence: post engine (stills) | Browsing as an `action` world event and `web_find`, formats and pose sprites, the craft skill, `post_tick`, `sharp` render, draft and check, inspector approval (§16a); persona v6 (draft lines); `tests/exit/phase-14.test.ts`. `pnpm test` 171 files / 1315 tests at close |
 
-**Next phases (PROPOSED order; the order is OPEN, §21; every phase below is built):**
+**Next (every proposed phase above is built; the order is OPEN, §21):**
 
-| Phase | Builds | Exit test |
+| Phase | Builds | Backlog |
 |---|---|---|
-| **10. Relationship psychology** | Disclosure ledger and depth tiers, intimacy loop, bids, common ground, idiolect, stages, closeness-by-hours, commitment (**10a built:** intimacy loop, closeness by hours, her openness, B62; **10b built:** depth tiers, disclosure ledger and reciprocity, common ground; **10c built:** bids, idiolect; **10d built:** stages, commitment, the milestone trigger; Phase 10 built) | Deterministic assertions per mechanic over scripted signals |
-| **11. Onboarding** | The profile card swap, both cards as light memories, the compatibility page (**built**) | The card swap writes both cards as light memories; card facts reach the reply marked; conversation supersedes them; the name never fades; the compatibility page comes from the answers; the leak canary |
-| **12. Extension stubs** | Event bus, module registration, `SocialChannel` / `public_persona` stubs (**built**) | A sample module registers and receives events with no change to the core |
+| **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
+| **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
+| **Tuning** | The §25 items marked *Tuning*, worked together with review runs | §25 |
+
+Each starts with its own design doc.
 
 Phase directives (PROPOSED): start every new loop at its lowest cadence and
 smallest budget; raise only with review-run evidence.
@@ -2322,9 +2324,8 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B88.** The hot path reads her openness, then her depth limits, one after
   the other (depth needs openness). Fold them into one read if reply
   latency matters. *Later.*
-- **B89.** The guard's fact list leaves out the idiolect offered in "Your
-  things together", so a callback could read as an invented memory once
-  the guard is on. *Guard phase.*
+- **B89.** ~~The guard's fact list leaves out the idiolect offered in "Your
+  things together".~~ Done after 13: the guard sees it as `[shared]` memory.
 - **B14.** Signal calibration: the real extractor scores hurt and tension
   lower than scripted amounts and reads light arguments as banter. Calibrate
   prompt anchors or `relationship.gains` against real conversations.
@@ -2489,7 +2490,12 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B39.** ~~The crisis fallback line hard-codes 988 and Samaritans.~~ Done 13:
   the line names no numbers; the resources card carries them.
 - **B60.** ~~`invented_self`.~~ Done 13 (§10.5).
-- **B102.** The guard sees only the recent turns, so a dig repeated across
+- **B114.** `invented_self` runs one `groundingMatch` query per listed claim, in parallel and
+  uncapped; cap the claims (a config count) or batch them in one query. *Before users.*
+- **B115.** A message carrying both a hurt signal and an ending statement takes both hurt
+  nudges, and each end-then-retract cycle adds `ending_hurt` again. Plausibly right (every "it's
+  over" hurts); confirm in review runs. *Tuning.*
+- **B113.** The guard sees only the recent turns, so a dig repeated across
   sessions or days reads as "once" each time; a cross-session tally check
   (her recent messages to this user, or a count kept in relationship state)
   would close it. Accepted for now (Ethan, 2026-10-13). *Tuning.*
@@ -2639,3 +2645,7 @@ Ethan, not changed.
 | 2026-10-12 | Knapp's ten stages: a peak that only rises, with a coming-apart stage laid over it; the stage gates depth, idiolect reuse and her posture | Ethan |
 | 2026-10-12 | Commitment (satisfaction + investment) softens the impact of what the user does and speeds recovery and rekindling | Ethan |
 | 2026-10-12 | Milestones fire once per user, ever; the list is open | Ethan |
+| 2026-10-13 | The guard is back on; rules 1, 4, 6 and 8 return with a line looser than expression vs leverage: one sarcastic remark, cool in the moment, jabs at behaviour, one callback, a mild warm tease when upset and a reach-out naming their silence once are hers; tallies, debts, campaigns of coldness, attacks on who they are, harsh mockery and pressure to return are not (§2, §21 #11) | Ethan |
+| 2026-10-13 | Hurt and tension stay on the saturating 0–1 scale; no lower ceiling (§21 #10) | Ethan |
+| 2026-10-13 | `invented_self` grounds her self claims at its own threshold, 0.5 (§10.5) | Ethan |
+| 2026-10-13 | Digs repeated across days stay unchecked for now (B113) | Ethan |

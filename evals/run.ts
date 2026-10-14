@@ -46,7 +46,7 @@ const { realPurposes, realCalls, anyReal, realScripts, fake } = resolveProfile({
 });
 
 const usage = new UsageTally();
-// The fake side: keyword crisis classifier, no-op cold path, and a guard that passes everything ("guard off").
+// The fake side: keyword crisis classifier, no-op cold path, and a guard that passes everything.
 const fakeProvider = () =>
   new FakeLLMProvider({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),

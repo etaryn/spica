@@ -101,3 +101,12 @@ test("the slot's items go to the cold path as recalls", async () => {
   const { r } = await talk(d, friend);
   expect(r.recalled.some((x) => x.factId === id && !x.forced)).toBe(true);
 });
+
+test("the guard sees the things together she was offered, so a callback isn't an invented memory", async () => {
+  const d = makeTestDeps();
+  const friend = await user(d, 0.5);
+  await idiolect(d, friend, HERS, true);
+  await talk(d, friend);
+  const guardInput = d.llm.structuredCalls.find((c) => c.purpose === "guard")!.input;
+  expect(guardInput).toContain(`[shared] ${HERS}`);
+});

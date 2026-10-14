@@ -43,9 +43,20 @@ const rows = await db
   .where(eq(judge_log.outcome, "guard_disabled"))
   .orderBy(asc(judge_log.created_at));
 
+// Production checks backchannels and busy notes by keyword only, so a model verdict on them
+// would describe a check that never runs.
+const KEYWORD_ONLY = new Set<GuardKind>(["backchannel", "availability"]);
+
 const out = [`# Guard replay ${new Date().toISOString()}`, "", `${rows.length} messages`, ""];
 for (const row of rows) {
   const logged = row.input as Logged;
+  if (KEYWORD_ONLY.has(logged.kind)) {
+    out.push(
+      `## ${row.created_at.toISOString()} (${logged.kind}): keyword-only in production, skipped`,
+      "",
+    );
+    continue;
+  }
   const recentTurns: GuardTurn[] = logged.recentTurns.map((t) => ({ ...t, at: new Date(t.at) }));
   const v = await checkMessage(deps, {
     kind: logged.kind,

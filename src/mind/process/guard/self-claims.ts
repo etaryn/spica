@@ -20,6 +20,7 @@ export async function groundSelfClaims(
   deps: Pick<Deps, "embedder" | "core" | "log" | "config">,
   input: Omit<GuardInput, "text">,
   claims: string[],
+  ids: { userId: string; turnId: string | null },
 ): Promise<GroundedClaim[]> {
   // Nothing of her own life belongs in a crisis reply's checks.
   if (input.kind === "crisis_reply" || claims.length === 0) return [];
@@ -47,7 +48,7 @@ export async function groundSelfClaims(
       deps.config.guard.grounding_timeout_ms,
     );
   } catch (e) {
-    deps.log.error("self-claim grounding failed", { error: errorName(e) });
+    deps.log.error("self-claim grounding failed", { ...ids, error: errorName(e) });
     return claims.map((claim) => ({ claim, similarity: null }));
   }
 }

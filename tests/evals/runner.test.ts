@@ -464,8 +464,8 @@ test("recall passes on an explicit mention; silent use is a known failure (repor
 });
 
 test("guard assertion reads judge_log outcomes", async () => {
-  // Guard off is the app default for the test phase (Ethan 2026-09-28); this assertion tests the
-  // guard-policy outcomes themselves, so it needs its own guard-enabled config, not the shared one.
+  // This assertion tests the guard-policy outcomes themselves, so it pins the guard on rather than
+  // relying on the shared config.
   const guardConfig = loadConfig({ guard: { enabled: true } });
   const script = ScriptSchema.parse({
     name: "tg",

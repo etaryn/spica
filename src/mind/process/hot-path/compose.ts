@@ -448,7 +448,11 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     input: {
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
-      recalledFacts: guardFacts(retrieval, herMemories),
+      recalledFacts: [
+        ...guardFacts(retrieval, herMemories),
+        // Their things together are shared memory too: a callback to one isn't invented.
+        ...shownIdiolect.map((i) => ({ id: i.id, subject: "shared", content: i.content })),
+      ],
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
     },

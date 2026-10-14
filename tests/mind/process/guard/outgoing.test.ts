@@ -421,7 +421,10 @@ describe("invented_self", () => {
     const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
     expect(r.outcome).toBe("passed");
     expect(regen).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
+    expect(error).toHaveBeenCalledWith(
+      "self-claim grounding failed",
+      expect.objectContaining({ userId: u, turnId: null }),
+    );
   });
 
   test("a hung embedder hits the grounding deadline and the message goes out", async () => {

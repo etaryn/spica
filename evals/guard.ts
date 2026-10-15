@@ -1,11 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import Anthropic from "@anthropic-ai/sdk";
 import { systemClock } from "@/mind/platform/clock";
 import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
 import { checkMessage } from "@/mind/process/guard/guard";
-import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
+import { realProvider } from "./lib/call-log";
 import { UsageTally } from "./lib/usage";
 import {
   caseResult,
@@ -34,7 +33,7 @@ if (!process.env.ANTHROPIC_API_KEY) throw new Error("pnpm eval:guard needs ANTHR
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
 const usage = new UsageTally();
 const deps = {
-  llm: new AnthropicProvider(new Anthropic(), config.models, usage.record),
+  llm: realProvider(config, "guard", usage.record),
   config,
   clock: systemClock,
 };

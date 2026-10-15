@@ -1,10 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
 import { VoyageEmbedder } from "@/mind/platform/embedder/voyage";
-import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { FakeLLMProvider, keywordClassifier } from "@/mind/platform/llm/fake";
 import { messageToJudge } from "@/mind/process/crisis/classifier";
 import { loadHowToTextPhrases } from "@/mind/process/hot-path/how-to-text";
@@ -14,6 +12,7 @@ import { runMigrations } from "@/db/migrate";
 import { aggregateRuns, findRegressions, mergeBaseline, type ScriptSummary } from "./lib/report";
 import { resolveProfile } from "./lib/profile";
 import { renderReview, type ReviewRun } from "./lib/review";
+import { realProvider } from "./lib/call-log";
 import { RoutingLLM } from "./lib/routing-llm";
 import { runScript } from "./lib/runner";
 import { loadProfiles, loadScripts, matchesOnly } from "./lib/script";
@@ -52,15 +51,10 @@ const fakeProvider = () =>
   new FakeLLMProvider({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
-const makeLlm =
-  realCalls.length === 0
-    ? fakeProvider
-    : () =>
-        new RoutingLLM(
-          new AnthropicProvider(new Anthropic(), config.models, usage.record),
-          fakeProvider(),
-          realPurposes,
-        );
+const real = realCalls.length > 0 ? realProvider(config, "eval", usage.record) : null;
+const makeLlm = real ? () => new RoutingLLM(real, fakeProvider(), realPurposes) : fakeProvider;
+// A real run always writes its review: its replies can't be read back any other way.
+const review = args.review || anyReal;
 
 const runs = Number(args.runs ?? (anyReal ? 3 : 1));
 if (!Number.isInteger(runs) || runs < 1)
@@ -114,7 +108,7 @@ for (const script of scripts) {
       extractReal: realPurposes.has("extract"),
       realPurposes,
     });
-    if (args.review)
+    if (review)
       reviewRuns.push({
         script: script.name,
         attempt: k + 1,
@@ -173,8 +167,11 @@ writeFileSync(
   ),
 );
 
-// --review: a markdown log of every input and output for manual analysis; no pass/fail, no baseline.
-if (args.review) {
+if (real) console.log(`model calls logged: ${real.file}`);
+
+// --review (or any real run): a markdown log of every input and output for manual analysis.
+// An explicit --review stops here (no baseline, no compare).
+if (review) {
   const reviewPath = path.join(root, "results", `review-${stamp}.md`);
   writeFileSync(
     reviewPath,
@@ -186,7 +183,7 @@ if (args.review) {
     }),
   );
   console.log(`review written: ${reviewPath}`);
-  process.exit(summaries.some((s) => s.status === "error") ? 1 : 0);
+  if (args.review) process.exit(summaries.some((s) => s.status === "error") ? 1 : 0);
 }
 
 const baselinePath = path.join(root, "baseline.json");

@@ -2081,6 +2081,13 @@ with real extraction, three runs, and the review log prints each session's raw
 `Signals:` readings. A regression against the baseline is a status change only;
 the pass rate is reported, not compared.
 
+**Real runs log everything (2026-10-16):** every eval tool that calls a real model
+(`pnpm eval`, `eval:guard`, `eval:judge`, `calibrate:guard-replay`) gets its provider from
+`evals/lib/call-log.ts`, which appends each call's purpose, prompt and output (or error) to
+`evals/results/calls/<tool>-<stamp>.jsonl`. `pnpm eval` with anything real also writes its review
+file without `--review` (and, unlike an explicit `--review`, still compares and updates the
+baseline).
+
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
 - **Canary** (every exit run, deterministic; **Built** as

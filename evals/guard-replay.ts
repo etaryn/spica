@@ -6,15 +6,14 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
 import { asc, eq } from "drizzle-orm";
 import { createDb } from "@/db/client";
 import { assertLocalDatabase } from "@/db/reset-self";
 import { judge_log } from "@/db/schema";
 import { systemClock } from "@/mind/platform/clock";
 import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
-import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { checkMessage, type GuardKind, type GuardTurn } from "@/mind/process/guard/guard";
+import { realProvider } from "./lib/call-log";
 import { UsageTally } from "./lib/usage";
 
 const url = process.env.DATABASE_URL;
@@ -26,7 +25,7 @@ if (!process.env.ANTHROPIC_API_KEY)
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
 const usage = new UsageTally();
 const deps = {
-  llm: new AnthropicProvider(new Anthropic(), config.models, usage.record),
+  llm: realProvider(config, "guard-replay", usage.record),
   config,
   clock: systemClock,
 };

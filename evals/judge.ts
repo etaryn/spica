@@ -1,9 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig, parseConfigOverrides } from "@/mind/platform/config";
-import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import {
   caseResult,
   findGuardRegressions,
@@ -12,6 +10,7 @@ import {
   type GuardRunRow,
 } from "./lib/guard-cases";
 import { loadJudgeFiles, runJudgeCase } from "./lib/judge-cases";
+import { realProvider } from "./lib/call-log";
 import { UsageTally } from "./lib/usage";
 
 /**
@@ -33,7 +32,7 @@ if (!process.env.ANTHROPIC_API_KEY) throw new Error("pnpm eval:judge needs ANTHR
 
 const config = loadConfig(parseConfigOverrides(process.env.SPICA_CONFIG));
 const usage = new UsageTally();
-const llm = new AnthropicProvider(new Anthropic(), config.models, usage.record);
+const llm = realProvider(config, "judge", usage.record);
 const root = path.join(process.cwd(), "evals");
 const files = loadJudgeFiles(path.join(root, "judge"));
 const only = args.only?.split(",");

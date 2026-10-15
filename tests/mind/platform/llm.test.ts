@@ -25,7 +25,7 @@ describe("AnthropicProvider.generateReply", () => {
     });
     const p = new AnthropicProvider(client, models);
     const out = await p.generateReply({
-      system: "sys",
+      system: [{ text: "sys" }],
       messages: [{ role: "user", content: "hi" }],
     });
     expect(out).toBe("hey you");
@@ -33,20 +33,45 @@ describe("AnthropicProvider.generateReply", () => {
     expect(params).toMatchObject({
       model: "claude-sonnet-5",
       max_tokens: 4096,
-      system: "sys",
+      system: [{ type: "text", text: "sys" }],
       output_config: { effort: "low" },
     });
     expect(options).toMatchObject({ timeout: 30000, maxRetries: 1 });
   });
 
+  test("marks cached blocks per config and drops empty ones", async () => {
+    const ok = { stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] };
+    const system = [{ text: "prefix", cache: true }, { text: "" }, { text: "rest" }];
+    const sent = async (reply_cache: "off" | "5m" | "1h") => {
+      const stub = stubClient(ok);
+      await new AnthropicProvider(stub.client, { ...models, reply_cache }).generateReply({
+        system,
+        messages: [],
+      });
+      return stub.create.mock.calls[0]![0].system;
+    };
+    expect(await sent("5m")).toEqual([
+      { type: "text", text: "prefix", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "rest" },
+    ]);
+    expect((await sent("1h"))[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    expect(await sent("off")).toEqual([
+      { type: "text", text: "prefix" },
+      { type: "text", text: "rest" },
+    ]);
+  });
+
   test("reply thinking mode comes from config (disabled by default: adaptive at low effort can end on a thinking-only turn)", async () => {
     const ok = { stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] };
     const off = stubClient(ok);
-    await new AnthropicProvider(off.client, models).generateReply({ system: "s", messages: [] });
+    await new AnthropicProvider(off.client, models).generateReply({
+      system: [{ text: "s" }],
+      messages: [],
+    });
     expect(off.create.mock.calls[0]![0]).toMatchObject({ thinking: { type: "disabled" } });
     const on = stubClient(ok);
     await new AnthropicProvider(on.client, { ...models, reply_thinking: "adaptive" }).generateReply(
-      { system: "s", messages: [] },
+      { system: [{ text: "s" }], messages: [] },
     );
     expect(on.create.mock.calls[0]![0]).toMatchObject({ thinking: { type: "adaptive" } });
   });
@@ -54,11 +79,17 @@ describe("AnthropicProvider.generateReply", () => {
   test("throws on refusal or empty text", async () => {
     const refusal = stubClient({ stop_reason: "refusal", content: [] });
     await expect(
-      new AnthropicProvider(refusal.client, models).generateReply({ system: "s", messages: [] }),
+      new AnthropicProvider(refusal.client, models).generateReply({
+        system: [{ text: "s" }],
+        messages: [],
+      }),
     ).rejects.toThrow(/refus/);
     const empty = stubClient({ stop_reason: "end_turn", content: [{ type: "text", text: "  " }] });
     await expect(
-      new AnthropicProvider(empty.client, models).generateReply({ system: "s", messages: [] }),
+      new AnthropicProvider(empty.client, models).generateReply({
+        system: [{ text: "s" }],
+        messages: [],
+      }),
     ).rejects.toThrow(/empty/);
   });
 });
@@ -189,7 +220,7 @@ describe("judge effort and thinking", () => {
   test("a null effort sends none, so Haiku can serve the reply or judge role", async () => {
     const reply = stubClient({ stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] });
     await new AnthropicProvider(reply.client, { ...models, reply_effort: null }).generateReply({
-      system: "s",
+      system: [{ text: "s" }],
       messages: [],
     });
     expect(reply.create.mock.calls[0]![0]).not.toHaveProperty("output_config");
@@ -223,13 +254,13 @@ describe("usage sink", () => {
       content: [{ type: "text", text: "hi" }],
     });
     await new AnthropicProvider(reply.client, models, onUsage).generateReply({
-      system: "s",
+      system: [{ text: "s" }],
       messages: [],
     });
     const refused = stubClient({ stop_reason: "refusal", usage, content: [] });
     await expect(
       new AnthropicProvider(refused.client, models, onUsage).generateReply({
-        system: "s",
+        system: [{ text: "s" }],
         messages: [],
       }),
     ).rejects.toThrow();
@@ -330,20 +361,22 @@ describe("FakeLLMProvider", () => {
   test("replays scripted replies, then echoes", async () => {
     const f = new FakeLLMProvider();
     f.replies.push("first");
-    expect(await f.generateReply({ system: "", messages: [{ role: "user", content: "a" }] })).toBe(
-      "first",
-    );
-    expect(await f.generateReply({ system: "", messages: [{ role: "user", content: "b" }] })).toBe(
-      "(fake reply to: b)",
-    );
+    expect(
+      await f.generateReply({ system: [{ text: "" }], messages: [{ role: "user", content: "a" }] }),
+    ).toBe("first");
+    expect(
+      await f.generateReply({ system: [{ text: "" }], messages: [{ role: "user", content: "b" }] }),
+    ).toBe("(fake reply to: b)");
     expect(f.calls).toHaveLength(2);
   });
 
   test("failReplies makes the next N calls throw", async () => {
     const f = new FakeLLMProvider();
     f.failReplies = 1;
-    await expect(f.generateReply({ system: "", messages: [] })).rejects.toThrow();
-    await expect(f.generateReply({ system: "", messages: [] })).resolves.toBeTypeOf("string");
+    await expect(f.generateReply({ system: [{ text: "" }], messages: [] })).rejects.toThrow();
+    await expect(f.generateReply({ system: [{ text: "" }], messages: [] })).resolves.toBeTypeOf(
+      "string",
+    );
   });
 
   test("keywordClassifier flags configured phrases case-insensitively", () => {

@@ -1,4 +1,9 @@
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "@/mind/platform/llm/types";
+import {
+  type ClassifyRequest,
+  type LLMProvider,
+  type ReplyRequest,
+  systemText,
+} from "@/mind/platform/llm/types";
 import type { VoiceCall } from "./voice-report";
 
 /** One core-loop model call: the prompt input and the parsed output. */
@@ -18,13 +23,12 @@ export class RecordingLLM implements LLMProvider {
   replies: VoiceCall[] = [];
   constructor(private readonly inner: LLMProvider) {}
   async generateReply(req: ReplyRequest): Promise<string> {
+    const system = systemText(req.system);
     this.prompts.push(
-      [req.system, ...req.messages.filter((m) => m.role === "user").map((m) => m.content)].join(
-        "\n",
-      ),
+      [system, ...req.messages.filter((m) => m.role === "user").map((m) => m.content)].join("\n"),
     );
     const draft = await this.inner.generateReply(req);
-    this.replies.push({ prompt: req.system, draft });
+    this.replies.push({ prompt: system, draft });
     return draft;
   }
   async classifyJson<T>(req: ClassifyRequest<T>): Promise<T> {

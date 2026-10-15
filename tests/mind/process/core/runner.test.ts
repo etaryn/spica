@@ -189,7 +189,7 @@ test("core loops can't call the reply model", async () => {
   const { deps } = setup();
   await expect(
     runCoreLoop(deps, "core_reflect", now, async (ctx) => {
-      await ctx.deps.llm.generateReply({ system: "s", messages: [] });
+      await ctx.deps.llm.generateReply({ system: [{ text: "s" }], messages: [] });
       return { inputs: {}, outputs: {} };
     }),
   ).rejects.toThrow("reply model");

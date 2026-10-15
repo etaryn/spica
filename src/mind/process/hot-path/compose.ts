@@ -492,7 +492,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     turnId: input.anchor.id,
     first: firstDraft,
     regenerate: (note) =>
-      llm.generateReply({ system: `${prompt.system}\n\n${note}`, messages: prompt.messages }),
+      llm.generateReply({ system: [...prompt.system, { text: note }], messages: prompt.messages }),
     input: {
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),

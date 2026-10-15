@@ -4,7 +4,7 @@
  * is the worst-case model the leak test runs against.
  */
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
-import type { ClassifyRequest, ReplyRequest } from "@/mind/platform/llm/types";
+import { type ClassifyRequest, type ReplyRequest, systemText } from "@/mind/platform/llm/types";
 
 export function sequence(...outputs: unknown[]): (input: string) => unknown {
   let i = 0;
@@ -29,7 +29,7 @@ export class CapturingLLM extends FakeLLMProvider {
   seen: { kind: "reply" | "structured"; purpose: string; text: string }[] = [];
 
   override async generateReply(request: ReplyRequest): Promise<string> {
-    const text = [request.system, ...request.messages.map((m) => m.content)].join("\n");
+    const text = [systemText(request.system), ...request.messages.map((m) => m.content)].join("\n");
     this.seen.push({ kind: "reply", purpose: "reply", text });
     const reply = await super.generateReply(request);
     const canary = CANARY.exec(text)?.[0];

@@ -12,7 +12,10 @@ test("routes the reply and each structured purpose to real or fake", async () =>
   const schema = z.object({ which: z.string() });
   const onlyJudge = new RoutingLLM(real, fake, new Set(["turn_judge"]));
   expect(
-    await onlyJudge.generateReply({ system: "", messages: [{ role: "user", content: "hi" }] }),
+    await onlyJudge.generateReply({
+      system: [{ text: "" }],
+      messages: [{ role: "user", content: "hi" }],
+    }),
   ).toBe("(fake reply to: hi)");
   expect(
     await onlyJudge.classifyJson({
@@ -36,7 +39,7 @@ test("routes the reply and each structured purpose to real or fake", async () =>
   ).toEqual({ facts: [], entities: [], threads: [], relationship: null });
   expect(
     await new RoutingLLM(real, fake, new Set(["reply"])).generateReply({
-      system: "",
+      system: [{ text: "" }],
       messages: [],
     }),
   ).toBe("REAL");

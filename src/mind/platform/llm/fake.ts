@@ -5,7 +5,13 @@
  */
 import defaults from "../../../../config/default.json";
 import { fakeTurnJudge } from "@/mind/process/turn-taking/judge";
-import type { ClassifyRequest, LLMProvider, ReplyRequest } from "./types";
+import {
+  type ChatMessage,
+  type ClassifyRequest,
+  type LLMProvider,
+  type ReplyRequest,
+  systemText,
+} from "./types";
 
 export { keywordClassifier } from "@/mind/process/crisis/keywords";
 
@@ -31,7 +37,8 @@ const FAKE_DAY_EVENT = {
 
 export class FakeLLMProvider implements LLMProvider {
   replies: string[] = [];
-  calls: ReplyRequest[] = [];
+  /** Each reply call, its system blocks joined so tests can read it as one prompt. */
+  calls: { system: string; messages: ChatMessage[] }[] = [];
   structuredCalls: { purpose: string; system: string; input: string }[] = [];
   failReplies = 0;
   replyDelayMs = 0;
@@ -210,7 +217,7 @@ export class FakeLLMProvider implements LLMProvider {
 
   async generateReply(request: ReplyRequest): Promise<string> {
     if (this.replyHook) await this.replyHook();
-    this.calls.push(request);
+    this.calls.push({ system: systemText(request.system), messages: request.messages });
 
     if (this.replyDelayMs > 0)
       await new Promise((resolve) => setTimeout(resolve, this.replyDelayMs));

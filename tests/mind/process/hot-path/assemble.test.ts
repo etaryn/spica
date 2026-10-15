@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { assemblePrompt, gapLine, relationshipLine } from "@/mind/process/hot-path/assemble";
+import {
+  assemblePrompt as assembleBlocks,
+  gapLine,
+  relationshipLine,
+} from "@/mind/process/hot-path/assemble";
+import { systemText } from "@/mind/platform/llm/types";
 import { relativeDate } from "@/mind/platform/relative-date";
 import { emptyRetrieval } from "@/mind/memory/shared/types";
 import { splitParts } from "@/mind/process/hot-path/split-parts";
@@ -34,7 +39,26 @@ describe("resolveSessionId", () => {
   });
 });
 
+/** The prompt with its system blocks joined, the way the model reads it. */
+function assemblePrompt(input: Parameters<typeof assembleBlocks>[0]) {
+  const p = assembleBlocks(input);
+  return { ...p, system: systemText(p.system) };
+}
+
 describe("assemblePrompt", () => {
+  test("values and snapshot are the cached prefix; everything else follows uncached", () => {
+    const p = assembleBlocks({
+      ...base,
+      snapshot: "SNAP",
+      feelingLine: "FEEL",
+      recentTurns: [{ role: "user", text: "hi" }],
+    });
+    expect(p.system).toEqual([
+      { text: "VALUES\n\n## Who you are lately\nSNAP", cache: true },
+      { text: "## How you're feeling\nFEEL" },
+    ]);
+  });
+
   test("system is the values doc only; turns map to user/assistant", () => {
     const p = assemblePrompt({
       ...base,

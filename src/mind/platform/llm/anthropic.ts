@@ -22,12 +22,22 @@ export class AnthropicProvider implements LLMProvider {
 
   async generateReply({ system, messages }: ReplyRequest): Promise<string> {
     const effort = this.models.reply_effort;
+    const ttl = this.models.reply_cache;
+    const cacheControl: Anthropic.CacheControlEphemeral | null =
+      ttl === "off" ? null : { type: "ephemeral", ...(ttl === "1h" ? { ttl } : {}) };
 
     const response = await this.client.messages.create(
       {
         model: this.models.reply,
         max_tokens: this.models.reply_max_tokens,
-        system,
+        // The API rejects empty text blocks.
+        system: system
+          .filter((b) => b.text)
+          .map((b) => ({
+            type: "text" as const,
+            text: b.text,
+            ...(b.cache && cacheControl ? { cache_control: cacheControl } : {}),
+          })),
         messages,
         ...(effort ? { output_config: { effort } } : {}),
         // Adaptive thinking at low effort sometimes ends the turn after an empty thinking block.

@@ -8,7 +8,7 @@
  * follows as the messages.
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
-import type { ChatMessage } from "@/mind/platform/llm/types";
+import type { ChatMessage, ReplyRequest } from "@/mind/platform/llm/types";
 import { relativeDate } from "@/mind/platform/relative-date";
 import { HOUR } from "@/mind/platform/time";
 
@@ -60,10 +60,10 @@ export interface AssembleInput {
   howToText?: string | null;
 }
 
-export function assemblePrompt(input: AssembleInput): { system: string; messages: ChatMessage[] } {
+export function assemblePrompt(input: AssembleInput): ReplyRequest {
+  // The same for every user until the nightly snapshot, so it's the cached prefix.
+  const shared = [input.valuesDoc, section("Who you are lately", input.snapshot)];
   const sections = [
-    input.valuesDoc,
-    section("Who you are lately", input.snapshot),
     section("How you're feeling", input.feelingLine),
     section("Your day", input.yourDay ?? null),
     section("You and them", input.relationshipSummary),
@@ -106,12 +106,19 @@ export function assemblePrompt(input: AssembleInput): { system: string; messages
     section("How to text this one", input.howToText ?? null),
     // A reach-out always gets its heading, even when the slot text is empty.
     input.reachOut ? `## Why you're writing\n${input.reachOut.slot}` : null,
-  ].filter((s): s is string => s !== null);
+  ];
 
   const messages = conversationMessages(input);
   if (input.reachOut) appendReachOutCue(messages, input.reachOut.cue);
 
-  return { system: sections.join("\n\n"), messages };
+  return {
+    system: [{ text: joinSections(shared), cache: true }, { text: joinSections(sections) }],
+    messages,
+  };
+}
+
+function joinSections(sections: (string | null)[]): string {
+  return sections.filter((s): s is string => s !== null).join("\n\n");
 }
 
 function section(heading: string, body: string | null): string | null {

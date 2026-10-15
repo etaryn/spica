@@ -6,9 +6,21 @@ import type { z } from "zod";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+/** One piece of the system prompt; `cache` marks the end of a prefix the provider may cache. */
+export type SystemBlock = { text: string; cache?: boolean };
+
 export interface ReplyRequest {
-  system: string;
+  /** Ordered; joined with blank lines, the blocks are the whole system prompt. */
+  system: SystemBlock[];
   messages: ChatMessage[];
+}
+
+/** The system prompt as one string, the way a fake or a log reads it. */
+export function systemText(blocks: SystemBlock[]): string {
+  return blocks
+    .map((b) => b.text)
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Which configured model a structured call uses (config `models.<role>`). */

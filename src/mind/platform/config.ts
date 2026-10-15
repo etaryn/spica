@@ -54,6 +54,8 @@ const models = z.object({
   judge_thinking: thinking,
   reply_timeout_ms: positiveInt,
   reply_max_retries: countFromZero,
+  // Caches the reply's shared prefix (values + snapshot); "off" is the kill switch.
+  reply_cache: z.enum(["off", "5m", "1h"]),
 });
 
 const embedding = z.object({

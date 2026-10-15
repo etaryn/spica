@@ -2561,6 +2561,10 @@ and life tick) were dropped; the replacement is designed fresh.
   prints a voice report (`evals/lib/voice-report.ts`), and `pnpm review:voice` runs the voice
   scripts on two reply models and saves blind X/Y review files with a separate key. Replies stay
   on Sonnet 5 until Ethan reads a comparison and chooses. *Tuning.*
+- **B116.** Reply prompt caching (`models.reply_cache`, 2026-10-15) is untested against the
+  real API: only the request shape is unit-tested. The next real-model run in a phase checks it
+  at the same time: `cache_read_input_tokens` above 0 from the second reply on in the usage
+  tallies. *Next phase run.*
 
 ### 25.7 Guard
 - **B36.** ~~Behavioural fixtures for rules 2–4.~~ Done 13: matched

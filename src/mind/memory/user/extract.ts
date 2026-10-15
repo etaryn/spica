@@ -246,6 +246,7 @@ export async function extract(
     schema: ExtractionSchema,
     timeoutMs: config.models.structured_timeout_ms,
     maxTokens: config.models.extract_max_tokens,
+    cache: config.models.extract_cache,
   });
 
   return normalizeExtraction(raw, config.extraction.max_candidates);

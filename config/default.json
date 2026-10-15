@@ -21,7 +21,8 @@
     "reply_thinking": "disabled",
     "reply_timeout_ms": 30000,
     "reply_max_retries": 1,
-    "reply_cache": "5m"
+    "reply_cache": "5m",
+    "extract_cache": "5m"
   },
   "embedding": {
     "provider": "voyage",

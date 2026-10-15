@@ -23,6 +23,7 @@ const promptVersion = z.string().regex(/^v\d+$/);
 const hourOfDay = z.number().int().min(0).max(23);
 const effort = z.enum(["low", "medium", "high"]);
 const thinking = z.enum(["disabled", "adaptive"]);
+const cacheTtl = z.enum(["off", "5m", "1h"]);
 
 const CrisisCardSchema = z.object({
   title: text,
@@ -55,7 +56,9 @@ const models = z.object({
   reply_timeout_ms: positiveInt,
   reply_max_retries: countFromZero,
   // Caches the reply's shared prefix (values + snapshot); "off" is the kill switch.
-  reply_cache: z.enum(["off", "5m", "1h"]),
+  reply_cache: cacheTtl,
+  // Extraction's fixed prefix (prompt + output schema) is ~4.6k tokens, past Haiku's 4,096 minimum.
+  extract_cache: cacheTtl,
 });
 
 const embedding = z.object({

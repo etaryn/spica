@@ -30,6 +30,8 @@ export type StructuredModel =
 /** Receives every completed call's usage; the evals tally spend with it. */
 export type UsageSink = (usage: LlmUsage) => void;
 
+export type CacheTtl = "off" | "5m" | "1h";
+
 export interface ClassifyRequest<T> {
   /** What the call is for ("crisis", "extract", "reconcile", "judge_recall", …); fakes route on it. */
   purpose: string;
@@ -44,6 +46,8 @@ export interface ClassifyRequest<T> {
    * have their own timeouts and fallbacks. Background loops ask for a few.
    */
   maxRetries?: number;
+  /** Caches `system` as a prefix; only worth it when it (with the output schema) passes the model's minimum. */
+  cache?: CacheTtl;
   /** Receives this call's usage once it completes; the core runner meters with it. */
   onUsage?: UsageSink;
 }

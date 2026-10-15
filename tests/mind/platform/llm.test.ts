@@ -108,7 +108,29 @@ describe("AnthropicProvider.classifyJson", () => {
     });
     expect(out).toEqual({ flag: true });
     expect(parse.mock.calls[0]![0]).toMatchObject({ model: "claude-haiku-4-5", max_tokens: 256 });
+    expect(parse.mock.calls[0]![0].system).toBe("s");
     expect(parse.mock.calls[0]![1]).toMatchObject({ timeout: 3000, maxRetries: 0 });
+  });
+
+  test("a cached call sends system as one block marked with the ttl", async () => {
+    const sent = async (cache: "off" | "5m" | "1h") => {
+      const stub = stubClient(undefined, { parsed_output: { flag: true } });
+      await new AnthropicProvider(stub.client, models).classifyJson({
+        purpose: "x",
+        system: "s",
+        input: "x",
+        schema: z.object({ flag: z.boolean() }),
+        timeoutMs: 3000,
+        maxTokens: 256,
+        cache,
+      });
+      return stub.parse.mock.calls[0]![0].system;
+    };
+    expect(await sent("5m")).toEqual([
+      { type: "text", text: "s", cache_control: { type: "ephemeral" } },
+    ]);
+    expect((await sent("1h"))[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    expect(await sent("off")).toBe("s");
   });
 
   test("a request may ask for SDK retries", async () => {

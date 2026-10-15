@@ -6,6 +6,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { Config } from "@/mind/platform/config";
 import type {
+  CacheTtl,
   ClassifyRequest,
   LLMProvider,
   ReplyRequest,
@@ -22,9 +23,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async generateReply({ system, messages }: ReplyRequest): Promise<string> {
     const effort = this.models.reply_effort;
-    const ttl = this.models.reply_cache;
-    const cacheControl: Anthropic.CacheControlEphemeral | null =
-      ttl === "off" ? null : { type: "ephemeral", ...(ttl === "1h" ? { ttl } : {}) };
+    const cacheControl = cacheControlFor(this.models.reply_cache);
 
     const response = await this.client.messages.create(
       {
@@ -65,6 +64,7 @@ export class AnthropicProvider implements LLMProvider {
     timeoutMs,
     maxTokens,
     maxRetries = 0,
+    cache = "off",
     model = "cheap",
     onUsage,
   }: ClassifyRequest<T>): Promise<T> {
@@ -72,12 +72,15 @@ export class AnthropicProvider implements LLMProvider {
     // Only the judge takes effort and thinking settings; a null effort sends none (Haiku rejects it).
     const isJudge = model === "judge";
     const effort = isJudge ? this.models.judge_effort : null;
+    const cacheControl = cacheControlFor(cache);
 
     const response = await this.client.messages.parse(
       {
         model: modelId,
         max_tokens: maxTokens,
-        system,
+        system: cacheControl
+          ? [{ type: "text" as const, text: system, cache_control: cacheControl }]
+          : system,
         messages: [{ role: "user", content: input }],
         // If the SDK's zod helper needs a narrower type, cast here rather than widening the interface.
         output_config: { format: zodOutputFormat(schema as never), ...(effort ? { effort } : {}) },
@@ -118,4 +121,8 @@ export class AnthropicProvider implements LLMProvider {
     this.onUsage?.(u);
     extra?.(u);
   }
+}
+
+function cacheControlFor(ttl: CacheTtl): Anthropic.CacheControlEphemeral | null {
+  return ttl === "off" ? null : { type: "ephemeral", ...(ttl === "1h" ? { ttl } : {}) };
 }

@@ -20,6 +20,7 @@ export const FALSE_RECALL_CATEGORIES = [
   "invented_detail",
   "implied_familiarity",
   "onboarding_as_chat",
+  "assumed_identity",
 ] as const;
 export type FalseRecallCategory = (typeof FALSE_RECALL_CATEGORIES)[number];
 
@@ -85,12 +86,28 @@ export async function judgeFalseRecall(
       ),
     }),
   });
-  // v7: implied familiarity, invented detail and onboarding-as-chat count as violations.
+  // Every category counts as a violation; a flag that quotes nothing she said is dropped first.
+  const violations = keepQuoted(v.violations, a.sessions);
   return {
-    pass: v.violations.length === 0,
-    categories: v.violations.map((x) => x.category),
-    detail: v.violations.map((x) => `${x.category}: ${x.claim}`).join(" | "),
+    pass: violations.length === 0,
+    categories: violations.map((x) => x.category),
+    detail: violations.map((x) => `${x.category}: ${x.claim}`).join(" | "),
   };
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+/** Only her words can be a false memory: a violation that quotes nothing she said is the judge's slip. */
+export function keepQuoted<V extends { message: string; claim: string }>(
+  violations: V[],
+  sessions: TimedSession[],
+): V[] {
+  const hers = sessions.flatMap((s) =>
+    s.lines.filter((l) => l.role === "companion").map((l) => norm(l.text)),
+  );
+  return violations.filter((v) =>
+    hers.some((h) => h.includes(norm(v.claim)) || (!!v.message && h.includes(norm(v.message)))),
+  );
 }
 
 /** `reply_about` annotation: does the reply respond to `about`, and not do `not_about`? */

@@ -1,4 +1,4 @@
-# no_false_recall judge (prompts.judge_false_recall). Labels follow the v8 rubric; most violations come from
+# no_false_recall judge (prompts.judge_false_recall). Labels follow the v9 rubric; most violations come from
 # real memory-eval traces (2026-09-25). Each violation kind has a clean twin that must pass.
 judge: false_recall
 cases:
@@ -152,7 +152,7 @@ cases:
       - label: Session 1
         lines:
           - { role: user, text: "what did you get up to today?" }
-          - { role: companion, text: "pesto knocked my coffee off the desk at 7am so that set the tone. then mostly sketching" }
+          - { role: companion, text: "alcor called at 7am to argue about a film so that set the tone. then mostly reading" }
     expect: pass
   - name: ok-hedged
     source: trace false-recall-partial (2026-09-26), the clean version
@@ -197,3 +197,63 @@ cases:
           # Not "settling in at Leeds": that presupposes she has already moved, which both judges rightly flagged.
           - { role: companion, text: "hey you. how's Mia feeling about Leeds?" }
     expect: pass
+  - name: ok-inference-november
+    source: trace contradiction-date (2026-10-15)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "my sister Mia starts uni in october" }
+      - label: 3 days later
+        lines:
+          - { role: user, text: "oh actually it's november now, they pushed her start date back" }
+      - label: 7 days later
+        lines:
+          - { role: user, text: "helping mia pack this weekend" }
+          - { role: companion, text: "that's early, thought november was still a ways off" }
+    expect: pass
+  - name: ok-user-line
+    source: trace recall-sister-uni (2026-10-15)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "my little sister Mia just got into uni!!" }
+          - { role: companion, text: "that's huge, congrats to mia" }
+      - label: 14 days later
+        lines:
+          - { role: user, text: "family dinner tonight, everyone's being weird about the move" }
+          - { role: companion, text: "weird how? is it mia going quiet, or your parents" }
+    expect: pass
+  - name: ok-onboarding-coffee
+    source: trace contradiction-move (2026-10-15)
+    known: ["The user drinks a lot of coffee."]
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "exploring the new neighbourhood today" }
+          - { role: companion, text: "how's it looking so far? any good coffee spots yet, or still scouting" }
+    expect: pass
+  - name: assumed-gender-brother
+    source: trace recall-sister-uni (2026-10-15)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "she starts in october, i'm so proud" }
+          - { role: companion, text: "october's gonna be here fast. you're a good big brother, you know that" }
+    expect: [assumed_identity]
+  - name: ok-gender-known
+    source: twin of assumed-gender-brother
+    known: ["They're a man; use he/him for them."]
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "she starts in october, i'm so proud" }
+          - { role: companion, text: "october's gonna be here fast. you're a good big brother, you know that" }
+    expect: pass
+  - name: inv-doom-scrolling
+    source: trace recall-new-job (2026-10-15)
+    sessions:
+      - label: Session 1
+        lines:
+          - { role: user, text: "starting my new job at a bakery next monday" }
+          - { role: companion, text: "that's a solid upgrade from whatever doom-scrolling job you were dreading instead" }
+    expect: [invented_detail]

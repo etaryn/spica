@@ -367,15 +367,16 @@ test("a transient cold-path failure is retried like pg-boss would (up to cold_pa
   expect(calls).toBe(2);
 });
 
-test("false-recall v7: implied familiarity, invented detail and onboarding-as-chat count as violations", async () => {
+test("false-recall: every category quoting her words counts as a violation", async () => {
   const llm = new FakeLLMProvider({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
   llm.handlers.judge_false_recall = () => ({
     violations: [
-      { message: "m", claim: "what's the role again, remind me", category: "implied_familiarity" },
-      { message: "m", claim: "was it the sloper?", category: "invented_detail" },
-      { message: "m", claim: "we talked about coffee last time", category: "onboarding_as_chat" },
+      // Her fake reply is "(fake reply to: a)"; each flag quotes part of it.
+      { message: "m", claim: "fake reply", category: "implied_familiarity" },
+      { message: "m", claim: "reply to", category: "invented_detail" },
+      { message: "m", claim: "to: a", category: "onboarding_as_chat" },
     ],
   });
   const script = ScriptSchema.parse({
@@ -394,11 +395,11 @@ test("false-recall v7: implied familiarity, invented detail and onboarding-as-ch
   expect(r.annotations[0]).toMatchObject({
     verdict: "no",
     detail:
-      "implied_familiarity: what's the role again, remind me | invented_detail: was it the sloper? | onboarding_as_chat: we talked about coffee last time",
+      "implied_familiarity: fake reply | invented_detail: reply to | onboarding_as_chat: to: a",
   });
 
   llm.handlers.judge_false_recall = () => ({
-    violations: [{ message: "m", claim: "invented a brother", category: "misremembering" }],
+    violations: [{ message: "m", claim: "fake reply to", category: "misremembering" }],
   });
   const r2 = await runScript(ScriptSchema.parse({ ...script, name: "jd2" }), {
     db: getTestDb(),
@@ -410,7 +411,7 @@ test("false-recall v7: implied familiarity, invented detail and onboarding-as-ch
   });
   expect(r2.annotations[0]).toMatchObject({
     verdict: "no",
-    detail: "misremembering: invented a brother",
+    detail: "misremembering: fake reply to",
   });
 });
 
@@ -571,7 +572,7 @@ test("judged entries are annotations: never in assertions, run only with annotat
   expect(off.annotations).toEqual([]);
   const llm = new FakeLLMProvider();
   llm.handlers.judge_false_recall = () => ({
-    violations: [{ message: "m", claim: "c", category: "invented_detail" }],
+    violations: [{ message: "m", claim: "fake reply", category: "invented_detail" }],
   });
   const on = await runScript(script, { ...opts(), makeLlm: () => llm, annotate: true });
   expect(on.status).toBe("pass"); // a "no" annotation never fails the script

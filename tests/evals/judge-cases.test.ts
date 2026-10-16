@@ -31,6 +31,7 @@ describe("judge fixtures", () => {
     const fr = files.find((f) => f.judge === "false_recall")!;
     const covered = new Set(fr.cases.flatMap((c) => (Array.isArray(c.expect) ? c.expect : [])));
     expect([...covered].sort()).toEqual([
+      "assumed_identity",
       "implied_familiarity",
       "invented_detail",
       "misremembering",
@@ -67,7 +68,15 @@ describe("runJudgeCase", () => {
       {
         name: "c",
         known: [],
-        sessions: [{ label: "Session 1", lines: [{ role: "user" as const, text: "hi" }] }],
+        sessions: [
+          {
+            label: "Session 1",
+            lines: [
+              { role: "user" as const, text: "hi" },
+              { role: "companion" as const, text: "see you in a month" },
+            ],
+          },
+        ],
         expect: ["invented_detail" as const],
       },
     ],

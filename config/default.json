@@ -67,6 +67,7 @@
   "reconcile": {
     "neighbor_k": 5,
     "near_match_similarity": 0.82,
+    "contradiction_similarity": 0.75,
     "duplicate_bump": 0.05,
     "max_tokens": 256
   },
@@ -211,7 +212,7 @@
     "crisis_classifier": "v2",
     "persona": "v6",
     "extract": "v9",
-    "reconcile": "v1",
+    "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v8",
     "judge_consistency": "v2",

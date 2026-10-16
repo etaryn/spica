@@ -278,7 +278,7 @@ export async function generateCoreEvents(
       const neighbors = await deps.core.memory.near(
         embedding,
         config.reconcile.neighbor_k,
-        config.reconcile.near_match_similarity,
+        config.reconcile.contradiction_similarity,
       );
       if (neighbors.length && !canCall()) return { accepted, attempts, budgetExhausted: true };
       const decision = await reconcileAgainstNeighbours(

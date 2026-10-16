@@ -191,6 +191,8 @@ const extraction = z.object({
 const reconcile = z.object({
   neighbor_k: positiveInt,
   near_match_similarity: unit,
+  // Below the near line, down to here: close enough to be contradicted, never merged.
+  contradiction_similarity: unit,
   duplicate_bump: unit,
   max_tokens: positiveInt,
 });
@@ -947,6 +949,10 @@ export function loadConfig(overrides: unknown = {}): Config {
     throw new Error(
       `embedding dimension ${config.embedding.dimensions} does not match the schema (${EMBEDDING_DIMENSIONS}); this needs a migration, not a config override`,
     );
+  }
+  // Below the band nothing is compared; above the near line, merging is allowed too.
+  if (config.reconcile.contradiction_similarity > config.reconcile.near_match_similarity) {
+    throw new Error("reconcile.contradiction_similarity must not exceed near_match_similarity");
   }
   // A shorter quiet gap would record a session mid-talk, and its real end would never fire.
   if (config.user_mind.triggers.long_conversation.quiet_minutes < config.session.idle_gap_minutes) {

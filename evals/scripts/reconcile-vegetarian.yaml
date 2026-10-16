@@ -1,0 +1,10 @@
+name: reconcile-vegetarian
+description: 'expect "vegetarian" superseded (measured similarity 0.755)'
+profile: none
+sessions:
+  - at: "day 0 18:00"
+    turns: ["i've been vegetarian for about five years now"]
+  - at: "+3d"
+    turns: ["had the best steak of my life tonight"]
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

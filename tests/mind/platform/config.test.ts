@@ -139,3 +139,9 @@ test("a long-conversation quiet gap shorter than the session gap is rejected", (
     loadConfig({ user_mind: { triggers: { long_conversation: { quiet_minutes: 10 } } } }),
   ).toThrow(/quiet_minutes/);
 });
+
+test("the contradiction band sits below the near-match line", () => {
+  expect(() => loadConfig({ reconcile: { contradiction_similarity: 0.9 } })).toThrow(
+    /contradiction_similarity/,
+  );
+});

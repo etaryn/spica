@@ -245,7 +245,7 @@ async function reconcileCandidates(
       fact.subject,
       embedding,
       config.reconcile.neighbor_k,
-      config.reconcile.near_match_similarity,
+      config.reconcile.contradiction_similarity,
     );
     const decision = await reconcileAgainstNeighbours(
       deps,

@@ -58,7 +58,35 @@ test("foreign target id → new; non-new relation without target → new", async
 });
 
 test("the label tells the model what kind of memory is new", () => {
-  expect(buildReconcileInput({ label: "episode", content: "She reread Dune." }, [])).toBe(
-    "New fact (episode): She reread Dune.\nExisting facts:",
-  );
+  expect(
+    buildReconcileInput(
+      { label: "episode", content: "She reread Dune." },
+      [],
+      config.reconcile.near_match_similarity,
+    ),
+  ).toBe("New fact (episode): She reread Dune.\nExisting facts:");
+});
+
+const distant = (id: string) => ({
+  id,
+  content: "The user is vegetarian.",
+  status: "open",
+  sim: 0.78,
+});
+
+test("a distant neighbour can only be contradicted, never merged or resolved", async () => {
+  const llm = new FakeLLMProvider();
+  const id = "33333333-3333-4333-8333-333333333333";
+  const steak = { label: "user, event", content: "The user had steak for dinner." };
+  llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: id });
+  expect(await reconcileAgainstNeighbours({ llm, config }, steak, [distant(id)])).toEqual({
+    relation: "new",
+    targetId: null,
+  });
+  llm.handlers.reconcile = () => ({ relation: "contradicts", target_fact_id: id });
+  expect(await reconcileAgainstNeighbours({ llm, config }, steak, [distant(id)])).toEqual({
+    relation: "contradicts",
+    targetId: id,
+  });
+  expect(llm.structuredCalls[0]!.input).toContain(`id=${id} [open] [distant]`);
 });

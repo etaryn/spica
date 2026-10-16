@@ -8,7 +8,7 @@ import * as relationshipRepo from "@/db/repos/user/relationship";
 import type { Deps } from "@/mind/platform/deps";
 import { parseSummaryPhrases, type Phrases } from "@/mind/platform/phrases";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { deviationOf, fadeParams } from "./params";
+import { deviationOf, fadeParams, rateEstimated } from "./params";
 import { makeUpLineDue } from "./transitions";
 import {
   PARAM_NAMES,
@@ -88,6 +88,7 @@ function notableDeviations(
       const deviation = deviationOf(params[name], settings.variance_epsilon);
       return { name, deviation, key: phraseKey(name, deviation) };
     })
+    .filter((p) => p.name !== "msgs_per_day" || rateEstimated(params.msgs_per_day, settings))
     .filter((p) => Math.abs(p.deviation) >= settings.summary_min_effect)
     .filter((p) => firstPhrase(phrases, p.key) !== null)
     .sort((a, b) => Math.abs(b.deviation) - Math.abs(a.deviation))

@@ -256,6 +256,7 @@
     "tick_local_hour": 4,
     "history_days": 90,
     "baseline_alpha": 0.15,
+    "rate_estimate_days": 7,
     "variance_epsilon": 0.01,
     "initial": {
       "closeness": 0.2,
@@ -263,7 +264,7 @@
       "warmth": 0.5,
       "hurt": 0,
       "tension": 0,
-      "msgs_per_day": 5,
+      "msgs_per_day": 0,
       "affect_valence": 0.5,
       "afterglow": 0,
       "user_disclosure": 0.2,

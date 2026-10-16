@@ -455,7 +455,7 @@ test("ended: an exchange hurt signal still raises hurt but never opens a make-up
 
 test("ended: a tick adds no absence hurt and never opens a make-up (closeness drift still applies)", () => {
   const p = init();
-  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0 };
+  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0, samples: 7 };
   const s: RelationshipState = { ...fresh(), status: "ended_by_user", ended_at: t0 };
   const r = relationshipAfterDailyTick(
     s,
@@ -592,7 +592,7 @@ test("tick: idempotent per local date, samples baselines, confirms a timed-out e
   };
   const r = relationshipAfterDailyTick(s, init(), tick, cfg);
   expect(r.state.last_tick).toBe("2026-01-06");
-  expect(r.params.msgs_per_day.baseline).toBeCloseTo(5 + cfg.baseline_alpha * 35);
+  expect(r.params.msgs_per_day.baseline).toBe(40);
   expect(r.state.status).toBe("ended_by_user");
   const again = relationshipAfterDailyTick(r.state, r.params, tick, cfg);
   expect(again.events).toEqual([]);
@@ -618,7 +618,7 @@ test("tick with no contact: no absence effects, no throw", () => {
 
 test("tick absence: closeness drifts after the grace, hurt rises on a strong negative frequency deviation", () => {
   const p = init();
-  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0 };
+  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0, samples: 7 };
   const r = relationshipAfterDailyTick(
     fresh(),
     p,
@@ -1131,4 +1131,40 @@ test("a scar is judged on the hurt itself, not on how much room was left", () =>
     cfg,
   );
   expect(r.events.some((e) => e.cause === "scar")).toBe(true);
+});
+
+const quietDay = (p: Params, localDate: string, hours: number) =>
+  relationshipAfterDailyTick(
+    fresh(),
+    p,
+    {
+      now: h(hours),
+      localDate,
+      yesterdayCount: 1,
+      msgs24h: 1,
+      lastContact: h(hours - 2),
+      medianGapHours: 24,
+    },
+    cfg,
+  );
+
+test("no estimate of their rate yet: a quiet day adds no absence hurt, and the first sample sets the baseline", () => {
+  const r = quietDay(init(), "2026-01-06", 25);
+  expect(r.events.some((e) => e.cause === "absence" && e.param === "hurt")).toBe(false);
+  expect(r.params.msgs_per_day.baseline).toBe(1);
+  expect(r.params.msgs_per_day.samples).toBe(1);
+});
+
+test("once her estimate is established, a quiet day against it hurts a little", () => {
+  const p = init();
+  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0, samples: 7 };
+  const r = quietDay(p, "2026-01-06", 25);
+  expect(r.events.some((e) => e.cause === "absence" && e.param === "hurt")).toBe(true);
+});
+
+test("a baseline learned before samples existed is kept, not replaced by one day", () => {
+  const p = init();
+  p.msgs_per_day = { value: 30, baseline: 30, variance: 20, updated_at: t0, samples: 30 };
+  const r = quietDay(p, "2026-01-06", 25);
+  expect(r.params.msgs_per_day.baseline).toBeCloseTo(30 + cfg.baseline_alpha * (1 - 30));
 });

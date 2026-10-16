@@ -246,6 +246,13 @@
       "when": 1792006495752,
       "tag": "0034_pointed",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792173810427,
+      "tag": "0035_rate_samples",
+      "breakpoints": true
     }
   ]
 }

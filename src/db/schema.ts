@@ -442,6 +442,8 @@ export const relationship_param = pgTable(
     baseline: real("baseline").notNull(),
     variance: real("variance").notNull(),
     updated_at: ts("updated_at").notNull(),
+    // Daily samples behind the baseline: her estimate of a rate needs a few days before it means anything.
+    samples: integer("samples").notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.user_id, t.name] }),

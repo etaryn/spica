@@ -27,6 +27,8 @@ export type HomeostaticParam = {
   baseline: number;
   variance: number;
   updated_at: Date;
+  /** Daily samples behind the baseline; absent reads as none. */
+  samples?: number;
 };
 export type Params = Record<ParamName, HomeostaticParam>;
 

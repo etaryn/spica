@@ -74,6 +74,7 @@ export async function getParams(db: Db, userId: string): Promise<Params> {
         baseline: r.baseline,
         variance: r.variance,
         updated_at: r.updated_at,
+        samples: r.samples,
       };
     }
   }
@@ -118,7 +119,13 @@ export async function saveRelationship(
     const p = a.params[name];
     await tx
       .update(relationship_param)
-      .set({ value: p.value, baseline: p.baseline, variance: p.variance, updated_at: p.updated_at })
+      .set({
+        value: p.value,
+        baseline: p.baseline,
+        variance: p.variance,
+        updated_at: p.updated_at,
+        samples: p.samples ?? 0,
+      })
       .where(and(eq(relationship_param.user_id, userId), eq(relationship_param.name, name)));
   }
 }

@@ -66,7 +66,7 @@ test("nothing notable → no lines; never raw numbers", () => {
     [],
   );
   const p = init();
-  p.msgs_per_day.value = 40;
+  p.msgs_per_day = { ...p.msgs_per_day, value: 40, samples: 7 };
   const lines = summaryLines({ state: fresh(), params: p, cause: null }, now, cfg, phrases);
   expect(lines).toHaveLength(1);
   expect(lines.join(" ")).not.toMatch(/\d/);
@@ -76,7 +76,7 @@ test("hurt with a cause uses the cause line; make-up line when due; at most summ
   const p = init();
   p.hurt.value = 0.5;
   p.tension.value = 0.5;
-  p.msgs_per_day.value = 40;
+  p.msgs_per_day = { ...p.msgs_per_day, value: 40, samples: 7 };
   const s = { ...fresh(), make_up_state: "due" as const, make_up_replies: 1 };
   const lines = summaryLines(
     { state: s, params: p, cause: "Spica felt hurt because the user mocked her." },
@@ -161,4 +161,14 @@ test("no line ever says nothing is wrong", () => {
     "tension below mild",
   ])
     expect(phrases[key], key).toBeUndefined();
+});
+
+test("no 'quieter than usual' line until her estimate of their rate is established", () => {
+  const p = init();
+  p.msgs_per_day = { value: 1, baseline: 30, variance: 20, updated_at: now, samples: 6 };
+  const early = summaryLines({ state: fresh(), params: p, cause: null }, now, cfg, phrases);
+  expect(early.some((l) => /quieter/.test(l))).toBe(false);
+  p.msgs_per_day = { ...p.msgs_per_day, samples: 7 };
+  const later = summaryLines({ state: fresh(), params: p, cause: null }, now, cfg, phrases);
+  expect(later.some((l) => /quieter/.test(l))).toBe(true);
 });

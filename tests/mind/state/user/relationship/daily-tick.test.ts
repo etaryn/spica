@@ -59,7 +59,8 @@ test("samples yesterday's count once per local date, per user", async () => {
   expect(await relationshipDailyTick(deps, day2)).toEqual({ users: 1, failed: 0 });
   await relationshipDailyTick(deps, new Date("2026-01-06T11:00:00Z")); // same local date: no-op
   const p = await rel.getParams(db, u);
-  expect(p.msgs_per_day.baseline).toBeCloseTo(5 + deps.config.relationship.baseline_alpha * 35);
+  // The first daily sample is the baseline outright.
+  expect(p.msgs_per_day.baseline).toBe(40);
   expect((await rel.getRelationshipRow(db, u))?.last_tick).toBe("2026-01-06");
 });
 

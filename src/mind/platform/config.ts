@@ -264,6 +264,7 @@ const relationship = z
     baseline_alpha: unit,
     variance_epsilon: z.number().positive(),
     initial: perParam(nonNegative),
+    rate_estimate_days: positiveInt,
     initial_variance: perParam(nonNegative),
     affect: z.object({
       exchange_gain: unit,

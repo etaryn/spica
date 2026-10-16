@@ -307,7 +307,7 @@ describe("composeReply", () => {
     await rel.ensureRelationship(getTestDb(), u, deps.clock.now(), deps.config.relationship);
     const row = await rel.getRelationshipRow(getTestDb(), u);
     const params = await rel.getParams(getTestDb(), u);
-    params.msgs_per_day = { ...params.msgs_per_day, value: 40 };
+    params.msgs_per_day = { ...params.msgs_per_day, value: 40, baseline: 5, samples: 7 };
     await rel.saveRelationship(getTestDb(), u, { state: rel.toRelationshipState(row!), params });
 
     const turns = [await userTurn(deps, u, "hi")];

@@ -12,18 +12,30 @@ export function deviationOf(param: HomeostaticParam, epsilon: number): number {
   return Math.tanh((param.value - param.baseline) / Math.sqrt(param.variance + epsilon));
 }
 
-/** One daily sample: an exponential moving average and an exponentially weighted variance. */
+/**
+ * One daily sample: an exponential moving average and an exponentially weighted variance. A
+ * rate's first sample is the baseline outright: there's no usual yet to blend it with.
+ */
 export function sampleBaseline(
   param: HomeostaticParam,
   sample: number,
   alpha: number,
+  firstIsBaseline = false,
 ): HomeostaticParam {
+  const samples = (param.samples ?? 0) + 1;
+  if (firstIsBaseline && samples === 1) return { ...param, baseline: sample, samples };
   const difference = sample - param.baseline;
   return {
     ...param,
     baseline: param.baseline + alpha * difference,
     variance: (1 - alpha) * (param.variance + alpha * difference * difference),
+    samples,
   };
+}
+
+/** Her estimate of their message rate: only after enough days of it is there a "usual". */
+export function rateEstimated(param: HomeostaticParam, settings: RelationshipConfig): boolean {
+  return (param.samples ?? 0) >= settings.rate_estimate_days;
 }
 
 /** A saturating move: each step closes that fraction of the gap to 1 (or to 0, going down). */

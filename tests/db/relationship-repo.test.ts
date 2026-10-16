@@ -22,7 +22,7 @@ test("ensureRelationship creates the row and every param at the initial values, 
   expect(row?.status).toBe("active");
   expect(row?.make_up_state).toBe("none");
   const p = await rel.getParams(db, u);
-  expect(p.msgs_per_day).toMatchObject({ value: 5, baseline: 5, variance: 25 });
+  expect(p.msgs_per_day).toMatchObject({ value: 0, baseline: 0, variance: 25, samples: 0 });
   expect(p.hurt.value).toBe(0);
 });
 
@@ -244,4 +244,17 @@ test("relationship history counts only inside jokes she could use: none born in 
   expect((await rel.relationshipHistory(db, u)).idiolect).toBe(0);
   await joke("theirs", false, "open");
   expect((await rel.relationshipHistory(db, u)).idiolect).toBe(1);
+});
+
+test("a param's daily sample count round-trips", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  await rel.ensureRelationship(db, u, now, cfg);
+  await db.transaction(async (tx) => {
+    const row = await rel.lockRelationship(tx, u);
+    const params = await rel.getParams(tx, u);
+    params.msgs_per_day = { ...params.msgs_per_day, samples: 3 };
+    await rel.saveRelationship(tx, u, { state: rel.toRelationshipState(row), params });
+  });
+  expect((await rel.getParams(db, u)).msgs_per_day.samples).toBe(3);
 });

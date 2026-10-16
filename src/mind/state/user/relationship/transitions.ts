@@ -13,7 +13,14 @@ import {
   sessionHours,
   skipSessionTime,
 } from "./closeness";
-import { deviationOf, diminishingReturns, fadeParams, nudge, sampleBaseline } from "./params";
+import {
+  deviationOf,
+  diminishingReturns,
+  fadeParams,
+  nudge,
+  rateEstimated,
+  sampleBaseline,
+} from "./params";
 import { peakCloseness } from "./stages";
 import type { BidResponse, Signals } from "./signals";
 import {
@@ -638,6 +645,8 @@ function applyAbsence(
   // Once she's let go, absence no longer hurts her or starts a make-up. Closeness still drifts
   // down above: that's distance, not a grievance.
   if (draft.state.status === "ended_by_user") return;
+  // With no estimate of how much they usually text, a quiet day isn't quieter than anything.
+  if (!rateEstimated(draft.params.msgs_per_day, settings)) return;
 
   // Read the frequency deviation before today's sample dilutes the baseline.
   const yesterday = { ...draft.params.msgs_per_day, value: input.yesterdayCount };
@@ -667,7 +676,12 @@ function sampleAllBaselines(
     const sample = name === "msgs_per_day" ? yesterdayCount : draft.params[name].value;
     const before = draft.params[name].baseline;
 
-    draft.params[name] = sampleBaseline(draft.params[name], sample, settings.baseline_alpha);
+    draft.params[name] = sampleBaseline(
+      draft.params[name],
+      sample,
+      settings.baseline_alpha,
+      name === "msgs_per_day",
+    );
     draft.events.push({
       param: name,
       before,

@@ -7,7 +7,8 @@ import { localMidnight } from "@/mind/platform/timezone";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { setTimezone } from "@/db/repos/user/users";
-import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../../helpers/db";
+import { insertFact } from "@/db/repos/user/facts";
+import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../../helpers/db";
 import { makeTestDeps } from "../../../../helpers/deps";
 
 function captureLog() {
@@ -181,7 +182,7 @@ test("a band crossing from fade records a tick run; a quiet or ended relationshi
     return u;
   }
   const crossing = await withHurt(0.3); // fades to ~0.15, under the 0.25 band
-  const quiet = await withHurt(0.1); // fades to ~0.05, crosses nothing
+  const quiet = await withHurt(0.08); // fades to ~0.04, crosses nothing (not even the repair line)
   const ended = await withHurt(0.3, true); // crosses the band, but nobody is talking to her
   await tickUser(deps, crossing, now);
   await tickUser(deps, quiet, now);
@@ -193,4 +194,39 @@ test("a band crossing from fade records a tick run; a quiet or ended relationshi
     expect.objectContaining({ kind: "param_band", param: "hurt" }),
   ]);
   expect(deps.queue.jobs.filter((j) => j.name === "user_mind_run")).toHaveLength(1);
+});
+
+test("a hurt fading below the repair line records a repair and turns her hurt memory past", async () => {
+  const deps = makeTestDeps();
+  const db = getTestDb();
+  const seeded = new Date("2026-01-04T10:00:00Z");
+  const u = await createTestUser();
+  await rel.ensureRelationship(db, u, seeded, deps.config.relationship);
+  const row = await rel.getRelationshipRow(db, u);
+  const params = await rel.getParams(db, u);
+  await rel.saveRelationship(db, u, {
+    state: rel.toRelationshipState(row!),
+    params: { ...params, hurt: { ...params.hurt, value: 0.15, updated_at: seeded } },
+  });
+  await insertFact(db, u, {
+    subject: "self",
+    kind: "feeling",
+    content: "Spica felt hurt because the user forgot her film night.",
+    embedding: vec(),
+    created_at: seeded,
+    status: "open",
+    salience: 0.6,
+    valence: -0.25,
+    confidence: 0.8,
+    source: "inferred",
+  });
+  await tickUser(deps, u, new Date("2026-01-06T10:00:00Z"));
+  const runs = await db.execute(sql`SELECT triggers FROM user_mind_run WHERE user_id = ${u}`);
+  expect(runs.rows[0]!.triggers).toContainEqual({ kind: "repaired", via: "fade" });
+  const facts = await db.execute(
+    sql`SELECT content FROM fact WHERE user_id = ${u} AND status = 'resolved'`,
+  );
+  expect(facts.rows.map((r) => r.content)).toEqual([
+    "Spica was hurt because the user forgot her film night; it has passed.",
+  ]);
 });

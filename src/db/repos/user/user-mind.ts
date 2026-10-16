@@ -15,7 +15,8 @@ export type UserMindRunRow = typeof user_mind_run.$inferSelect;
 export type NewUserLoopTrace = typeof user_loop_trace.$inferInsert;
 export type Trigger =
   | { kind: "param_jump" | "param_band"; param: string; from: number; to: number }
-  | { kind: "salient_fact"; salience: number }
+  | { kind: "salient_fact"; salience: number; content?: string }
+  | { kind: "repaired"; via: "apology" | "fade" }
   | { kind: "make_up_done" }
   | { kind: "long_conversation"; session_id: string; user_turns: number }
   | { kind: "crisis_passed" }

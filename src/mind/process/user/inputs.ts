@@ -46,14 +46,25 @@ const MILESTONE_TEXT: Record<string, string> = {
   first_their_depth: "they opened up to you about something deeply personal for the first time",
 };
 
+function paramMove(t: { param: string; from: number; to: number }, sharply: boolean): string {
+  const what =
+    t.param === "affect_valence" ? "how warmly you feel toward them" : `${t.param} between you`;
+  return `${what} just ${t.to > t.from ? "rose" : "fell"}${sharply ? " sharply" : ""}`;
+}
+
 export function triggerText(t: Trigger): string {
   switch (t.kind) {
     case "param_jump":
-      return `${t.param} between you just ${t.to > t.from ? "rose" : "fell"} sharply`;
+      return paramMove(t, true);
     case "param_band":
-      return `${t.param} between you just ${t.to > t.from ? "rose" : "fell"}`;
+      return paramMove(t, false);
     case "salient_fact":
-      return "they told you something important";
+      // Runs recorded before the content was kept read the old way.
+      return t.content ? `they told you: ${t.content}` : "they told you something";
+    case "repaired":
+      return t.via === "apology"
+        ? "they apologised, and the hurt has passed"
+        : "the hurt between you has faded";
     case "make_up_done":
       return "you two made up after a hurt";
     case "long_conversation":

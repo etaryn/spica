@@ -16,6 +16,7 @@ import {
   localHour,
   previousLocalDate,
 } from "@/mind/platform/timezone";
+import { settleHurtFacts } from "@/mind/memory/user/hurt";
 import { detectBigEvents } from "@/mind/process/user/big-events";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { applyCommitment } from "./commitment";
@@ -133,19 +134,15 @@ export async function tickUser(
     // Params drifting after the user ended it are no event: nothing is happening between them.
     if (ended) return { runId: null, moved: [] };
     const moved = movedParams(params, committed.params);
-    const runId = await recordBigEvents(
-      deps,
-      tx,
-      userId,
-      `tick:${localDate}`,
-      detectBigEvents({
-        before: { params, makeUp: row.make_up_state },
-        after: { params: committed.params, makeUp: state.make_up_state },
-        newFactSaliences: [],
-        settings: deps.config.user_mind.triggers,
-        source: "tick",
-      }).concat(firsts.fired.map((name) => ({ kind: "milestone" as const, name }))),
-    );
+    const triggers = detectBigEvents({
+      before: { params, makeUp: row.make_up_state },
+      after: { params: committed.params, makeUp: state.make_up_state },
+      newFacts: [],
+      settings: deps.config.user_mind.triggers,
+      source: "tick",
+    }).concat(firsts.fired.map((name) => ({ kind: "milestone" as const, name })));
+    if (triggers.some((t) => t.kind === "repaired")) await settleHurtFacts(tx, userId, "fade", now);
+    const runId = await recordBigEvents(deps, tx, userId, `tick:${localDate}`, triggers);
     return { runId, moved };
   });
   if (result?.runId) await enqueueUserMindRun(deps, result.runId);

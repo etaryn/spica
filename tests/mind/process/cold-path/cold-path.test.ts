@@ -472,7 +472,7 @@ test("a reach-out on its own records no run, even with a salient fact of hers", 
     replyTurnId: c.id,
     recalled: [],
   });
-  expect(out.applied?.insertedSaliences.length).toBeGreaterThan(0);
+  expect(out.applied?.insertedFacts.length).toBeGreaterThan(0);
   expect(out.userMindRunId).toBeNull();
   const runs = await getTestDb().execute(sql`SELECT count(*)::int AS n FROM user_mind_run`);
   expect(runs.rows[0]!.n).toBe(0);

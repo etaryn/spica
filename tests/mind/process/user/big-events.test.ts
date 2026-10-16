@@ -22,9 +22,10 @@ function snap(
 const detect = (
   before: RelationshipSnapshot,
   after: RelationshipSnapshot,
-  newFactSaliences: number[] = [],
+  newFacts: { salience: number; content: string }[] = [],
   source: "exchange" | "tick" = "exchange",
-) => detectBigEvents({ before, after, newFactSaliences, settings, source });
+  apology = false,
+) => detectBigEvents({ before, after, newFacts, apology, settings, source });
 
 test("nothing moved: no trigger", () => {
   expect(detect(snap({}), snap({}))).toEqual([]);
@@ -58,10 +59,13 @@ test("bands cross downward too", () => {
 });
 
 test("a salient new fact triggers; a minor one doesn't", () => {
-  expect(detect(snap({}), snap({}), [0.5, 0.85])).toEqual([
-    { kind: "salient_fact", salience: 0.85 },
-  ]);
-  expect(detect(snap({}), snap({}), [0.79])).toEqual([]);
+  expect(
+    detect(snap({}), snap({}), [
+      { salience: 0.5, content: "a" },
+      { salience: 0.85, content: "b" },
+    ]),
+  ).toEqual([{ kind: "salient_fact", salience: 0.85, content: "b" }]);
+  expect(detect(snap({}), snap({}), [{ salience: 0.79, content: "a" }])).toEqual([]);
 });
 
 test("make-up done triggers from due or offered", () => {
@@ -82,9 +86,21 @@ test("no relationship before or after: no param or make-up trigger, facts still 
     detectBigEvents({
       before: null,
       after: null,
-      newFactSaliences: [0.9],
+      newFacts: [{ salience: 0.9, content: "x" }],
       settings,
       source: "exchange",
     }),
-  ).toEqual([{ kind: "salient_fact", salience: 0.9 }]);
+  ).toEqual([{ kind: "salient_fact", salience: 0.9, content: "x" }]);
+});
+
+test("hurt falling below the line is a repair: by apology on an exchange, by fading otherwise", () => {
+  expect(detect(snap({ hurt: 0.27 }), snap({ hurt: 0.07 }), [], "exchange", true)).toContainEqual({
+    kind: "repaired",
+    via: "apology",
+  });
+  expect(detect(snap({ hurt: 0.12 }), snap({ hurt: 0.08 }), [], "tick")).toContainEqual({
+    kind: "repaired",
+    via: "fade",
+  });
+  expect(detect(snap({ hurt: 0.08 }), snap({ hurt: 0.05 }))).toEqual([]);
 });

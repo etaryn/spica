@@ -757,6 +757,7 @@ const userMind = z.object({
     param_jump: unit,
     bands: z.array(unit).min(1),
     fact_salience: unit,
+    hurt_resolved: unit,
     long_conversation: z.object({ min_user_turns: positiveInt, quiet_minutes: countFromZero }),
     stale_summary: z.object({ max_age_hours: z.number().positive(), lead_minutes: countFromZero }),
     milestone: z.object({ their_depth: unit }),

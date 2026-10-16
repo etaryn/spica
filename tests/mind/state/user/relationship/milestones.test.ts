@@ -65,3 +65,17 @@ test("every milestone reads in plain words for the user loops", () => {
     "something new happened between you",
   );
 });
+
+test("trigger texts name the thing", () => {
+  expect(triggerText({ kind: "repaired", via: "apology" })).toBe(
+    "they apologised, and the hurt has passed",
+  );
+  expect(triggerText({ kind: "repaired", via: "fade" })).toBe("the hurt between you has faded");
+  expect(
+    triggerText({ kind: "salient_fact", salience: 0.9, content: "The user is a nurse." }),
+  ).toBe("they told you: The user is a nurse.");
+  expect(triggerText({ kind: "salient_fact", salience: 0.9 })).toBe("they told you something");
+  expect(triggerText({ kind: "param_jump", param: "affect_valence", from: 0.5, to: 0.7 })).toBe(
+    "how warmly you feel toward them just rose sharply",
+  );
+});

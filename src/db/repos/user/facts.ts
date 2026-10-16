@@ -196,6 +196,23 @@ export async function establishIdiolect(
       AND (payload->'idiolect'->>'established_at') IS NULL`);
 }
 
+/** Her open hurt memories about this user: the feelings the cold path inferred from a slight. */
+export async function openHurtFacts(db: Db, userId: string): Promise<FactRow[]> {
+  return db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
+        eq(fact.subject, "self"),
+        eq(fact.kind, "feeling"),
+        eq(fact.source, "inferred"),
+        eq(fact.status, "open"),
+      ),
+    );
+}
+
 export async function setFactStatus(
   db: Db,
   userId: string,

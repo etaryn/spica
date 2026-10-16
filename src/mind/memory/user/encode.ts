@@ -66,8 +66,8 @@ export type EncodeOutcome = {
   recalledUpdated: number;
   /** One entry per planned fact, in order: the inserted row's id, or the duplicate target's id. */
   factIds: (string | null)[];
-  /** Salience of each fact row inserted, for the big-event check. */
-  insertedSaliences: number[];
+  /** Each new fact's subject, weight and words: the cold path reads them for big events. */
+  insertedFacts: { subject: string; salience: number; content: string }[];
   /** Every fact row inserted, for announcing after the cold path commits. */
   written: { id: string; kind: string }[];
 };
@@ -96,7 +96,7 @@ export async function encodeExtraction(
     threadsOpened: 0,
     recalledUpdated: 0,
     factIds: [],
-    insertedSaliences: [],
+    insertedFacts: [],
     written: [],
   };
 
@@ -322,7 +322,11 @@ async function encodeFacts(
       const inserted = await insertFact(db, userId, { ...row, status: "resolved" });
       outcome.written.push({ id: inserted.id, kind: inserted.kind });
       outcome.inserted += 1;
-      outcome.insertedSaliences.push(fact.salience);
+      outcome.insertedFacts.push({
+        subject: fact.subject,
+        salience: fact.salience,
+        content: fact.content,
+      });
       outcome.factIds.push(inserted.id);
       continue;
     }
@@ -342,7 +346,11 @@ async function encodeFacts(
         await setFactStatus(db, userId, target.id, "superseded", inserted.id);
         outcome.factIds.push(inserted.id);
         // Only news that stands counts as salient: an already-overridden fact is no big event.
-        outcome.insertedSaliences.push(fact.salience);
+        outcome.insertedFacts.push({
+          subject: fact.subject,
+          salience: fact.salience,
+          content: fact.content,
+        });
       }
       outcome.superseded += 1;
       outcome.inserted += 1;
@@ -352,7 +360,11 @@ async function encodeFacts(
     const inserted = await insertFact(db, userId, { ...row, status: "open" });
     outcome.written.push({ id: inserted.id, kind: inserted.kind });
     outcome.inserted += 1;
-    outcome.insertedSaliences.push(fact.salience);
+    outcome.insertedFacts.push({
+      subject: fact.subject,
+      salience: fact.salience,
+      content: fact.content,
+    });
     outcome.factIds.push(inserted.id);
   }
 }

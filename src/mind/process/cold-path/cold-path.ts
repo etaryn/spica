@@ -22,6 +22,7 @@ import type { Deps } from "@/mind/platform/deps";
 import type { Trigger } from "@/db/repos/user/user-mind";
 import { detectBigEvents } from "@/mind/process/user/big-events";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
+import { settleHurtFacts } from "@/mind/memory/user/hurt";
 import { errorName } from "@/mind/platform/errors";
 import type { ColdPathJob } from "@/mind/platform/jobs";
 import { exchangeTone } from "@/mind/state/user/relationship/affect";
@@ -125,7 +126,8 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
             ...detectBigEvents({
               before: relationship?.before ?? null,
               after: relationship?.after ?? null,
-              newFactSaliences: applied.insertedSaliences,
+              newFacts: applied.insertedFacts.filter((f) => f.subject !== "self"),
+              apology: !!signals && (signals.apology || signals.make_up),
               settings: config.user_mind.triggers,
               source: "exchange",
             }),
@@ -134,6 +136,10 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
               name,
             })),
           ];
+    const repaired = triggers.find(
+      (t): t is Extract<Trigger, { kind: "repaired" }> => t.kind === "repaired",
+    );
+    if (repaired) await settleHurtFacts(tx, job.userId, repaired.via, clock.now());
     const userMindRunId = await recordBigEvents(
       deps,
       tx,

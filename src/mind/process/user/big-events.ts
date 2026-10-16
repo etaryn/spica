@@ -1,7 +1,7 @@
 /**
  * Big events: the moments that make her think about a user. Pure. A param scored from the
  * user's behaviour jumping in one exchange, any watched param crossing a level band, a salient
- * new memory, or a make-up completed. Closeness grows a little with every warm exchange, so only
+ * new memory, a make-up completed, or a hurt that has passed. Closeness grows a little with every warm exchange, so only
  * its band crossings count; afterglow and message rate never do, so a long session isn't a big
  * event by length alone.
  */
@@ -17,7 +17,10 @@ const BAND_PARAMS: ParamName[] = ["closeness", ...JUMP_PARAMS];
 export function detectBigEvents(input: {
   before: RelationshipSnapshot | null;
   after: RelationshipSnapshot | null;
-  newFactSaliences: number[];
+  /** What the user (or the two of them) newly told her; her own facts aren't news about them. */
+  newFacts: { salience: number; content: string }[];
+  /** The exchange carried an apology or a make-up. */
+  apology?: boolean;
   settings: Config["user_mind"]["triggers"];
   /** The daily tick moves params by fade and absence only: no jumps, no facts, no make-up. */
   source: "exchange" | "tick";
@@ -39,11 +42,21 @@ export function detectBigEvents(input: {
     }
     if (source === "exchange" && before.makeUp !== "none" && after.makeUp === "none")
       triggers.push({ kind: "make_up_done" });
+    // The hurt has passed: worth taking stock, or her notes keep it open for good.
+    const line = settings.hurt_resolved;
+    if (before.params.hurt.value >= line && after.params.hurt.value < line) {
+      const via = source === "exchange" && input.apology ? "apology" : "fade";
+      triggers.push({ kind: "repaired", via });
+    }
   }
 
   if (source === "exchange") {
-    const top = Math.max(-Infinity, ...input.newFactSaliences);
-    if (top >= settings.fact_salience) triggers.push({ kind: "salient_fact", salience: top });
+    const top = input.newFacts.reduce<{ salience: number; content: string } | null>(
+      (best, f) => (!best || f.salience > best.salience ? f : best),
+      null,
+    );
+    if (top && top.salience >= settings.fact_salience)
+      triggers.push({ kind: "salient_fact", salience: top.salience, content: top.content });
   }
   return triggers;
 }

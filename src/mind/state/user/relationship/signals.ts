@@ -87,6 +87,15 @@ export function hurtFactContent(cause: string): string {
   return `Spica felt hurt because ${cause}.`;
 }
 
+const SETTLED = { apology: "they made up", fade: "it has passed" } as const;
+
+/** The same hurt, told as over, so nothing that reads it takes it for a live grievance. */
+export function pastHurtContent(content: string, via: "apology" | "fade"): string {
+  const cause = /^Spica felt hurt because (.+)\.$/s.exec(content)?.[1];
+  const past = cause ? `Spica was hurt because ${cause}` : content.replace(/[.\s]+$/, "");
+  return `${past}; ${SETTLED[via]}.`;
+}
+
 /** How the user met her last reach: a joke, a question, her news, an invitation. */
 export const BID_RESPONSES = ["toward", "away", "against"] as const;
 export type BidResponse = (typeof BID_RESPONSES)[number];

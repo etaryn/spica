@@ -65,7 +65,11 @@ function answers(pick: number, words: string[]) {
 async function meet(d: D, name: string, words = ["chess", "jazz", "tea"]) {
   const id = await createTestUser(name);
   await ensureRelationship(d.db, id, d.clock.now(), d.config.relationship);
-  const r = await submitCard(d, { id, name }, { quiz_version: "v1", answers: answers(0, words) });
+  const r = await submitCard(
+    d,
+    { id, name, gender: "unspecified" },
+    { quiz_version: "v1", answers: answers(0, words) },
+  );
   expect(r.status).toBe(201);
   return id;
 }
@@ -130,9 +134,9 @@ test("1: a finished quiz writes exactly the expected cards for both sides", asyn
   const facts = await cardFactsOf(u);
   const theirs = facts.filter((f) => f.subject === "user");
   const hers = facts.filter((f) => f.subject === "self");
-  // name + one per dimension + one per open question
+  // name + gender + one per dimension + one per open question
   const opens = quiz.questions.filter((q) => q.kind === "open").length;
-  expect(theirs).toHaveLength(1 + quiz.dimensions.length + opens);
+  expect(theirs).toHaveLength(2 + quiz.dimensions.length + opens);
   expect(hers.map((f) => f.content).sort()).toEqual(
     quiz.questions.flatMap((q) => (q.her_fact ? [q.her_fact] : [])).sort(),
   );
@@ -207,7 +211,7 @@ test("4: the gate opens only once the card exists", async () => {
   expect(await redirectOf(OnboardingPage())).toBeNull();
   await submitCard(
     d,
-    { id: u, name: "Sam" },
+    { id: u, name: "Sam", gender: "unspecified" },
     { quiz_version: "v1", answers: answers(0, ["a", "b", "c"]) },
   );
   expect(await redirectOf(ChatPage())).toBeNull();
@@ -227,7 +231,7 @@ test("5: the compatibility page comes out of the stored answers", async () => {
   expect(view.yours.map((a) => a.answer)).toEqual(["Stargazing", "knitting", "tea"]);
 });
 
-test("6: their name never fades; the rest of the card can go stale", async () => {
+test("6: their name and gender never fade; the rest of the card can go stale", async () => {
   const d = setup();
   const u = await meet(d, "Sam");
   const day = 86_400_000;
@@ -235,10 +239,11 @@ test("6: their name never fades; the rest of the card can go stale", async () =>
     await adminDecayFacts(getTestDb(), new Date(d.clock.now().getTime() + i * day), d.config.decay);
   }
   const facts = await cardFactsOf(u);
-  expect(facts.find((f) => f.content === "Their name is Sam.")?.status).toBe("open");
-  expect(
-    facts.filter((f) => f.content !== "Their name is Sam.").every((f) => f.status === "stale"),
-  ).toBe(true);
+  const kept = ["Their name is Sam.", "They didn't say their gender; use they/them for them."];
+  for (const content of kept) expect(facts.find((f) => f.content === content)?.status).toBe("open");
+  expect(facts.filter((f) => !kept.includes(f.content)).every((f) => f.status === "stale")).toBe(
+    true,
+  );
 });
 
 test("7: leak canary and side channel: A's card never reaches core or B's reply", async () => {

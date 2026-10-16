@@ -40,6 +40,8 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   dateOfBirth: text("date_of_birth").notNull(), // YYYY-MM-DD, validated at signup
+  // woman | man | non-binary | unspecified, chosen at signup; earlier rows read as unspecified.
+  gender: text("gender").notNull().default("unspecified"),
   timezone: text("timezone"), // IANA name from the browser; null = UTC
   createdAt: ts("created_at").notNull(),
   updatedAt: ts("updated_at").notNull(),

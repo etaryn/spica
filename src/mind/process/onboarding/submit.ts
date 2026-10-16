@@ -8,6 +8,7 @@ import { insertFact } from "@/db/repos/user/facts";
 import { getOnboarding, insertOnboarding } from "@/db/repos/user/onboarding";
 import type { Deps } from "@/mind/platform/deps";
 import { cardFacts } from "./card-facts";
+import { isGender } from "./gender";
 import { answersSchema, loadQuiz } from "./quiz";
 import { commonTopics } from "./score";
 
@@ -19,7 +20,7 @@ class AlreadyDone extends Error {}
 
 export async function submitCard(
   deps: Pick<Deps, "db" | "config" | "embedder" | "clock" | "modules">,
-  user: { id: string; name: string },
+  user: { id: string; name: string; gender: string },
   body: unknown,
 ): Promise<SubmitResult> {
   const cfg = deps.config.onboarding;
@@ -34,7 +35,8 @@ export async function submitCard(
   if (await getOnboarding(deps.db, user.id)) return { status: 409, error: "already_done" };
 
   // Embedding happens before the transaction so a slow embedder never holds it open.
-  const facts = cardFacts(quiz, answers.data, user.name, cfg);
+  const gender = isGender(user.gender) ? user.gender : "unspecified";
+  const facts = cardFacts(quiz, answers.data, user.name, gender, cfg);
   const topics = await commonTopics(quiz, answers.data, deps.embedder, cfg.topic_similarity);
   const vectors = await deps.embedder.embed(
     facts.map((f) => f.content),

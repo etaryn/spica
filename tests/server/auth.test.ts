@@ -18,6 +18,7 @@ const body = (dateOfBirth: string, email = `p${Math.random()}@test.local`) => ({
   password: "correct-horse-battery",
   name: "Pat",
   dateOfBirth,
+  gender: "woman",
 });
 
 test("adult sign-up creates a uuid user with the date of birth", async () => {
@@ -43,4 +44,17 @@ test("the name is stored trimmed", async () => {
   await auth.api.signUpEmail({ body: b });
   const [row] = await getTestDb().select().from(user).where(eq(user.email, b.email));
   expect(row?.name).toBe("Pat");
+});
+
+test("sign-up needs a gender from the list", async () => {
+  await expect(
+    auth.api.signUpEmail({ body: { ...body("1995-04-02"), gender: "" } }),
+  ).rejects.toThrow();
+  await expect(
+    auth.api.signUpEmail({ body: { ...body("1995-04-02"), gender: "robot" } }),
+  ).rejects.toThrow(/gender/i);
+  const b = { ...body("1995-04-02"), gender: "non-binary" };
+  await auth.api.signUpEmail({ body: b });
+  const [row] = await getTestDb().select().from(user).where(eq(user.email, b.email));
+  expect(row?.gender).toBe("non-binary");
 });

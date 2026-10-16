@@ -6,7 +6,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { submitCard } from "@/mind/process/onboarding/submit";
 
 export function createOnboardingHandler(opts: {
-  getUser(req: Request): Promise<{ id: string; name: string } | null>;
+  getUser(req: Request): Promise<{ id: string; name: string; gender: string } | null>;
   getDeps(): Deps;
 }) {
   return async function POST(req: Request): Promise<Response> {

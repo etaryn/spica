@@ -9,6 +9,7 @@ import { checkAge } from "@/mind/platform/age-gate";
 import type { Config } from "@/mind/platform/config";
 import type { Db } from "@/db/client";
 import { account, session, user, verification } from "@/db/schema";
+import { isGender } from "@/mind/process/onboarding/gender";
 
 export function createAuth(
   db: Db,
@@ -26,6 +27,7 @@ export function createAuth(
     user: {
       additionalFields: {
         dateOfBirth: { type: "string", required: true, input: true },
+        gender: { type: "string", required: true, input: true },
       },
     },
     advanced: { database: { generateId: "uuid" } },
@@ -40,6 +42,8 @@ export function createAuth(
               config.auth.min_age,
             );
             if (!result.ok) throw new APIError("BAD_REQUEST", { message: result.reason });
+            if (!isGender((u as { gender?: unknown }).gender))
+              throw new APIError("BAD_REQUEST", { message: "Choose a gender option." });
             // Stray spaces would show on her side of the card and in every reply.
             return { data: { ...u, name: u.name.trim() } };
           },

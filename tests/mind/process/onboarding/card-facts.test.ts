@@ -18,7 +18,7 @@ function answers(i: number, words: string[]) {
 }
 
 test("their card: name at full salience, one impression per dimension, one per open answer", () => {
-  const facts = cardFacts(quiz, answers(0, ["chess", "jazz", "tea"]), "Sam", cfg);
+  const facts = cardFacts(quiz, answers(0, ["chess", "jazz", "tea"]), "Sam", "woman", cfg);
   const theirs = facts.filter((f) => f.subject === "user");
   expect(theirs[0]).toEqual({
     subject: "user",
@@ -26,7 +26,8 @@ test("their card: name at full salience, one impression per dimension, one per o
     content: "Their name is Sam.",
     salience: 1,
   });
-  const traits = theirs.filter((f) => f.kind === "trait").slice(1);
+  // Name and gender come first, at full weight.
+  const traits = theirs.filter((f) => f.kind === "trait").slice(2);
   expect(traits).toHaveLength(quiz.dimensions.length);
   expect(traits.every((f) => f.salience === 0.5)).toBe(true);
   expect(traits.map((f) => f.content)).toContain(
@@ -41,14 +42,14 @@ test("their card: name at full salience, one impression per dimension, one per o
 
 test("a middle score reads as somewhere between", () => {
   // Option 1 is the middle pick for most dimensions in v1.
-  const facts = cardFacts(quiz, answers(1, ["a", "b", "c"]), "Sam", cfg);
+  const facts = cardFacts(quiz, answers(1, ["a", "b", "c"]), "Sam", "woman", cfg);
   expect(facts.map((f) => f.content)).toContain(
     "On their profile card they came across as somewhere between easy banter and deep talk.",
   );
 });
 
 test("her card: one self fact per open question and per choice question that has one", () => {
-  const facts = cardFacts(quiz, answers(0, ["a", "b", "c"]), "Sam", cfg);
+  const facts = cardFacts(quiz, answers(0, ["a", "b", "c"]), "Sam", "woman", cfg);
   const hers = facts.filter((f) => f.subject === "self");
   const expected = quiz.questions.filter((q) => q.her_fact).map((q) => q.her_fact);
   expect(hers.map((f) => f.content)).toEqual(expected);
@@ -57,15 +58,31 @@ test("her card: one self fact per open question and per choice question that has
 
 test("their name is trimmed and capped; a blank name writes no name fact", () => {
   const capped = { ...cfg, max_name_chars: 10 };
-  const long = cardFacts(quiz, answers(0, ["a", "b", "c"]), `  ${"x".repeat(50)}  `, capped);
+  const long = cardFacts(
+    quiz,
+    answers(0, ["a", "b", "c"]),
+    `  ${"x".repeat(50)}  `,
+    "woman",
+    capped,
+  );
   expect(long[0]!.content).toBe(`Their name is ${"x".repeat(10)}.`);
-  const blank = cardFacts(quiz, answers(0, ["a", "b", "c"]), "   ", capped);
+  const blank = cardFacts(quiz, answers(0, ["a", "b", "c"]), "   ", "woman", capped);
   expect(blank.some((f) => f.content.startsWith("Their name is"))).toBe(false);
 });
 
 test("an answer with $ patterns is stored as typed", () => {
-  const facts = cardFacts(quiz, answers(0, ["$`$&", "b", "c"]), "Sam", cfg);
+  const facts = cardFacts(quiz, answers(0, ["$`$&", "b", "c"]), "Sam", "woman", cfg);
   expect(facts.map((f) => f.content)).toContain(
     "On their profile card they said they could talk about $`$& for hours.",
   );
+});
+
+test("their gender is a card fact at full weight, next to the name", () => {
+  const facts = cardFacts(quiz, answers(0, ["a", "b", "c"]), "Sam", "unspecified", cfg);
+  expect(facts[1]).toEqual({
+    subject: "user",
+    kind: "trait",
+    content: "They didn't say their gender; use they/them for them.",
+    salience: 1,
+  });
 });

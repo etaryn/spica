@@ -1,8 +1,9 @@
 /**
  * Both profile cards as memories: their card as impressions of them, hers as what she has told
  * them about herself. First impressions only, so later conversation can override them; only their
- * name is kept at full weight so it never fades.
+ * name and gender are kept at full weight so they never fade.
  */
+import { genderFact, type Gender } from "./gender";
 import type { Answers, Quiz } from "./quiz";
 import { positionOf } from "./score";
 
@@ -17,6 +18,7 @@ export function cardFacts(
   quiz: Quiz,
   answers: Answers,
   name: string,
+  gender: Gender,
   cfg: { neutral_band: number; salience: number; max_name_chars: number },
 ): CardFact[] {
   const theirs = (kind: CardFact["kind"], content: string): CardFact => ({
@@ -30,6 +32,7 @@ export function cardFacts(
   const facts: CardFact[] = shortName
     ? [{ subject: "user", kind: "trait", content: `Their name is ${shortName}.`, salience: 1 }]
     : [];
+  facts.push({ subject: "user", kind: "trait", content: genderFact(gender), salience: 1 });
   for (const d of quiz.dimensions) {
     const you = positionOf(quiz, answers, d.id);
     const content =

@@ -207,7 +207,7 @@
     }
   },
   "prompts": {
-    "reply": "v17",
+    "reply": "v18",
     "crisis_classifier": "v2",
     "persona": "v6",
     "extract": "v9",

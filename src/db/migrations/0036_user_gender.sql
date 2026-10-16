@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "gender" text DEFAULT 'unspecified' NOT NULL;

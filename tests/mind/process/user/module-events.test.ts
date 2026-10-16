@@ -61,7 +61,11 @@ test("every profile card fact is announced after the card is saved", async () =>
   const answers = Object.fromEntries(
     quiz.questions.map((q) => [q.id, q.kind === "choice" ? 0 : ["a", "b", "c"][w++]!]),
   );
-  const r = await submitCard(deps, { id: u, name: "Sam" }, { quiz_version: "v1", answers });
+  const r = await submitCard(
+    deps,
+    { id: u, name: "Sam", gender: "unspecified" },
+    { quiz_version: "v1", answers },
+  );
   expect(r.status).toBe(201);
   const cards = await getTestDb()
     .select({ id: s.fact.id, kind: s.fact.kind })

@@ -21,6 +21,7 @@ export default function SignupPage() {
       email: String(f.get("email") ?? ""),
       password: String(f.get("password") ?? ""),
       dateOfBirth: String(f.get("dateOfBirth") ?? ""),
+      gender: String(f.get("gender") ?? ""),
     });
     setBusy(false);
     if (error) {
@@ -56,6 +57,18 @@ export default function SignupPage() {
         <label>
           Date of birth
           <input name="dateOfBirth" type="date" required />
+        </label>
+        <label>
+          Gender (so she gets your pronouns right)
+          <select name="gender" required defaultValue="">
+            <option value="" disabled>
+              Choose…
+            </option>
+            <option value="woman">Woman (she/her)</option>
+            <option value="man">Man (he/him)</option>
+            <option value="non-binary">Non-binary (they/them)</option>
+            <option value="unspecified">Prefer not to say (they/them)</option>
+          </select>
         </label>
         {error && (
           <p className={styles.error} role="alert">

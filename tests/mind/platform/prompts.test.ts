@@ -56,7 +56,7 @@ test("persona v6 is the configured persona", () => {
 
 test("the configured reply prompt tells her the feeling and day lines are her own state", () => {
   const c = loadConfig();
-  expect(c.prompts.reply).toBe("v17");
+  expect(c.prompts.reply).toBe("v18");
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/"Your day" are your own state/);
 });
 
@@ -80,4 +80,9 @@ test("her user-mind prompts take stock plainly and keep plans and pronouns hones
     expect(p).toMatch(/hasn't happened until a memory says it did/);
     expect(p).toMatch(/they\/them/);
   }
+});
+
+test("reply v18 uses the card's pronouns and names or they for everyone else", () => {
+  const c = loadConfig();
+  expect(loadPrompt("reply", c.prompts.reply)).toMatch(/use their name or they\/them/);
 });

@@ -33,15 +33,17 @@ function setup() {
   const deps = { ...makeTestDeps(), embedder: new ScriptedEmbedder(1024) };
   return deps;
 }
-const handlerFor = (deps: ReturnType<typeof setup>, user: { id: string; name: string } | null) =>
-  createOnboardingHandler({ getUser: async () => user, getDeps: () => deps });
+const handlerFor = (
+  deps: ReturnType<typeof setup>,
+  user: { id: string; name: string; gender: string } | null,
+) => createOnboardingHandler({ getUser: async () => user, getDeps: () => deps });
 const factCount = async (u: string) =>
   (await getTestDb().select().from(fact).where(eq(fact.user_id, u))).length;
 
 test("401 without a session; 400 on bad JSON or bad answers", async () => {
   const deps = setup();
   expect((await handlerFor(deps, null)(post({}))).status).toBe(401);
-  const u = { id: await createTestUser(), name: "Sam" };
+  const u = { id: await createTestUser(), name: "Sam", gender: "woman" };
   const h = handlerFor(deps, u);
   expect((await h(post("{not json"))).status).toBe(400);
   expect((await h(post({ quiz_version: "v1", answers: {} }))).status).toBe(400);
@@ -55,7 +57,7 @@ test("401 without a session; 400 on bad JSON or bad answers", async () => {
 
 test("201 stores the card with normalized answers and the card facts", async () => {
   const deps = setup();
-  const u = { id: await createTestUser(), name: "Sam" };
+  const u = { id: await createTestUser(), name: "Sam", gender: "woman" };
   const answers = { ...fullAnswers(), hours_topic: "  Star   Gazing " };
   const res = await handlerFor(deps, u)(post({ quiz_version: "v1", answers }));
   expect(res.status).toBe(201);
@@ -67,7 +69,7 @@ test("201 stores the card with normalized answers and the card facts", async () 
 
 test("review focus 1: a second submit is 409 and writes nothing more", async () => {
   const deps = setup();
-  const u = { id: await createTestUser(), name: "Sam" };
+  const u = { id: await createTestUser(), name: "Sam", gender: "woman" };
   const h = handlerFor(deps, u);
   const body = { quiz_version: "v1", answers: fullAnswers() };
   const [a, b] = await Promise.all([h(post(body)), h(post(body))]);
@@ -82,7 +84,7 @@ test("review focus 1: a second submit is 409 and writes nothing more", async () 
 test("review focus 2: an embedder failure is 503, writes nothing, and a retry succeeds", async () => {
   const deps = setup();
   deps.embedder.failNext = true;
-  const u = { id: await createTestUser(), name: "Sam" };
+  const u = { id: await createTestUser(), name: "Sam", gender: "woman" };
   const h = handlerFor(deps, u);
   const body = { quiz_version: "v1", answers: fullAnswers() };
   expect((await h(post(body))).status).toBe(503);
@@ -93,7 +95,7 @@ test("review focus 2: an embedder failure is 503, writes nothing, and a retry su
 
 test("review focus 3: a stale quiz version is 409 stale_quiz and writes nothing", async () => {
   const deps = setup();
-  const u = { id: await createTestUser(), name: "Sam" };
+  const u = { id: await createTestUser(), name: "Sam", gender: "woman" };
   const res = await handlerFor(deps, u)(post({ quiz_version: "v0", answers: fullAnswers() }));
   expect(res.status).toBe(409);
   expect(await res.json()).toEqual({ error: "stale_quiz" });

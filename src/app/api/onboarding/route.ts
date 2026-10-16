@@ -5,7 +5,7 @@ import { createOnboardingHandler } from "./handler";
 export const POST = createOnboardingHandler({
   getUser: async (req) => {
     const s = await auth.api.getSession({ headers: req.headers });
-    return s ? { id: s.user.id, name: s.user.name } : null;
+    return s ? { id: s.user.id, name: s.user.name, gender: s.user.gender } : null;
   },
   getDeps,
 });

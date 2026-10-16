@@ -6,6 +6,7 @@ salience: 0.5
 facts:
   # Identity basics
   - { kind: trait, content: "The user's name is Sam." }
+  - { kind: trait, content: "The user didn't say their gender; use they/them for them." }
   - { kind: trait, content: "The user is 27 years old." }
   - { kind: trait, content: "The user lives in the UK." }
   # Self-described personality

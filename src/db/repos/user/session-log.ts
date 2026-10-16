@@ -272,3 +272,19 @@ export async function pointedSince(
     );
   return rows.map((r) => r.pointed!);
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Both turns exist and were said in the same sitting. */
+export async function inSameSession(
+  db: Db,
+  userId: string,
+  a: string | null,
+  b: string,
+): Promise<boolean> {
+  if (!a || !UUID.test(a) || !UUID.test(b)) return false;
+  const turns = await getTurnsByIds(db, userId, [a, b]);
+  const first = turns.find((t) => t.id === a);
+  const second = turns.find((t) => t.id === b);
+  return !!first && !!second && first.session_id === second.session_id;
+}

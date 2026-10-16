@@ -39,6 +39,7 @@ import { sleepUntil, typingMs } from "@/mind/process/turn-taking/pacing";
 import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
 import { evaluateGate } from "./gate";
+import { loadDepth } from "@/mind/state/user/relationship/depth";
 import { loadGateInputs } from "./inputs";
 import type { Candidate, GateOutcome, GateResult } from "./types";
 
@@ -223,13 +224,18 @@ async function checkGateAndTopic(
 }
 
 /** An idea still open and within its chance; a make-up still due. Other kinds always are. */
-async function winnerLive(
+export async function winnerLive(
   deps: Deps,
   db: Db,
   userId: string,
   winner: Candidate,
   at: Date,
 ): Promise<boolean> {
+  // Depth was checked when it was picked; where they are can drop before the send.
+  if (winner.depth !== null && winner.depth !== undefined) {
+    const limit = (await loadDepth({ db, config: deps.config }, userId, null, true, null)).open;
+    if (winner.depth > limit) return false;
+  }
   if (winner.kind === "user_idea") {
     const idea = winner.factId ? await getFact(db, userId, winner.factId) : null;
     const cutoff = ideaCutoff(at, deps.config.user_mind.ideate.ttl_days);

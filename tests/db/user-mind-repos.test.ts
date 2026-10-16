@@ -25,6 +25,7 @@ import {
   recentReflections,
   retireIdeas,
   userLocalDate,
+  type Trigger,
 } from "@/db/repos/user/user-mind";
 import { adminStalePendingRuns } from "@/db/repos/admin/user-mind";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
@@ -297,4 +298,17 @@ test("the live model, the newest non-sensitive model, beliefs by weight, and bel
   expect(await supersedeBelief(db, u, low.id, high.id)).toBe(false);
   expect(await supersedeBelief(db, u, theirs.id, high.id)).toBe(false);
   expect(await supersedeBelief(db, u, "not-a-uuid", high.id)).toBe(false);
+});
+
+test("a milestone run is recorded past the daily cap; others are capped", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const at = new Date("2026-01-05T09:00:00Z");
+  const add = (ref: string, triggers: Trigger[]) =>
+    insertRun(db, u, { sourceRef: ref, triggers, localDate: "2026-01-05", now: at, cap: 1 });
+  await add("a", [{ kind: "salient_fact", salience: 0.9 }]);
+  expect((await add("b", [{ kind: "salient_fact", salience: 0.9 }]))?.status).toBe("capped");
+  expect((await add("c", [{ kind: "milestone", name: "first_inside_joke" }]))?.status).toBe(
+    "pending",
+  );
 });

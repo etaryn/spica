@@ -37,18 +37,18 @@ const extracting = (d: D, fact: object) => {
 };
 
 /** One user message and her reply, then the cold path on them. Returns her reply's id. */
-async function exchange(d: D, u: string): Promise<string> {
+async function exchange(d: D, u: string, session = SESSION): Promise<string> {
   d.clock.advance(60_000);
   const ut = await insertTurn(d.db, u, {
     id: randomUUID(),
-    session_id: SESSION,
+    session_id: session,
     role: "user",
     text: "whale cloud again",
     created_at: d.clock.now(),
   });
   const ct = await insertTurn(d.db, u, {
     id: randomUUID(),
-    session_id: SESSION,
+    session_id: session,
     role: "companion",
     text: "ha",
     created_at: d.clock.now(),
@@ -75,7 +75,7 @@ test("a joke starts as a candidate and is established when a later exchange call
   });
 
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: first!.id });
-  await exchange(d, u);
+  await exchange(d, u, randomUUID());
   const rows = await idiolects(u);
   expect(rows).toHaveLength(1);
   expect((rows[0]!.payload as Established).idiolect.established_at).not.toBeNull();
@@ -187,4 +187,19 @@ test("a fact of another kind carries no idiolect fields", async () => {
   await exchange(d, u);
   const [row] = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(row!.payload).toBeNull();
+});
+
+test("a callback in the same sitting doesn't establish the joke; the next sitting does", async () => {
+  const d = makeTestDeps();
+  const u = await createTestUser();
+  extracting(d, idiolectFact());
+  await exchange(d, u);
+  const [first] = await idiolects(u);
+  d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: first!.id });
+
+  await exchange(d, u);
+  expect(((await idiolects(u))[0]!.payload as Established).idiolect.established_at).toBeNull();
+
+  await exchange(d, u, randomUUID());
+  expect(((await idiolects(u))[0]!.payload as Established).idiolect.established_at).not.toBeNull();
 });

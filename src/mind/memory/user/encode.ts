@@ -15,7 +15,7 @@ import {
   insertFact,
   setFactStatus,
 } from "@/db/repos/user/facts";
-import { markExtracted } from "@/db/repos/user/session-log";
+import { inSameSession, markExtracted } from "@/db/repos/user/session-log";
 import {
   findOpenThreadByTitle,
   getOwnedThread,
@@ -301,8 +301,12 @@ async function encodeFacts(
         config.retrieval.recall_cap,
         fact.confidence,
       );
-      // An inside joke is born when it comes up again in another exchange, not twice in one.
-      if (target.kind === "idiolect" && target.source_ref !== input.sourceRef) {
+      // A joke becomes theirs only once it survives a gap: a callback in a later sitting.
+      if (
+        target.kind === "idiolect" &&
+        target.source_ref !== input.sourceRef &&
+        !(await inSameSession(db, userId, target.source_ref, input.sourceRef))
+      ) {
         await establishIdiolect(db, userId, target.id, input.exchangeAt);
       }
       outcome.duplicates += 1;

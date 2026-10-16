@@ -65,6 +65,7 @@ export function buildCandidates(
       coreMemoryId: memory.id,
       threadId: null,
       sensitive: memory.sensitive,
+      depth: memory.depth,
       tooDeep: memory.depth > inputs.depthLimit,
     });
   }
@@ -79,6 +80,7 @@ export function buildCandidates(
       coreMemoryId: memory.id,
       threadId: null,
       sensitive: false,
+      depth: memory.depth,
       tooDeep: memory.depth > inputs.depthLimit,
     });
   }

@@ -48,7 +48,11 @@ export async function insertRun(
       user_id: userId,
       source_ref: input.sourceRef,
       triggers: input.triggers,
-      status: (counted[0]?.n ?? 0) >= input.cap ? "capped" : "pending",
+      // A first happens once per user ever; letting a busy day swallow it would lose it for good.
+      status:
+        !input.triggers.some((t) => t.kind === "milestone") && (counted[0]?.n ?? 0) >= input.cap
+          ? "capped"
+          : "pending",
       local_date: input.localDate,
       created_at: input.now,
     })

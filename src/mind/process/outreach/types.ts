@@ -29,6 +29,8 @@ export type Candidate = {
   /** Her own memory behind a her_day candidate; core memory, so never a fact. */
   coreMemoryId: string | null;
   threadId: string | null;
+  /** Her memory's depth (1–3) for a her_day or core_thought; absent otherwise. */
+  depth?: number | null;
   /** Why it can't win; null when it can. */
   filtered: FilterReason | null;
 };

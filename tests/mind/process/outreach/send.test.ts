@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { runReachOutSend } from "@/mind/process/outreach/send";
+import { runReachOutSend, winnerLive } from "@/mind/process/outreach/send";
+import type { Candidate } from "@/mind/process/outreach/types";
 import { COLD_PATH_QUEUE } from "@/mind/platform/jobs";
 import { getFact, insertFact } from "@/db/repos/user/facts";
 import { getState } from "@/db/repos/user/conversation-state";
@@ -455,4 +456,21 @@ test("a make-up a reply already offered → dropped, nothing sent", async () => 
   });
   expect(await reachOuts(deps, u)).toEqual([]);
   expect(deps.events.events).toEqual([]);
+});
+
+test("a reach-out whose memory became too deep for them before send isn't live", async () => {
+  const { deps, u } = await setup();
+  const hers = (depth: number) =>
+    ({
+      ...winner,
+      kind: "her_day",
+      topic: "core:m1",
+      text: "finished the slow-film list",
+      threadId: null,
+      coreMemoryId: "m1",
+      depth,
+    }) as Candidate;
+  // A new relationship opens only the shallowest of her own things.
+  expect(await winnerLive(deps, deps.db, u, hers(2), now)).toBe(false);
+  expect(await winnerLive(deps, deps.db, u, hers(1), now)).toBe(true);
 });

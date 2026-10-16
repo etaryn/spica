@@ -66,3 +66,18 @@ test("her core values and the reply prompt never repeat a section heading", () =
   const headings = system.split("\n").filter((l) => l.startsWith("## "));
   expect(new Set(headings).size).toBe(headings.length);
 });
+
+test("her user-mind prompts take stock plainly and keep plans and pronouns honest", () => {
+  const c = loadConfig();
+  for (const [name, version] of [
+    ["user-mind/summarise", c.prompts.user_summarise],
+    ["user-mind/reflect", c.prompts.user_reflect],
+    ["user-mind/model", c.prompts.user_model],
+    ["user-mind/ideate", c.prompts.user_ideate],
+  ] as const) {
+    const p = loadPrompt(name, version);
+    expect(p).not.toMatch(/something important just happened/);
+    expect(p).toMatch(/hasn't happened until a memory says it did/);
+    expect(p).toMatch(/they\/them/);
+  }
+});

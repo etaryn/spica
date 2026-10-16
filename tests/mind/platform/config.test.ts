@@ -133,3 +133,9 @@ test("posts config: defaults load, draft and check are optional loops", () => {
   expect(c.prompts.post_draft).toBe("v1");
   expect(() => loadConfig({ posts: { capabilities: ["video"] } })).toThrow();
 });
+
+test("a long-conversation quiet gap shorter than the session gap is rejected", () => {
+  expect(() =>
+    loadConfig({ user_mind: { triggers: { long_conversation: { quiet_minutes: 10 } } } }),
+  ).toThrow(/quiet_minutes/);
+});

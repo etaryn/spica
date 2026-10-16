@@ -5,7 +5,14 @@ import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
-import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
+import {
+  closeTestDb,
+  createTestUser,
+  getTestDb,
+  openCrisisWindow,
+  resetDb,
+  vec,
+} from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -46,21 +53,52 @@ async function setup() {
   return { deps, userId, fact, run };
 }
 
-test("writes one live summary from the user's memories and her snapshot", async () => {
+test("outside a crisis window, nothing sensitive is read and the summary is unmarked", async () => {
   const { deps, userId, fact, run } = await setup();
   await fact("They got the job in Osaka.", 0.9);
   await fact("Private crisis detail.", 0.95, { sensitive: true });
-  expect(
-    await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId)),
-  ).toBe("done");
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   const s = (await liveSummary(deps.db, userId))!;
   expect(s).toMatchObject({ kind: "summary", subject: "shared", source: "generated" });
   expect(s.content).toContain("Osaka");
-  expect(s.content).toContain("Private crisis");
-  expect(s.payload).toMatchObject({ sensitive: true });
-  expect(s.payload).toHaveProperty("how_i_feel");
+  expect(s.content).not.toContain("Private crisis");
+  expect(s.payload).not.toHaveProperty("sensitive");
   const prompt = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
   expect(prompt.input).toContain("She loves old films.");
+});
+
+test("inside a crisis window, sensitive memories are read and the summary is marked", async () => {
+  const { deps, userId, fact, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
+  await fact("Private crisis detail.", 0.95, { sensitive: true });
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
+  const s = (await liveSummary(deps.db, userId))!;
+  expect(s.content).toContain("Private crisis");
+  expect(s.payload).toMatchObject({ sensitive: true });
+});
+
+test("after the window, a fact a marked summary read is still unread for the clean chain", async () => {
+  const { deps, userId, fact, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
+  await fact("They started a pottery class.", 0.7);
+  await fact("Private crisis detail.", 0.95, { sensitive: true });
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
+  deps.clock.advance(2 * 3_600_000);
+  const after = await loadRunInputs(deps, userId);
+  expect(after.clean).toBe(true);
+  expect(after.facts.map((f) => f.content)).toEqual(["They started a pottery class."]);
+  expect(after.previous).toBeNull();
+});
+
+test("a fact a busy run left out is read by the next run", async () => {
+  const { deps, userId, fact, run } = await setup();
+  const max = deps.config.user_mind.summarise.max_facts;
+  for (let i = 0; i < max; i++) await fact(`Heavy fact ${i}.`, 0.9);
+  await fact("A light fact.", 0.2);
+  await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
+  deps.clock.advance(60_000);
+  const next = await loadRunInputs(deps, userId);
+  expect(next.facts.map((f) => f.content)).toEqual(["A light fact."]);
 });
 
 test("a second run supersedes the first; one stays live", async () => {
@@ -147,8 +185,9 @@ test("a memory committed after a summary but dated before it is still summarised
   expect(contents).toEqual(["They adopted a cat."]);
 });
 
-test("a sensitive memory marks the summary, and the mark carries to the next one", async () => {
+test("inside a crisis window a sensitive memory marks the summary, and the mark carries", async () => {
   const { deps, userId, fact, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   await fact("They said they'd been thinking of ending it.", 0.9, { sensitive: true });
   await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   const call = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise").at(-1)!;

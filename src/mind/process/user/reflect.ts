@@ -5,12 +5,17 @@
  */
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";
-import { liveSummary, recentReflections, type Trigger } from "@/db/repos/user/user-mind";
+import {
+  latestNonSensitiveSummary,
+  liveSummary,
+  recentReflections,
+  type Trigger,
+} from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import { memoryLines, triggerText, type RunInputs } from "./inputs";
+import { memoryLines, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userReflect(
@@ -22,8 +27,10 @@ export async function userReflect(
   const settings = config.user_mind.reflect;
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_reflect", async (ctx) => {
-    const summary = await liveSummary(db, userId);
-    const earlier = await recentReflections(db, userId, settings.recent);
+    const summary = inputs.clean
+      ? await latestNonSensitiveSummary(db, userId)
+      : await liveSummary(db, userId);
+    const earlier = visible(inputs, await recentReflections(db, userId, settings.recent));
     const now = deps.clock.now();
     const Output = z.object({
       reflection: fitText(settings.max_chars).nullable(),

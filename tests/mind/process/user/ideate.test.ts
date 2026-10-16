@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
-import { insertRun, liveIdeas } from "@/db/repos/user/user-mind";
+import { insertRun, liveIdeas, retireIdeas } from "@/db/repos/user/user-mind";
 import { userReflect } from "@/mind/process/user/reflect";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { ideaCutoff, userIdeate } from "@/mind/process/user/ideate";
-import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
+import { closeTestDb, createTestUser, openCrisisWindow, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 import { sequence } from "../../../helpers/llm";
 
@@ -110,8 +110,9 @@ async function sensitiveFact(
   });
 }
 
-test("ideate never sees a sensitive memory, summary or reflection", async () => {
+test("ideate never sees a sensitive memory, summary or reflection, even inside a crisis window", async () => {
   const { deps, userId, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   deps.llm.handlers.user_reflect = sequence({ reflection: "SECRET-REFLECTION", subject: "user" });
   await sensitiveFact(deps, userId, "SECRET-FACT thinking of ending it");
   const inputs = await loadRunInputs(deps, userId);
@@ -153,4 +154,25 @@ test("ideate reads her latest read on them only when nothing sensitive went into
   const input = JSON.parse(deps.llm.structuredCalls.at(-1)!.input);
   expect(input.your_read_on_them.how_they_are).toBe("Plain read.");
   expect(JSON.stringify(input)).not.toContain("Crisis read.");
+});
+
+test("an idea she already brought up recently is in already_planned", async () => {
+  const { deps, userId, run } = await setup();
+  const raised = await insertFact(deps.db, userId, {
+    subject: "shared",
+    kind: "idea",
+    content: "Ask how the pottery class went.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  await retireIdeas(deps.db, userId, [raised.id]);
+  deps.llm.handlers.user_ideate = sequence({ idea: null });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_ideate")!;
+  expect(JSON.parse(call.input).already_planned).toContain("Ask how the pottery class went.");
 });

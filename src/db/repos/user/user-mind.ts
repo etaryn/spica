@@ -185,25 +185,6 @@ export async function supersedeBelief(
   return rows.length > 0;
 }
 
-/** The memory ids the loop that wrote this summary read; empty when its trace is gone. */
-export async function summaryInputFactIds(
-  db: Db,
-  userId: string,
-  summaryId: string,
-): Promise<string[]> {
-  const rows = await db
-    .select({ inputs: user_loop_trace.inputs })
-    .from(user_loop_trace)
-    .where(
-      and(
-        eq(user_loop_trace.user_id, userId),
-        sql`${user_loop_trace.outputs}->>'summary_id' = ${summaryId}`,
-      ),
-    )
-    .limit(1);
-  return (rows[0]?.inputs as { fact_ids?: string[] } | undefined)?.fact_ids ?? [];
-}
-
 /** The user's local date; UTC when their zone is unset or invalid. */
 export async function userLocalDate(db: Db, userId: string, now: Date): Promise<string> {
   const raw = await getTimezone(db, userId);
@@ -250,6 +231,29 @@ export async function liveIdeas(
 }
 
 /** An idea gets one chance: once offered, it is resolved. Only open ideas move. */
+/** Ideas she already brought up (used, so resolved) since `since`: not worth proposing again. */
+export async function recentlyRaisedIdeas(
+  db: Db,
+  userId: string,
+  since: Date,
+  limit: number,
+): Promise<FactRow[]> {
+  return db
+    .select()
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.scope, "private"),
+        eq(fact.kind, "idea"),
+        eq(fact.status, "resolved"),
+        gt(fact.created_at, since),
+      ),
+    )
+    .orderBy(desc(fact.created_at))
+    .limit(limit);
+}
+
 export async function retireIdeas(db: Db, userId: string, ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
   const rows = await db

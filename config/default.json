@@ -739,7 +739,7 @@
     "summarise": {
       "max_facts": 20,
       "max_threads": 5,
-      "since_slack_minutes": 120,
+      "unread_days": 14,
       "max_chars": 300,
       "max_tokens": 512,
       "salience": 0.6,
@@ -758,6 +758,7 @@
       "salience": 0.5,
       "confidence": 0.6,
       "ttl_days": 3,
+      "recent_days": 14,
       "max_planned": 20,
       "slot_max": 1
     },

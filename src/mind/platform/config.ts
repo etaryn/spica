@@ -765,7 +765,7 @@ const userMind = z.object({
   summarise: z.object({
     max_facts: positiveInt,
     max_threads: countFromZero,
-    since_slack_minutes: countFromZero,
+    unread_days: positiveInt,
     max_chars: positiveInt,
     max_tokens: positiveInt,
     salience: unit,
@@ -784,6 +784,7 @@ const userMind = z.object({
     salience: unit,
     confidence: unit,
     ttl_days: z.number().positive(),
+    recent_days: positiveInt,
     max_planned: positiveInt,
     slot_max: countFromZero,
   }),
@@ -945,6 +946,12 @@ export function loadConfig(overrides: unknown = {}): Config {
   if (config.embedding.dimensions !== EMBEDDING_DIMENSIONS) {
     throw new Error(
       `embedding dimension ${config.embedding.dimensions} does not match the schema (${EMBEDDING_DIMENSIONS}); this needs a migration, not a config override`,
+    );
+  }
+  // A shorter quiet gap would record a session mid-talk, and its real end would never fire.
+  if (config.user_mind.triggers.long_conversation.quiet_minutes < config.session.idle_gap_minutes) {
+    throw new Error(
+      "user_mind.triggers.long_conversation.quiet_minutes must be at least session.idle_gap_minutes",
     );
   }
   return config;

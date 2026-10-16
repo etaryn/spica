@@ -155,7 +155,7 @@ async function loadHerDay(
  * before that cold path commits, or even if it never does.
  */
 export async function effectiveCrisisQuietUntil(
-  deps: InputDeps,
+  deps: Pick<Deps, "db" | "config">,
   userId: string,
   stored: Date | null,
   now: Date,

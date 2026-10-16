@@ -11,6 +11,7 @@ import {
   latestNonSensitiveModel,
   latestNonSensitiveSummary,
   liveIdeas,
+  recentlyRaisedIdeas,
   recentReflections,
 } from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
@@ -42,12 +43,16 @@ export async function userIdeate(
     const [latest] = await recentReflections(db, userId, 1);
     const noticed =
       latest && latest.created_at >= run.created_at && !isSensitive(latest) ? latest : null;
-    const planned = await liveIdeas(
-      db,
-      userId,
-      ideaCutoff(now, settings.ttl_days),
-      settings.max_planned,
-    );
+    // Ideas she already brought up count too, so she doesn't pitch the same one twice.
+    const planned = [
+      ...(await liveIdeas(db, userId, ideaCutoff(now, settings.ttl_days), settings.max_planned)),
+      ...(await recentlyRaisedIdeas(
+        db,
+        userId,
+        new Date(now.getTime() - settings.recent_days * DAY),
+        settings.max_planned,
+      )),
+    ];
     // A sensitive storyline's title can carry what the sensitive fact says.
     const threads = await listOpenThreads(db, userId, config.user_mind.summarise.max_threads, {
       excludeSensitive: true,

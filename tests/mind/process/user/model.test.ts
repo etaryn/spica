@@ -3,7 +3,14 @@ import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, liveBeliefs, liveModel } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userModel } from "@/mind/process/user/model";
-import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
+import {
+  closeTestDb,
+  createTestUser,
+  getTestDb,
+  openCrisisWindow,
+  resetDb,
+  vec,
+} from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 import { sequence } from "../../../helpers/llm";
 import { sql } from "drizzle-orm";
@@ -154,6 +161,7 @@ test("a belief that repeats a live one is dropped, unless it names the belief it
 
 test("a model or belief that read anything sensitive is marked; an ordinary one is not", async () => {
   const { deps, userId, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   deps.llm.handlers.user_model = sequence(read([{ text: "They keep going.", replaces: null }]));
   await userModel(deps, run, await loadRunInputs(deps, userId));
   expect((await liveModel(deps.db, userId))!.payload).not.toHaveProperty("sensitive");
@@ -183,7 +191,7 @@ test("a model or belief that read anything sensitive is marked; an ordinary one 
   // The mark carries through the previous model even when the new memories are ordinary.
   deps.clock.advance(60_000);
   deps.llm.handlers.user_model = sequence(read([]));
-  await userModel(deps, run, { previous: null, facts: [] });
+  await userModel(deps, run, { previous: null, facts: [], clean: false });
   expect((await liveModel(deps.db, userId))!.payload).toMatchObject({ sensitive: true });
 });
 
@@ -195,4 +203,26 @@ test("empty output fails and keeps the old model", async () => {
   const before = (await liveModel(deps.db, userId))!;
   expect(await userModel(deps, run, inputs)).toBe("failed");
   expect((await liveModel(deps.db, userId))!.id).toBe(before.id);
+});
+
+test("outside a crisis window a sensitive belief isn't shown to the model, and nothing is marked", async () => {
+  const { deps, userId, run } = await setup();
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "belief",
+    content: "They were in a very dark place.",
+    payload: { sensitive: true },
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  deps.llm.handlers.user_model = sequence(read([]));
+  await userModel(deps, run, await loadRunInputs(deps, userId));
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_model")!;
+  expect(call.input).not.toContain("dark place");
+  expect((await liveModel(deps.db, userId))!.payload).not.toHaveProperty("sensitive");
 });

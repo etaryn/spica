@@ -227,18 +227,26 @@ export async function setFactStatus(
 }
 
 /**
- * What she has learned about a user since `since`, most salient first, leaving out `excludeIds`
- * (what the last summary already read). Her own summaries, reflections, ideas, gists, reads and
- * beliefs are left out: a loop never feeds on its own output. Sensitive memories are included and flagged; each loop
- * decides what it may read.
+ * Memories her notes haven't read yet: from the last `since` window, minus any a summary of the
+ * same chain read (clean runs count only clean summaries), the weightiest first. A fact a busy
+ * run left out stays unread for the next one. Her own generated kinds are never read back.
  */
-export async function listFactsForSummary(
+export async function listUnreadFacts(
   db: Db,
   userId: string,
-  since: Date | null,
-  excludeIds: string[],
-  limit: number,
+  a: { since: Date; clean: boolean; limit: number },
 ) {
+  const since = a.since.toISOString();
+  const cleanOnly = a.clean
+    ? sql`AND COALESCE((s.payload->>'sensitive')::boolean, false) = false`
+    : sql``;
+  const read = sql`(
+    SELECT jsonb_array_elements_text(t.inputs->'fact_ids')::uuid
+    FROM user_loop_trace t
+    JOIN fact s ON s.id::text = t.outputs->>'summary_id'
+    WHERE t.user_id = ${userId} AND t.loop = 'user_summarise'
+      AND t.created_at > ${since}::timestamptz ${cleanOnly}
+  )`;
   return db
     .select({
       id: fact.id,
@@ -255,13 +263,17 @@ export async function listFactsForSummary(
         eq(fact.scope, "private"),
         notInArray(fact.status, [...INACTIVE]),
         notInArray(fact.kind, ["summary", "reflection", "idea", "episode", "model", "belief"]),
-        since ? sql`${fact.created_at} > ${since.toISOString()}::timestamptz` : undefined,
-        excludeIds.length > 0 ? notInArray(fact.id, excludeIds) : undefined,
+        sql`${fact.created_at} > ${since}::timestamptz`,
+        a.clean
+          ? sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`
+          : undefined,
+        sql`${fact.id} NOT IN ${read}`,
       ),
     )
     .orderBy(desc(fact.salience))
-    .limit(limit);
+    .limit(a.limit);
 }
+export type UnreadFact = Awaited<ReturnType<typeof listUnreadFacts>>[number];
 
 /**
  * Cold-path recall write-back. Every recalled fact that still exists gets a retrieval_trace row;

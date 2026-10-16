@@ -76,11 +76,13 @@ export async function runUserMind(
     const loopDeps = { db, embedder, config, clock, log, llm, modules, snapshot };
     const inputs = await loadRunInputs(loopDeps, run.user_id);
     // In order, each reading what the one before wrote; a failed loop doesn't stop the next.
+    // Nothing new: a param-only trigger still takes stock, but there's nothing to notice or plan.
+    const fresh = inputs.facts.length > 0;
     const results = [
       await userSummarise(loopDeps, run, inputs),
-      await userReflect(loopDeps, run, inputs),
+      fresh ? await userReflect(loopDeps, run, inputs) : "done",
       await userModel(loopDeps, run, inputs),
-      await userIdeate(loopDeps, run, inputs),
+      fresh ? await userIdeate(loopDeps, run, inputs) : "done",
       await userConsolidate(loopDeps, run),
     ];
     status = results.includes("failed") ? "failed" : "done";

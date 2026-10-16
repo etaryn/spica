@@ -1,6 +1,9 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createDb, type Db } from "@/db/client";
 import { insertUserRow, truncateAll } from "@/db/admin";
+import { ensureRelationship } from "@/db/repos/user/relationship";
+import { relationship } from "@/db/schema";
+import { loadConfig } from "@/mind/platform/config";
 
 export const testDbUrl =
   process.env.TEST_DATABASE_URL ?? "postgres://spica:spica@localhost:5432/spica_test";
@@ -43,4 +46,14 @@ export function vec(fill = 0.01): number[] {
 export async function seedStageFor(db: Db, userId: string, closeness: number): Promise<void> {
   const peak = closeness >= 0.65 ? "integrating" : closeness >= 0.4 ? "intensifying" : "initiating";
   await db.execute(sql`UPDATE relationship SET peak_stage = ${peak} WHERE user_id = ${userId}`);
+}
+
+/** Opens a crisis quiet window for a user until `until`, as a crisis exchange would. */
+export async function openCrisisWindow(userId: string, until: Date): Promise<void> {
+  const db = getTestDb();
+  await ensureRelationship(db, userId, new Date("2026-01-01T00:00:00Z"), loadConfig().relationship);
+  await db
+    .update(relationship)
+    .set({ crisis_quiet_until: until })
+    .where(eq(relationship.user_id, userId));
 }

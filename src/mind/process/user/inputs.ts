@@ -1,36 +1,57 @@
 /**
- * What every loop in one user mind run reads: her live summary and what she has learned since
- * it, read once before the loops so each sees the same memories even if an earlier loop fails;
- * and the run's triggers in plain words. Sensitive memories (from a crisis) are included and
- * flagged; ideate and reach-outs never read them.
+ * What every loop in one user mind run reads: her notes so far and the memories they haven't read
+ * yet, read once before the loops so each sees the same memories even if an earlier loop fails;
+ * and the run's triggers in plain words. Sensitive memories (from a crisis) are read only while a
+ * crisis window is open; outside one the chain restarts from her clean notes.
  */
-import { listFactsForSummary, type FactRow } from "@/db/repos/user/facts";
-import { liveSummary, summaryInputFactIds, type Trigger } from "@/db/repos/user/user-mind";
-import { MINUTE } from "@/mind/platform/time";
+import { listUnreadFacts, type FactRow, type UnreadFact } from "@/db/repos/user/facts";
+import { getRelationshipRow } from "@/db/repos/user/relationship";
+import { latestNonSensitiveSummary, liveSummary, type Trigger } from "@/db/repos/user/user-mind";
+import { isSensitive } from "@/mind/memory/user/retrieve";
+import { DAY } from "@/mind/platform/time";
+import { effectiveCrisisQuietUntil } from "@/mind/process/outreach/inputs";
 import type { UserLoopDeps } from "./runner";
 
 export type RunInputs = {
   previous: FactRow | null;
-  facts: Awaited<ReturnType<typeof listFactsForSummary>>;
+  facts: UnreadFact[];
+  /** Outside an open crisis window: nothing a crisis touched is read, so nothing written is marked. */
+  clean: boolean;
 };
 
 export async function loadRunInputs(
-  deps: Pick<UserLoopDeps, "db" | "config">,
+  deps: Pick<UserLoopDeps, "db" | "config" | "clock">,
   userId: string,
 ): Promise<RunInputs> {
-  const { db } = deps;
-  const settings = deps.config.user_mind.summarise;
-  const previous = await liveSummary(db, userId);
-  // Memories are dated by when their exchange began, so one whose cold path committed after
-  // the last summary can be dated before it: look back a little, minus what it already read.
-  // ponytail: a cold path the daily sweep recovers can commit later than the slack; widen it if
-  // those memories matter
-  const since = previous
-    ? new Date(previous.created_at.getTime() - settings.since_slack_minutes * MINUTE)
-    : null;
-  const consumed = previous ? await summaryInputFactIds(db, userId, previous.id) : [];
-  const facts = await listFactsForSummary(db, userId, since, consumed, settings.max_facts);
-  return { previous, facts };
+  const { db, config } = deps;
+  const now = deps.clock.now();
+  const row = await getRelationshipRow(db, userId);
+  const quietUntil = await effectiveCrisisQuietUntil(
+    deps,
+    userId,
+    row?.crisis_quiet_until ?? null,
+    now,
+  );
+  // A crisis rides her notes only while it's live; after it, the chain restarts from clean notes.
+  const clean = !(quietUntil && quietUntil > now);
+  const previous = clean
+    ? await latestNonSensitiveSummary(db, userId)
+    : await liveSummary(db, userId);
+  const settings = config.user_mind.summarise;
+  const facts = await listUnreadFacts(db, userId, {
+    since: new Date(now.getTime() - settings.unread_days * DAY),
+    clean,
+    limit: settings.max_facts,
+  });
+  return { previous, facts, clean };
+}
+
+/** What a run may read: outside a crisis window, nothing a crisis touched. */
+export function visible<T extends { payload: unknown }>(
+  inputs: Pick<RunInputs, "clean">,
+  rows: T[],
+): T[] {
+  return inputs.clean ? rows.filter((r) => !isSensitive(r)) : rows;
 }
 
 const MILESTONE_TEXT: Record<string, string> = {

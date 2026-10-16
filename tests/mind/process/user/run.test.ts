@@ -2,6 +2,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { sql } from "drizzle-orm";
 import { insertFact } from "@/db/repos/user/facts";
 import { USER_MIND_RUN_QUEUE } from "@/mind/platform/jobs";
+import { insertRun } from "@/db/repos/user/user-mind";
 import { recordBigEvents, runUserMind, sweepPendingUserMindRuns } from "@/mind/process/user/run";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
@@ -152,4 +153,21 @@ test("model reads this run's summary, and ideate reads this run's read on them",
     JSON.parse(deps.llm.structuredCalls.find((c) => c.purpose === purpose)!.input);
   expect(input("user_model").summary.whats_live).toContain("They booked a solo trip.");
   expect(input("user_ideate").your_read_on_them.how_they_are).toContain("They booked a solo trip.");
+});
+
+test("a run with nothing unread skips reflect and ideate", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const r = (await insertRun(deps.db, u, {
+    sourceRef: "tick:2026-01-05",
+    triggers: [{ kind: "param_band", param: "warmth", from: 0.26, to: 0.24 }],
+    localDate: "2026-01-05",
+    now: deps.clock.now(),
+    cap: 9,
+  }))!;
+  expect(await runUserMind(deps, { runId: r.id })).toBe("done");
+  const purposes = deps.llm.structuredCalls.map((c) => c.purpose);
+  expect(purposes).toContain("user_summarise");
+  expect(purposes).not.toContain("user_reflect");
+  expect(purposes).not.toContain("user_ideate");
 });

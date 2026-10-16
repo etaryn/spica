@@ -159,7 +159,9 @@ test("each new trigger runs its batch exactly once", async () => {
     [talker, "long_conversation", "done"],
     [writer, "stale_summary", "done"],
   ]);
-  expect(await count("user_loop_trace")).toBe(15);
+  // The talker's run has new memories (all five loops); the other two have nothing unread, so
+  // they take stock without reflect or ideate.
+  expect(await count("user_loop_trace")).toBe(11);
   expect(await coreDump()).toBe(before);
 });
 
@@ -173,7 +175,7 @@ test("an idle user runs no loop", async () => {
   expect(d.llm.structuredCalls).toHaveLength(0);
 });
 
-test("a crisis reaches her summary, never ideate, a reach-out, another user or core", async () => {
+test("once the window has passed, a crisis reaches no note of hers, no reach-out, user or core", async () => {
   const d = deps();
   const before = await coreDump();
   const alice = await user(d, "alice");
@@ -207,13 +209,14 @@ test("a crisis reaches her summary, never ideate, a reach-out, another user or c
   await drain(d);
 
   const calls = (p: string) => d.llm.structuredCalls.filter((c) => c.purpose === p);
-  // Exactly Alice's summarise read the crisis; ideate never did, for either user.
+  // The run after the window is clean: no loop reads the crisis. Neither user has anything else
+  // unread (the fake extractor stores nothing), so neither ideates.
   expect(calls("user_summarise")).toHaveLength(2);
-  expect(calls("user_summarise").filter((c) => c.input.includes(TOKEN))).toHaveLength(1);
-  expect(calls("user_ideate")).toHaveLength(2);
+  for (const c of calls("user_summarise")) expect(c.input).not.toContain(TOKEN);
+  expect(calls("user_ideate")).toHaveLength(0);
   for (const c of calls("user_ideate")) expect(c.input).not.toContain(TOKEN);
 
-  // Alice's reach-out: her live summary is sensitive, so the reach-out never carries it.
+  // Alice's reach-out never carries it.
   await dueThread(d, alice);
   const later = new Date(now.getTime() + HOUR);
   d.clock.set(later);

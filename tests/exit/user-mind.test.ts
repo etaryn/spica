@@ -187,6 +187,7 @@ describe("phase 9 exit", () => {
         "param_jump",
         "param_band",
         "make_up_done",
+        "repaired",
         "crisis_passed",
         "long_conversation",
         "stale_summary",
@@ -195,13 +196,15 @@ describe("phase 9 exit", () => {
     );
   });
 
-  test("each run is one batch of five; none failed or was left behind", async () => {
+  test("each run is one batch (three loops when nothing is unread); none failed or was left behind", async () => {
     const runs = await q(sql`SELECT id, status FROM user_mind_run WHERE status <> 'capped'`);
     expect(runs.length).toBeGreaterThan(0);
     for (const run of runs) {
       expect(run.status).toBe("done");
       const loops = await q(sql`SELECT loop FROM user_loop_trace WHERE run_id = ${run.id}`);
-      expect(loops.map((l) => String(l.loop)).sort()).toEqual(LOOPS);
+      const ran = loops.map((l) => String(l.loop)).sort();
+      // Nothing unread: she still takes stock, but has nothing to notice or plan.
+      expect([LOOPS, ["user_consolidate", "user_model", "user_summarise"]]).toContainEqual(ran);
     }
   });
 

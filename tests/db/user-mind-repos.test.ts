@@ -5,7 +5,7 @@ import {
   candidateFacts,
   getFact,
   insertFact,
-  listFactsForSummary,
+  listUnreadFacts,
   nearFacts,
 } from "@/db/repos/user/facts";
 import { adminDecayFacts } from "@/db/repos/admin/decay";
@@ -240,7 +240,7 @@ test("her model stays out of retrieval and decay; gists, models and beliefs are 
   expect(retrieved).not.toContain(model.id);
   expect(await nearFacts(db, u, "user", vec(), 10, 0)).toEqual([]);
   expect(await nearFacts(db, u, "shared", vec(), 10, 0)).toEqual([]);
-  expect(await listFactsForSummary(db, u, null, [], 10)).toEqual([]);
+  expect(await listUnreadFacts(db, u, { since: new Date(0), clean: false, limit: 10 })).toEqual([]);
 
   await adminDecayFacts(db, new Date("2026-01-05T09:00:00Z"), {
     grace_days: 3,

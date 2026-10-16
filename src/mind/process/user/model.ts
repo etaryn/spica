@@ -8,6 +8,8 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { insertFact, setFactStatus } from "@/db/repos/user/facts";
 import {
+  latestNonSensitiveModel,
+  latestNonSensitiveSummary,
   liveBeliefs,
   liveModel,
   liveSummary,
@@ -20,7 +22,7 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import { memoryLines, triggerText, type RunInputs } from "./inputs";
+import { memoryLines, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export const modelPayload = z.object({
@@ -40,12 +42,16 @@ export async function userModel(
   const userId = run.user_id;
   return runUserLoop(deps, run, "user_model", async (ctx) => {
     const now = deps.clock.now();
-    const summary = await liveSummary(db, userId);
+    const summary = inputs.clean
+      ? await latestNonSensitiveSummary(db, userId)
+      : await liveSummary(db, userId);
     // This run's reflection, if reflect wrote one: an older one isn't news.
-    const [latest] = await recentReflections(db, userId, 1);
+    const [latest] = visible(inputs, await recentReflections(db, userId, 1));
     const noticed = latest && latest.created_at >= run.created_at ? latest : null;
-    const previous = await liveModel(db, userId);
-    const beliefs = await liveBeliefs(db, userId, settings.belief_context);
+    const previous = inputs.clean
+      ? await latestNonSensitiveModel(db, userId)
+      : await liveModel(db, userId);
+    const beliefs = visible(inputs, await liveBeliefs(db, userId, settings.belief_context));
     const Output = z.object({
       how_they_are: fitText(settings.max_chars),
       what_they_want: fitText(settings.max_chars),

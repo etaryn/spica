@@ -3,7 +3,7 @@ import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, recentReflections } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userReflect } from "@/mind/process/user/reflect";
-import { closeTestDb, createTestUser, resetDb, vec } from "../../../helpers/db";
+import { closeTestDb, createTestUser, openCrisisWindow, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 import { sequence } from "../../../helpers/llm";
 
@@ -88,6 +88,7 @@ async function sensitiveFact(
 
 test("a reflection that read a sensitive memory is marked; one that didn't is not", async () => {
   const { deps, userId, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   deps.llm.handlers.user_reflect = sequence(
     { reflection: "They quit things before they matter.", subject: "user" },
     { reflection: "They carry more than they show.", subject: "user" },
@@ -105,6 +106,7 @@ test("a reflection that read a sensitive memory is marked; one that didn't is no
 
 test("a reflection that read a sensitive earlier reflection is marked too", async () => {
   const { deps, userId, run } = await setup();
+  await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   deps.llm.handlers.user_reflect = sequence({
     reflection: "They keep going quiet.",
     subject: "user",
@@ -127,4 +129,30 @@ test("a reflection that read a sensitive earlier reflection is marked too", asyn
   const [latest] = await recentReflections(deps.db, userId, 1);
   expect(latest!.content).toBe("They keep going quiet.");
   expect(latest!.payload).toMatchObject({ sensitive: true });
+});
+
+test("outside a crisis window a sensitive earlier reflection isn't shown, and nothing is marked", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_reflect = sequence({
+    reflection: "They keep going quiet.",
+    subject: "user",
+  });
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "reflection",
+    content: "They were in a very dark place.",
+    payload: { sensitive: true },
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  deps.clock.advance(60_000);
+  await userReflect(deps, run, await loadRunInputs(deps, userId));
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_reflect")!;
+  expect(call.input).not.toContain("dark place");
+  expect((await recentReflections(deps.db, userId, 1))[0]!.payload).toBeNull();
 });

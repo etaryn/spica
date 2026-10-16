@@ -8,6 +8,7 @@ import {
   nextLocalDate,
   previousLocalDate,
   shiftLocalDate,
+  zoneOffsetMinutes,
 } from "@/mind/platform/timezone";
 
 test("validates IANA names", () => {
@@ -101,4 +102,10 @@ test("localMidnight finds the start of the local date, including where literal m
 test("shiftLocalDate moves across month and year ends", () => {
   expect(shiftLocalDate("2026-01-05", -7)).toBe("2025-12-29");
   expect(shiftLocalDate("2026-02-28", 1)).toBe("2026-03-01");
+});
+
+test("zoneOffsetMinutes: minutes ahead of UTC at that instant", () => {
+  expect(zoneOffsetMinutes(new Date("2026-01-05T09:00:00Z"), "Asia/Singapore")).toBe(480);
+  expect(zoneOffsetMinutes(new Date("2026-01-05T09:00:00Z"), "America/New_York")).toBe(-300);
+  expect(zoneOffsetMinutes(new Date("2026-07-05T09:00:00Z"), "Europe/London")).toBe(60);
 });

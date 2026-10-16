@@ -210,7 +210,7 @@
     "reply": "v17",
     "crisis_classifier": "v2",
     "persona": "v6",
-    "extract": "v8",
+    "extract": "v9",
     "reconcile": "v1",
     "judge_recall": "v3",
     "judge_false_recall": "v8",

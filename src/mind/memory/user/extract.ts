@@ -30,6 +30,7 @@ import {
   type IdiolectStarter,
   type IdiolectType,
 } from "./idiolect";
+import { applyWhen } from "./when";
 
 const subject = z.enum(["user", "self", "shared"]);
 // Summaries, reflections and ideas are hers to write after a big event, never read off one exchange.
@@ -46,6 +47,8 @@ const FactSchema = z.object({
   kind: extractableKind,
   content: z.string(),
   occurred_at: z.string().nullable(),
+  // The time words as said; code turns them into a date. Fixtures without it read as null.
+  when: z.string().nullable().default(null),
   salience: z.number(),
   valence: z.number(),
   confidence: z.number(),
@@ -76,6 +79,7 @@ export const ExtractionSchema = z.object({
       subject,
       stakes: z.enum(["low", "med", "high"]),
       next_checkpoint: z.string().nullable(),
+      checkpoint_when: z.string().nullable().default(null),
       thread_id: z.string().nullable(),
     }),
   ),
@@ -90,9 +94,11 @@ type RawExtraction = z.infer<typeof ExtractionSchema>;
 
 export type ExtractedFact = Omit<
   RawExtraction["facts"][number],
-  "occurred_at" | "claim_kind" | "idiolect_type" | "started_by"
+  "occurred_at" | "claim_kind" | "idiolect_type" | "started_by" | "when"
 > & {
   occurred_at: Date | null;
+  /** The time words as said; facts code writes (her hurt) have none. */
+  when?: string | null;
   /** Only her own facts carry one; facts code writes (her hurt) leave it out. */
   claim_kind?: RawExtraction["facts"][number]["claim_kind"];
   /** Only idiolect facts carry these. */
@@ -100,8 +106,12 @@ export type ExtractedFact = Omit<
   started_by?: IdiolectStarter | null;
 };
 export type ExtractedEntity = EntityMention;
-export type ExtractedThread = Omit<RawExtraction["threads"][number], "next_checkpoint"> & {
+export type ExtractedThread = Omit<
+  RawExtraction["threads"][number],
+  "next_checkpoint" | "checkpoint_when"
+> & {
   next_checkpoint: Date | null;
+  checkpoint_when?: string | null;
 };
 
 export type Extraction = {
@@ -193,6 +203,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       subject: fact.kind === "idiolect" ? ("shared" as const) : fact.subject,
       content: tidy(fact.content),
       occurred_at: parseDate(fact.occurred_at),
+      when: fact.when && tidy(fact.when) ? tidy(fact.when) : null,
       salience: clamp(fact.salience, 0, 1),
       valence: clamp(fact.valence, -1, 1),
       confidence: clamp(fact.confidence, 0, 1),
@@ -219,6 +230,10 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       ...thread,
       title: tidy(thread.title),
       next_checkpoint: parseDate(thread.next_checkpoint),
+      checkpoint_when:
+        thread.checkpoint_when && tidy(thread.checkpoint_when)
+          ? tidy(thread.checkpoint_when)
+          : null,
     }))
     .filter((thread) => thread.title.length > 0);
 
@@ -249,5 +264,11 @@ export async function extract(
     cache: config.models.extract_cache,
   });
 
-  return normalizeExtraction(raw, config.extraction.max_candidates);
+  const zone = args.timezone && isValidTimeZone(args.timezone) ? args.timezone : "UTC";
+  // Their own last message dates "tomorrow"; a reach-out exchange falls back to its last turn.
+  const ref =
+    [...args.newTurns].reverse().find((t) => t.role === "user")?.created_at ??
+    args.newTurns.at(-1)?.created_at ??
+    null;
+  return applyWhen(normalizeExtraction(raw, config.extraction.max_candidates), ref, zone);
 }

@@ -229,3 +229,43 @@ test("a malformed intimacy block becomes null without failing the extraction", (
   );
   expect(read.intimacy).toEqual({ user_disclosure: 0.7, user_responsiveness: null });
 });
+
+test("extract resolves a fact's time words from their last message, in their zone", async () => {
+  const llm = new FakeLLMProvider();
+  llm.handlers.extract = () => ({
+    facts: [
+      rawFact({
+        content: "The user starts a new job {when}.",
+        when: "tomorrow",
+        occurred_at: null,
+      }),
+    ],
+    entities: [],
+    threads: [
+      {
+        action: "open",
+        title: "new job",
+        subject: "user",
+        stakes: "med",
+        next_checkpoint: null,
+        checkpoint_when: "tomorrow evening",
+        thread_id: null,
+      },
+    ],
+    relationship: null,
+  });
+  const out = await extract(
+    { llm, config: loadConfig() },
+    {
+      contextTurns: [],
+      newTurns: [
+        turn("user", "new job tomorrow!", "2026-01-05T15:30:00Z"), // 23:30 Monday in Singapore
+        turn("companion", "oh nice", "2026-01-05T15:31:00Z"),
+      ],
+      openThreads: [],
+      timezone: "Asia/Singapore",
+    },
+  );
+  expect(out.facts[0]!.content).toBe("The user starts a new job Tuesday 6 January 2026.");
+  expect(out.threads[0]!.next_checkpoint).not.toBeNull();
+});

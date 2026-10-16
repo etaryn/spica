@@ -108,3 +108,30 @@ export function localMidnight(date: string, tz: string): Date {
 
   return new Date(highMinute * MINUTE);
 }
+
+/** Minutes the zone is ahead of UTC at that instant (480 for Singapore, -300 for New York in winter). */
+export function zoneOffsetMinutes(at: Date, tz: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(at)
+      .map((p) => [p.type, p.value]),
+  );
+  const local = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return Math.round((local - at.getTime()) / 60_000);
+}

@@ -866,6 +866,7 @@ const posts = z
     max_find_px: positiveInt,
     output_width: positiveInt,
     caption_max_chars: positiveInt,
+    caption_target_chars: positiveInt,
     overlay_max_chars: positiveInt,
     media_dir: text,
     formats_dir: text,

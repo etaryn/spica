@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import type { StillFormat } from "@/mind/process/core/post-library";
-import { checkPost, draftPost } from "@/mind/process/core/post-words";
+import { checkPost, cutAtWord, draftPost } from "@/mind/process/core/post-words";
 import type { PublicPersona } from "@/mind/process/core/public-persona";
 
 const config = loadConfig();
@@ -90,4 +90,20 @@ test("the check returns the model's verdict", async () => {
     await checkPost({ llm, config }, { draft: { caption: "hi", overlay_text: null }, find }),
   ).toEqual({ ok: false, reason: "mentions her mood" });
   expect(llm.structuredCalls.at(-1)!.input).toContain("The Pillars");
+});
+
+test("a long caption is cut at the last whole word", () => {
+  expect(cutAtWord("like they were trying to catch it", 26)).toBe("like they were trying to");
+});
+
+test("one long word still fits", () => {
+  expect(cutAtWord("a".repeat(30), 10)).toBe("a".repeat(10));
+});
+
+test("short text is untouched", () => {
+  expect(cutAtWord("short", 10)).toBe("short");
+});
+
+test("a line break counts as a word boundary", () => {
+  expect(cutAtWord("first line\nsecondword", 15)).toBe("first line");
 });

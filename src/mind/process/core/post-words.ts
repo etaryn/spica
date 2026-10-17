@@ -23,17 +23,26 @@ export type DraftInput = {
 const DraftSchema = z.object({ caption: z.string(), overlay_text: z.string().nullable() });
 const CheckSchema = z.object({ ok: z.boolean(), reason: z.string() });
 
+const tidy = (s: string, max: number) => cutAtWord(clean(s), max);
+
 // Keeps a caption's line breaks (at most one blank line) so a two-line pattern can be honoured.
-const tidy = (s: string, max: number) =>
+const clean = (s: string) =>
   s
     .replace(/[^\S\n]+/g, " ")
     .split("\n")
     .map((l) => l.trim())
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .slice(0, max)
     .trim();
+
+/** Cuts at the last whole word within `max`, dropping a dangling comma or dash. */
+export function cutAtWord(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const head = s.slice(0, max + 1);
+  const space = Math.max(head.lastIndexOf(" "), head.lastIndexOf("\n"));
+  const cut = space > 0 ? head.slice(0, space) : s.slice(0, max);
+  return cut.replace(/[\s,;:—–-]+$/, "");
+}
 
 /** Null when the model wrote no caption. Model failures throw; the core loop runner traces them. */
 export async function draftPost(
@@ -57,6 +66,7 @@ export async function draftPost(
       `Your day so far: ${persona.today.happened.join("; ") || "nothing much yet"}`,
       `Format: ${format.name}; caption pattern: ${format.caption_pattern}; overlay: ${format.overlay.kind}`,
       `Your skill at posts: ${input.skill.toFixed(2)}`,
+      `Keep the caption under ${config.posts.caption_target_chars} characters: one or two short sentences.`,
     ].join("\n\n"),
     schema: DraftSchema,
     timeoutMs: config.models.structured_timeout_ms,

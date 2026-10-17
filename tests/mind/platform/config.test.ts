@@ -130,7 +130,7 @@ test("posts config: defaults load, draft and check are optional loops", () => {
   expect(c.core.loop_priority.optional).toEqual(
     expect.arrayContaining(["post_draft", "post_check"]),
   );
-  expect(c.prompts.post_draft).toBe("v1");
+  expect(c.prompts.post_draft).toBe("v2");
   expect(() => loadConfig({ posts: { capabilities: ["video"] } })).toThrow();
 });
 

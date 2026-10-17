@@ -246,8 +246,8 @@
     "user_ideate": "v3",
     "user_consolidate": "v1",
     "user_model": "v2",
-    "post_draft": "v1",
-    "post_check": "v1",
+    "post_draft": "v2",
+    "post_check": "v2",
     "format_draft": "v1"
   },
   "queue": {
@@ -705,6 +705,7 @@
     "max_find_px": 2048,
     "output_width": 1080,
     "caption_max_chars": 220,
+    "caption_target_chars": 200,
     "overlay_max_chars": 80,
     "media_dir": ".data/media",
     "formats_dir": "formats/stills",

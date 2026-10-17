@@ -232,10 +232,12 @@ test("a joke seen once is not offered; called back in a later exchange, it is", 
     .where(and(eq(s.fact.user_id, u), eq(s.fact.kind, "idiolect")));
   next.facts = [idiolectFact(JOKE, "spica")];
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: born!.id });
-  await settle(d, u, await talk(d, u, session));
+  // A joke becomes theirs once it survives a gap: the callback comes in a later sitting.
+  const later = randomUUID();
+  await settle(d, u, await talk(d, u, later));
   next.facts = [];
 
-  expect((await talk(d, u, session)).system).toContain(`- ${JOKE} (you started this)`);
+  expect((await talk(d, u, later)).system).toContain(`- ${JOKE} (you started this)`);
 });
 
 test("a new user gets only the idiolect they started; a close friend gets hers too", async () => {
@@ -286,10 +288,11 @@ test("leak canary and side channel: one user's idiolect never reaches another us
     .where(and(eq(s.fact.user_id, a), eq(s.fact.kind, "idiolect")));
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: born!.id });
   next.bid = "toward";
-  await settle(d, a, await talk(d, a, session));
+  const later = randomUUID();
+  await settle(d, a, await talk(d, a, later));
   next.facts = [];
   next.bid = null;
-  expect((await talk(d, a, session)).system).toContain(canary);
+  expect((await talk(d, a, later)).system).toContain(canary);
 
   const callsBefore = d.llm.calls.length;
   await talk(d, b, randomUUID());

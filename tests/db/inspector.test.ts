@@ -337,11 +337,10 @@ test("listUserMindRuns: newest run first, each with its traces in order, one use
   await runUserMind(deps, { runId: r1 });
   const runs = await listUserMindRuns(getTestDb(), a, 10);
   expect(runs.map((r) => r.id)).toEqual([r2, r1]);
+  // Nothing unread, so she takes stock without reflect or ideate.
   expect(runs[1]!.traces.map((t) => t.loop)).toEqual([
     "user_summarise",
-    "user_reflect",
     "user_model",
-    "user_ideate",
     "user_consolidate",
   ]);
   expect(runs[0]!.traces).toEqual([]);

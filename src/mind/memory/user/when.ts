@@ -12,6 +12,9 @@ export type ResolvedWhen = { at: Date; label: string };
 
 // Words pointing back in time: forward-dating would push "last friday" into next week.
 const PAST = /\b(last|ago|yesterday|earlier|previous|before)\b/i;
+// Words meaning now: "this morning" at 23:30 is today's, "this friday" on a Friday is today.
+const PRESENT = /\b(this|today|tonight)\b/i;
+const TODAY = /\b(today|this (morning|afternoon|evening))\b/i;
 const BARE_WEEKDAY = /^(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
 
 function parts(at: Date, zone: string): Record<string, string> {
@@ -39,22 +42,32 @@ export function resolveWhen(phrase: string, ref: Date, zone: string): ResolvedWh
   if (!text) return null;
   const past = PAST.test(text);
   const reference = { instant: ref, timezone: zoneOffsetMinutes(ref, zone) };
-  const result = chrono.parse(text, reference, { forwardDate: !past })[0];
+  let result = chrono.parse(text, reference, { forwardDate: !past && !PRESENT.test(text) })[0];
   if (!result) return null;
+  // "in october" said in October is this October, not next year's.
+  if (!result.start.isCertain("day") && result.start.isCertain("month")) {
+    const plain = chrono.parse(text, reference)[0];
+    if (plain && parts(plain.start.date(), zone).month === parts(ref, zone).month) result = plain;
+  }
   const start = result.start;
   let at = start.date();
+  // "this morning" or "today" is the day it was said, even late at night.
+  if (TODAY.test(text) && dayLabel(at, zone) !== dayLabel(ref, zone) && at > ref)
+    at = new Date(at.getTime() - DAY);
   // "monday" said on a Monday means next week's.
   if (BARE_WEEKDAY.test(text) && dayLabel(at, zone) === dayLabel(ref, zone))
     at = new Date(at.getTime() + 7 * DAY);
 
   const p = parts(at, zone);
-  const day = start.isCertain("day") || start.isCertain("weekday");
+  const day = start.isCertain("day") || start.isCertain("weekday") || start.isCertain("hour");
   if (/\bweekend\b/i.test(text)) return { at, label: `the weekend of ${dayLabel(at, zone)}` };
   // chrono reads "next week" as that week's first day, certain; it means the whole week.
   if (/\bnext week\b/i.test(text)) return { at, label: `the week of ${dayLabel(at, zone)}` };
   if (day) return { at, label: dayLabel(at, zone) };
   if (start.isCertain("month")) return { at, label: `${p.month} ${p.year}` };
-  return { at, label: p.year! };
+  if (start.isCertain("year")) return { at, label: p.year! };
+  // No day, month or year given ("this evening"): it's about the day it was said, or chrono's move.
+  return { at, label: dayLabel(at, zone) };
 }
 
 /** Fills each fact's `{when}` and dates; the model's own date is the fallback, then its words. */

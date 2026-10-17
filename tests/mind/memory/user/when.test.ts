@@ -73,3 +73,15 @@ test("applyWhen fills the date in, sets occurred_at, and never leaves {when} beh
   const [d] = applyWhen(extraction([{ when: null }]), mon, "UTC").facts;
   expect(d!.content).toBe("The user starts a new job.");
 });
+
+test("a time of day keeps the day it was said on", () => {
+  expect(label("at 3pm")).toBe("Monday 5 January 2026");
+  expect(label("this evening")).toBe("Monday 5 January 2026");
+});
+
+test("present-tense words aren't pushed forward", () => {
+  const lateMon = new Date("2026-01-05T23:30:00Z");
+  expect(label("this morning", lateMon)).toBe("Monday 5 January 2026");
+  expect(label("in october", new Date("2026-10-16T09:00:00Z"))).toBe("October 2026");
+  expect(label("this friday", new Date("2026-01-09T09:00:00Z"))).toBe("Friday 9 January 2026");
+});

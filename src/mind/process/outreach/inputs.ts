@@ -14,6 +14,7 @@ import { liveIdeas } from "@/db/repos/user/user-mind";
 import { dueThreads, threadUserFacts } from "@/db/repos/user/threads";
 import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
+import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
 import { loadDepth } from "@/mind/state/user/relationship/depth";
@@ -49,11 +50,14 @@ export async function loadCandidateInputs(
     ? await getFact(db, userId, relationship.hurt_cause_fact)
     : null;
 
+  // Writing first draws on no live chemistry: her usual limit, never a stretch.
+  const depthLimit = (await loadDepth({ db, config }, userId, null, true, null)).open;
   const herDay = await loadHerDay(
     deps,
     now,
     settings.her_day_lookback_hours,
     settings.her_day_limit,
+    depthLimit,
   );
   const cadence = (relationship?.cadence ?? {}) as Partial<Cadence>;
 
@@ -119,8 +123,7 @@ export async function loadCandidateInputs(
       medianGapHours: cadence.median_gap_hours ?? config.relationship.default_median_gap_hours,
     },
     usedTopics: await usedTopics(db, userId),
-    // Writing first draws on no live chemistry: her usual limit, never a stretch.
-    depthLimit: (await loadDepth({ db, config }, userId, null, true, null)).open,
+    depthLimit,
   };
 }
 
@@ -133,28 +136,47 @@ async function loadHerDay(
   now: Date,
   lookbackHours: number,
   limit: number,
+  open: number,
 ): Promise<CandidateInputs["herDay"]> {
   const from = new Date(now.getTime() - lookbackHours * HOUR);
   const episodes = await deps.core.memory.recentEpisodes(from, now, limit);
   const intentions = await deps.core.memory.openIntentions(from, now, limit);
-  const herDay = [...episodes, ...intentions].map((e) => ({
-    id: e.id,
-    content: e.content,
-    salience: e.salience,
-    depth: e.depth,
-    sensitive: false,
-  }));
+  const memories = [...episodes, ...intentions];
   const state = await deps.core.state.get();
   const pre = state?.preoccupation ? await deps.core.memory.get(state.preoccupation) : null;
-  if (pre && recallable(pre) && !herDay.some((m) => m.id === pre.id))
-    herDay.push({
-      id: pre.id,
-      content: pre.content,
-      salience: pre.salience,
-      depth: pre.depth,
-      sensitive: false,
-    });
-  return herDay;
+  if (pre && recallable(pre) && !memories.some((m) => m.id === pre.id)) memories.push(pre);
+  return Promise.all(memories.map((m) => shareable(deps, m, open, now)));
+}
+
+/**
+ * What happened is surface news anyone can hear, like her day plan; how it felt keeps its depth.
+ * A memory deeper than she'd share falls back to its world event's plain words.
+ */
+async function shareable(
+  deps: Pick<Deps, "core">,
+  m: CoreMemoryItem,
+  open: number,
+  now: Date,
+): Promise<CandidateInputs["herDay"][number]> {
+  const at = m.occurred_at ?? m.created_at;
+  const plain = {
+    id: m.id,
+    content: m.content,
+    salience: m.salience,
+    depth: m.depth,
+    sensitive: false,
+    at,
+  };
+  if (m.depth <= open || !m.source_ref?.startsWith("world_event:")) return plain;
+  const event = await deps.core.world.getEvent(m.source_ref.slice("world_event:".length));
+  if (!event) return plain;
+  const ahead = event.at.getTime() > now.getTime();
+  return {
+    ...plain,
+    content: ahead ? `planned: ${event.content}` : event.content,
+    depth: 1,
+    at: event.at,
+  };
 }
 
 /**

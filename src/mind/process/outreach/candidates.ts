@@ -3,18 +3,23 @@
  * strength. A candidate is filtered out when its topic was already used, when it's sensitive, or
  * when it scores under the threshold. A thread's topic is keyed on their newest fact on it, so it
  * goes out once until they bring it up again; candidates carry dated notes for the reason line.
- * Pure. Sorted best first (score, then kind order, then
- * topic), with filtered candidates kept so the log shows them too.
+ * Pure. Sorted their things first, then by score (then kind order, then topic), with filtered
+ * candidates kept so the log shows them too.
  */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
 import {
   KIND_ORDER,
   type Candidate,
+  type CandidateKind,
   type CandidateInputs,
   type FilterReason,
   type Note,
 } from "./types";
+
+/** Their things (a due thread, making up, their event) always come before hers. */
+const THEIRS: ReadonlySet<CandidateKind> = new Set(["thread", "make_up", "user_event"]);
+const tier = (c: Candidate) => (THEIRS.has(c.kind) ? 0 : 1);
 
 type RawCandidate = Omit<Candidate, "score" | "filtered" | "notes"> & {
   notes?: Note[];
@@ -83,6 +88,7 @@ export function buildCandidates(
       sensitive: memory.sensitive,
       depth: memory.depth,
       tooDeep: memory.depth > inputs.depthLimit,
+      notes: [{ text: memory.content, at: memory.at.toISOString(), dated: true }],
     });
   }
   for (const memory of inputs.coreThoughts) {
@@ -132,6 +138,7 @@ export function buildCandidates(
     })
     .sort(
       (a, b) =>
+        tier(a) - tier(b) ||
         b.score - a.score ||
         KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) ||
         a.topic.localeCompare(b.topic),

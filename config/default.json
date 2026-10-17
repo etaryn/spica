@@ -639,7 +639,7 @@
       "thread": 1.0,
       "make_up": 0.9,
       "user_event": 0.8,
-      "her_day": 0.6,
+      "her_day": 1.0,
       "core_thought": 0.5,
       "user_idea": 0.6,
       "check_in": 0.5

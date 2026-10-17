@@ -349,3 +349,70 @@ test("no make-up reach-out while their ending is pending: she lets go, she doesn
     .where(eq(relationship.user_id, u));
   expect((await loadCandidateInputs(deps, u, now)).makeUp.due).toBe(false);
 });
+
+async function herEpisode(
+  deps: ReturnType<typeof makeTestDeps>,
+  o: { content: string; depth: number; source_ref: string | null; kind?: "episode" | "intention" },
+) {
+  return deps.core.memory.insert({
+    kind: o.kind ?? "episode",
+    content: o.content,
+    embedding: vec(),
+    occurred_at: ago(2),
+    created_at: ago(2),
+    status: o.kind === "intention" ? "open" : "resolved",
+    salience: 0.4,
+    valence: 0.3,
+    confidence: 1,
+    source: "world",
+    source_ref: o.source_ref,
+    depth: o.depth,
+  });
+}
+
+test("a too-deep episode from a world event falls back to the plain event at depth 1", async () => {
+  const { deps, u } = await setup();
+  const wid = await deps.core.world.recordEvent({
+    at: ago(2),
+    kind: "planned",
+    content: "Spica went to the film club screening of Stalker.",
+    valence: 0.5,
+    stakes: "low",
+    agents: [],
+    life_day: "2026-01-10",
+    created_at: ago(30),
+  });
+  const id = await herEpisode(deps, {
+    content: "Spica watched Stalker and felt something loosen in her chest.",
+    depth: 2,
+    source_ref: `world_event:${wid}`,
+  });
+  const inputs = await loadCandidateInputs(deps, u, now);
+  expect(inputs.depthLimit).toBe(1);
+  expect(inputs.herDay).toEqual([
+    {
+      id,
+      content: "Spica went to the film club screening of Stalker.",
+      salience: 0.4,
+      depth: 1,
+      sensitive: false,
+      at: ago(2),
+    },
+  ]);
+});
+
+test("a too-deep loop memory with no world event stays too deep", async () => {
+  const { deps, u } = await setup();
+  const id = await herEpisode(deps, {
+    content: "Spica wants to stop hiding how lonely the nights get.",
+    depth: 2,
+    source_ref: "core_reflect:x",
+    kind: "intention",
+  });
+  const [m] = (await loadCandidateInputs(deps, u, now)).herDay;
+  expect(m).toMatchObject({
+    id,
+    content: "Spica wants to stop hiding how lonely the nights get.",
+    depth: 2,
+  });
+});

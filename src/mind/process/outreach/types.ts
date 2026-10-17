@@ -66,7 +66,15 @@ export type CandidateInputs = {
     sensitive: boolean;
     occurred_at: Date | null;
   }[];
-  herDay: { id: string; content: string; salience: number; depth: number; sensitive: boolean }[];
+  /** Her news; `content`/`depth` are already the plain event's when the memory was too deep. */
+  herDay: {
+    id: string;
+    content: string;
+    salience: number;
+    depth: number;
+    sensitive: boolean;
+    at: Date;
+  }[];
   /** Her own recent thoughts and ideas (core memory, never sensitive). */
   coreThoughts: { id: string; content: string; salience: number; depth: number }[];
   /** Her live ideas about this user, from her user mind; never from sensitive memories. */

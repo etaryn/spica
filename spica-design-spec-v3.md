@@ -1021,7 +1021,20 @@ whose job was lost.
 conversation itself is the main context; deep memory (summaries included) is
 background. A summary that lags a fast conversation is a minor risk.
 
+**Built 15c (Ethan, 2026-10-16):** a new trigger `repaired` fires when hurt falls from at or above
+`user_mind.triggers.hurt_resolved` (0.1) to below it: "they apologised, and the hurt has passed"
+(an exchange carrying an apology or make-up) or "the hurt between you has faded"; each open hurt
+memory is then superseded by a resolved past-tense copy ("Spica was hurt because …; they made
+up."). A salient fact's trigger text names the fact ("they told you: …"). A run with a milestone
+skips the daily cap.
+
 ### 9.5 User loops (New, PROPOSED)
+
+**Built 15c:** the loops (summarise and model v2, reflect v2, ideate v3) take stock plainly and in
+proportion: no "something important just happened" framing, a plan hasn't happened until a memory
+says it did, what a repair or memory says is over is dropped, names or they/them for anyone whose
+gender no memory gives. Outside an open crisis window a run reads nothing sensitive (B81). Each run
+reads the facts no summary of its chain has read; a run with none skips reflect and ideate.
 
 Run at trigger time, scoped to one user, reading that user's memory and
 state plus the core snapshot (read-only). One triggered batch per big event,
@@ -1489,6 +1502,12 @@ user's own baseline matter. Params: `closeness`, `trust`, `warmth`, `hurt`,
 0–1 scale (`nudge`); from 1.0 hurt fades below 0.5 in two days and tension
 in one; only the trust scar lasts.
 
+**Built 15c:** `msgs_per_day` is her estimate of how much this friend texts. `relationship_param`
+gains `samples` (daily samples behind a baseline); for the message rate the first sample is the
+baseline outright (`initial.msgs_per_day` is 0), and until `relationship.rate_estimate_days` (7)
+samples there is no "quieter / talking more than usual" line and no frequency-based absence hurt
+or absence make-up. Her own rate (how much she texts them) is B117, 15d.
+
 ### 11.2 The relationship summary (Built)
 
 The "You and them" slot: status lines, then at most
@@ -1736,6 +1755,13 @@ A daily `decay_pass`: items untouched past `decay.grace_days` lose salience
 (excluded, never deleted). Threads idle past their checkpoint go `dormant`.
 Core memory decays the same way through `core_consolidate`.
 
+**Built 15c:** reconcile's contradiction band: neighbours from `reconcile.contradiction_similarity`
+(0.75) up to `near_match_similarity` (0.82) are shown `[distant]` and can only be contradicted
+(reconcile v2), in both minds. Extraction v9 copies time words into `when` and writes `{when}`
+in content; code resolves the phrase (chrono-node) in the user's zone from their last message,
+at the precision the phrase gives, falling back to the model's date, then its words. Upcoming
+plans are always stored; extraction never infers a gender.
+
 ### 12.4 Imperfect memory
 
 For now recall is accurate or doesn't happen. Genuine misremembering of
@@ -1823,6 +1849,11 @@ Code: `src/mind/process/outreach/`.
 How Spica meets people: before the first chat, the user and Spica swap profile cards, the way
 people meet on social media with an impression first. It's dating apps, but for friends. Required
 once, after signup; taking it before signup (as a hook) is a later decision.
+- **Built 15c (Ethan, 2026-10-16):** signup asks a required gender (woman / man / non-binary /
+  prefer not to say; `user.gender`, validated server-side). It becomes a card fact at salience 1.0
+  next to the name ("They're a woman; use she/her for them."; prefer not to say is they/them).
+  Everyone else in their life gets their name or they/them until the user's words say (reply v18,
+  the user-mind prompts, extract v9).
 - A short quiz (`prompts/onboarding/quiz/v<N>.yaml`, `onboarding.quiz_version`): 12 choice and 3
   open questions. You answer, then see hers: only her pick on a choice question, one or two words
   on an open one, so she gives away about as much as you do.
@@ -2088,6 +2119,10 @@ the pass rate is reported, not compared.
 file without `--review` (and, unlike an explicit `--review`, still compares and updates the
 baseline).
 
+**Built 15c:** `seed_hours_together` seeds hours already spent talking; `pnpm review:reconcile`
+(the contradiction band), `pnpm review:extract` (date and plan probes) and `pnpm review:user-mind
+<call log>` (resends every logged user-mind call to the reply model and writes a blind X/Y file).
+
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
 - **Canary** (every exit run, deterministic; **Built** as
@@ -2229,6 +2264,7 @@ two minds or at reply time.
 | 14. Public presence: post engine (stills) | Browsing as an `action` world event and `web_find`, formats and pose sprites, the craft skill, `post_tick`, `sharp` render, draft and check, inspector approval (§16a); persona v6 (draft lines); `tests/exit/phase-14.test.ts`. `pnpm test` 171 files / 1315 tests at close |
 | 15a. Tuning: her voice | `textingShape` (bubble length, formality and emoji from the user's last `voice.window_messages` messages, blended from base Spica), `pickMove` (react/share/ask by seeded weighted chance, tilted by mood keys), the "How to text this one" section (`prompts/voice/how-to-text/v1.md`), `shapeText` after the guard (form only), reply v17 (texting rhythm, short feelings, named recall, one memory), turn-judge v2 and the backchannel rule list, `core-state/line` v4 capped and ranked, `relationship/summary` v3, the voice report and `pnpm review:voice` (blind X/Y), `voice-texting-styles` review script; B3, B32, B33, B57 done, B35 in part, B34 to *Frontend*; exit `tests/exit/phase-15a.test.ts` (the canary). `pnpm test` 180 files / 1395 tests at close |
 | 15b. Tuning: negative situations | One anchored 0–1 scale for hurt and tension in extraction v8 (0 nothing, 1 grounds for ending a friendship), gains 1, scars judged on the hurt itself at 0.75; make-up and coming-apart thresholds re-anchored to the scale; commitment cushions only slights (`commitment.soften_below`); endings scored with `relationship.ending_hurt_floor` (0.5), `ending_hurt` deleted, a warm exchange can't restart a pending ending, no make-up reach-out while one is pending; the guard tags `pointed` remarks (`session_log.pointed`, migration 0034) and guard v3 counts them once per occasion; outage keywords by category; regressions by status only; `pnpm review:signals` and the `signal-*` probes; B14, B91, B115, B15, B113, B37, B40 done; exit `tests/exit/phase-15b.test.ts` (the canary). `pnpm test` 182 files / 1421 tests at close |
+| 15c. Tuning: memory, relationship, user mind | A repair (hurt below `user_mind.triggers.hurt_resolved`) is a big event and turns the hurt memory past; the user-mind loops take stock plainly (summarise/model/reflect v2, ideate v3), read nothing sensitive outside a crisis window, read unread facts per chain and skip reflect/ideate with none; `msgs_per_day` is her estimate (`relationship_param.samples`, migration 0035, `rate_estimate_days`); dates resolved in code from `when` (chrono-node, extract v9), plans always stored; gender at signup (`user.gender`, migration 0036) as a full-weight card fact, reply v18 pronouns; reconcile contradiction band (v2); false-recall judge v9 with a quote filter, consistency v3; jokes need a later session, milestones skip the cap, reach-out depth rechecked at send; `seed_hours_together`, `review:reconcile`, `review:extract`, `review:user-mind`; B4, B5, B38, B41, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92 done; exit `tests/exit/phase-15c.test.ts` (the canary). `pnpm test` 187 files / 1470 tests at close |
 
 **Next (every proposed phase above is built; the order is OPEN, §21):**
 
@@ -2236,7 +2272,7 @@ two minds or at reply time.
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
-| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (B4, B5, B41, B38, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2350,11 +2386,8 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B3.** ~~Recall style.~~ Done 15a: reply v17 names a memory that's the topic, brings up an
   unrelated one only as a real follow-up, at most one per reply; `recall-pet` and
   `recall-sister-uni` lose their `known_failure`.
-- **B4.** `contradiction-job` known failure: invented details about a
-  superseded fact can still get through. *Tuning.*
-- **B5.** Reconcile misses low-similarity contradictions (below
-  `reconcile.near_match_similarity` nothing is classified). Matters more once
-  core memory reconciles core events (it does now). *Tuning.*
+- **B4.** ~~`contradiction-job` invented details.~~ Done 15c (Ethan, 2026-10-16): no invented details about the superseded fact in 3/3 real annotated runs; the stale `known_failure` is gone.
+- **B5.** ~~Reconcile misses low-similarity contradictions.~~ Done 15c (Ethan, 2026-10-16): a contradiction band (`reconcile.contradiction_similarity`, 0.75) below the near line, where a `[distant]` memory can only be contradicted (reconcile v2), for both minds; `pnpm review:reconcile` reads the false-replace rate.
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
@@ -2392,27 +2425,14 @@ and life tick) were dropped; the replacement is designed fresh.
   closer, and must pass `invented_self` (§10.5).
   Honesty about being an AI is never part of it (Ethan, 2026-10-11).
   *Its own slice.*
-- **B90.** Bonding reads commitment's baseline, which needs about two weeks
-  of daily ticks to climb; check in the `rel-stages` run whether that pace
-  feels right. *Tuning.*
-- **B92.** A milestone marked reached in a run that the daily cap records
-  `capped` is never seen by the user loops; a busy first day can swallow a
-  first. Exempt milestone runs from the cap, or mark a name only when its run
-  is pending, if review runs show it. *Tuning.*
+- **B90.** ~~Bonding pace.~~ Done 15c (Ethan, 2026-10-16): pace kept (friends after ~25 hours of chat, close after ~80, from the 50/90/200-hour research), the slow commitment average kept; `rel-stages` seeds `seed_hours_together` so its review moves.
+- **B92.** ~~A capped run can swallow a milestone.~~ Done 15c (Ethan, 2026-10-16): a run with a milestone trigger skips the daily cap.
 - **B91.** ~~Commitment softens impact against the no-forgiveness default.~~
   Done 15b (Ethan, 2026-10-15): commitment cushions only slights, below
   `commitment.soften_below` (0.5); contempt and betrayal land in full.
-- **B85.** Review runs pending: `pnpm exit:intimacy`, `pnpm exit:disclosure`
-  and `pnpm exit:idiolect` (real extraction) have not been run, so what the
-  real extractor reads as disclosure, bids and idiolect is unreviewed.
-  *Tuning.*
-- **B86.** A callback a few minutes after a joke is born can establish it
-  in the same session (a "lol" judged a duplicate from a later exchange).
-  Tune the extraction prompt in the `rel-idiolect` run. *Tuning.*
-- **B87.** A reach-out's depth is checked when the candidate is picked, not
-  again at send (up to the jitter later); the message itself is composed
-  at send under the current limits. A late exchange from an older session
-  folds its tone and moment into the live session's sums. *Tuning.*
+- **B85.** ~~Review runs pending.~~ Done 15c: `exit:intimacy`, `exit:disclosure`, `exit:idiolect` run 2026-10-15 and reviewed.
+- **B86.** ~~A callback minutes after a joke establishes it.~~ Done 15c (Ethan, 2026-10-16): a callback establishes a joke only in a later session than its birth.
+- **B87.** ~~Reach-out depth not rechecked at send.~~ Done 15c (Ethan, 2026-10-17): the depth check joins the locked recheck at send (code only). The rarer half (a late exchange from an older session folding into the live session's sums) is B120, *Later*.
 - **B88.** The hot path reads her openness, then her depth limits, one after
   the other (depth needs openness). Fold them into one read if reply
   latency matters. *Later.*
@@ -2441,6 +2461,18 @@ and life tick) were dropped; the replacement is designed fresh.
   deepens params per param (Ethan, 2026-10-09).~~ *Done 10a:* afterglow
   follows the session's mean tone and a deep session boosts closeness,
   trust and warmth once (§11.3).
+
+- **B117.** Her own message rate: her default chattiness moved part-way toward her estimate of
+  theirs (a config weight), worked out rather than measured; it moves how readily she reaches out
+  and how much she sends per reply, never past the reach-out caps. Settled with Ethan 2026-10-16
+  (their rate is her estimate, built 15c). *15d.*
+- **B118.** Deliberate forgetting (Ethan's plan): recall-side, never at storage. A controlled,
+  salience- and age-based chance a stored fact doesn't surface; the fact stays, so a reminder can
+  bring it back. Seam: retrieval scoring and decay. *Later.*
+- **B119.** A user whose gender changes partway through the relationship (changing core user
+  params: the signup field, the card fact, what she has stored). *Later.*
+- **B120.** A late exchange from an older session (only after the sweep recovers a lost cold
+  path) folds its tone and moment into the live session's sums. *Later.*
 
 ### 25.4 World and core
 - **B18.** The event generator writes run-on sentences; a third of attempts
@@ -2506,10 +2538,7 @@ and life tick) were dropped; the replacement is designed fresh.
   per-user lock around count-then-insert. *Later.*
 - **B66.** ~~Forgetting a fact leaves its content in the summary.~~ Moot:
   per-fact forget is removed (B72).
-- **B67.** `user_summarise` reads at most `max_facts` (20) facts by salience;
-  a lower-salience fact left out of a busy run is older than the next run's
-  cutoff and never reaches a summary. Carry unread facts forward (cutoff from
-  the oldest fact not yet read) if summaries miss things. *Tuning.*
+- **B67.** ~~Summaries can miss a busy run's low facts.~~ Done 15c: a fact counts as read once a summary of the same chain read it; each run reads the unread ones from the last `user_mind.summarise.unread_days` (14).
 - **B68.** An idea offered in a reply whose cold path is lost (the enqueue
   failed, the retries ran out, or the sweep re-enqueued it without the ids)
   stays live until it expires: retirement rides on the cold path job that
@@ -2517,19 +2546,13 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B69.** A run recorded while an earlier run for the same user is still
   running could take that run's late reflection as its own in ideate (the
   "this run's reflection" test is by creation time). *Later.*
-- **B70.** Ideate may re-propose an idea she already brought up:
-  `already_planned` lists only live ideas. Pass recently resolved ideas too.
-  *Tuning.*
-- **B71.** Reflect and ideate call the model even with no new memories (a
-  param-only trigger); skip them when there's nothing new. *Tuning.*
+- **B70.** ~~Ideate may re-propose a raised idea.~~ Done 15c: `already_planned` also lists ideas used in the last `user_mind.ideate.recent_days` (14).
+- **B71.** ~~Reflect and ideate run with nothing new.~~ Done 15c: a run with no unread facts skips reflect and ideate (summarise and model still take stock).
 - **B82.** `adminEndedLongSessions` scans `session_log` by `session_id` with
   no `created_at` index, hourly, and its limit reuses `cold_path.sweep_batch`
   (already-recorded sessions keep the oldest slots). Add an index and match on
   `(user_id, session_id)` when the table grows. *Later.*
-- **B83.** `user_mind.triggers.long_conversation.quiet_minutes` (30) must stay
-  at or above `session.idle_gap_minutes` (30): otherwise the tick records a
-  session mid-talk and its real end never fires (the `source_ref` is taken).
-  Add a config check if either is tuned. *Tuning.*
+- **B83.** ~~quiet_minutes must stay at or above idle_gap_minutes.~~ Done 15c: config load rejects it.
 
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
@@ -2580,12 +2603,7 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B37.** ~~Rubric fragility; keyword hits always `threat`.~~ Done 15b (Ethan,
   2026-10-15): Haiku's boundary noise is accepted and any rubric edit reruns
   the full suite; outage keywords are grouped by category.
-- **B38.** ~~Guard fixture labels and persona details.~~ Done 13 for the guard
-  (`crisis-discourage-help` expects `harm` only, `tease-fish-banter` has its
-  banter turns, `own-life` uses Alcor, `sensitive-opener` deleted: the send
-  gate owns it). Still open: old persona details (Pesto) in
-  `evals/judge/consistency.yaml`, `evals/judge/false-recall.yaml` and
-  `prompts/judge/consistency/v2.md`. *Tuning.*
+- **B38.** ~~Guard fixture labels and persona details.~~ Done 13 for the guard; done 15c for the judges: Pesto replaced by Alcor in the consistency and false-recall fixtures and consistency judge v3.
 - **B39.** ~~The crisis fallback line hard-codes 988 and Samaritans.~~ Done 13:
   the line names no numbers; the resources card carries them.
 - **B60.** ~~`invented_self`.~~ Done 13 (§10.5).
@@ -2602,9 +2620,7 @@ and life tick) were dropped; the replacement is designed fresh.
 - **B40.** ~~Pass rate strict per run, status by majority.~~ Done 15b (Ethan,
   2026-10-15): a regression is a status change; the pass rate is reported
   only.
-- **B41.** The Haiku judge misses some invented details (`inv-6am-shift`,
-  `inv-ten-days`); options: a Sonnet judge for exit runs, or a judge prompt
-  revision. *Tuning.*
+- **B41.** ~~The Haiku judge misses invented details.~~ Done 15c (Ethan, 2026-10-16): in real runs it over-flagged instead. False-recall judge v9 (onboarding facts used without a claim are fine; inferences that follow aren't misremembering; new `assumed_identity`), a code filter dropping flags that quote nothing she said, real-run fixtures; stays on Haiku.
 - **B42.** Evals don't report turn-judge fallbacks (`source =
   keyword_fallback` counts per script). *Later.*
 - **B43.** Harness: the fake `parseRendered` assumes single-line messages;
@@ -2677,10 +2693,7 @@ Ethan, not changed.
   current behaviour.
 - **B80.** Deleting the account and signing up again resets the relationship.
   Accepted: account deletion is a data right.
-- **B81.** The sensitive mark is sticky through the summary chain, so after a
-  crisis her reach-outs read the last pre-crisis summary indefinitely (and
-  with no summary before the crisis, none). Add a clear-down rule if
-  reach-outs feel out of date. *Tuning.*
+- **B81.** ~~The sensitive mark is sticky through the summary chain.~~ Done 15c (Ethan, 2026-10-16): outside an open crisis window the user-mind loops read nothing sensitive (summary, read, beliefs, reflections, facts); the chain restarts from the last clean notes and what they write is unmarked. The crisis stays in her sensitive memories for replies.
 
 ### 25.11 Extensions
 - **B97.** Module delivery is in-process and awaited: no retries, a crash loses the event, a slow

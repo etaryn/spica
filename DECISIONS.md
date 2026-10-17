@@ -169,3 +169,11 @@ code itself.
 | 2026-10-15 | Thresholds on the hurt and tension values re-anchored to the gain-1 scale: make-up at 0.5 (clear 0.2), differentiating at tension 0.5 (clear 0.25), circumscribing at 0.75 (clear 0.5) | They were sized for gains 0.5 and 0.3; left alone, one friendly disagreement or one real sting would start coming apart. |
 | 2026-10-16 | Extraction caches its fixed prefix (`models.extract_cache`, 5m); no other structured call does | A real probe: the v8 prompt plus output schema is 4,575 tokens and the second call read 4,569 from cache; an extraction averages ~4,870 input tokens, so a warm call costs ~85% less input. Other prompts must be measured against the 4,096 minimum before turning it on. |
 | 2026-10-16 | Every real eval call is logged to a JSONL call log, and a real `pnpm eval` always writes its review | A paid overnight run without `--review` lost all 989 replies; a flag nobody remembers can't be the only record of a paid run. |
+| 2026-10-17 | "next <day>" is that day in the following week (chrono's reading); a bare weekday said on that weekday is next week's; past phrases are never forward-dated | chrono-node's own reading, made explicit so a weekday never lands on today. |
+| 2026-10-17 | Users who already had daily ticks get `samples = 30` in migration 0035 | Their learned rate baseline is kept instead of being replaced by one day's count. |
+| 2026-10-17 | The past-tense hurt copy keeps the old embedding | The meaning hasn't moved, and no network call runs inside the cold-path or tick transaction. |
+| 2026-10-17 | `relationship.initial.msgs_per_day` is 0, not deleted | The config schema needs every param; the first daily sample replaces it. |
+| 2026-10-17 | A run with nothing unread skips reflect and ideate only | Summarise and model still take stock on a param-only trigger (a repair, a band). |
+| 2026-10-17 | `EncodeOutcome.insertedFacts` (not `inserted`) | `inserted` was already the insert counter. |
+| 2026-10-17 | `ExtractedFact.when`, `ExtractedThread.checkpoint_when` and `Candidate.depth` are optional on the types | The model schema still requires the fields; code-built facts and older stored winners simply have none. |
+| 2026-10-17 | `rel-stages` seeds closeness 0.4 with 24 hours together | The fake run grows no closeness; 0.4 is the lowest seed that reaches becoming friends. |

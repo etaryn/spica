@@ -231,8 +231,12 @@ text this one", `shapeText`, reply v17, backchannel rules, quieter feeling lines
 `pnpm review:voice`) is built. 15b (negative situations: one anchored 0–1 scale for hurt and
 tension in extraction v8, gains 1, commitment cushions only slights, scored endings with a floor,
 pointed remarks once per occasion via `session_log.pointed` and guard v3, keywords by category,
-`pnpm review:signals`) is built. Next is 15c (memory, relationship, user mind), which opens with
-an item-by-item discussion with Ethan before any design.** Tuning sets base Spica; no external
+`pnpm review:signals`) is built. 15c (memory, relationship, user mind: a repair turns the hurt
+past, plain user-mind notes that read nothing sensitive outside a crisis window, the message rate
+as her estimate, dates resolved in code, gender at signup, a reconcile contradiction band,
+false-recall judge v9, later-session jokes) is built. Next is 15d (world, outreach, posts, plus
+B117 her own message rate), which opens with an item-by-item discussion with Ethan before any
+design.** Tuning sets base Spica; no external
 samples; each user's own messages bring their bias. Publishing, video and a frontend phase (B34)
 come later. Persona
 v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's

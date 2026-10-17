@@ -6,7 +6,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import type { Config } from "@/mind/platform/config";
 import type { CoreDeps } from "@/mind/platform/deps";
+import type { CoreGoal } from "@/mind/state/core/types";
 import { errorName } from "@/mind/platform/errors";
 import type { Logger } from "@/mind/platform/log";
 import { loadPersona, parseSeedGoals } from "@/mind/platform/persona";
@@ -79,39 +81,44 @@ export function choosePose(poses: Pose[], format: StillFormat, roll: number): Po
   return fits.length ? fits[Math.floor(roll * fits.length)]! : null;
 }
 
+/** Her posting skill is set by Ethan, not earned by her loops; her craft goal is how she sees it. */
+export const isCraftGoal = (goal: Pick<CoreGoal, "title">, config: Config) =>
+  Object.values(config.posts.craft_goals).includes(goal.title);
+
 /**
- * Her skill at a medium: its craft goal's progress (1 once done). The goal comes from her
- * persona; a database seeded before it was added gets it once here, while there's room.
+ * Her skill at a medium is the configured value: outward improvements are timed by Ethan and read
+ * in her world as her learning. The craft goal always exists and mirrors the skill; a dropped one
+ * comes back, even past the active-goal cap.
  * ponytail: two concurrent first calls could both create it; post_tick is the only caller.
  */
 export async function craftSkill(
   deps: Pick<CoreDeps, "core" | "config" | "embedder" | "log" | "clock">,
   medium: "still",
 ): Promise<{ goalId: string | null; skill: number }> {
-  const { core, config, log } = deps;
+  const { core, config } = deps;
+  const skill = config.posts.craft_skill[medium];
+  const now = deps.clock.now();
   const title = config.posts.craft_goals[medium];
   const goal = await core.goals.byTitle(title);
-  if (goal)
-    return {
-      goalId: goal.status === "active" ? goal.id : null,
-      skill: goal.status === "done" ? 1 : goal.progress,
-    };
+  if (goal?.status === "active") {
+    if (goal.progress !== skill) await core.goals.setProgress(goal.id, skill, now);
+    return { goalId: goal.id, skill };
+  }
   const seed = parseSeedGoals(loadPersona(config).seedSelf).find((g) => g.title === title);
-  if (!seed || (await core.goals.active()).length >= config.core.goals.max_active) {
-    log.info("craft goal unavailable", { medium, inPersona: Boolean(seed) });
-    return { goalId: null, skill: 0 };
+  if (!seed) {
+    deps.log.info("craft goal not in the persona", { medium });
+    return { goalId: null, skill };
   }
   const [embedding] = await deps.embedder.embed([`${seed.title}: ${seed.why}`], "document");
-  const now = deps.clock.now();
   const goalId = await core.goals.insert({
     ...seed,
     status: "active",
-    progress: 0,
+    progress: skill,
     source: "seed",
     source_ref: `persona:${config.prompts.persona}`,
     started_at: now,
     target_at: null,
     embedding: embedding!,
   });
-  return { goalId, skill: 0 };
+  return { goalId, skill };
 }

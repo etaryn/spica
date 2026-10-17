@@ -87,33 +87,29 @@ test("a pose comes from the format's tags, or none", () => {
   expect(choosePose(poses, { ...base, poses: ["flying"] }, 0.1)).toBeNull();
 });
 
-test("craft skill: created once from her persona, then read from the goal", async () => {
+test("craft skill: created once from her persona at the configured skill", async () => {
   const deps = coreDepsOf(makeTestDeps());
   const first = await craftSkill(deps, "still");
   expect(first.skill).toBe(0);
   expect(first.goalId).not.toBeNull();
-  const again = await craftSkill(deps, "still");
-  expect(again.goalId).toBe(first.goalId);
-  await deps.core.goals.setProgress(first.goalId!, 0.4, deps.clock.now());
-  expect((await craftSkill(deps, "still")).skill).toBe(0.4);
+  expect((await craftSkill(deps, "still")).goalId).toBe(first.goalId);
 });
 
-test("craft skill: done reads 1, dropped keeps its progress, neither is recreated", async () => {
-  const deps = coreDepsOf(makeTestDeps());
-  const { goalId } = await craftSkill(deps, "still");
-  await deps.core.goals.setProgress(goalId!, 0.3, deps.clock.now());
-  await deps.core.goals.setStatus(goalId!, "dropped", deps.clock.now());
-  expect(await craftSkill(deps, "still")).toEqual({ goalId: null, skill: 0.3 });
-  const deps2 = coreDepsOf(makeTestDeps());
-  await resetDb();
-  const g = await craftSkill(deps2, "still");
-  await deps2.core.goals.setStatus(g.goalId!, "done", deps2.clock.now());
-  expect(await craftSkill(deps2, "still")).toEqual({ goalId: null, skill: 1 });
-  expect((await deps2.core.goals.active()).length).toBe(0);
+test("skill comes from config, and the goal's progress is set to it", async () => {
+  const all = makeTestDeps({ posts: { craft_skill: { still: 0.4 } } });
+  const { goalId, skill } = await craftSkill(coreDepsOf(all), "still");
+  expect(skill).toBe(0.4);
+  expect((await all.core.goals.get(goalId!))?.progress).toBe(0.4);
+  // Her loops moving it doesn't change her skill: the next read sets it back.
+  await all.core.goals.setProgress(goalId!, 0.9, all.clock.now());
+  expect((await craftSkill(coreDepsOf(all), "still")).skill).toBe(0.4);
+  expect((await all.core.goals.get(goalId!))?.progress).toBe(0.4);
 });
 
-test("craft skill: no room for another active goal reads 0 and creates nothing", async () => {
+test("a dropped craft goal comes back active, even with the active goals full", async () => {
   const deps = coreDepsOf(makeTestDeps({ core: { goals: { max_active: 1 } } }));
+  const { goalId } = await craftSkill(deps, "still");
+  await deps.core.goals.setStatus(goalId!, "dropped", deps.clock.now());
   await deps.core.goals.insert({
     title: "Something else",
     why: "x",
@@ -125,6 +121,9 @@ test("craft skill: no room for another active goal reads 0 and creates nothing",
     target_at: null,
     embedding: vec(),
   });
-  expect(await craftSkill(deps, "still")).toEqual({ goalId: null, skill: 0 });
-  expect(await deps.core.goals.byTitle("Get better at making posts")).toBeNull();
+  const back = await craftSkill(deps, "still");
+  expect(back.goalId).not.toBeNull();
+  expect(back.goalId).not.toBe(goalId);
+  expect((await deps.core.goals.get(back.goalId!))?.status).toBe("active");
+  expect((await deps.core.goals.byTitle("Get better at making posts"))?.id).toBe(back.goalId);
 });

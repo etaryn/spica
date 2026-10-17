@@ -128,7 +128,7 @@ async function dayOfPosting(deps: Awaited<ReturnType<typeof setup>>) {
   return postTick(core, at(23, 40));
 }
 
-test("1-4: browse, land, draft, approve: she remembers posting and her craft moves", async () => {
+test("1-4: browse, land, draft, approve: she remembers posting; her craft stays where Ethan set it", async () => {
   const deps = await setup();
   const out = await dayOfPosting(deps);
   expect(out.status).toBe("drafted");
@@ -149,7 +149,7 @@ test("1-4: browse, land, draft, approve: she remembers posting and her craft mov
     `world_event:${approved!.action_event_id}`,
   );
   expect(episode?.content).toMatch(/^Spica posted "/);
-  expect((await deps.core.goals.get(goal!.id))!.progress).toBeGreaterThan(0);
+  expect((await deps.core.goals.get(goal!.id))!.progress).toBe(0); // her skill is configured, not earned
 });
 
 test("5: a rejected draft leaves no event and no memory", async () => {

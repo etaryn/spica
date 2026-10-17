@@ -859,6 +859,8 @@ const posts = z
     // What's built: a medium outside this list is never posted, whatever her skill.
     capabilities: z.array(z.enum(["still"])).min(1),
     craft_goals: z.object({ still: text }),
+    // Set by Ethan when her posting should get better; she reads it as her own progress.
+    craft_skill: z.object({ still: unit }),
     max_per_week: positiveInt,
     max_pending: positiveInt,
     max_find_age_hours: z.number().positive(),

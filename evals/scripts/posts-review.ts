@@ -2,8 +2,7 @@
  * `pnpm posts:review`: today's real finds, every reviewed format, real draft and check calls, and
  * the renders, written to .data/review/<time>/ with a log of every input and output, for Ethan to
  * judge by eye. Reads her public self from the dev database and writes nothing to it: her skill is
- * read straight from the craft goal (0 when it doesn't exist yet) instead of through `craftSkill`,
- * which would insert the goal.
+ * the configured one, read directly rather than through `craftSkill`, which would write the goal.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -30,8 +29,7 @@ const now = deps.clock.now();
 const out = path.join(".data", "review", now.toISOString().replace(/[:.]/g, "-"));
 mkdirSync(out, { recursive: true });
 const persona = await publicPersona(core);
-const goal = await deps.core.goals.byTitle(cfg.craft_goals.still);
-const skill = goal ? (goal.status === "done" ? 1 : goal.progress) : 0;
+const skill = cfg.craft_skill.still;
 // Every reviewed format regardless of skill, so a high-skill format can still be eyeballed.
 const formats = eligibleFormats(loadFormats(cfg.formats_dir, deps.log), cfg.capabilities, 1);
 const poses = loadPoses(cfg.poses_dir);

@@ -7,6 +7,7 @@ import type { LoopStatus } from "@/mind/platform/core";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { isCraftGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
 
 const active = (item: CoreMemoryItem | null, kind: CoreMemoryItem["kind"]) =>
@@ -184,7 +185,9 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         (await tx.goals.active()).length + goalAdds.length - config.core.goals.min_active;
       for (const id of result.goals.drop) {
         if (droppable <= 0) break;
-        if ((await tx.goals.get(id))?.status === "active")
+        const goal = await tx.goals.get(id);
+        // Her craft goal is her outward aim: its progress is Ethan's to set, so it stays.
+        if (goal?.status === "active" && !isCraftGoal(goal, config))
           if (await tx.goals.setStatus(id, "dropped", now)) {
             droppedGoalIds.push(id);
             droppable--;

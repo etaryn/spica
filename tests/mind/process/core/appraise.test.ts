@@ -241,3 +241,37 @@ test("the episode keeps the appraisal's depth", async () => {
   );
   expect((await deps.core.memory.get(out.episodeId))!.depth).toBe(3);
 });
+
+test("appraisal goal effects skip the craft goal: her skill is set, not earned", async () => {
+  const { deps, event } = await setup();
+  const craft = await deps.core.goals.insert({
+    title: deps.config.posts.craft_goals.still,
+    why: "w",
+    status: "active",
+    progress: 0.2,
+    source: "seed",
+    source_ref: null,
+    started_at: earlier,
+    target_at: null,
+    embedding: vec(),
+  });
+  await deps.core.transaction((tx) =>
+    applyAppraisal(
+      tx,
+      deps,
+      { ...event, valence: 0.1, stakes: "low" },
+      {
+        source: "model" as const,
+        episode: "Spica posted a picture of the Carina Nebula.",
+        emotion: { label: "pleased", valence: 0.4, arousal: 0.3, phrase: null },
+        salience: 0.4,
+        goalEffects: [{ goalId: craft, delta: 0.3 }],
+        needEffects: { autonomy: 0, competence: 0 },
+        depth: 1,
+      },
+      vec(0.01),
+      now,
+    ),
+  );
+  expect(await deps.core.goals.get(craft)).toMatchObject({ progress: 0.2, status: "active" });
+});

@@ -19,6 +19,7 @@ import { applyEvent, moodOf } from "@/mind/state/core/core-state";
 import type { CoreNeeds, CoreStatePatch } from "@/mind/state/core/types";
 import type { LoopContext } from "./runner";
 import { clamp } from "@/mind/platform/math";
+import { isCraftGoal } from "./post-library";
 
 /** Sent to the model. No numeric bounds (unsupported); `boundAppraisal` clamps. */
 export const AppraisalSchema = z.object({
@@ -211,7 +212,7 @@ export async function applyAppraisal(
     await core.memory.setStatus(target.id, "resolved");
   for (const g of a.goalEffects) {
     const goal = await core.goals.get(g.goalId);
-    if (!goal || goal.status !== "active") continue;
+    if (!goal || goal.status !== "active" || isCraftGoal(goal, deps.config)) continue;
     const progress = clamp(goal.progress + g.delta, 0, 1);
     await core.goals.setProgress(goal.id, progress, now);
     if (progress >= 1) await core.goals.setStatus(goal.id, "done", now);

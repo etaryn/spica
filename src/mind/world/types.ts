@@ -96,6 +96,7 @@ export type NewWebFind = {
   credit: string;
   licence: string;
   media_path: string;
+  image_sha256: string;
   world_event_id: string;
   found_at: Date;
 };
@@ -126,6 +127,7 @@ export type PostRow = NewPost & {
 export interface Posts {
   insertFind(row: NewWebFind): Promise<string>;
   findByUrl(url: string): Promise<WebFindRow | null>;
+  findByHash(sha256: string): Promise<WebFindRow | null>;
   getFind(id: string): Promise<WebFindRow | null>;
   /** Finds that arrived with an event on her local `day`. */
   findsOn(day: string): Promise<number>;

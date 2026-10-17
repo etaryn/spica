@@ -689,9 +689,11 @@
     "browse_window": ["09:00", "23:00"],
     "browse_step_minutes": 15,
     "sources": [
-      { "name": "apod", "weight": 2 },
-      { "name": "commons_potd", "weight": 1 }
+      { "name": "commons_potd", "weight": 1 },
+      { "name": "eso_potw", "weight": 1 },
+      { "name": "noirlab_iotw", "weight": 1 }
     ],
+    "weekly_max_age_days": 7,
     "fetch_timeout_ms": 20000,
     "max_download_bytes": 15000000,
     "user_agent": "SpicaPostEngine/0.1 (personal project; contact via repository owner)",

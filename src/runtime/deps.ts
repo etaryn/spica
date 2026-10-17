@@ -71,12 +71,11 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     events: new PgEventBus(db, config.events.channel),
     pusher,
     modules: createModuleBus(modules, () => deps),
-    // DEMO_KEY is rate-limited per IP, which one browse a day stays well under.
     webSources: createWebSources({
-      nasaApiKey: env.NASA_API_KEY ?? "DEMO_KEY",
       userAgent: config.posts.user_agent,
       timeoutMs: config.posts.fetch_timeout_ms,
       maxDownloadBytes: config.posts.max_download_bytes,
+      weeklyMaxAgeDays: config.posts.weekly_max_age_days,
     }),
   };
   return { deps, boss };

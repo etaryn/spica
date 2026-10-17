@@ -29,6 +29,7 @@ async function draft(deps: ReturnType<typeof makeTestDeps>) {
     credit: "NASA",
     licence: "public domain",
     media_path: "a.png",
+    image_sha256: eventId,
     world_event_id: eventId,
     found_at: at(8),
   });

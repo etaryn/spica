@@ -267,6 +267,13 @@
       "when": 1792274372976,
       "tag": "0037_world_event_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792274957427,
+      "tag": "0038_find_image_hash",
+      "breakpoints": true
     }
   ]
 }

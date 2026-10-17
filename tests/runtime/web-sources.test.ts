@@ -1,12 +1,12 @@
-/** The two image sources: today's item with its licence, null when there's no image. */
+/** The image sources: today's item with its licence, null when there's no image. */
 import { afterEach, expect, test, vi } from "vitest";
 import { createWebSources } from "@/runtime/web-sources";
 
 const sources = createWebSources({
-  nasaApiKey: "K",
   userAgent: "UA",
   timeoutMs: 1000,
   maxDownloadBytes: 1000,
+  weeklyMaxAgeDays: 7,
 });
 const png = new Uint8Array([137, 80, 78, 71]);
 
@@ -15,9 +15,10 @@ function stub(routes: Record<string, unknown>) {
     const key = Object.keys(routes).find((k) => url.startsWith(k));
     if (!key) return new Response("missing", { status: 404 });
     const body = routes[key];
-    return body instanceof Uint8Array
-      ? new Response(body as BodyInit)
-      : new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+    if (body instanceof Uint8Array) return new Response(body as BodyInit);
+    if (typeof body === "string")
+      return new Response(body, { headers: { "content-type": "application/rss+xml" } });
+    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
@@ -25,54 +26,68 @@ function stub(routes: Record<string, unknown>) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-test("apod: a public-domain image day", async () => {
+const rss = (items: string) =>
+  `<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>${items}</channel></rss>`;
+const item = (title: string, date: string, url: string) =>
+  `<item><title>${title}</title><pubDate>${date}</pubDate><enclosure url="${url}" type="image/jpeg" length="1"/></item>`;
+const ESO = "https://www.eso.org/public/images/potw/feed/";
+const NOIRLAB = "https://noirlab.edu/public/images/iotw/feed/";
+
+test("eso: the newest picture within a week, CC BY 4.0, credit ESO", async () => {
   const fetch = stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
-      media_type: "image",
-      title: "The Pillars",
-      url: "https://apod.nasa.gov/p.jpg",
-    },
-    "https://apod.nasa.gov/p.jpg": png,
+    [ESO]: rss(
+      item(
+        "Massive antenna &amp; silent mirror",
+        "Mon, 12 Oct 2026 06:00:00 +0200",
+        "https://cdn.eso.org/images/screen/potw2641a.jpg",
+      ) + item("Older", "Mon, 05 Oct 2026 06:00:00 +0200", "https://cdn.eso.org/old.jpg"),
+    ),
+    "https://cdn.eso.org/images/screen/potw2641a.jpg": png,
   });
-  const item = await sources.apod!.fetch("2026-01-05");
-  expect(item).toMatchObject({
-    source: "apod",
-    url: "https://apod.nasa.gov/p.jpg",
-    title: "The Pillars",
-    credit: "NASA",
-    licence: "public domain",
+  const found = await sources.eso_potw!.fetch("2026-10-14");
+  expect(found).toMatchObject({
+    source: "eso_potw",
+    url: "https://cdn.eso.org/images/screen/potw2641a.jpg",
+    title: "Massive antenna & silent mirror",
+    credit: "ESO",
+    licence: "CC BY 4.0",
   });
-  expect(item!.image).toEqual(png);
+  expect(found!.image).toEqual(png);
   expect(fetch.mock.calls[0]![1]).toMatchObject({ headers: { "User-Agent": "UA" } });
 });
 
-test("apod: a copyrighted image is labelled so; a video day is null", async () => {
+test("noirlab: an enclosure with its url last still reads", async () => {
   stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
-      media_type: "image",
-      title: "T",
-      url: "https://apod.nasa.gov/c.jpg",
-      copyright: " Jane Doe ",
-    },
-    "https://apod.nasa.gov/c.jpg": png,
+    [NOIRLAB]: rss(
+      `<item><title>All-Nighter on Kitt Peak</title><pubDate>Wed, 14 Oct 2026 12:00:00 -0700</pubDate><enclosure length="1" type="image/jpeg" url="https://storage.noirlab.edu/i.jpg"></enclosure></item>`,
+    ),
+    "https://storage.noirlab.edu/i.jpg": png,
   });
-  expect(await sources.apod!.fetch("2026-01-05")).toMatchObject({
-    credit: "Jane Doe",
-    licence: "copyrighted",
+  expect(await sources.noirlab_iotw!.fetch("2026-10-15")).toMatchObject({
+    source: "noirlab_iotw",
+    credit: "NOIRLab",
+    url: "https://storage.noirlab.edu/i.jpg",
   });
-  stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-05": {
-      media_type: "video",
-      title: "T",
-      url: "https://youtube.com/x",
-    },
-  });
-  expect(await sources.apod!.fetch("2026-01-06")).toBeNull();
 });
 
-test("apod: a date NASA hasn't published yet throws, so the tick retries later", async () => {
+test("a weekly picture older than a week, an empty feed, or no enclosure is null", async () => {
+  stub({
+    [ESO]: rss(item("Old", "Mon, 28 Sep 2026 06:00:00 +0200", "https://cdn.eso.org/x.jpg")),
+  });
+  expect(await sources.eso_potw!.fetch("2026-10-14")).toBeNull();
+  stub({ [NOIRLAB]: rss("") });
+  expect(await sources.noirlab_iotw!.fetch("2026-10-14")).toBeNull();
+  stub({
+    [NOIRLAB]: rss(
+      "<item><title>X</title><pubDate>Wed, 14 Oct 2026 12:00:00 -0700</pubDate></item>",
+    ),
+  });
+  expect(await sources.noirlab_iotw!.fetch("2026-10-14")).toBeNull();
+});
+
+test("a feed that fails throws, so the tick retries later", async () => {
   stub({});
-  await expect(sources.apod!.fetch("2026-01-07")).rejects.toThrow(/404/);
+  await expect(sources.eso_potw!.fetch("2026-10-14")).rejects.toThrow(/404/);
 });
 
 test("commons: the picture of the day with its licence and artist", async () => {
@@ -99,22 +114,10 @@ test("commons: the picture of the day with its licence and artist", async () => 
   expect(await sources.commons_potd!.fetch("2026-01-06")).toBeNull();
 });
 
-test("apod: asks for the previous day, across a month boundary too", async () => {
-  const fetch = stub({
-    "https://api.nasa.gov/planetary/apod": { media_type: "video", title: "T", url: "u" },
-  });
-  await sources.apod!.fetch("2026-03-01");
-  expect(fetch.mock.calls[0]![0]).toContain("date=2026-02-28");
-});
-
 test("an image over the download cap throws", async () => {
   stub({
-    "https://api.nasa.gov/planetary/apod?api_key=K&date=2026-01-04": {
-      media_type: "image",
-      title: "T",
-      url: "https://apod.nasa.gov/big.jpg",
-    },
-    "https://apod.nasa.gov/big.jpg": new Uint8Array(2000),
+    [ESO]: rss(item("T", "Mon, 12 Oct 2026 06:00:00 +0200", "https://cdn.eso.org/big.jpg")),
+    "https://cdn.eso.org/big.jpg": new Uint8Array(2000),
   });
-  await expect(sources.apod!.fetch("2026-01-05")).rejects.toThrow("too large");
+  await expect(sources.eso_potw!.fetch("2026-10-14")).rejects.toThrow("too large");
 });

@@ -118,6 +118,15 @@ test("the same item twice in a day is written once", async () => {
   expect(await deps.core.posts.findsOn(DAY)).toBe(1);
 });
 
+test("a find whose image matches an earlier one is skipped, even under a new URL", async () => {
+  const item = await webItem();
+  const { deps, core } = await setup({ apod: item }, { browse_per_day: 2 });
+  expect(await browseIfDue(core, at(8))).toBe(true);
+  item.url = "https://example.org/same-picture-new-url.jpg";
+  expect(await browseIfDue(core, at(9))).toBe(false);
+  expect(await deps.core.posts.findsOn(DAY)).toBe(1);
+});
+
 test("the world tick browses, and a later tick lands the find through appraisal", async () => {
   const { deps, core } = await setup({ apod: await webItem() });
   const first = await coreWorldTick(core, at(8));

@@ -26,6 +26,7 @@ async function find(layer = createCoreLayer(getTestDb()), url = "https://x/1.png
     credit: "NASA",
     licence: "public domain",
     media_path: ".data/media/finds/a.png",
+    image_sha256: eventId,
     world_event_id: eventId,
     found_at: at(hour),
   });

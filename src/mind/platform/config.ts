@@ -851,6 +851,7 @@ const posts = z
     browse_window: z.tuple([hhmm, hhmm]),
     browse_step_minutes: positiveInt,
     sources: z.array(z.object({ name: text, weight: z.number().positive() })),
+    weekly_max_age_days: positiveInt,
     fetch_timeout_ms: positiveInt,
     // Largest image she will download; a full-size original can be tens of megabytes.
     max_download_bytes: positiveInt,

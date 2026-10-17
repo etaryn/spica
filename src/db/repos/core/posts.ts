@@ -20,6 +20,10 @@ export function postsRepo(db: Db): Posts {
       const row = (await db.select().from(web_find).where(eq(web_find.url, url)))[0];
       return row ? toFind(row) : null;
     },
+    async findByHash(sha256) {
+      const row = (await db.select().from(web_find).where(eq(web_find.image_sha256, sha256)))[0];
+      return row ? toFind(row) : null;
+    },
     async getFind(id) {
       const row = (await db.select().from(web_find).where(eq(web_find.id, id)))[0];
       return row ? toFind(row) : null;

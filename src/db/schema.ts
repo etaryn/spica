@@ -836,6 +836,11 @@ export const web_find = pgTable(
     credit: text("credit").notNull(),
     licence: text("licence").notNull(),
     media_path: text("media_path").notNull(),
+    /**
+     * The downloaded image's hash: a source serving the same picture under a new URL, or a broken
+     * one serving a logo, can't feed her it twice.
+     */
+    image_sha256: text("image_sha256").notNull().unique(),
     world_event_id: uuid("world_event_id")
       .notNull()
       .references(() => world_event.id, { onDelete: "cascade" }),

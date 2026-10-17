@@ -4,6 +4,7 @@
  * cached, and lands like any event, through appraisal, so she has a take on it and can mention it.
  * Only freely licensed items are kept, because she may post them.
  */
+import { createHash } from "node:crypto";
 import sharp from "sharp";
 import type { LifePlan } from "@/db/schema";
 import type { Config, LifeConfig } from "@/mind/platform/config";
@@ -70,10 +71,13 @@ export async function browseIfDue(deps: CoreDeps, now: Date): Promise<boolean> {
   const page = webSources[source.name]!;
   let item;
   let image: Buffer;
+  let hash: string;
   try {
     item = await page.fetch(day);
     if (!item || !isFreeLicence(item.licence) || (await core.posts.findByUrl(item.url)))
       return false;
+    hash = createHash("sha256").update(item.image).digest("hex");
+    if (await core.posts.findByHash(hash)) return false;
     image = await sharp(item.image)
       .resize({
         width: cfg.max_find_px,
@@ -91,7 +95,11 @@ export async function browseIfDue(deps: CoreDeps, now: Date): Promise<boolean> {
   const media = await saveMedia(cfg.media_dir, `finds/${day}-${slot}-${source.name}.png`, image);
   return core.transaction(async (tx) => {
     await tx.lock(WORLD_LOCK);
-    if ((await tx.posts.findsOn(day)) !== slot || (await tx.posts.findByUrl(found.url)))
+    if (
+      (await tx.posts.findsOn(day)) !== slot ||
+      (await tx.posts.findByUrl(found.url)) ||
+      (await tx.posts.findByHash(hash))
+    )
       return false;
     const eventId = await tx.world.recordEvent({
       at,
@@ -111,6 +119,7 @@ export async function browseIfDue(deps: CoreDeps, now: Date): Promise<boolean> {
       credit: found.credit,
       licence: found.licence,
       media_path: media,
+      image_sha256: hash,
       world_event_id: eventId,
       found_at: at,
     });

@@ -58,6 +58,7 @@ async function landedFind(
     credit: "NASA",
     licence: "public domain",
     media_path: media,
+    image_sha256: eventId,
     world_event_id: eventId,
     found_at: at(hour),
   });

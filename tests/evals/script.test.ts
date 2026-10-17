@@ -206,3 +206,14 @@ test("an injected event is spontaneous by default; a planned one needs its thoug
   });
   expect(() => parse([planned])).toThrow();
 });
+
+test("a script can seed hours together", () => {
+  const s = ScriptSchema.parse({
+    name: "x",
+    relationship_seed: {},
+    seed_hours_together: 24,
+    sessions: [{ at: "day 0 10:00", turns: ["hi"] }],
+    assertions: [{ type: "state", check: "turn_count", expect: 2 }],
+  });
+  expect(s.seed_hours_together).toBe(24);
+});

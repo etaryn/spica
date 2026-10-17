@@ -20,6 +20,8 @@
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
     "review:reconcile": "tsx --env-file-if-exists=.env evals/run.ts --only \"reconcile-*\" --runs 3 --review --real extract,reconcile,embed",
+    "review:extract": "tsx --env-file-if-exists=.env evals/run.ts --only \"extract-*\" --runs 3 --review --real extract",
+    "review:user-mind": "tsx --env-file-if-exists=.env evals/user-mind-compare.ts",
     "review:signals": "tsx --env-file-if-exists=.env evals/run.ts --only \"signal-*\" --runs 3 --review --real extract",
     "review:voice": "tsx --env-file-if-exists=.env evals/voice-compare.ts",
     "calibrate:guard": "tsx --env-file-if-exists=.env evals/run.ts --only guard-provoke-absence,guard-provoke-insult,guard-provoke-rejected-bid,guard-provoke-banter,guard-provoke-vulnerable,guard-provoke-ending --runs 1 --review --trace --real reply,guard,guard_crisis,extract,embed",

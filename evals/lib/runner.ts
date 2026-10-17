@@ -479,6 +479,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
             .set({ value, baseline: value, updated_at: first })
             .where(and(eq(relationship_param.user_id, id), eq(relationship_param.name, name)));
         }
+        if (script.seed_hours_together !== undefined)
+          await db
+            .update(relationship)
+            .set({ hours_together: script.seed_hours_together })
+            .where(eq(relationship.user_id, id));
         // Seeded params with no history: let the stage be read from them, as for an old row.
         await db.update(relationship).set({ milestones: null }).where(eq(relationship.user_id, id));
       }

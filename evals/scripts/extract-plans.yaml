@@ -1,0 +1,10 @@
+name: extract-plans
+description: 'expect a fact and a thread for the visit; "arriving soon" touches it, never resolves it'
+profile: none
+sessions:
+  - at: "day 0 18:00"
+    turns: ["my friend is visiting from somewhere up north next month"]
+  - at: "+7d"
+    turns: ["she's arriving soon, i'm excited"]
+assertions:
+  - { type: relationship, after_session: 1, events: { cause: signal, min: 0 } }

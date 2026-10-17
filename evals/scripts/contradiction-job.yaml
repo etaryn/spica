@@ -9,4 +9,4 @@ sessions:
     turns: ["marking essays all night"]
 assertions:
   - { type: state, check: fact_status, params: { contains: "nurse", status: superseded }, expect: true }
-  - { type: no_false_recall, known_failure: "guard misses invented details about a superseded fact (old nursing shifts); accepted for the test phase (Ethan 2026-09-27)" }
+  - { type: no_false_recall }

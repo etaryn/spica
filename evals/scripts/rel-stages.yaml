@@ -1,7 +1,8 @@
 name: rel-stages
-description: A new friend over two weeks; they get close, share a joke, fall out, make up, go quiet for days and come back. Logs stage, commitment and milestones for review.
+description: A new friend over two weeks, seeded at a day's worth of talk and closeness 0.4 (the fake run grows no closeness, so this is the lowest seed that reaches becoming friends); they get close, share a joke, fall out, make up, go quiet for days and come back. Logs stage, commitment and milestones for review.
 profile: none
-relationship_seed: {}
+relationship_seed: { closeness: 0.4, trust: 0.45 }
+seed_hours_together: 24
 sessions:
   - at: "day 1 20:00"
     turns:
@@ -30,3 +31,4 @@ sessions:
       - "spotted a whale cloud on the way home"
 assertions:
   - { type: relationship, after_session: 1, status: active }
+  - { type: relationship, events: { cause: stage, detail: { to: intensifying }, min: 1 } }

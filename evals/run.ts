@@ -87,7 +87,25 @@ if (scripts.length === 0)
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const traceDir = path.join(root, "results", "traces", stamp);
-if (args.trace) mkdirSync(traceDir, { recursive: true });
+if (args.trace || anyReal) mkdirSync(traceDir, { recursive: true });
+
+/**
+ * A real run's whole eval database after each attempt (auth secrets and embeddings left out):
+ * every row its jobs wrote, so a paid run can be analysed beyond what the review prints.
+ */
+async function dumpDb(file: string) {
+  const { rows: tables } = await pool.query<{ name: string }>(
+    `SELECT table_name AS name FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+       AND table_name NOT IN ('account', 'session', 'verification') ORDER BY 1`,
+  );
+  const dump: Record<string, unknown[]> = {};
+  for (const { name } of tables)
+    dump[name] = (
+      await pool.query<{ r: unknown }>(`SELECT to_jsonb(x) - 'embedding' AS r FROM "${name}" x`)
+    ).rows.map((x) => x.r);
+  writeFileSync(file, JSON.stringify(dump, null, 2));
+}
 
 const profiles = loadProfiles(path.join(root, "profiles"));
 const summaries: ScriptSummary[] = [];
@@ -108,6 +126,7 @@ for (const script of scripts) {
       extractReal: realPurposes.has("extract"),
       realPurposes,
     });
+    if (anyReal) await dumpDb(path.join(traceDir, `${script.name}-${k + 1}-db.json`));
     if (review)
       reviewRuns.push({
         script: script.name,
@@ -116,7 +135,7 @@ for (const script of scripts) {
         description: script.description,
         profile: script.profile,
       });
-    if (args.trace) {
+    if (args.trace || anyReal) {
       writeFileSync(
         path.join(traceDir, `${script.name}-${k + 1}.json`),
         JSON.stringify(

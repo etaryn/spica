@@ -66,6 +66,7 @@ export function makeLifeLoop(
     if (policy === "never") return;
     const ids = o.userIds();
     if (!ids.length) return;
+    const texts = [o.script.reply_text].flat();
     const ros = await deps.db
       .select({
         id: session_log.id,
@@ -83,7 +84,7 @@ export function makeLifeLoop(
       if (at > clock.now().getTime()) clock.set(new Date(at));
       await receiveMessage(deps, r.user_id, {
         clientMessageId: randomUUID(),
-        text: o.script.reply_text,
+        text: texts[handled.size % texts.length]!,
       });
       handled.add(r.id);
     }

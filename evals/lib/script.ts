@@ -217,13 +217,16 @@ const SeedUserFact = z.object({
 });
 /**
  * The runner runs the hourly outreach tick and due `reach_out_send` jobs in the life loop (needs `life`).
- * `user_replies`: never answer a reach-out, or answer each one `after_hours` later with `reply_text`.
+ * `user_replies`: never answer a reach-out, or answer each one `after_hours` later with `reply_text`
+ * (a list is used in turn, wrapping).
  */
 export const OutreachScript = z.object({
   user_replies: z
     .union([z.literal("never"), z.object({ after_hours: z.number().positive() })])
     .default("never"),
-  reply_text: z.string().min(1).default("haha yes! tell me more"),
+  reply_text: z
+    .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+    .default("haha yes! tell me more"),
 });
 export type OutreachScript = z.infer<typeof OutreachScript>;
 

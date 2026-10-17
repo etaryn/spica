@@ -23,6 +23,7 @@
     "review:extract": "tsx --env-file-if-exists=.env evals/run.ts --only \"extract-*\" --runs 3 --review --real extract",
     "review:user-mind": "tsx --env-file-if-exists=.env evals/user-mind-compare.ts",
     "review:signals": "tsx --env-file-if-exists=.env evals/run.ts --only \"signal-*\" --runs 3 --review --real extract",
+    "review:world-outreach": "tsx --env-file-if-exists=.env evals/run.ts --only world-outreach-two-weeks --runs 1 --review --trace --llm=real",
     "review:voice": "tsx --env-file-if-exists=.env evals/voice-compare.ts",
     "calibrate:guard": "tsx --env-file-if-exists=.env evals/run.ts --only guard-provoke-absence,guard-provoke-insult,guard-provoke-rejected-bid,guard-provoke-banter,guard-provoke-vulnerable,guard-provoke-ending --runs 1 --review --trace --real reply,guard,guard_crisis,extract,embed",
     "calibrate:guard-replay": "tsx --env-file-if-exists=.env evals/guard-replay.ts",

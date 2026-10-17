@@ -1,0 +1,45 @@
+name: world-outreach-two-weeks
+description: >
+  15d review run. Fourteen of her days with her real world (model day plans, events, the core loops)
+  and one friend: three conversations (one crossing her midnight), seeded plans in their life, and a
+  varied answer to every reach-out 3 h later. For reading what her reach-outs say, how candidates
+  score, her events and her night blocks (pnpm review:world-outreach, everything real).
+profile: basic
+config: { life: { timezone: UTC } }
+life:
+  plan: model
+  inject:
+    - { day: 1, content: "Spica's telescope booking for tonight came through.", valence: 0.6, kind: planned, thought: "Spica is looking forward to the telescope session tonight." }
+    - { day: 5, content: "Spica went to the film club screening of Stalker.", valence: 0.4, kind: planned, thought: "Spica plans to see Stalker at the film club.", fallthrough: true }
+  until: "day 14 12:00"
+outreach:
+  user_replies: { after_hours: 3 }
+  reply_text:
+    - "haha yes! tell me more"
+    - "sorry was at work, it went okay actually"
+    - "omg i forgot to tell you, it was kind of a mess"
+    - "lol that's so you. what are you up to tonight?"
+    - "ugh long day. i'm so tired"
+seed_user_facts:
+  - { content: "The user is running a half marathon on Sunday morning.", occurred_at: "day 6 09:00", salience: 0.6 }
+  - { content: "The user's sister is visiting on the weekend.", occurred_at: "day 12 12:00", salience: 0.5 }
+sessions:
+  - at: "day 0 10:00"
+    turns:
+      - "hey! big week coming up"
+      - "i have a job interview on thursday afternoon, kind of nervous"
+      - "it's for a design role at a small studio. what's your week looking like?"
+  - at: "day 4 20:00"
+    turns:
+      - "okay the interview happened"
+      - "i think it went well? they asked me to do a take home task"
+      - "anyway how was your day"
+  - at: "day 9 23:50"
+    turns:
+      - { text: "you up?", after_s: 0 }
+      - { text: "can't sleep, brain won't stop", after_s: 180 }
+      - { text: "the studio hasn't replied about the task yet", after_s: 240 }
+      - { text: "what are you doing awake anyway", after_s: 300 }
+      - { text: "ok i should really try to sleep", after_s: 420 }
+assertions:
+  - { type: reach_out, count: { min: 1 }, distinct_topics: true, no_gate_violation: true, pushed: true, composed: true }

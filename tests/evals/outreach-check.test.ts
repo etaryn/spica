@@ -16,6 +16,7 @@ const snap = (o: Partial<OutreachSnapshot> = {}): OutreachSnapshot => ({
   endings: [],
   pushTags: [],
   composedPrompts: 0,
+  log: [],
   ...o,
 });
 const ro = (id: string, at: Date, topic = id, kind = "thread") => ({ id, at, topic, kind });

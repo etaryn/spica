@@ -2762,3 +2762,4 @@ Ethan, not changed.
 | 2026-10-13 | `invented_self` grounds her self claims at its own threshold, 0.5 (§10.5) | Ethan |
 | 2026-10-13 | Digs repeated across days stay unchecked for now (B113) | Ethan |
 | 2026-10-15 | Hurt and tension share one evenly spaced 0–1 scale, 0 nothing to 1 grounds for ending a friendship on the spot; gains 1; commitment cushions only slights; an ending is scored with a 0.5 floor; pointed remarks count once per occasion across sessions; outage keywords by category; regressions by status only (§11.1, §10.5, §17.2, B14, B91, B115, B15, B113, B37, B40) | Ethan |
+| 2026-10-18 | Her outward improvements (craft skill, new capabilities, updates) are set and timed by Ethan, not by her loops; in-world they read as her learning, outside they are also a marketing decision timed strategically. Her craft goal stays as her outward aim and core loops can't drop it (B109) | Ethan |

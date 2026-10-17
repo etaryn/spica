@@ -1,5 +1,7 @@
 import type { Phrases } from "@/mind/platform/phrases";
 import type { GroundedClaim } from "@/mind/process/guard/self-claims";
+import type { Candidate, GateResult } from "@/mind/process/outreach/types";
+import type { OutreachSnapshot } from "./outreach-check";
 import type { RelSnapshot } from "./relationship-check";
 import type { ScriptResult, TraceDecision, TraceTurn } from "./runner";
 import { renderVoiceReport } from "./voice-report";
@@ -86,6 +88,28 @@ function renderRelationship(snap: RelSnapshot): string[] {
     "",
     `Events by cause: ${eventsLine}`,
     signalsLine(snap.events),
+  ];
+}
+
+/** Every outreach tick that got past the pre-check: candidates by score, the winner, failed gates. */
+export function reachOutTicks(log: OutreachSnapshot["log"]): string[] {
+  const cand = (c: Candidate) => `${c.kind} ${c.score.toFixed(2)} "${oneLine(c.topic)}"`;
+  return [
+    `Reach-out ticks (${log.length}):`,
+    "",
+    ...log.map((l) => {
+      const cs = [...(l.candidates as Candidate[])].sort((a, b) => b.score - a.score);
+      // A send-time drop wraps the tick's gates: `{ tick, dropped, recheck? }`.
+      const g = l.gate_results as GateResult[] | { tick: GateResult[]; dropped: string };
+      const failed = (Array.isArray(g) ? g : g.tick).filter((r) => !r.pass);
+      return [
+        `- ${new Date(l.created_at).toISOString()} **${l.status}**${Array.isArray(g) ? "" : ` (${oneLine(g.dropped)})`}`,
+        `winner: ${l.winner ? cand(l.winner as Candidate) : "none"}`,
+        `gates failed: ${failed.map((g) => `${g.rule}${g.detail ? ` (${oneLine(g.detail)})` : ""}`).join(", ") || "none"}`,
+        `candidates: ${cs.map(cand).join(" | ") || "none"}`,
+      ].join(" · ");
+    }),
+    "",
   ];
 }
 
@@ -183,6 +207,8 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
           : ["- (none)"]),
         "",
       );
+      const ticks = trace?.outreach?.[user]?.log;
+      if (ticks) out.push(...reachOutTicks(ticks));
     }
     out.push("### Annotations", "");
     out.push(

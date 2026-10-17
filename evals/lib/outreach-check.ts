@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { Config } from "@/mind/platform/config";
 import { lifeInstant } from "@/mind/world/her-clock";
 import { HOUR } from "@/mind/platform/time";
@@ -15,6 +15,8 @@ export type OutreachSnapshot = {
   endings: { at: Date; kind: "ended" | "repair" }[];
   pushTags: string[];
   composedPrompts: number;
+  /** Every reach_out_log row (each tick past the pre-check), oldest first, for review. */
+  log: (typeof reach_out_log.$inferSelect)[];
 };
 
 /**
@@ -37,10 +39,12 @@ export async function outreachSnapshot(
     .from(session_log)
     .where(eq(session_log.user_id, userId))
     .orderBy(asc(session_log.created_at));
-  const logs = await db
+  const log = await db
     .select()
     .from(reach_out_log)
-    .where(and(eq(reach_out_log.user_id, userId), eq(reach_out_log.status, "sent")));
+    .where(eq(reach_out_log.user_id, userId))
+    .orderBy(asc(reach_out_log.created_at));
+  const logs = log.filter((l) => l.status === "sent");
   const byTurn = new Map(logs.map((l) => [l.turn_id, l]));
   const days = await db.select().from(life_day);
   const events = await db
@@ -83,6 +87,7 @@ export async function outreachSnapshot(
       if (e.cause === "repair") return [{ at: e.created_at, kind: "repair" }];
       return [];
     }),
+    log,
     ...extra,
   };
 }

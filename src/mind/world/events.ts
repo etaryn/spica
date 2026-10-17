@@ -16,7 +16,7 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { relativeDate } from "@/mind/platform/relative-date";
 import { seededUnit } from "@/mind/platform/seeded-random";
-import { lifeInstant } from "@/mind/world/her-clock";
+import { lifeInstant, lifeTimezone } from "@/mind/world/her-clock";
 import { DAY } from "@/mind/platform/time";
 
 /** Sent to the model. No numeric bounds (unsupported); `checkEvent` validates and clamps. */
@@ -120,6 +120,7 @@ export function buildEventInput(
   day: string,
   rejected: { candidate: unknown; reason: string }[],
   now: Date,
+  tz: string,
 ): string {
   const parts = [`Today is ${day} in her zone.`];
   parts.push(
@@ -129,7 +130,7 @@ export function buildEventInput(
   );
   parts.push(
     ctx.episodes.length
-      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${relativeDate(e.when, now)})`).join("\n")}`
+      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${relativeDate(e.when, now, tz)})`).join("\n")}`
       : "What has happened in her life lately: nothing yet.",
   );
   parts.push(`People she knows: ${ctx.people.join(", ") || "none"}.`);
@@ -253,7 +254,7 @@ export async function generateCoreEvents(
             purpose: "life_event",
             model: "life",
             system,
-            input: buildEventInput(ctx, day, rejected, now),
+            input: buildEventInput(ctx, day, rejected, now, lifeTimezone(config.life, now)),
             schema: EventSchema,
             timeoutMs: config.models.structured_timeout_ms,
             maxTokens: cfg.event_max_tokens,

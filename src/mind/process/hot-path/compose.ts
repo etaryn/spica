@@ -28,6 +28,7 @@ import { parseSummaryPhrases } from "@/mind/platform/phrases";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
 import { isValidTimeZone } from "@/mind/platform/timezone";
+import { lifeTimezone } from "@/mind/world/her-clock";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
@@ -469,6 +470,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
+    timezone: lifeTimezone(config.life, clock.now()),
     howToText: inCrisis
       ? null
       : howToText({ shape, move, mustAnswer }, loadHowToTextPhrases(config)),
@@ -568,13 +570,9 @@ async function loadRelationshipLine(
 
   try {
     const zone = await getTimezone(deps.db, userId);
-    const stats = await sessionLog.userTurnStats(
-      deps.db,
-      userId,
-      anchor.created_at,
-      zone && isValidTimeZone(zone) ? zone : "UTC",
-    );
-    return relationshipLine(stats, deps.clock.now());
+    const tz = zone && isValidTimeZone(zone) ? zone : "UTC";
+    const stats = await sessionLog.userTurnStats(deps.db, userId, anchor.created_at, tz);
+    return relationshipLine(stats, deps.clock.now(), tz);
   } catch (e) {
     deps.log.error("relationship line unavailable", { userId, error: errorName(e) });
     return null;

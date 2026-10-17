@@ -41,6 +41,8 @@ export interface AssembleInput {
     trigger?: string | null;
   }[];
   now: Date;
+  /** Her zone: dates in her memories are counted in her days. */
+  timezone: string;
   /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
   /**
@@ -89,7 +91,10 @@ export function assemblePrompt(input: AssembleInput): ReplyRequest {
             .join("\n")
         : null,
     ),
-    section("What you remember", memorySection(input.retrieval, input.coreMemories, input.now)),
+    section(
+      "What you remember",
+      memorySection(input.retrieval, input.coreMemories, input.now, input.timezone),
+    ),
     section(
       "Your things together",
       input.idiolect?.length
@@ -129,12 +134,13 @@ function memorySection(
   retrieval: RetrievalResult,
   coreMemories: RetrievedFact[],
   now: Date,
+  tz: string,
 ): string | null {
   const lists = [
-    factList("About them", retrieval.facts.user, now),
-    factList("Between you", retrieval.facts.shared, now),
-    factList("What you've told them", retrieval.facts.self, now),
-    factList("From your own life", coreMemories, now),
+    factList("About them", retrieval.facts.user, now, tz),
+    factList("Between you", retrieval.facts.shared, now, tz),
+    factList("What you've told them", retrieval.facts.self, now, tz),
+    factList("From your own life", coreMemories, now, tz),
   ].filter((s): s is string => s !== null);
 
   return lists.length ? lists.join("\n\n") : null;
@@ -152,7 +158,7 @@ const ORIGIN = {
   guess: "your own guess, they never said this",
 };
 
-function factList(title: string, facts: RetrievedFact[], now: Date): string | null {
+function factList(title: string, facts: RetrievedFact[], now: Date, tz: string): string | null {
   if (facts.length === 0) return null;
 
   const lines = facts.map((fact) => {
@@ -161,7 +167,7 @@ function factList(title: string, facts: RetrievedFact[], now: Date): string | nu
       Boolean,
     );
     const tail = notes.length ? ` (${notes.join("; ")})` : "";
-    return `- ${fact.content} (${relativeDate(fact.when, now)})${onMind}${tail}`;
+    return `- ${fact.content} (${relativeDate(fact.when, now, tz)})${onMind}${tail}`;
   });
   return `### ${title}\n${lines.join("\n")}`;
 }
@@ -256,10 +262,11 @@ function elapsed(hours: number): string {
 export function relationshipLine(
   stats: { sessions: number; days: number; first: Date | null },
   now: Date,
+  tz: string,
 ): string {
   if (!stats.first || stats.sessions <= 1) return "This is your first conversation with them.";
   if (stats.days <= 1) return "You've already talked earlier today.";
-  return `You first talked ${relativeDate(stats.first, now)}, and have talked on ${stats.days} different days.`;
+  return `You first talked ${relativeDate(stats.first, now, tz)}, and have talked on ${stats.days} different days.`;
 }
 
 /** Time since the previous turn; null under `minHours`. */

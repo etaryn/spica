@@ -117,6 +117,7 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
     day,
     [{ candidate: { content: "x" }, reason: "it repeats something" }],
     now,
+    "UTC",
   );
   expect(input).toContain("09:00-12:00 busy: reading");
   expect(input).toContain("What has happened in her life lately (never contradict):");
@@ -129,6 +130,7 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
     day,
     [],
     now,
+    "UTC",
   );
   expect(empty).toContain("unknown, keep the event generic");
   expect(empty).toContain("What has happened in her life lately: nothing yet.");

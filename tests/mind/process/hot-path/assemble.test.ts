@@ -19,6 +19,7 @@ const base = {
   relationshipSummary: null,
   retrieval: emptyRetrieval(),
   now,
+  timezone: "UTC",
 };
 
 describe("resolveSessionId", () => {
@@ -165,12 +166,12 @@ describe("the summary section", () => {
 
 describe("relativeDate", () => {
   test("buckets", () => {
-    expect(relativeDate(new Date("2026-01-12T08:00:00Z"), now)).toBe("today");
-    expect(relativeDate(new Date("2026-01-11T08:00:00Z"), now)).toBe("yesterday");
-    expect(relativeDate(new Date("2026-01-08T08:00:00Z"), now)).toBe("4 days ago");
-    expect(relativeDate(new Date("2025-12-20T08:00:00Z"), now)).toBe("3 weeks ago");
-    expect(relativeDate(new Date("2025-10-01T08:00:00Z"), now)).toBe("3 months ago");
-    expect(relativeDate(new Date("2026-01-20T08:00:00Z"), now)).toBe("in 8 days");
+    expect(relativeDate(new Date("2026-01-12T08:00:00Z"), now, "UTC")).toBe("today");
+    expect(relativeDate(new Date("2026-01-11T08:00:00Z"), now, "UTC")).toBe("yesterday");
+    expect(relativeDate(new Date("2026-01-08T08:00:00Z"), now, "UTC")).toBe("4 days ago");
+    expect(relativeDate(new Date("2025-12-20T08:00:00Z"), now, "UTC")).toBe("3 weeks ago");
+    expect(relativeDate(new Date("2025-10-01T08:00:00Z"), now, "UTC")).toBe("3 months ago");
+    expect(relativeDate(new Date("2026-01-20T08:00:00Z"), now, "UTC")).toBe("in 8 days");
   });
 });
 
@@ -356,6 +357,7 @@ test("open questions fill their own slot after due threads, only when present", 
     retrieval: emptyRetrieval(),
     recentTurns: [{ role: "user" as const, text: "hi" }],
     now: new Date(),
+    timezone: "UTC",
   };
   expect(assemblePrompt(base).system).not.toMatch(/haven't answered/);
   const s = assemblePrompt({ ...base, openQuestions: ["what should I cook tonight?"] }).system;
@@ -364,17 +366,17 @@ test("open questions fill their own slot after due threads, only when present", 
 
 test("relationshipLine: first conversation, same day, then days and first-contact date", () => {
   const now = new Date("2026-01-20T09:00:00Z");
-  expect(relationshipLine({ sessions: 1, days: 1, first: now }, now)).toBe(
+  expect(relationshipLine({ sessions: 1, days: 1, first: now }, now, "UTC")).toBe(
     "This is your first conversation with them.",
   );
-  expect(relationshipLine({ sessions: 0, days: 0, first: null }, now)).toBe(
+  expect(relationshipLine({ sessions: 0, days: 0, first: null }, now, "UTC")).toBe(
     "This is your first conversation with them.",
   );
-  expect(relationshipLine({ sessions: 2, days: 1, first: now }, now)).toBe(
+  expect(relationshipLine({ sessions: 2, days: 1, first: now }, now, "UTC")).toBe(
     "You've already talked earlier today.",
   );
   expect(
-    relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, now),
+    relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, now, "UTC"),
   ).toBe("You first talked 2 weeks ago, and have talked on 3 different days.");
 });
 
@@ -396,6 +398,7 @@ test("'Your day' sits before 'You and them'; the preoccupation is labelled", () 
     retrieval: r,
     recentTurns: [],
     now: new Date("2026-01-05T10:00:00Z"),
+    timezone: "UTC",
   });
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## You and them"));
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## Your day"));
@@ -451,6 +454,7 @@ test("sections come in the two-mind order", () => {
     coreMemories: [{ id: "c", content: "HERLIFE", when: now, onMind: true }],
     recentTurns: [],
     now,
+    timezone: "UTC",
   });
   const order = [
     "VALUES",

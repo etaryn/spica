@@ -18,6 +18,7 @@ import { relativeDate } from "@/mind/platform/relative-date";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant, lifeTimezone } from "@/mind/world/her-clock";
 import { DAY } from "@/mind/platform/time";
+import { shiftLocalDate } from "@/mind/platform/timezone";
 
 /** Sent to the model. No numeric bounds (unsupported); `checkEvent` validates and clamps. */
 const EventSchema = z.object({
@@ -62,6 +63,8 @@ export type AcceptedEvent = {
   thoughtEmbedding: number[] | null;
   at: Date;
   goalRef: string | null;
+  /** The subject key it was drawn about; null for an injected event. */
+  subject: string | null;
   resolvesMemoryId: string | null;
   fallthrough: boolean | null;
 };
@@ -69,35 +72,79 @@ export type CoreEventContext = {
   plan: LifePlan | null;
   episodes: { content: string; when: Date }[];
   people: string[];
-  goal: CoreGoal | null;
+  subject: EventSubject;
   needs: CoreNeeds;
 };
+export type EventSubject =
+  | { kind: "goal"; goal: CoreGoal }
+  | { kind: "interest"; id: string; content: string }
+  | { kind: "person"; name: string }
+  | { kind: "everyday" };
 type WorldConfig = Config["core"]["world"];
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
 const normalizeName = (s: string) => tidy(s).toLowerCase();
 
-/** Day-stable goal selection does not depend on repository ordering. */
-export function selectEventGoal(goals: CoreGoal[], day: string, cfg: WorldConfig): CoreGoal | null {
-  const active = goals
+export function subjectKey(s: EventSubject): string {
+  if (s.kind === "goal") return `goal:${s.goal.id}`;
+  if (s.kind === "interest") return `interest:${s.id}`;
+  if (s.kind === "person") return `person:${s.name}`;
+  return "everyday";
+}
+
+/**
+ * What today's event is about, drawn in code so her days don't narrow to one theme: one of her
+ * goals, an interest, someone she knows, or an ordinary thing, by weight, with anything used in
+ * the last few days drawn less. Day-stable, and independent of repository order.
+ */
+export function selectEventSubject(
+  options: { goals: CoreGoal[]; interests: { id: string; content: string }[]; people: string[] },
+  recentKeys: string[],
+  day: string,
+  cfg: WorldConfig,
+): EventSubject {
+  const w = cfg.subject_weights;
+  const goals = options.goals
     .filter((goal) => goal.status === "active")
     .sort((a, b) => a.id.localeCompare(b.id));
-  if (!active.length || seededUnit(`${day}:goal`) >= cfg.goal_driven_share) return null;
-  const weights = active.map((goal) => 1 - goal.progress + cfg.goal_weight_floor);
-  let draw = seededUnit(`${day}:goal-pick`) * weights.reduce((sum, weight) => sum + weight, 0);
-  for (const [index, goal] of active.entries()) {
-    draw -= weights[index]!;
-    if (draw < 0) return goal;
+  // Goals further from done are drawn more, the share of all goals staying w.goal.
+  const goalWeights = goals.map((goal) => 1 - goal.progress + cfg.goal_weight_floor);
+  const goalTotal = goalWeights.reduce((sum, x) => sum + x, 0);
+  const pool: { subject: EventSubject; weight: number }[] = [
+    ...goals.map((goal, i) => ({
+      subject: { kind: "goal" as const, goal },
+      weight: (w.goal * goalWeights[i]!) / goalTotal,
+    })),
+    ...options.interests.map((it) => ({
+      subject: { kind: "interest" as const, id: it.id, content: it.content },
+      weight: w.interest / options.interests.length,
+    })),
+    ...options.people.map((name) => ({
+      subject: { kind: "person" as const, name },
+      weight: w.person / options.people.length,
+    })),
+    { subject: { kind: "everyday" as const }, weight: w.everyday },
+  ].map((o) => ({
+    ...o,
+    weight: recentKeys.includes(subjectKey(o.subject))
+      ? o.weight * cfg.subject_recent_penalty
+      : o.weight,
+  }));
+  const total = pool.reduce((sum, o) => sum + o.weight, 0);
+  let position = seededUnit(`${day}:subject`) * total;
+  for (const o of pool) {
+    position -= o.weight;
+    if (position < 0) return o.subject;
   }
-  return active.at(-1)!;
+  return { kind: "everyday" };
 }
 
 async function coreEventContext(
   deps: CoreDeps,
   day: string,
   now: Date,
-  goal: CoreGoal | null,
+  subject: EventSubject,
 ): Promise<CoreEventContext> {
   const cfg = deps.config.core.world;
   const from = new Date(now.getTime() - cfg.event_context_days * DAY);
@@ -107,7 +154,7 @@ async function coreEventContext(
     plan: await deps.core.world.plan(day),
     episodes: episodes.map((e) => ({ content: e.content, when: e.occurred_at ?? e.created_at })),
     people: [...new Set([...cfg.canon_entities, ...known])],
-    goal,
+    subject,
     needs: (await deps.core.state.get())?.needs ?? {
       autonomy: deps.config.core.state.needs_baseline,
       competence: deps.config.core.state.needs_baseline,
@@ -121,6 +168,7 @@ export function buildEventInput(
   rejected: { candidate: unknown; reason: string }[],
   now: Date,
   tz: string,
+  targetChars: number,
 ): string {
   const parts = [`Today is ${day} in her zone.`];
   parts.push(
@@ -138,9 +186,16 @@ export function buildEventInput(
     `Current needs: autonomy: ${ctx.needs.autonomy}; competence: ${ctx.needs.competence}.`,
   );
   parts.push(
-    ctx.goal
-      ? `Selected active goal: ${ctx.goal.title}. Why: ${ctx.goal.why}. Progress: ${ctx.goal.progress}. Let this event advance or block it where possible.`
-      : "Selected active goal: none. Write an ordinary event.",
+    ctx.subject.kind === "goal"
+      ? `Today's event is about her goal: ${ctx.subject.goal.title}. Why: ${ctx.subject.goal.why}. Progress: ${ctx.subject.goal.progress}. Let it advance or block it.`
+      : ctx.subject.kind === "interest"
+        ? `Today's event is about something she loves: ${ctx.subject.content}.`
+        : ctx.subject.kind === "person"
+          ? `Today's event is about: ${ctx.subject.name}. Something happens with them.`
+          : "Today's event is about something ordinary, not her goals or usual interests.",
+  );
+  parts.push(
+    `Write the event as one plain sentence, under ${targetChars} characters: what happened, no feelings.`,
   );
   if (rejected.length)
     parts.push(
@@ -219,8 +274,25 @@ export async function generateCoreEvents(
   const attempts: EventAttempt[] = [];
   if (!draws.some(Boolean)) return { accepted, attempts, budgetExhausted: false };
 
-  const goal = selectEventGoal(await deps.core.goals.active(), day, cfg);
-  const ctx = await coreEventContext(deps, day, now, goal);
+  const subject = selectEventSubject(
+    {
+      goals: await deps.core.goals.active(),
+      interests: (await deps.core.memory.activeByKind("interest", cfg.event_context_items)).map(
+        (m) => ({ id: m.id, content: m.content }),
+      ),
+      people: [
+        ...new Set([
+          ...cfg.canon_entities,
+          ...(await deps.core.memory.entities()).map((e) => e.name),
+        ]),
+      ],
+    },
+    await deps.core.world.recentSubjects(shiftLocalDate(day, -cfg.subject_recent_days)),
+    day,
+    cfg,
+  );
+  const goal = subject.kind === "goal" ? subject.goal : null;
+  const ctx = await coreEventContext(deps, day, now, subject);
   const known = new Set(ctx.people.map(normalizeName));
   let lastNewEntityAt = await deps.core.memory.latestEntityFirstSeen(cfg.canon_entities);
   let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
@@ -254,7 +326,14 @@ export async function generateCoreEvents(
             purpose: "life_event",
             model: "life",
             system,
-            input: buildEventInput(ctx, day, rejected, now, lifeTimezone(config.life, now)),
+            input: buildEventInput(
+              ctx,
+              day,
+              rejected,
+              now,
+              lifeTimezone(config.life, now),
+              cfg.event_target_chars,
+            ),
             schema: EventSchema,
             timeoutMs: config.models.structured_timeout_ms,
             maxTokens: cfg.event_max_tokens,
@@ -311,6 +390,7 @@ export async function generateCoreEvents(
         thoughtEmbedding,
         at: lifeInstant(config.life, day, c.at),
         goalRef: useInjected ? null : (goal?.id ?? null),
+        subject: useInjected ? null : subjectKey(subject),
         resolvesMemoryId: decision.relation === "resolves" ? decision.targetId : null,
         fallthrough: useInjected ? (injected!.fallthrough ?? null) : null,
       });

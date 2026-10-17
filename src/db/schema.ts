@@ -805,6 +805,11 @@ export const world_event = pgTable(
     life_day: date("life_day", { mode: "string" }).notNull(),
     plan_ref: text("plan_ref"),
     goal_ref: uuid("goal_ref").references(() => core_goal.id, { onDelete: "set null" }),
+    /**
+     * What the day's event was drawn about (`goal:<id>`, `interest:<id>`, `person:<name>`,
+     * `everyday`); recent ones are drawn less.
+     */
+    subject: text("subject"),
     outcome: text("outcome").$type<"happened" | "fell_through">(),
     fallthrough: boolean("fallthrough"),
     resolves_memory_id: uuid("resolves_memory_id").references(() => core_memory.id, {

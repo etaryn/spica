@@ -1,0 +1,1 @@
+ALTER TABLE "world_event" ADD COLUMN "subject" text;

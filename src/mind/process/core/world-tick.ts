@@ -152,6 +152,7 @@ async function applyDay(
         agents,
         agent_names: c.entity_names,
         goal_ref: e.goalRef,
+        subject: e.subject,
         resolves_memory_id: e.resolvesMemoryId,
         fallthrough: e.fallthrough,
         life_day: day,

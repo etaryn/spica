@@ -260,6 +260,13 @@
       "when": 1792175079440,
       "tag": "0036_user_gender",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792274372976,
+      "tag": "0037_world_event_subject",
+      "breakpoints": true
     }
   ]
 }

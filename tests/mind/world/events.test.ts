@@ -12,7 +12,8 @@ import {
   checkEvent,
   checkRules,
   generateCoreEvents,
-  selectEventGoal,
+  selectEventSubject,
+  subjectKey,
 } from "@/mind/world/events";
 import type { CoreGoal } from "@/mind/state/core/types";
 import { closeTestDb, resetDb, vec } from "../../helpers/db";
@@ -111,13 +112,14 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
       },
       episodes: [{ content: "She rewatched Solaris.", when: new Date(now.getTime() - DAY) }],
       people: ["Alcor"],
-      goal: null,
+      subject: { kind: "everyday" },
       needs: { autonomy: 0.3, competence: 0.7 },
     },
     day,
     [{ candidate: { content: "x" }, reason: "it repeats something" }],
     now,
     "UTC",
+    140,
   );
   expect(input).toContain("09:00-12:00 busy: reading");
   expect(input).toContain("What has happened in her life lately (never contradict):");
@@ -126,11 +128,18 @@ test("buildEventInput shows her plan, her recent life, her people and the reject
   expect(input).toContain("Rejected attempts");
 
   const empty = buildEventInput(
-    { plan: null, episodes: [], people: [], goal: null, needs: { autonomy: 0.6, competence: 0.6 } },
+    {
+      plan: null,
+      episodes: [],
+      people: [],
+      subject: { kind: "everyday" },
+      needs: { autonomy: 0.6, competence: 0.6 },
+    },
     day,
     [],
     now,
     "UTC",
+    140,
   );
   expect(empty).toContain("unknown, keep the event generic");
   expect(empty).toContain("What has happened in her life lately: nothing yet.");
@@ -278,7 +287,13 @@ test("an injected event is the first attempt, spontaneous unless it says otherwi
 
 test("an injected first event does not suppress the selected goal for a later model event", async () => {
   const deps = makeTestDeps({
-    core: { world: { event_probability: 1, events_per_day_max: 2, goal_driven_share: 1 } },
+    core: {
+      world: {
+        event_probability: 1,
+        events_per_day_max: 2,
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+      },
+    },
   });
   const goal = await deps.core.goals.insert({
     title: "Finish her film list",
@@ -328,14 +343,14 @@ test("a planned event carries its thought's embedding; a planned one without a t
   );
 });
 
-test("the generator's prompt is life/event v4, which explains both kinds and the selected goal", async () => {
+test("the generator's prompt is life/event v5, which explains both kinds and the subject", async () => {
   const deps = makeTestDeps(always);
-  expect(deps.config.prompts.life_event).toBe("v4");
+  expect(deps.config.prompts.life_event).toBe("v5");
   await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain("planned");
   expect(call.system).toContain("spontaneous");
-  expect(call.system).toContain("selected active goal");
+  expect(call.system).toContain("one plain sentence");
 });
 
 test("the generator sees only core context: her episodes, her people, her plan", async () => {
@@ -385,7 +400,12 @@ test("with no snapshot yet the generator falls back to the seed self", async () 
 
 test("a selected active goal is assigned by code and shown with current needs", async () => {
   const deps = makeTestDeps({
-    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+    core: {
+      world: {
+        event_probability: 1,
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+      },
+    },
   });
   const id = await deps.core.goals.insert({
     title: "Finish her film list",
@@ -412,7 +432,14 @@ test("a selected active goal is assigned by code and shown with current needs", 
 });
 
 test("the deterministic fake keeps event content stable across selected goals", async () => {
-  const deps = makeTestDeps({ core: { world: { event_probability: 1, goal_driven_share: 1 } } });
+  const deps = makeTestDeps({
+    core: {
+      world: {
+        event_probability: 1,
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+      },
+    },
+  });
   const firstGoal = await deps.core.goals.insert({
     title: "Learn the winter constellations",
     why: "She loves stars",
@@ -459,7 +486,7 @@ test("a reconcile resolution target stays on the accepted event", async () => {
   expect(out.accepted[0]).toMatchObject({ resolvesMemoryId: near!.id });
 });
 
-test("goal selection is seeded, weighted and independent of repository order", () => {
+test("goal subjects are seeded, weighted and independent of repository order", () => {
   const goal = (id: string, progress: number): CoreGoal => ({
     id,
     title: id,
@@ -474,16 +501,61 @@ test("goal selection is seeded, weighted and independent of repository order", (
   });
   const a = goal("a", 0.99);
   const b = goal("b", 0);
-  const force = { ...cfg, goal_driven_share: 1 };
-  expect(selectEventGoal([a, b], day, force)?.id).toBe("b");
-  expect(selectEventGoal([b, a], day, force)?.id).toBe("b");
-  expect(selectEventGoal([a, b], day, { ...force, goal_driven_share: 0 })).toBeNull();
-  expect(selectEventGoal([], day, force)).toBeNull();
-  expect(selectEventGoal([{ ...a, status: "done" }], day, force)).toBeNull();
+  const force = { ...cfg, subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 } };
+  const pick = (goals: CoreGoal[], d = day) =>
+    selectEventSubject({ goals, interests: [], people: [] }, [], d, force);
+  const days = Array.from({ length: 200 }, (_, i) => `${day}#${i}`);
+  const bs = days.filter((d) => subjectKey(pick([a, b], d)) === "goal:b").length;
+  expect(bs).toBeGreaterThan(150); // 1.1 vs 0.11 of the weight
+  expect(days.every((d) => subjectKey(pick([a, b], d)) === subjectKey(pick([b, a], d)))).toBe(true);
+  expect(pick([])).toEqual({ kind: "everyday" });
+  expect(pick([{ ...a, status: "done" }])).toEqual({ kind: "everyday" });
+});
+
+test("a subject used recently is drawn less", () => {
+  const options = { goals: [], interests: [{ id: "i1", content: "old films" }], people: ["Alcor"] };
+  const days = Array.from({ length: 400 }, (_, d) => `2026-01-05#${d}`);
+  const count = (recent: string[]) =>
+    days.filter(
+      (key) => subjectKey(selectEventSubject(options, recent, key, cfg)) === "person:Alcor",
+    ).length;
+  expect(count(["person:Alcor"])).toBeLessThan(count([]));
+});
+
+test("no goals, interests or people still yields an everyday subject", () => {
+  expect(
+    selectEventSubject({ goals: [], interests: [], people: [] }, [], "2026-01-05", cfg),
+  ).toEqual({ kind: "everyday" });
+});
+
+test("the input names the subject and the target length", () => {
+  const input = buildEventInput(
+    {
+      plan: null,
+      episodes: [],
+      people: ["Alcor"],
+      subject: { kind: "person", name: "Alcor" },
+      needs: { autonomy: 0.6, competence: 0.6 },
+    },
+    day,
+    [],
+    now,
+    "UTC",
+    140,
+  );
+  expect(input).toContain("Today's event is about: Alcor");
+  expect(input).toContain("one plain sentence, under 140 characters");
 });
 
 test("injected events have no implicit goal and retain explicit fallthrough overrides", async () => {
-  const deps = makeTestDeps({ core: { world: { goal_driven_share: 1, event_probability: 0 } } });
+  const deps = makeTestDeps({
+    core: {
+      world: {
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+        event_probability: 0,
+      },
+    },
+  });
   await deps.core.goals.insert({
     title: "Read more",
     why: "She loves books",

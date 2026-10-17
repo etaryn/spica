@@ -1,7 +1,7 @@
 /**
  * Her world in Postgres: the shared day plan, the events that happened and the generator's attempts.
  */
-import { and, asc, desc, eq, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { life_event_log, world_event } from "@/db/schema";
 import type { NewLifeDay, World, WorldEventRow } from "@/mind/world/types";
@@ -22,6 +22,7 @@ function toRow(r: typeof world_event.$inferSelect): WorldEventRow {
     created_at: r.created_at,
     appraised_at: r.appraised_at,
     goal_ref: r.goal_ref,
+    subject: r.subject,
     plan_ref: r.plan_ref,
     outcome: r.outcome,
     fallthrough: r.fallthrough,
@@ -87,6 +88,14 @@ export function worldRepo(db: Db): World {
 
     async setGoalRef(id, goalId) {
       await db.update(world_event).set({ goal_ref: goalId }).where(eq(world_event.id, id));
+    },
+
+    async recentSubjects(sinceDay) {
+      const rows = await db
+        .selectDistinct({ subject: world_event.subject })
+        .from(world_event)
+        .where(and(gte(world_event.life_day, sinceDay), isNotNull(world_event.subject)));
+      return rows.map((r) => r.subject!);
     },
 
     async lastHighStakesAt() {

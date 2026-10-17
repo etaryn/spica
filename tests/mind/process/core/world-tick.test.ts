@@ -188,7 +188,12 @@ test("one remaining call cannot accept an event needing reconciliation", async (
 
 test("world events persist the code-selected goal and reconcile target without landing a surprise", async () => {
   const deps = makeTestDeps({
-    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+    core: {
+      world: {
+        event_probability: 1,
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+      },
+    },
     life: { timezone: "UTC" },
   });
   const goal = await deps.core.goals.insert({
@@ -222,14 +227,26 @@ test("world events persist the code-selected goal and reconcile target without l
   deps.llm.handlers.reconcile = sequence({ relation: "resolves", target_fact_id: target });
   await coreWorldTick(coreDepsOf(deps), morning);
   const [event] = await deps.db.select().from(world_event);
-  expect(event).toMatchObject({ goal_ref: goal, resolves_memory_id: target, fallthrough: null });
+  expect(event).toMatchObject({
+    goal_ref: goal,
+    subject: `goal:${goal}`,
+    resolves_memory_id: target,
+    fallthrough: null,
+  });
+  // The subject is drawn less for the next week.
+  expect(await deps.core.world.recentSubjects("2026-01-01")).toEqual([`goal:${goal}`]);
   expect((await memories(deps)).map((memory) => memory.id)).toEqual([target]);
   expect((await deps.core.state.get())!.preoccupation).toBeNull();
 });
 
 test("a goal completed during generation leaves no stale event, intention or entity", async () => {
   const deps = makeTestDeps({
-    core: { world: { event_probability: 1, goal_driven_share: 1 } },
+    core: {
+      world: {
+        event_probability: 1,
+        subject_weights: { goal: 1, interest: 0, person: 0, everyday: 0 },
+      },
+    },
     life: { timezone: "UTC" },
   });
   const goal = await deps.core.goals.insert({

@@ -26,6 +26,7 @@ export type NewWorldEvent = {
   created_at: Date;
   plan_ref?: string | null;
   goal_ref?: string | null;
+  subject?: string | null;
   outcome?: "happened" | "fell_through" | null;
   fallthrough?: boolean | null;
   resolves_memory_id?: string | null;
@@ -69,6 +70,8 @@ export interface World {
   markAppraised(id: string, at: Date): Promise<void>;
   setAgents(id: string, agents: string[]): Promise<void>;
   setGoalRef(id: string, goalId: string): Promise<void>;
+  /** The subjects her events were drawn about since `sinceDay` (inclusive). */
+  recentSubjects(sinceDay: string): Promise<string[]>;
   lastHighStakesAt(): Promise<Date | null>;
   logEventAttempts(attempts: NewEventAttempt[]): Promise<void>;
 }

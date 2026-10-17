@@ -2,7 +2,9 @@
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { core_loop_trace, core_memory } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
-import { coreWander } from "@/mind/process/core/wander";
+import { loadConfig } from "@/mind/platform/config";
+import type { CoreMemoryItem } from "@/mind/memory/core/types";
+import { coreWander, pickCue } from "@/mind/process/core/wander";
 import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -129,10 +131,9 @@ test("one accepted wander stores seed context and leaves core state and source u
   expect(await deps.core.memory.get(id)).toEqual(source);
 });
 
-test("seed pool omits old, unreal, stale, superseded and resolved intentions", async () => {
+test("seed pool omits unreal, stale, superseded and resolved intentions", async () => {
   const { all, deps } = setup();
   await plan(deps);
-  await seed(deps, "too old", { created: before(24 * 8) });
   await seed(deps, "unreal", { kind: "hypothetical" });
   await seed(deps, "stale", { status: "stale" });
   await seed(deps, "superseded", { status: "superseded" });
@@ -346,4 +347,59 @@ test("extra wander items beyond the limit are dropped, not a failed run", async 
   const result = await coreWander(deps, now);
   expect(result.applied).toBe(true);
   expect(result.ids).toHaveLength(max);
+});
+
+const cfg = loadConfig().core.wander;
+const baseItem: CoreMemoryItem = {
+  id: "x",
+  kind: "episode",
+  content: "Spica found an old film.",
+  payload: {},
+  entity_refs: [],
+  occurred_at: now,
+  created_at: now,
+  last_recalled_at: null,
+  status: "resolved",
+  salience: 0.5,
+  valence: 0,
+  depth: 1,
+  source: "world",
+  source_ref: null,
+};
+
+test("a memory her recent wanderings already used is drawn less", () => {
+  const m = (id: string) => ({ ...baseItem, id });
+  const cues = [{ kind: "memory" as const, items: [m("a"), m("b")] }];
+  const rolls = Array.from({ length: 200 }, (_, i) => i / 200);
+  const picks = (used: string[]) =>
+    rolls.filter((r) => pickCue(cues, new Set(used), r, cfg)?.id === "a").length;
+  expect(picks(["a"])).toBeLessThan(picks([]));
+});
+
+test("no cue at all → null (wander skips)", () => {
+  expect(pickCue([], new Set(), 0.5, cfg)).toBeNull();
+});
+
+test("an old memory can start a wandering, and a thought never does", async () => {
+  const { all, deps } = setup();
+  await plan(deps);
+  const old = await seed(deps, "Spica watched Stalker last month.", { created: before(24 * 30) });
+  await deps.core.memory.insert({
+    kind: "thought",
+    content: "the wanting does the work",
+    payload: {},
+    embedding: vec(),
+    entity_refs: [],
+    occurred_at: before(1),
+    created_at: before(1),
+    status: "open",
+    salience: 1,
+    valence: 0.5,
+    confidence: 1,
+    source: "loop",
+    source_ref: "core_wander:t",
+  });
+  expect(await coreWander(deps, now)).toMatchObject({ applied: true });
+  const mine = (await thoughts(all)).filter((t) => t.content !== "the wanting does the work");
+  expect(mine[0]?.payload).toMatchObject({ seed: old });
 });

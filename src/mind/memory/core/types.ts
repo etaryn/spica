@@ -155,8 +155,6 @@ export interface CoreMemory {
     minValence: number,
     maxCount: number,
   ): Promise<CoreMemoryItem | null>;
-  /** Factual history created in [from, to], newest first, then ID; no resolved intentions. */
-  recallable(from: Date, to: Date, limit: number): Promise<CoreMemoryItem[]>;
   mergePayload(id: string, patch: Record<string, unknown>): Promise<void>;
   reinforce(id: string, now: Date, bump: number, cap: number): Promise<void>;
   /**

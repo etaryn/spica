@@ -1,7 +1,13 @@
-/** Wandering associates recent real memories during free time without moving her state. */
+/**
+ * Wandering associates her real memories during free time without moving her state. It starts
+ * from a cue picked in code (an older memory, an interest, or something from today), drawing
+ * less on what her recent wanderings already used.
+ */
 import { z } from "zod";
 import { DepthLabel } from "@/mind/memory/core/depth";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
+import { recallable } from "@/mind/memory/core/retrieve";
+import type { Config } from "@/mind/platform/config";
 import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
@@ -12,7 +18,7 @@ import { lifeDate } from "@/mind/world/her-clock";
 import { budgetDayStart, runCoreLoop } from "./runner";
 import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
 import type { ApplyOutput, ThinkingResult } from "./thoughts";
-import { DAY, HOUR } from "@/mind/platform/time";
+import { HOUR } from "@/mind/platform/time";
 
 const Output = z.object({
   items: z
@@ -47,16 +53,85 @@ async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope },
   return { day, completedToday: today.count };
 }
 
-function pickSeed(pool: CoreMemoryItem[], roll: number, mood: number, bias: number) {
-  const weights = pool.map((item) => item.salience * Math.max(0, 1 + bias * item.valence * mood));
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  if (total === 0) return pool[Math.floor(roll * pool.length)]!;
+type CueKind = "memory" | "interest" | "event";
+type Cue = { kind: CueKind; items: CoreMemoryItem[] };
+
+/**
+ * Where her mind can start: any older memory of hers, an interest, or something that happened
+ * today. Never a thought, so her thoughts don't feed on themselves.
+ */
+async function wanderCues(deps: CoreDeps, now: Date): Promise<Cue[]> {
+  const { core, config } = deps;
+  const limit = config.core.wander.seed_limit;
+  const usable = (m: CoreMemoryItem) => recallable(m) && m.created_at.getTime() <= now.getTime();
+  const memory = (
+    await Promise.all(
+      (["episode", "opinion", "insight"] as const).map((k) => core.memory.activeByKind(k, limit)),
+    )
+  ).flat();
+  const interest = await core.memory.activeByKind("interest", limit);
+  const today = (await core.world.events(lifeDate(config.life, now))).filter(
+    (e) => e.at.getTime() <= now.getTime(),
+  );
+  const event = (
+    await Promise.all(today.map((e) => core.memory.bySourceRef("episode", `world_event:${e.id}`)))
+  ).filter((m): m is CoreMemoryItem => !!m);
+  return [
+    { kind: "memory" as const, items: memory.filter(usable) },
+    { kind: "interest" as const, items: interest.filter(usable) },
+    { kind: "event" as const, items: event.filter(usable) },
+  ].filter((c) => c.items.length);
+}
+
+/**
+ * A kind by weight, then an item by salience and mood-congruence; one her recent wanderings
+ * already used counts less. With every weight zero the pick is uniform; null only with no cue.
+ */
+export function pickCue(
+  cues: Cue[],
+  used: Set<string>,
+  roll: number,
+  cfg: Config["core"]["wander"],
+  mood = 0,
+): CoreMemoryItem | null {
+  const pool = cues
+    .flatMap((c) =>
+      c.items.map((item) => ({
+        item,
+        weight:
+          (cfg.cue_weights[c.kind] / c.items.length) *
+          item.salience *
+          Math.max(0, 1 + cfg.mood_bias * item.valence * mood) *
+          (used.has(item.id) ? cfg.recent_penalty : 1),
+      })),
+    )
+    .sort((a, b) => a.item.id.localeCompare(b.item.id));
+  if (!pool.length) return null;
+  const total = pool.reduce((sum, p) => sum + p.weight, 0);
+  if (total === 0) return pool[Math.floor(roll * pool.length)]!.item;
   let position = roll * total;
-  for (let index = 0; index < pool.length; index++) {
-    position -= weights[index]!;
-    if (position < 0) return pool[index]!;
+  for (const p of pool) {
+    position -= p.weight;
+    if (position < 0) return p.item;
   }
-  return pool.at(-1)!;
+  return pool.at(-1)!.item;
+}
+
+/** The memories her last few wanderings started from or chained through. */
+async function recentlyUsed(deps: CoreDeps, now: Date): Promise<Set<string>> {
+  const recent = await deps.core.memory.recentThoughts(
+    new Date(0),
+    now,
+    deps.config.core.wander.recent_outputs,
+  );
+  return new Set(
+    recent
+      .filter((t) => t.source_ref?.startsWith("core_wander:"))
+      .flatMap((t) => {
+        const p = (t.payload ?? {}) as { seed?: string; chain?: string[] };
+        return [...(p.seed ? [p.seed] : []), ...(p.chain ?? [])];
+      }),
+  );
 }
 
 async function chainFor(deps: CoreDeps, seed: CoreMemoryItem, vector: number[]) {
@@ -89,21 +164,19 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
     return { status: "not_due", applied: false, ids: [] };
   const due = await eligibility(deps, now);
   if (!due) return { status: "not_due", applied: false, ids: [] };
-  const pool = await core.memory.recallable(
-    new Date(now.getTime() - config.core.wander.seed_days * DAY),
-    now,
-    config.core.wander.seed_limit,
-  );
-  if (!pool.length) return { status: "not_due", applied: false, ids: [] };
+  const cues = await wanderCues(deps, now);
+  if (!cues.length) return { status: "not_due", applied: false, ids: [] };
+  const used = await recentlyUsed(deps, now);
 
   const run = await runCoreLoop<ApplyOutput>(deps, "core_wander", now, async (ctx) => {
     const state = await core.state.get();
-    const seed = pickSeed(
-      pool,
+    const seed = pickCue(
+      cues,
+      used,
       seededUnit(`${due.day}:wander:${due.completedToday}`),
+      config.core.wander,
       state?.mood_valence ?? config.core.state.baseline.mood_valence,
-      config.core.wander.mood_bias,
-    );
+    )!;
     const [query] = await ctx.deps.embedder.embed([seed.content], "query");
     if (!query) throw new Error("missing wander seed embedding");
     const chain = await chainFor(ctx.deps, seed, query);

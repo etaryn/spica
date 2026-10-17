@@ -576,9 +576,11 @@ const core = z
     wander: z.object({
       max_per_day: countFromZero,
       min_gap_hours: z.number().positive(),
-      seed_days: positiveInt,
       seed_limit: positiveInt,
       mood_bias: z.number().min(-1).max(1),
+      cue_weights: z.object({ memory: unit, interest: unit, event: unit }),
+      recent_outputs: positiveInt,
+      recent_penalty: unit,
       chain: positiveInt,
       min_similarity: unit,
       max_items: positiveInt,

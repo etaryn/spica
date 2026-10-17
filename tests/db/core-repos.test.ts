@@ -624,32 +624,6 @@ test("malformed payload is ineligible", async () => {
   expect(await memory.ruminationCandidate(atHour(-24), atHour(-2), 0.5, 1)).toBeNull();
 });
 
-test("recall keeps history but excludes unreal and resolved intentions", async () => {
-  const memory = core().memory;
-  for (const item of [
-    { kind: "hypothetical" as const },
-    { kind: "intention" as const },
-    { status: "stale" as const },
-    { status: "superseded" as const },
-    { created_at: atHour(-2) },
-    { created_at: atHour(1) },
-  ])
-    await memory.insert({ ...episode("excluded", 0.01, now), ...item });
-  const entities = await memory.addEntities(["Alcor"], 0.5, now);
-  const old = await memory.insert({
-    ...episode("history", 0.01, atHour(-1)),
-    entity_refs: entities,
-  });
-  const newest = [];
-  for (let i = 0; i < 2; i++)
-    newest.push(await memory.insert(intention("open", "open", now, null)));
-  newest.sort();
-  expect((await memory.recallable(atHour(-1), now, 3)).map((m) => m.id)).toEqual([...newest, old]);
-  expect((await memory.recallable(atHour(-1), now, 1)).map((m) => m.id)).toEqual([newest[0]]);
-  expect((await memory.get(old))?.entity_refs).toEqual(entities);
-  expect((await memory.recallable(atHour(-1), now, 3))[2]?.entity_refs).toEqual(entities);
-});
-
 test("dedupe can see hypotheticals while factual near retains resolved intention history", async () => {
   const memory = core().memory;
   const imagined = await memory.insert({ ...episode("imagined", 0.01, now), kind: "hypothetical" });

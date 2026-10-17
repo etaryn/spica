@@ -333,24 +333,6 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       return row ? toItem(row) : null;
     },
 
-    async recallable(from, to, limit) {
-      const rows = await db
-        .select()
-        .from(core_memory)
-        .where(
-          and(
-            ACTIVE,
-            gte(core_memory.created_at, from),
-            lte(core_memory.created_at, to),
-            sql`${core_memory.kind} <> 'hypothetical'`,
-            sql`NOT (${core_memory.kind} = 'intention' AND ${core_memory.status} = 'resolved')`,
-          ),
-        )
-        .orderBy(desc(core_memory.created_at), core_memory.id)
-        .limit(limit);
-      return rows.map(toItem);
-    },
-
     async mergePayload(id, patch) {
       await db
         .update(core_memory)

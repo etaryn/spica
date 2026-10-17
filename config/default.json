@@ -523,9 +523,11 @@
     "wander": {
       "max_per_day": 2,
       "min_gap_hours": 3,
-      "seed_days": 7,
       "seed_limit": 50,
       "mood_bias": 0.5,
+      "cue_weights": { "memory": 0.4, "interest": 0.2, "event": 0.25 },
+      "recent_outputs": 10,
+      "recent_penalty": 0.2,
       "chain": 3,
       "min_similarity": 0.3,
       "max_items": 2

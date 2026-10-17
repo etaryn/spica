@@ -23,7 +23,7 @@ test("nothing eligible → no candidates, no winner", () => {
   expect(pickWinner([])).toBeNull();
 });
 
-test("due thread: high/med only, strength by stakes, topic includes the checkpoint", () => {
+test("due thread: high/med only, strength by stakes, topic keys on none with no fact about them", () => {
   const i = empty();
   const cp = new Date("2026-01-10T09:00:00Z");
   i.dueThreads = [
@@ -35,6 +35,7 @@ test("due thread: high/med only, strength by stakes, topic includes the checkpoi
       next_checkpoint: cp,
       fact_id: "f1",
       sensitive: false,
+      facts: [],
     },
     {
       id: "t2",
@@ -44,12 +45,13 @@ test("due thread: high/med only, strength by stakes, topic includes the checkpoi
       next_checkpoint: cp,
       fact_id: null,
       sensitive: false,
+      facts: [],
     },
   ];
   const [c] = buildCandidates(i, cfg, now);
   expect(c).toMatchObject({
     kind: "thread",
-    topic: `thread:t1@${cp.toISOString()}`,
+    topic: "thread:t1@none",
     strength: 1,
     score: 1,
     factId: "f1",
@@ -99,9 +101,27 @@ test("check-in: eligible only past gap_factor × median gap; strength grows with
 test("sensitive and used topics are kept but filtered; below threshold is filtered", () => {
   const i = empty();
   i.userEvents = [
-    { id: "e1", content: "The user had a hospital appointment.", salience: 0.9, sensitive: true },
-    { id: "e2", content: "The user ran a half marathon.", salience: 0.6, sensitive: false },
-    { id: "e3", content: "The user bought socks.", salience: 0.1, sensitive: false },
+    {
+      id: "e1",
+      content: "The user had a hospital appointment.",
+      salience: 0.9,
+      sensitive: true,
+      occurred_at: null,
+    },
+    {
+      id: "e2",
+      content: "The user ran a half marathon.",
+      salience: 0.6,
+      sensitive: false,
+      occurred_at: null,
+    },
+    {
+      id: "e3",
+      content: "The user bought socks.",
+      salience: 0.1,
+      sensitive: false,
+      occurred_at: null,
+    },
   ];
   i.usedTopics = ["fact:e2"];
   const cands = buildCandidates(i, cfg, now);
@@ -115,7 +135,7 @@ test("sensitive and used topics are kept but filtered; below threshold is filter
 
 test("winner is the highest score; ties break by kind order, then topic", () => {
   const i = empty();
-  i.userEvents = [{ id: "u", content: "x", salience: 0.75, sensitive: false }]; // 0.8 × 0.75 = 0.6
+  i.userEvents = [{ id: "u", content: "x", salience: 0.75, sensitive: false, occurred_at: null }]; // 0.8 × 0.75 = 0.6
   i.herDay = [{ id: "s", content: "y", salience: 1, depth: 1, sensitive: false }]; // 0.6 × 1   = 0.6
   expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("user_event");
   i.herDay[0]!.salience = 1;
@@ -134,7 +154,9 @@ test("her day is her own core memory: topic core:<id>, coreMemoryId set, never a
       sensitive: false,
     },
   ];
-  i.userEvents = [{ id: "m1", content: "The user ran.", salience: 0.6, sensitive: false }];
+  i.userEvents = [
+    { id: "m1", content: "The user ran.", salience: 0.6, sensitive: false, occurred_at: null },
+  ];
   const cands = buildCandidates(i, cfg, now);
   expect(cands.find((c) => c.kind === "her_day")).toMatchObject({
     topic: "core:m1",
@@ -196,4 +218,77 @@ test("her own memory deeper than their usual limit is never offered", () => {
   expect(pickWinner(cands)).toBeNull();
   i.depthLimit = 3;
   expect(buildCandidates(i, cfg, now).every((c) => c.filtered === null)).toBe(true);
+});
+
+test("a thread's topic is keyed on its newest fact about them, and carries dated notes", () => {
+  const i = empty();
+  const cp = new Date("2026-01-10T09:00:00Z");
+  i.dueThreads = [
+    {
+      id: "t1",
+      title: "half marathon",
+      detail: null,
+      stakes: "med",
+      next_checkpoint: cp,
+      fact_id: "f9",
+      sensitive: false,
+      facts: [
+        {
+          id: "f2",
+          content: "The user is running a half marathon on Sunday.",
+          at: new Date("2026-01-11T09:00:00Z"),
+          dated: true,
+        },
+        {
+          id: "f1",
+          content: "The user is training.",
+          at: new Date("2026-01-05T10:00:00Z"),
+          dated: false,
+        },
+      ],
+    },
+  ];
+  const [c] = buildCandidates(i, cfg, now);
+  expect(c!.topic).toBe("thread:t1@f2");
+  expect(c!.notes).toEqual([
+    {
+      text: "The user is running a half marathon on Sunday.",
+      at: "2026-01-11T09:00:00.000Z",
+      dated: true,
+    },
+    { text: "The user is training.", at: "2026-01-05T10:00:00.000Z", dated: false },
+  ]);
+});
+
+test("a thread with no fact about them keys on none", () => {
+  const i = empty();
+  i.dueThreads = [
+    {
+      id: "t1",
+      title: "x",
+      detail: null,
+      stakes: "high",
+      next_checkpoint: now,
+      fact_id: null,
+      sensitive: false,
+      facts: [],
+    },
+  ];
+  expect(buildCandidates(i, cfg, now)[0]!.topic).toBe("thread:t1@none");
+});
+
+test("a user event carries its date", () => {
+  const i = empty();
+  i.userEvents = [
+    {
+      id: "f1",
+      content: "Sister visits.",
+      salience: 0.6,
+      sensitive: false,
+      occurred_at: new Date("2026-01-09T12:00:00Z"),
+    },
+  ];
+  expect(buildCandidates(i, cfg, now)[0]!.notes).toEqual([
+    { text: "Sister visits.", at: "2026-01-09T12:00:00.000Z", dated: true },
+  ]);
 });

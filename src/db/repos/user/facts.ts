@@ -350,13 +350,20 @@ export async function listOnboardingFacts(
     .orderBy(asc(fact.created_at));
 }
 
-export type OutreachFact = { id: string; content: string; salience: number; sensitive: boolean };
+export type OutreachFact = {
+  id: string;
+  content: string;
+  salience: number;
+  sensitive: boolean;
+  occurred_at: Date | null;
+};
 const sensitiveCol = sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`;
 const outreachCols = {
   id: fact.id,
   content: fact.content,
   salience: fact.salience,
   sensitive: sensitiveCol,
+  occurred_at: fact.occurred_at,
 };
 
 /**

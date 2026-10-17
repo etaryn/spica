@@ -645,6 +645,7 @@
       "check_in": 0.5
     },
     "stakes_strength": { "high": 1.0, "med": 0.6 },
+    "reason_facts": 3,
     "user_event_lookback_hours": 72,
     "her_day_lookback_hours": 24,
     "core_thought_lookback_hours": 24,

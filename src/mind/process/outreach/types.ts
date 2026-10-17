@@ -18,6 +18,9 @@ export type CandidateKind = (typeof KIND_ORDER)[number];
 
 export type FilterReason = "topic_used" | "sensitive" | "too_deep" | "below_threshold";
 
+/** Something she knows behind a topic and when it happens (ISO); `dated` when the date is real. */
+export type Note = { text: string; at: string; dated: boolean };
+
 export type Candidate = {
   kind: CandidateKind;
   /** Identifies the topic, so each topic is used at most once. */
@@ -31,6 +34,8 @@ export type Candidate = {
   threadId: string | null;
   /** Her memory's depth (1–3) for a her_day or core_thought; absent otherwise. */
   depth?: number | null;
+  /** What she knows behind the topic, each with when; rendered in her words at compose time. */
+  notes: Note[];
   /** Why it can't win; null when it can. */
   filtered: FilterReason | null;
 };
@@ -44,6 +49,8 @@ export type CandidateInputs = {
     next_checkpoint: Date;
     fact_id: string | null;
     sensitive: boolean;
+    /** Live facts about them on the thread, newest first; `at` is occurred_at else created_at. */
+    facts: { id: string; content: string; at: Date; dated: boolean }[];
   }[];
   makeUp: {
     due: boolean;
@@ -52,7 +59,13 @@ export type CandidateInputs = {
     causeText: string | null;
     lastHurtAt: Date | null;
   };
-  userEvents: { id: string; content: string; salience: number; sensitive: boolean }[];
+  userEvents: {
+    id: string;
+    content: string;
+    salience: number;
+    sensitive: boolean;
+    occurred_at: Date | null;
+  }[];
   herDay: { id: string; content: string; salience: number; depth: number; sensitive: boolean }[];
   /** Her own recent thoughts and ideas (core memory, never sensitive). */
   coreThoughts: { id: string; content: string; salience: number; depth: number }[];

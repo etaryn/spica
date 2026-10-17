@@ -1,10 +1,10 @@
 /**
  * One user's threads: ongoing storylines with checkpoints and stakes, and which ones are due.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
-import { thread, threadStakes } from "@/db/schema";
+import { fact, thread, threadStakes } from "@/db/schema";
 import { normalizeName } from "./entities";
 import { one, toDate } from "@/db/repos/util";
 
@@ -161,4 +161,27 @@ export async function dueThreads(
     stakes: r.stakes as DueThread["stakes"],
     sensitive: r.sensitive === true,
   }));
+}
+
+/** The live facts about them on a thread, newest first: what she knows behind a follow-up. */
+export async function threadUserFacts(db: Db, userId: string, threadId: string, limit: number) {
+  return db
+    .select({
+      id: fact.id,
+      content: fact.content,
+      occurred_at: fact.occurred_at,
+      created_at: fact.created_at,
+    })
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.thread_id, threadId),
+        eq(fact.subject, "user"),
+        eq(fact.scope, "private"),
+        notInArray(fact.status, ["superseded", "stale"]),
+      ),
+    )
+    .orderBy(desc(fact.created_at))
+    .limit(limit);
 }

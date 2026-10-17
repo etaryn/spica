@@ -11,7 +11,7 @@ import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
 import { liveIdeas } from "@/db/repos/user/user-mind";
-import { dueThreads } from "@/db/repos/user/threads";
+import { dueThreads, threadUserFacts } from "@/db/repos/user/threads";
 import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
 import type { Deps } from "@/mind/platform/deps";
@@ -81,15 +81,23 @@ export async function loadCandidateInputs(
   ).map((f) => ({ id: f.id, content: f.content, salience: f.salience }));
 
   return {
-    dueThreads: due.map((thread) => ({
-      id: thread.id,
-      title: thread.title,
-      detail: thread.content,
-      stakes: thread.stakes,
-      next_checkpoint: thread.next_checkpoint,
-      fact_id: thread.fact_id,
-      sensitive: thread.sensitive,
-    })),
+    dueThreads: await Promise.all(
+      due.map(async (thread) => ({
+        id: thread.id,
+        title: thread.title,
+        detail: thread.content,
+        stakes: thread.stakes,
+        next_checkpoint: thread.next_checkpoint,
+        fact_id: thread.fact_id,
+        sensitive: thread.sensitive,
+        facts: (await threadUserFacts(db, userId, thread.id, settings.reason_facts)).map((f) => ({
+          id: f.id,
+          content: f.content,
+          at: f.occurred_at ?? f.created_at,
+          dated: f.occurred_at !== null,
+        })),
+      })),
+    ),
     makeUp: {
       // While their "we're done" is pending she lets go: writing first to make up would be
       // pressure to stay.

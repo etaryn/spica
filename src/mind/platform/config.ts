@@ -656,6 +656,7 @@ const outreach = z.object({
     check_in: unit,
   }),
   stakes_strength: z.object({ high: unit, med: unit }),
+  reason_facts: positiveInt,
   user_event_lookback_hours: z.number().positive(),
   her_day_lookback_hours: z.number().positive(),
   core_thought_lookback_hours: z.number().positive(),

@@ -1,14 +1,23 @@
 /**
  * Reach-out candidates: every reason she might write first, each scored in code as weight ×
  * strength. A candidate is filtered out when its topic was already used, when it's sensitive, or
- * when it scores under the threshold. Pure. Sorted best first (score, then kind order, then
+ * when it scores under the threshold. A thread's topic is keyed on their newest fact on it, so it
+ * goes out once until they bring it up again; candidates carry dated notes for the reason line.
+ * Pure. Sorted best first (score, then kind order, then
  * topic), with filtered candidates kept so the log shows them too.
  */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";
-import { KIND_ORDER, type Candidate, type CandidateInputs, type FilterReason } from "./types";
+import {
+  KIND_ORDER,
+  type Candidate,
+  type CandidateInputs,
+  type FilterReason,
+  type Note,
+} from "./types";
 
-type RawCandidate = Omit<Candidate, "score" | "filtered"> & {
+type RawCandidate = Omit<Candidate, "score" | "filtered" | "notes"> & {
+  notes?: Note[];
   sensitive: boolean;
   tooDeep?: boolean;
 };
@@ -24,16 +33,20 @@ export function buildCandidates(
 
   for (const thread of inputs.dueThreads) {
     if (thread.stakes !== "high" && thread.stakes !== "med") continue;
+    const facts = thread.facts.slice(0, settings.reason_facts);
 
     raw.push({
       kind: "thread",
-      topic: `thread:${thread.id}@${thread.next_checkpoint.toISOString()}`,
+      // Keyed on what they last said about it: her own reach-out adds nothing about them, so the
+      // thread goes out once until they bring it up again.
+      topic: `thread:${thread.id}@${facts[0]?.id ?? "none"}`,
       text: thread.detail ? `${thread.title} (latest: ${thread.detail})` : thread.title,
       strength: settings.stakes_strength[thread.stakes],
       factId: thread.fact_id,
       coreMemoryId: null,
       threadId: thread.id,
       sensitive: thread.sensitive,
+      notes: facts.map((f) => ({ text: f.content, at: f.at.toISOString(), dated: f.dated })),
     });
     if (thread.fact_id) claimedFacts.add(thread.fact_id);
   }
@@ -53,6 +66,9 @@ export function buildCandidates(
       coreMemoryId: null,
       threadId: null,
       sensitive: memory.sensitive,
+      notes: memory.occurred_at
+        ? [{ text: memory.content, at: memory.occurred_at.toISOString(), dated: true }]
+        : [],
     });
   }
   for (const memory of inputs.herDay) {
@@ -102,7 +118,7 @@ export function buildCandidates(
 
   const usedTopics = new Set(inputs.usedTopics);
   return raw
-    .map(({ sensitive, tooDeep, ...candidate }): Candidate => {
+    .map(({ sensitive, tooDeep, notes, ...candidate }): Candidate => {
       const score = settings.weights[candidate.kind] * candidate.strength;
       const filtered = filterReason(
         candidate.topic,
@@ -112,7 +128,7 @@ export function buildCandidates(
         usedTopics,
         settings,
       );
-      return { ...candidate, score, filtered };
+      return { ...candidate, notes: notes ?? [], score, filtered };
     })
     .sort(
       (a, b) =>

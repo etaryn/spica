@@ -306,6 +306,30 @@ describe("threads", () => {
   });
 });
 
+describe("thread facts", () => {
+  test("threadUserFacts: their live facts on the thread, newest first", async () => {
+    const u = await createTestUser();
+    const t = await threads.insertThread(
+      db(),
+      u,
+      { title: "half marathon", subject: "user", stakes: "med", next_checkpoint: T0 },
+      T0,
+    );
+    const older = await fact(u, "The user is training.", ax(1), { thread_id: t.id });
+    const newer = await fact(u, "The user runs on Sunday.", ax(2), {
+      thread_id: t.id,
+      created_at: new Date("2026-01-06T09:00:00Z"),
+      occurred_at: new Date("2026-01-11T09:00:00Z"),
+    });
+    await fact(u, "Spica said she'd cheer.", ax(3), { thread_id: t.id, subject: "self" });
+    await fact(u, "Old plan.", ax(4), { thread_id: t.id, status: "superseded" });
+    const got = await threads.threadUserFacts(db(), u, t.id, 5);
+    expect(got.map((f) => f.id)).toEqual([newer.id, older.id]);
+    expect(got[0]!.occurred_at).toEqual(new Date("2026-01-11T09:00:00Z"));
+    expect(await threads.threadUserFacts(db(), u, t.id, 1)).toHaveLength(1);
+  });
+});
+
 describe("summary facts", () => {
   test("summary facts are invisible to retrieval, reconcile and decay", async () => {
     const u = await createTestUser();

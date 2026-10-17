@@ -25,6 +25,10 @@ export type GuardInput = {
   ownContext?: string[];
   /** Her pointed remarks already used on this occasion; absent for crisis replies. */
   usedOnOccasion?: Pointed[];
+  /** Her local date and time, so "how did it go" about something dated earlier isn't presuming. */
+  now?: string;
+  /** A reach-out's reason, with dates. */
+  reachOutReason?: string;
 };
 
 export type Violation = { category: Category; claim: string };
@@ -79,10 +83,12 @@ export function renderGuardInput(input: GuardInput): string {
     : [];
 
   return [
+    ...(input.now ? [`NOW: ${input.now}`] : []),
     `KNOWN FROM THE PROFILE CARD (filled in at sign-up, never discussed in conversation):\n${onboarding}`,
     `WHAT SPICA REMEMBERS FROM EARLIER CONVERSATIONS:\n${remembered}`,
     `RECENT CONVERSATION (oldest first):\n${turns || "(no earlier messages)"}`,
     ...occasion,
+    ...(input.reachOutReason ? [`WHY SPICA IS WRITING FIRST:\n${input.reachOutReason}`] : []),
     `${MESSAGE_MARKER}${input.text}`,
   ].join("\n\n");
 }

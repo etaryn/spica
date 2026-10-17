@@ -531,6 +531,12 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
       usedOnOccasion: await occasion,
+      now: new Intl.DateTimeFormat("en-GB", {
+        timeZone: lifeTimezone(config.life, clock.now()),
+        dateStyle: "full",
+        timeStyle: "short",
+      }).format(clock.now()),
+      ...(reachOutText ? { reachOutReason: reachOutText.reason } : {}),
     },
   });
 

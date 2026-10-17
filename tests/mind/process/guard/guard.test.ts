@@ -120,7 +120,7 @@ describe("checkMessage", () => {
       source: "model",
       violations: [],
       reasoning: "plain congratulations",
-      promptVersion: "guard@v3",
+      promptVersion: "guard@v4",
     });
     const bad = await checkMessage(d, input("what's the role again? remind me"));
     expect(bad).toMatchObject({
@@ -196,4 +196,19 @@ test("checkMessage returns the self claims the guard listed; missing claims read
 
   d.llm.handlers.guard = () => ({ reasoning: "ok", violations: [] });
   expect((await checkMessage(d, input("hey"))).selfClaims).toEqual([]);
+});
+
+test("renderGuardInput: NOW first, and a reach-out's reason before the message", () => {
+  const text = renderGuardInput({
+    kind: "reach_out",
+    text: "how did thursday go?",
+    recentTurns: [],
+    recalledFacts: [],
+    onboardingFacts: [],
+    now: "Thursday 8 January 2026, 19:12",
+    reachOutReason: "job interview\n- The user has a job interview. (Thursday 8 January, today)",
+  });
+  expect(text.startsWith("NOW: Thursday 8 January 2026, 19:12")).toBe(true);
+  expect(text).toContain("WHY SPICA IS WRITING FIRST:\njob interview");
+  expect(text.indexOf("WHY SPICA")).toBeLessThan(text.indexOf("MESSAGE TO CHECK"));
 });

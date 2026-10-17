@@ -123,6 +123,7 @@ export function buildCandidates(
   if (checkIn) raw.push(checkIn);
 
   const usedTopics = new Set(inputs.usedTopics);
+  const threshold = herThreshold(inputs.theirRate, settings);
   return raw
     .map(({ sensitive, tooDeep, notes, ...candidate }): Candidate => {
       const score = settings.weights[candidate.kind] * candidate.strength;
@@ -132,7 +133,7 @@ export function buildCandidates(
         tooDeep ?? false,
         score,
         usedTopics,
-        settings,
+        threshold,
       );
       return { ...candidate, notes: notes ?? [], score, filtered };
     })
@@ -191,16 +192,28 @@ function filterReason(
   tooDeep: boolean,
   score: number,
   usedTopics: Set<string>,
-  settings: OutreachConfig,
+  threshold: number,
 ): FilterReason | null {
   if (sensitive) return "sensitive";
   if (tooDeep) return "too_deep";
   if (usedTopics.has(topic)) return "topic_used";
-  if (score < settings.threshold) return "below_threshold";
+  if (score < threshold) return "below_threshold";
   return null;
 }
 
 /** The best candidate that isn't filtered out, or none. */
+/**
+ * How readily she writes first to this person. Her own chattiness moves part-way toward how much
+ * she thinks they text, once she has a sense of it; the caps and gates still apply.
+ */
+export function herThreshold(theirRate: number | null, settings: OutreachConfig): number {
+  if (theirRate === null) return settings.threshold;
+  const { default: base, toward_them, scale_min, scale_max } = settings.her_rate;
+  const hers = base + toward_them * (theirRate - base);
+  const scale = Math.min(scale_max, Math.max(scale_min, hers / base));
+  return settings.threshold / scale;
+}
+
 export function pickWinner(candidates: Candidate[]): Candidate | null {
   return candidates.find((c) => c.filtered === null) ?? null;
 }

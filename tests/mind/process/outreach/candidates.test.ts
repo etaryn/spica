@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { buildCandidates, pickWinner } from "@/mind/process/outreach/candidates";
+import { buildCandidates, herThreshold, pickWinner } from "@/mind/process/outreach/candidates";
 import type { CandidateInputs } from "@/mind/process/outreach/types";
 
 const cfg = loadConfig().outreach;
@@ -16,6 +16,7 @@ const empty = (): CandidateInputs => ({
   checkIn: { lastContact: null, medianGapHours: 24 },
   usedTopics: [],
   depthLimit: 3,
+  theirRate: null,
 });
 
 test("nothing eligible → no candidates, no winner", () => {
@@ -338,4 +339,22 @@ test("her news beats an idea but never their thread", () => {
     },
   ];
   expect(pickWinner(buildCandidates(i, cfg, now))!.kind).toBe("thread");
+});
+
+test("her rate scales the bar: none before an estimate, lower for a chatty friend, higher for a quiet one", () => {
+  expect(herThreshold(null, cfg)).toBe(cfg.threshold);
+  // default 4, halfway to 12 → 8 → bar / 2
+  expect(herThreshold(12, cfg)).toBeCloseTo(cfg.threshold / 2);
+  // halfway to 1 → 2.5 → bar × 1.6
+  expect(herThreshold(1, cfg)).toBeCloseTo(cfg.threshold * 1.6);
+  // clamped at ×2
+  expect(herThreshold(0, cfg)).toBeCloseTo(cfg.threshold * 2);
+});
+
+test("a quiet friend's raised bar filters a candidate the default bar lets through", () => {
+  const i = empty();
+  i.userIdeas = [{ id: "i", content: "z", salience: 0.5 }]; // 0.6 × 0.5 = 0.3
+  expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("user_idea");
+  i.theirRate = 0; // bar × 2 = 0.4
+  expect(buildCandidates(i, cfg, now)[0]!.filtered).toBe("below_threshold");
 });

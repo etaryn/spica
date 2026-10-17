@@ -83,6 +83,8 @@ export type CandidateInputs = {
   usedTopics: string[];
   /** The deepest of her own tiers she'd bring up unprompted with them: no stretch when writing first. */
   depthLimit: number;
+  /** Her estimate of how many messages a day they send; null until she has one. */
+  theirRate: number | null;
 };
 
 export type GateRule = "status" | "caps" | "her_day" | "unanswered" | "in_progress" | "crisis";

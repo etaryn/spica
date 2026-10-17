@@ -665,6 +665,14 @@ const outreach = z.object({
   user_idea_limit: positiveInt,
   check_in_gap_factor: z.number().positive(),
   jitter_max_minutes: nonNegative,
+  her_rate: z
+    .object({
+      default: z.number().positive(),
+      toward_them: unit,
+      scale_min: z.number().positive(),
+      scale_max: z.number().positive(),
+    })
+    .refine((r) => r.scale_min <= 1 && r.scale_max >= 1, "her_rate scale must span 1"),
   due_threads_limit: positiveInt,
   her_day_limit: positiveInt,
   pending_max_age_minutes: z.number().positive(),

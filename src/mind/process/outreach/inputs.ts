@@ -18,7 +18,7 @@ import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
 import { loadDepth } from "@/mind/state/user/relationship/depth";
-import { faded } from "@/mind/state/user/relationship/params";
+import { faded, rateEstimated } from "@/mind/state/user/relationship/params";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import type { CandidateInputs, GateInputs } from "./types";
 
@@ -124,6 +124,10 @@ export async function loadCandidateInputs(
     },
     usedTopics: await usedTopics(db, userId),
     depthLimit,
+    theirRate:
+      params && rateEstimated(params.msgs_per_day, config.relationship)
+        ? params.msgs_per_day.baseline
+        : null,
   };
 }
 

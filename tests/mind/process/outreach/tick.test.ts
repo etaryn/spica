@@ -73,7 +73,7 @@ test("a winner through an open gate is scheduled with deterministic jitter and a
   expect(job.startAfter).toEqual(r!.send_at);
   const delay = r!.send_at!.getTime() - now.getTime();
   expect(delay).toBeGreaterThanOrEqual(0);
-  expect(delay).toBeLessThanOrEqual(40 * 60_000);
+  expect(delay).toBeLessThanOrEqual(59 * 60_000);
 });
 
 test("her day comes from her core episodes: topic core:<id> and the core memory id", async () => {

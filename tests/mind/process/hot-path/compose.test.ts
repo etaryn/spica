@@ -636,7 +636,7 @@ describe("composeReachOut", () => {
     expect(prompt.system).toContain("On your mind: interview at Canva");
     expect(prompt.system).toContain("how it went");
     expect(prompt.messages.at(-1)!.content).toContain(
-      "[You're texting them first. Write only your message.]",
+      "[You're texting them first, about: interview at Canva. Write only your message.]",
     );
     expect(spy.mock.calls[0]![0]).toEqual(["interview at Canva"]);
     expect(out.parts.length).toBeGreaterThan(0);
@@ -679,15 +679,44 @@ describe("composeReachOut", () => {
   });
 
   test("renderReachOut: check-in has no topic text", () => {
-    const r = renderReachOut(loadPrompt("reach-out", "v2"), {
-      kind: "check_in",
-      text: "",
-      factId: null,
-      threadId: null,
-      coreMemoryId: null,
-    });
+    const r = renderReachOut(
+      loadPrompt("reach-out", "v3"),
+      { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
+      new Date("2026-01-12T10:00:00Z"),
+      "UTC",
+    );
     expect(r.slot).toContain("On your mind: just saying hi");
     expect(r.slot).not.toContain("{{");
+  });
+
+  test("renderReachOut: the reason carries dated notes, and the cue repeats the topic", () => {
+    const r = renderReachOut(
+      loadPrompt("reach-out", "v3"),
+      {
+        kind: "thread",
+        text: "half marathon",
+        factId: null,
+        threadId: "t1",
+        coreMemoryId: null,
+        notes: [
+          {
+            text: "The user is running a half marathon on Sunday.",
+            at: "2026-01-11T09:00:00.000Z",
+            dated: true,
+          },
+          { text: "The user is training.", at: "2026-01-05T10:00:00.000Z", dated: false },
+        ],
+      },
+      new Date("2026-01-12T10:00:00Z"),
+      "UTC",
+    );
+    expect(r.reason).toContain(
+      "The user is running a half marathon on Sunday. (Sunday 11 January, yesterday)",
+    );
+    expect(r.reason).toContain("The user is training. (they told you 7 days ago)");
+    expect(r.slot).toContain(r.reason);
+    expect(r.slot).toContain("not about your last conversation");
+    expect(r.cue).toContain("about: half marathon");
   });
 
   test("I1: a reach-out prompt never carries sensitive threads or facts; a normal reply still does", async () => {

@@ -33,7 +33,8 @@ import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
-import type { Candidate } from "@/mind/process/outreach/types";
+import type { Candidate, Note } from "@/mind/process/outreach/types";
+import { dayInWords, relativeDate } from "@/mind/platform/relative-date";
 import { ideaCutoff } from "@/mind/process/user/ideate";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
@@ -88,7 +89,7 @@ export type Composed = {
 export type ReachOutTrigger = Pick<
   Candidate,
   "kind" | "text" | "factId" | "threadId" | "coreMemoryId"
->;
+> & { notes?: Note[] };
 
 type ComposeInput = {
   recent: Turn[];
@@ -177,19 +178,37 @@ export async function composeReachOut(
   });
 }
 
-/** Fills the reach-out prompt file's `slot` and `cue` with this trigger's topic and guidance. */
+/**
+ * Fills the reach-out prompt file's `slot` and `cue`: the topic with what she knows behind it,
+ * each dated in her words, so a past event never reads as upcoming. The cue repeats the topic,
+ * since it is the last thing she reads.
+ */
 export function renderReachOut(
   markdown: string,
   trigger: ReachOutTrigger,
-): { slot: string; cue: string } {
+  now: Date,
+  tz: string,
+): { slot: string; cue: string; reason: string } {
   const phrases = parseSummaryPhrases(markdown);
   const topic = trigger.text || "just saying hi";
+  // A row logged before notes existed has none.
+  const notes = (trigger.notes ?? []).map((n) => {
+    const at = new Date(n.at);
+    const when = n.dated ? dayInWords(at, now, tz) : `they told you ${relativeDate(at, now, tz)}`;
+    return `- ${n.text} (${when})`;
+  });
+  const reason = notes.length ? `${topic}\n${notes.join("\n")}` : topic;
   const guidance = (phrases[trigger.kind] ?? []).join(" ");
-
-  const slot = (phrases.slot ?? [])
-    .map((line) => line.replace("{{topic}}", () => topic).replace("{{guidance}}", () => guidance))
-    .join("\n");
-  return { slot, cue: (phrases.cue ?? []).join(" ") };
+  const fill = (line: string) =>
+    line
+      .replace("{{reason}}", () => reason)
+      .replace("{{topic}}", () => topic)
+      .replace("{{guidance}}", () => guidance);
+  return {
+    slot: (phrases.slot ?? []).map(fill).join("\n"),
+    cue: (phrases.cue ?? []).map(fill).join(" "),
+    reason,
+  };
 }
 
 /**
@@ -447,6 +466,14 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const mustAnswer =
     input.openQuestions.length > 0 || input.answering.some((t) => t.text.trim().endsWith("?"));
 
+  const reachOutText = input.reachOut
+    ? renderReachOut(
+        loadPrompt("reach-out", config.prompts.reach_out),
+        input.reachOut,
+        clock.now(),
+        lifeTimezone(config.life, clock.now()),
+      )
+    : null;
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     // The snapshot never stretches: only her memories can be drawn out as a hint.
@@ -474,9 +501,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     howToText: inCrisis
       ? null
       : howToText({ shape, move, mustAnswer }, loadHowToTextPhrases(config)),
-    reachOut: input.reachOut
-      ? renderReachOut(loadPrompt("reach-out", config.prompts.reach_out), input.reachOut)
-      : null,
+    reachOut: reachOutText ? { slot: reachOutText.slot, cue: reachOutText.cue } : null,
   });
 
   let firstDraft: string;

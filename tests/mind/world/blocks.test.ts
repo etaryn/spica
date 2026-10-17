@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertLifeDay } from "@/db/repos/world/life-day";
 import { loadConfig } from "@/mind/platform/config";
-import { blockAt, blockByKey, blocksForDay, todaysBlocks } from "@/mind/world/blocks";
+import { blockAt, blockByKey, blocksForDay, joinNight, todaysBlocks } from "@/mind/world/blocks";
 import { closeTestDb, resetDb } from "../../helpers/db";
 import { makeTestDeps } from "../../helpers/deps";
 
@@ -48,4 +48,45 @@ test("reads today's plan and finds a block by key; an unknown key is null", asyn
   expect((await blockByKey(deps, "2026-01-05#10:00"))?.label).toBe("reading");
   expect(await blockByKey(deps, "2026-01-05#11:11")).toBeNull();
   expect(await blockByKey(deps, "not-a-key")).toBeNull();
+});
+
+const night = (start: string, end: string) => ({
+  start,
+  end,
+  kind: "quiet" as const,
+  busy: 0.9,
+  label: "offline, winding down",
+});
+
+test("a quiet block ending at midnight runs on into tomorrow's from 00:00", () => {
+  const today = blocksForDay(cfg, "2026-01-05", { blocks: [night("22:00", "24:00")] });
+  const tomorrow = blocksForDay(cfg, "2026-01-06", { blocks: [night("00:00", "07:30")] });
+  const [b] = joinNight(today, tomorrow);
+  expect(b!.key).toBe("2026-01-05#22:00");
+  expect(b!.end.toISOString()).toBe("2026-01-06T07:30:00.000Z");
+});
+
+test("no plan for tomorrow leaves midnight as the end", () => {
+  const today = blocksForDay(cfg, "2026-01-05", { blocks: [night("22:00", "24:00")] });
+  expect(joinNight(today, [])[0]!.end.toISOString()).toBe("2026-01-06T00:00:00.000Z");
+});
+
+test("todaysBlocks reads tomorrow to join the night", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  const at = new Date("2026-01-05T23:50:00Z");
+  for (const [date, blocks] of [
+    ["2026-01-05", [night("22:00", "24:00")]],
+    ["2026-01-06", [night("00:00", "07:30")]],
+  ] as const) {
+    await insertLifeDay(deps.db, {
+      date,
+      plan: { blocks: [...blocks] },
+      source: "scripted",
+      model: "none",
+      prompt_version: "scripted",
+      generated_at: at,
+    });
+  }
+  const b = blockAt(await todaysBlocks(deps, at), at);
+  expect(b!.end.toISOString()).toBe("2026-01-06T07:30:00.000Z");
 });

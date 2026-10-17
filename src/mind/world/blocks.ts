@@ -1,10 +1,12 @@
 /**
  * Her busy and quiet blocks, read straight from the shared day plan. Downtime is free time, so it
- * isn't a block. A block's key is her local date and start time, which is stable for the day.
+ * isn't a block. A block's key is her local date and start time, which is stable for the day. A
+ * quiet block ending at midnight runs on into tomorrow morning's: one night, one deferral.
  */
 import type { LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
+import { nextLocalDate } from "@/mind/platform/timezone";
 import { lifeDate, lifeInstant } from "./her-clock";
 
 export type WorldBlock = {
@@ -40,12 +42,25 @@ export function blocksForDay(
 export const blockAt = (blocks: WorldBlock[], at: Date): WorldBlock | null =>
   blocks.find((b) => b.start.getTime() <= at.getTime() && at.getTime() < b.end.getTime()) ?? null;
 
+/** Tonight's quiet block and tomorrow morning's are one night: one deferral, one note. */
+export function joinNight(today: WorldBlock[], tomorrow: WorldBlock[]): WorldBlock[] {
+  const last = today.at(-1);
+  const first = tomorrow[0];
+  if (!last || !first || last.block !== "quiet" || first.block !== "quiet") return today;
+  if (last.end.getTime() !== first.start.getTime()) return today;
+  return [...today.slice(0, -1), { ...last, end: first.end }];
+}
+
 export async function todaysBlocks(
   deps: Pick<Deps, "core" | "config">,
   now: Date,
 ): Promise<WorldBlock[]> {
   const day = lifeDate(deps.config.life, now);
-  return blocksForDay(deps.config.life, day, await deps.core.world.plan(day));
+  const next = nextLocalDate(day);
+  return joinNight(
+    blocksForDay(deps.config.life, day, await deps.core.world.plan(day)),
+    blocksForDay(deps.config.life, next, await deps.core.world.plan(next)),
+  );
 }
 
 export async function blockByKey(

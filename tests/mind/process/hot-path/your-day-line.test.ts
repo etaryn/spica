@@ -27,13 +27,13 @@ const blocks = [
 ];
 
 test("now, later and the deferred line", () => {
-  expect(yourDayLines(blocks, d("2026-01-05T03:00:00Z"), null)).toBe(
+  expect(yourDayLines(blocks, d("2026-01-05T03:00:00Z"), null, [])).toBe(
     "Right now you're rewatching an old film (busy).\nLater: offline, winding down.",
   );
-  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film")).toBe(
+  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film", [])).toBe(
     "Right now you're free.\nLater: offline, winding down.\nThey wrote while you were rewatching an old film; you're only getting to it now.",
   );
-  expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null)).toBeNull();
+  expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null, [])).toBeNull();
 });
 
 test("a deferred block that is in the plan gives the 'while you were' line", async () => {
@@ -54,4 +54,11 @@ test("an unknown deferred block key just drops the 'while you were' line", async
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
   const line = await loadYourDayLine(deps, d("2026-01-05T10:00:00Z"), "2026-01-05#03:33");
   expect(line ?? "").not.toContain("They wrote while you were");
+});
+
+test("lists what happened earlier today, plain", () => {
+  const text = yourDayLines([], new Date("2026-01-10T15:00:00Z"), null, [
+    "Spica went to the film club screening of Stalker.",
+  ]);
+  expect(text).toContain("Earlier today: Spica went to the film club screening of Stalker.");
 });

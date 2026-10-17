@@ -440,6 +440,7 @@ const life = z.object({
   timezone: z.string().refine(isValidTimeZone, "life.timezone must be an IANA zone"),
   plan_cron: cron,
   plan_context_days: countFromZero,
+  your_day_events: positiveInt,
   plan_max_tokens: positiveInt,
   plan_label_max_chars: positiveInt,
   plan_attempts: positiveInt,

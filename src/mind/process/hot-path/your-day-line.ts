@@ -1,17 +1,19 @@
 /**
- * The "Your day" section of her reply prompt: what she's doing right now, what's next, and,
- * when the reply was deferred, that they wrote while she was busy.
+ * The "Your day" section of her reply prompt: what she's doing right now, what's next, what
+ * already happened today, and, when the reply was deferred, that they wrote while she was busy.
  */
 import type { Deps } from "@/mind/platform/deps";
 import { blockAt, blockByKey, todaysBlocks, type WorldBlock } from "@/mind/world/blocks";
+import { lifeDate } from "@/mind/world/her-clock";
 
-/** Null when she has no blocks today and the reply wasn't deferred. */
+/** Null when she has no blocks today, nothing happened yet and the reply wasn't deferred. */
 export function yourDayLines(
   blocks: WorldBlock[],
   now: Date,
   deferredLabel: string | null,
+  happened: string[],
 ): string | null {
-  if (blocks.length === 0 && !deferredLabel) return null;
+  if (blocks.length === 0 && !deferredLabel && happened.length === 0) return null;
 
   const lines: string[] = [];
 
@@ -24,6 +26,7 @@ export function yourDayLines(
 
   const next = blocks.find((b) => b.start.getTime() > now.getTime());
   if (next) lines.push(`Later: ${next.label}.`);
+  lines.push(...happened.map((h) => `Earlier today: ${h}`));
 
   if (deferredLabel) {
     lines.push(`They wrote while you were ${deferredLabel}; you're only getting to it now.`);
@@ -39,5 +42,11 @@ export async function loadYourDayLine(
 ): Promise<string | null> {
   const blocks = await todaysBlocks(deps, now);
   const deferred = deferredBlock ? await blockByKey(deps, deferredBlock) : null;
-  return yourDayLines(blocks, now, deferred?.label ?? null);
+  // Plain events are surface, like the plan; the guard counts this section as her own context.
+  const happened = (await deps.core.world.events(lifeDate(deps.config.life, now)))
+    .filter((e) => e.outcome !== "fell_through" && e.at.getTime() <= now.getTime())
+    .sort((a, b) => a.at.getTime() - b.at.getTime())
+    .slice(-deps.config.life.your_day_events)
+    .map((e) => e.content);
+  return yourDayLines(blocks, now, deferred?.label ?? null, happened);
 }

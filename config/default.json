@@ -455,6 +455,7 @@
     "timezone": "Asia/Singapore",
     "plan_cron": "5 * * * *",
     "plan_context_days": 7,
+    "your_day_events": 3,
     "plan_max_tokens": 1200,
     "plan_label_max_chars": 80,
     "plan_attempts": 2,

@@ -92,7 +92,7 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.core.state.bands.energy).toEqual([0.35, 0.7]);
   expect(c.availability.override_closeness).toBe(0.8);
   expect(c.models.life).toBe("claude-haiku-4-5");
-  expect(c.prompts.life_plan).toBe("v1");
+  expect(c.prompts.life_plan).toBe("v2");
 });
 
 test("life.timezone must be a real IANA zone", () => {
@@ -115,7 +115,7 @@ test("outreach, push and reach_out prompt defaults", () => {
     body_max_chars: 1000,
     generic_body: "Spica sent you a message",
   });
-  expect(c.prompts.reach_out).toBe("v2");
+  expect(c.prompts.reach_out).toBe("v3");
 });
 
 test("rejects the removed backchannel style keys", () => {

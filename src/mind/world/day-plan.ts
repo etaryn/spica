@@ -33,7 +33,11 @@ export type PlanCheck = { ok: true; plan: LifePlan } | { ok: false; violations: 
 const BLOCK_TIME = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
 /** Normalises busy levels and labels, then checks times, overlaps, the busy count and total quiet. */
-export function validatePlan(raw: RawPlan, settings: LifeConfig): PlanCheck {
+export function validatePlan(
+  raw: RawPlan,
+  settings: LifeConfig,
+  yesterday: LifePlan | null,
+): PlanCheck {
   const violations: string[] = [];
   const blocks: LifeBlock[] = [];
 
@@ -69,6 +73,16 @@ export function validatePlan(raw: RawPlan, settings: LifeConfig): PlanCheck {
     );
   }
 
+  // Her days narrow to one template unless each must differ from the last.
+  const busyLabels = (p: LifePlan) =>
+    p.blocks
+      .filter((b) => b.kind === "busy")
+      .map((b) => b.label)
+      .sort()
+      .join("|");
+  if (yesterday && busyLabels({ blocks }) === busyLabels(yesterday)) {
+    violations.push("busy blocks are the same as yesterday: change at least one");
+  }
   return violations.length ? { ok: false, violations } : { ok: true, plan: { blocks } };
 }
 
@@ -160,7 +174,7 @@ async function generatePlan(
         maxTokens: config.life.plan_max_tokens,
       });
 
-      const checked = validatePlan(raw, config.life);
+      const checked = validatePlan(raw, config.life, previous.at(-1)?.plan ?? null);
       if (checked.ok) return { plan: checked.plan, source: "model" };
 
       input = `${buildPlanInput(date, previous)}\n\nYour previous plan was rejected: ${checked.violations.join("; ")}. Fix these.`;

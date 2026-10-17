@@ -54,7 +54,17 @@ export class FakeLLMProvider implements LLMProvider {
     guard_crisis: () => ({ reasoning: "ok", violations: [] }),
     // The keyword cue check stands in for the turn judge.
     turn_judge: fakeTurnJudge(defaults.turn.incomplete_cues),
-    life_plan: () => structuredClone(FAKE_DAY_PLAN),
+    // Alternates its busy block so a day never repeats the one before (plans must differ).
+    life_plan: (input: string) => {
+      const plan = structuredClone(FAKE_DAY_PLAN);
+      const lastDay =
+        input
+          .split("\n")
+          .filter((l) => l.startsWith("- "))
+          .at(-1) ?? "";
+      if (lastDay.includes("busy (reading)")) plan.blocks[1]!.label = "rewatching an old film";
+      return plan;
+    },
     // A plain caption about the find, with a short overlay only when the format asks for one.
     post_draft: (input: string) => {
       const title = /What you found: "([^"]*)"/.exec(input)?.[1] ?? "something";

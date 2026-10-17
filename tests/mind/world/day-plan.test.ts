@@ -20,7 +20,7 @@ const good = {
 };
 
 test("validatePlan sorts, normalises busy levels and labels", () => {
-  const r = validatePlan(good, cfg);
+  const r = validatePlan(good, cfg, null);
   expect(r.ok).toBe(true);
   if (!r.ok) return;
   expect(r.plan.blocks.map((b) => b.start)).toEqual(["00:00", "10:00", "23:00"]);
@@ -38,6 +38,7 @@ test("validatePlan rejects overlap, bad times, no busy block and too little quie
       ],
     },
     cfg,
+    null,
   );
   expect(bad.ok).toBe(false);
   if (bad.ok) return;
@@ -95,4 +96,25 @@ test("over budget the fallback plan is written without calling the model", async
   expect(deps.llm.structuredCalls.filter((c) => c.purpose === "life_plan")).toEqual([]);
   const rows = await deps.db.select().from(core_loop_trace);
   expect(rows.map((r) => r.status)).toEqual(["fallback", "fallback"]);
+});
+
+test("a plan doing the same busy things as yesterday is rejected", () => {
+  const raw = {
+    blocks: [
+      { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
+      { start: "09:00", end: "12:00", kind: "busy" as const, busy: 0.8, label: "reading fiction" },
+      {
+        start: "19:00",
+        end: "21:00",
+        kind: "busy" as const,
+        busy: 0.9,
+        label: "rewatching an old film",
+      },
+      { start: "22:00", end: "24:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
+    ],
+  };
+  const yesterday = validatePlan(raw, cfg, null);
+  expect(yesterday.ok).toBe(true);
+  const again = validatePlan(raw, cfg, yesterday.ok ? yesterday.plan : null);
+  expect(again).toEqual({ ok: false, violations: [expect.stringContaining("same as yesterday")] });
 });

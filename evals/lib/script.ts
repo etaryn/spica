@@ -227,6 +227,8 @@ export const OutreachScript = z.object({
   reply_text: z
     .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
     .default("haha yes! tell me more"),
+  /** A card about the user: when set, a model plays them and writes each answer (`sim_user`). */
+  simulate: z.string().min(1).optional(),
 });
 export type OutreachScript = z.infer<typeof OutreachScript>;
 

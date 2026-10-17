@@ -15,6 +15,9 @@ import { nextLocalDate } from "@/mind/platform/timezone";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
 import { insertLifeDay } from "@/db/repos/world/life-day";
 import { session_log } from "@/db/schema";
+import { recentTurns } from "@/db/repos/user/session-log";
+import { loadPrompt } from "@/mind/platform/prompts";
+import { simUserInput, SimUserSchema } from "./sim-user";
 import { drainUserMind, runDueJobs } from "./scheduler";
 import { BASE, type LifeScript, type OutreachScript } from "./script";
 import { DAY, HOUR } from "@/mind/platform/time";
@@ -82,10 +85,10 @@ export function makeLifeLoop(
       if (at > t) continue;
       await runDueJobs(deps, o.queue, clock, new Date(at));
       if (at > clock.now().getTime()) clock.set(new Date(at));
-      await receiveMessage(deps, r.user_id, {
-        clientMessageId: randomUUID(),
-        text: texts[handled.size % texts.length]!,
-      });
+      const text = o.script.simulate
+        ? await simulatedAnswer(deps, r.user_id, o.script.simulate)
+        : texts[handled.size % texts.length]!;
+      await receiveMessage(deps, r.user_id, { clientMessageId: randomUUID(), text });
       handled.add(r.id);
     }
     await runDueJobs(deps, o.queue, clock, new Date(t));
@@ -154,4 +157,22 @@ export function makeLifeLoop(
       return hours;
     },
   };
+}
+
+/** The simulated user's answer to her latest message, from their card and the recent turns. */
+async function simulatedAnswer(deps: Deps, userId: string, card: string): Promise<string> {
+  const turns = await recentTurns(deps.db, userId, deps.config.chat.recent_turns);
+  const out = await deps.llm.classifyJson({
+    purpose: "sim_user",
+    model: "cheap",
+    system: loadPrompt("eval/sim-user", deps.config.prompts.sim_user),
+    input: simUserInput(
+      card,
+      turns.map((t) => ({ role: t.role, text: t.text })),
+    ),
+    schema: SimUserSchema,
+    timeoutMs: deps.config.models.structured_timeout_ms,
+    maxTokens: 300,
+  });
+  return out.text.trim() || "haha";
 }

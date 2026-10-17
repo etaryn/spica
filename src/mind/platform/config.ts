@@ -713,6 +713,7 @@ const prompts = z.object({
   reply: promptVersion,
   persona: promptVersion,
   crisis_classifier: promptVersion,
+  sim_user: promptVersion,
   post_draft: promptVersion,
   post_check: promptVersion,
   format_draft: promptVersion,

@@ -210,6 +210,7 @@
   "prompts": {
     "reply": "v18",
     "crisis_classifier": "v2",
+    "sim_user": "v1",
     "persona": "v6",
     "extract": "v9",
     "reconcile": "v2",

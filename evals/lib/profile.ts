@@ -1,6 +1,7 @@
 /** Call purposes an eval run can make real. `embed` is the Voyage embedder. */
 export const ALL_PURPOSES = [
   "reply",
+  "sim_user",
   "crisis",
   "extract",
   "reconcile",

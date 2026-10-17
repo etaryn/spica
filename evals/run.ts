@@ -47,10 +47,13 @@ const { realPurposes, realCalls, anyReal, realScripts, fake } = resolveProfile({
 
 const usage = new UsageTally();
 // The fake side: keyword crisis classifier, no-op cold path, and a guard that passes everything.
-const fakeProvider = () =>
-  new FakeLLMProvider({
+const fakeProvider = () => {
+  const fake = new FakeLLMProvider({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
+  fake.handlers.sim_user = () => ({ text: "haha yes! tell me more" });
+  return fake;
+};
 const real = realCalls.length > 0 ? realProvider(config, "eval", usage.record) : null;
 const makeLlm = real ? () => new RoutingLLM(real, fakeProvider(), realPurposes) : fakeProvider;
 // A real run always writes its review: its replies can't be read back any other way.

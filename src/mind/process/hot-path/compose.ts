@@ -180,18 +180,20 @@ export async function composeReachOut(
 
 /**
  * Fills the reach-out prompt file's `slot` and `cue`: the topic with what she knows behind it,
- * each dated in her words, so a past event never reads as upcoming. The cue repeats the topic,
- * since it is the last thing she reads.
+ * each dated in her words, so a past event never reads as upcoming. Their things are dated on
+ * their calendar, her own news on hers. The cue repeats the topic, since it is the last thing she
+ * reads.
  */
 export function renderReachOut(
   markdown: string,
   trigger: ReachOutTrigger,
   now: Date,
-  tz: string,
+  zones: { hers: string; theirs: string },
 ): { slot: string; cue: string; reason: string } {
   const phrases = parseSummaryPhrases(markdown);
   const topic = trigger.text || "just saying hi";
   // A row logged before notes existed has none.
+  const tz = trigger.kind === "her_day" ? zones.hers : zones.theirs;
   const notes = (trigger.notes ?? []).map((n) => {
     const at = new Date(n.at);
     const when = n.dated ? dayInWords(at, now, tz) : `they told you ${relativeDate(at, now, tz)}`;
@@ -471,7 +473,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
         loadPrompt("reach-out", config.prompts.reach_out),
         input.reachOut,
         clock.now(),
-        lifeTimezone(config.life, clock.now()),
+        { hers: lifeTimezone(config.life, clock.now()), theirs: await userZone(deps, userId) },
       )
     : null;
   const prompt = assemblePrompt({
@@ -592,6 +594,11 @@ function replyQuery(input: ComposeInput, contextTurns: number): string {
 }
 
 /** How long she's known them, so she doesn't guess. Off when `chat.relationship_line` is false. */
+async function userZone(deps: Deps, userId: string): Promise<string> {
+  const zone = await getTimezone(deps.db, userId);
+  return zone && isValidTimeZone(zone) ? zone : "UTC";
+}
+
 async function loadRelationshipLine(
   deps: Deps,
   userId: string,
@@ -600,8 +607,7 @@ async function loadRelationshipLine(
   if (!deps.config.chat.relationship_line) return null;
 
   try {
-    const zone = await getTimezone(deps.db, userId);
-    const tz = zone && isValidTimeZone(zone) ? zone : "UTC";
+    const tz = await userZone(deps, userId);
     const stats = await sessionLog.userTurnStats(deps.db, userId, anchor.created_at, tz);
     return relationshipLine(stats, deps.clock.now(), tz);
   } catch (e) {

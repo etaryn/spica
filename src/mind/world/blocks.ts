@@ -6,7 +6,7 @@
 import type { LifePlan } from "@/db/schema";
 import type { LifeConfig } from "@/mind/platform/config";
 import type { Deps } from "@/mind/platform/deps";
-import { nextLocalDate } from "@/mind/platform/timezone";
+import { nextLocalDate, previousLocalDate } from "@/mind/platform/timezone";
 import { lifeDate, lifeInstant } from "./her-clock";
 
 export type WorldBlock = {
@@ -56,11 +56,17 @@ export async function todaysBlocks(
   now: Date,
 ): Promise<WorldBlock[]> {
   const day = lifeDate(deps.config.life, now);
-  const next = nextLocalDate(day);
-  return joinNight(
-    blocksForDay(deps.config.life, day, await deps.core.world.plan(day)),
-    blocksForDay(deps.config.life, next, await deps.core.world.plan(next)),
-  );
+  const forDay = async (d: string) =>
+    blocksForDay(deps.config.life, d, await deps.core.world.plan(d));
+  const [prev, today, next] = await Promise.all([
+    forDay(previousLocalDate(day)),
+    forDay(day),
+    forDay(nextLocalDate(day)),
+  ]);
+  // Past midnight, this morning's quiet block is still last night's: its key and start carry over.
+  const lastNight = joinNight(prev, today);
+  const morning = lastNight === prev ? today : [lastNight.at(-1)!, ...today.slice(1)];
+  return joinNight(morning, next);
 }
 
 export async function blockByKey(

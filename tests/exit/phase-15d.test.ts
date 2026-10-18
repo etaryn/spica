@@ -104,7 +104,7 @@ test("3: the reason carries its dates; the guard sees now and why she's writing"
       notes: [{ text: "The user runs on Sunday.", at: "2026-01-11T09:00:00.000Z", dated: true }],
     },
     now,
-    "UTC",
+    { hers: "UTC", theirs: "UTC" },
   );
   expect(r.reason).toContain("(Sunday 11 January, yesterday)");
   const g = renderGuardInput({

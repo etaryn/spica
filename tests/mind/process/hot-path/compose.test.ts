@@ -678,12 +678,26 @@ describe("composeReachOut", () => {
     expect(system.slice(system.indexOf("## Why you're writing"))).toContain(idea.content);
   });
 
+  test("renderReachOut: their things are dated in their zone, her news in hers", () => {
+    const zones = { hers: "Asia/Singapore", theirs: "America/New_York" };
+    const note = { text: "x", at: "2026-01-09T17:00:00.000Z", dated: true };
+    const base = { text: "t", factId: null, threadId: null, coreMemoryId: null, notes: [note] };
+    const now = new Date("2026-01-12T10:00:00Z");
+    const md = loadPrompt("reach-out", "v3");
+    expect(renderReachOut(md, { ...base, kind: "thread" }, now, zones).reason).toContain(
+      "Friday 9 January",
+    );
+    expect(renderReachOut(md, { ...base, kind: "her_day" }, now, zones).reason).toContain(
+      "Saturday 10 January",
+    );
+  });
+
   test("renderReachOut: check-in has no topic text", () => {
     const r = renderReachOut(
       loadPrompt("reach-out", "v3"),
       { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
       new Date("2026-01-12T10:00:00Z"),
-      "UTC",
+      { hers: "UTC", theirs: "UTC" },
     );
     expect(r.slot).toContain("On your mind: just saying hi");
     expect(r.slot).not.toContain("{{");
@@ -708,7 +722,7 @@ describe("composeReachOut", () => {
         ],
       },
       new Date("2026-01-12T10:00:00Z"),
-      "UTC",
+      { hers: "UTC", theirs: "UTC" },
     );
     expect(r.reason).toContain(
       "The user is running a half marathon on Sunday. (Sunday 11 January, yesterday)",

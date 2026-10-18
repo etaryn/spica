@@ -90,3 +90,25 @@ test("todaysBlocks reads tomorrow to join the night", async () => {
   const b = blockAt(await todaysBlocks(deps, at), at);
   expect(b!.end.toISOString()).toBe("2026-01-06T07:30:00.000Z");
 });
+
+test("after midnight the night is still last night's block: same key, same start", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
+  const at = new Date("2026-01-06T00:30:00Z");
+  for (const [date, blocks] of [
+    ["2026-01-05", [night("22:00", "24:00")]],
+    ["2026-01-06", [night("00:00", "07:30")]],
+  ] as const) {
+    await insertLifeDay(deps.db, {
+      date,
+      plan: { blocks: [...blocks] },
+      source: "scripted",
+      model: "none",
+      prompt_version: "scripted",
+      generated_at: at,
+    });
+  }
+  const b = blockAt(await todaysBlocks(deps, at), at);
+  expect(b!.key).toBe("2026-01-05#22:00");
+  expect(b!.start.toISOString()).toBe("2026-01-05T22:00:00.000Z");
+  expect(b!.end.toISOString()).toBe("2026-01-06T07:30:00.000Z");
+});

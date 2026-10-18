@@ -328,6 +328,26 @@ describe("thread facts", () => {
     expect(got[0]!.occurred_at).toEqual(new Date("2026-01-11T09:00:00Z"));
     expect(await threads.threadUserFacts(db(), u, t.id, 1)).toHaveLength(1);
   });
+
+  test("threadUserFacts leaves out a sensitive fact, even an older one", async () => {
+    const u = await createTestUser();
+    const t = await threads.insertThread(
+      db(),
+      u,
+      { title: "interview", subject: "user", stakes: "med", next_checkpoint: T0 },
+      T0,
+    );
+    await fact(u, "The user had a panic attack.", ax(1), {
+      thread_id: t.id,
+      payload: { sensitive: true },
+    });
+    const plain = await fact(u, "The interview is Friday.", ax(2), {
+      thread_id: t.id,
+      created_at: new Date("2026-01-06T09:00:00Z"),
+    });
+    const got = await threads.threadUserFacts(db(), u, t.id, 5);
+    expect(got.map((f) => f.id)).toEqual([plain.id]);
+  });
 });
 
 describe("summary facts", () => {

@@ -180,6 +180,8 @@ export async function threadUserFacts(db: Db, userId: string, threadId: string, 
         eq(fact.subject, "user"),
         eq(fact.scope, "private"),
         notInArray(fact.status, ["superseded", "stale"]),
+        // The thread's flag only reads its latest fact; an older sensitive one never goes out.
+        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
       ),
     )
     .orderBy(desc(fact.created_at))

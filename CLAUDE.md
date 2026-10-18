@@ -226,7 +226,7 @@ Built baseline: 0 Skeleton · 1 Memory engine · 2 Guardrails (guard back on in 
 | 14. Post engine (stills) | Browsing, formats and poses, craft skill, post_tick, render, draft/check, inspector approval |
 | 15. Tuning | Every §25 *Tuning* item in slices: 15a voice, 15b negative situations, 15c memory/relationship/user mind, 15d world/outreach/posts |
 
-**Current phase: Phase 15 (tuning) is under way. 15a (her voice: texting shape, move, "How to
+**Current phase: Phase 15 (tuning): every slice is built. 15a (her voice: texting shape, move, "How to
 text this one", `shapeText`, reply v17, backchannel rules, quieter feeling lines, voice report,
 `pnpm review:voice`) is built. 15b (negative situations: one anchored 0–1 scale for hurt and
 tension in extraction v8, gains 1, commitment cushions only slights, scored endings with a floor,
@@ -234,9 +234,13 @@ pointed remarks once per occasion via `session_log.pointed` and guard v3, keywor
 `pnpm review:signals`) is built. 15c (memory, relationship, user mind: a repair turns the hurt
 past, plain user-mind notes that read nothing sensitive outside a crisis window, the message rate
 as her estimate, dates resolved in code, gender at signup, a reconcile contradiction band,
-false-recall judge v9, later-session jokes) is built. Next is 15d (world, outreach, posts, plus
-B117 her own message rate), which opens with an item-by-item discussion with Ethan before any
-design.** Tuning sets base Spica; no external
+false-recall judge v9, later-session jokes) is built. 15d (world, outreach, posts, B117: her plain
+news reaches people under their things, reach-outs dated and the reason last (reach-out v3, guard
+v4), a thread once until revived, her own rate scales readiness, code-picked event subjects and
+wander cues, plans differ daily, one night across midnight, ESO/NOIRLab sources with image hashes,
+captions cut at a word, the craft skill set by Ethan in `posts.craft_skill`) is built. The tuning
+slices are done; next are Ethan's logged review runs (`review:world-outreach` with the simulated
+user, `posts:review`, `eval:guard`), and B35 waits on his reply-model comparison.** Tuning sets base Spica; no external
 samples; each user's own messages bring their bias. Publishing, video and a frontend phase (B34)
 come later. Persona
 v6's drafted lines (avatar is her body, the craft goal, the public-voice blog line) await Ethan's

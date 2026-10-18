@@ -1,7 +1,6 @@
 /** Call purposes an eval run can make real. `embed` is the Voyage embedder. */
 export const ALL_PURPOSES = [
   "reply",
-  "sim_user",
   "crisis",
   "extract",
   "reconcile",
@@ -25,6 +24,7 @@ export const ALL_PURPOSES = [
   "user_ideate",
   "user_consolidate",
   "embed",
+  "sim_user",
 ];
 /** The annotation judges, made real by `--annotate`. */
 export const JUDGE_PURPOSES = [

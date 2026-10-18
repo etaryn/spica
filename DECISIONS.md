@@ -177,3 +177,6 @@ code itself.
 | 2026-10-17 | `EncodeOutcome.insertedFacts` (not `inserted`) | `inserted` was already the insert counter. |
 | 2026-10-17 | `ExtractedFact.when`, `ExtractedThread.checkpoint_when` and `Candidate.depth` are optional on the types | The model schema still requires the fields; code-built facts and older stored winners simply have none. |
 | 2026-10-17 | `rel-stages` seeds closeness 0.4 with 24 hours together | The fake run grows no closeness; 0.4 is the lowest seed that reaches becoming friends. |
+| 2026-10-18 | Wander's "recent themes" are the memories her last 10 wanderings started from or chained through (`payload.seed`/`chain`), drawn at ×0.2; no embedding check, and people come in through events | Needs no extra embedding calls; the design doc's embedding check was simplified to this. |
+| 2026-10-18 | `pickCue` keeps a uniform pick when every weight is zero and keeps mood-congruence | Matches the old seed pick; wander skips only when there is no cue at all. |
+| 2026-10-18 | The fake `life_plan` alternates its busy label after a "reading" day | Plans now must differ from yesterday; a constant fake plan would fall back every second day. |

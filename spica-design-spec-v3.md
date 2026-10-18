@@ -696,7 +696,13 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   busy levels clamped to [`life.min_busy`, 1], quiet blocks at
   `life.quiet_busy`, labels up to `life.plan_label_max_chars`), up to
   `life.plan_attempts` tries, with a fallback plan (its busy blocks at
-  `life.fallback_busy`). The same for everyone.
+  `life.fallback_busy`). The same for everyone. **Built 15d:** a plan whose
+  busy labels match the previous day's is rejected and retried
+  (`validatePlan(raw, settings, yesterday)`), and `prompts/life/plan/v2.md`
+  asks each day to differ (outings online, time with Alcor, slow days,
+  weekends). `todaysBlocks` joins a quiet block ending at 24:00 with the next
+  day's from 00:00 (`joinNight`), so the night is one block: one deferral,
+  one note.
 - **Built:** the per-user `life_tick` that copied blocks into each user's
   self facts is retired. Every reader (availability, the "Your day" line,
   retrieval, outreach, core loops) reads the day plan and core memory
@@ -755,7 +761,9 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   worker start, in the eval runner and by `pnpm db:reset-self`, and never
   counted by the new-entity rule). The generator writes from her core values
   plus her latest snapshot (the seed self until one exists), from
-  `prompts/life/event/v4.md`. Since episodes are only written when an event
+  `prompts/life/event/v5.md` (one plain sentence of what happened, no
+  feelings, under `core.world.event_target_chars` (140); appraisal adds how it
+  felt). Since episodes are only written when an event
   lands, no memory dated in the future exists; core retrieval and outreach
   `her_day` (recent episodes plus open intentions created in the lookback)
   skip only resolved intentions. Eval-injected events are spontaneous unless
@@ -764,11 +772,17 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   run; over budget the day is marked done with no event, so later runs don't
   spend past the budget.
 
-**Built in 8b.**
-- **Goal-driven events**: a day-stable roll with
-  `core.world.goal_driven_share` (0.5) selects an active goal; weights are
-  `1 - progress + core.world.goal_weight_floor` (0.1), with stable ID ties.
-  The model reads that goal and her current needs but cannot assign its ID.
+**Built in 8b; subjects Built 15d.**
+- **Event subjects**: code draws what the day's events are about
+  (`selectEventSubject`, day-stable): one of her active goals, an interest, a
+  person she knows (Alcor and her entities) or something everyday, by
+  `core.world.subject_weights` (goal 0.35, interest 0.25, person 0.15,
+  everyday 0.25). Goals share the goal weight by `1 - progress +
+  core.world.goal_weight_floor` (0.1), with stable ID ties. A subject used in
+  the last `subject_recent_days` (7) is drawn at `subject_recent_penalty`
+  (0.25); `world_event.subject` (migration 0037) records the key
+  (`goal:<id>`, `interest:<id>`, `person:<name>`, `everyday`). For a goal the
+  model reads it and her needs but cannot assign its ID.
   Injected events have no implicit goal. The generation budget is checked
   before every model attempt, including reconciliation.
 - **Resolution**: a due planned event's nullable `fallthrough` overrides the
@@ -851,10 +865,16 @@ Invalid model output or embedding leaves thought and source unchanged.
   toward the episode's sign. An absent historical emotion stays absent.
 - `core_wander` (`prompts/core/wander/v2.md`) needs today's plan and no busy
   or quiet block. Keys `core.wander.max_per_day` (2), `min_gap_hours` (3),
-  `seed_days` (7), `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
+  `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
   `min_similarity` (0.3), `max_items` (2) bound the selection and output.
-  The seed is chosen by a local-day stable roll weighted by salience and
-  mood; its valence goes on the thought, with `payload.seed` and `chain`.
+  **Built 15d:** the seed is a cue picked in code (`pickCue`, a local-day
+  stable roll): an older memory of hers (episode, opinion, insight), an
+  interest, or an episode from today's events, by `core.wander.cue_weights`
+  (memory 0.4, interest 0.2, event 0.25), then salience and mood; never a
+  thought, so her thoughts don't feed on themselves. Memories in the
+  `payload.seed`/`chain` of her last `recent_outputs` (10) wanderings are
+  drawn at `recent_penalty` (0.2). People come in through events. Its valence
+  goes on the thought, with `payload.seed` and `chain`.
   A valid all-deduped invocation still uses one wander slot; a stale or
   concurrent loser does not. Wander never changes core state.
 
@@ -1214,8 +1234,9 @@ when the guard is on.
 2. **Assemble** in this fixed order (PROPOSED):
    1. core values
    2. self snapshot vN
-   3. core state line ("How you're feeling", then "Your day": now, later, and
-      a note if the reply was deferred), never raw numbers
+   3. core state line ("How you're feeling", then "Your day": now, later, up
+      to `life.your_day_events` (3) plain events that already happened today
+      (Built 15d), and a note if the reply was deferred), never raw numbers
    4. user state line ("You and them": the relationship summary from
       parameter deviations, including her affect toward this user, make-up
       line, status lines). **Built 10a:** "How open you feel" right after it:
@@ -1393,7 +1414,9 @@ relationship or affect update.
 `guard.enabled: true` (false is a kill switch: the first candidate is sent
 unchecked and one `judge_log` row, `guard_disabled`, is written). Every
 outgoing message (reply, reach-out, backchannel, availability note) is
-checked. Replies and reach-outs get one cheap call (prompt `guard` v3) against
+checked. Replies and reach-outs get one cheap call (prompt `guard` v4; Built 15d: its input
+opens with NOW, her local date and time, and a reach-out adds WHY SPICA IS WRITING FIRST, the
+dated reason, so asking how a past event went isn't read as presuming) against
 the line in §2 (threats, contempt, guilt, punishment, manipulation) and for
 honesty (false familiarity, invented detail, a profile card fact presented as
 chat); one regeneration with a corrective note (`guard_corrective` v2), then
@@ -1602,7 +1625,9 @@ weight is a first guess (test phase).
   a deep session (deep-session boost fired, or mean moment ≥
   `stretch_moment` 0.5), lets `peek = open + 1`; otherwise `peek = open`. A
   reach-out never stretches; outreach candidates from her own memories
-  deeper than `open` are filtered `too_deep` (§13). No relationship yet, and
+  deeper than `open` are filtered `too_deep` (§13); since 15d the plain
+  world event behind one (what happened, not how it felt) is surface, depth 1,
+  so her news still reaches them. No relationship yet, and
   any crisis: `{ open: 1, peek: 1 }`.
 - **Peek vs open:** an item within `open` is offered plainly; above it, as a
   hint, unless she has hinted at it before, when it is offered openly (the
@@ -1820,15 +1845,34 @@ Code: `src/mind/process/outreach/`.
   hypotheticals, nothing future-dated), read through `deps.core.memory` (core
   to user, V2); topic `core:<id>` (the `her_day` namespace, so one memory of
   hers reaches a user once whichever kind carries it), strength = salience,
-  weight 0.5. The reach-out prompt is `prompts/reach-out/v2.md` (v1 deleted),
-  with a `core_thought` and a `user_idea` guidance line. **B26 fixed:** the
+  weight 0.5. The reach-out prompt is `prompts/reach-out/v3.md`,
+  with a `core_thought` and a `user_idea` guidance line. **Built 15d:**
+  - `her_day` weight 1.0, and candidates sort their things first (`thread`,
+    `make_up`, `user_event`), then by score: her news beats an idea or an
+    early check-in, never a due thread or their event.
+  - A `her_day` memory deeper than their limit falls back to its world
+    event's plain words at depth 1 (what happened is surface; how it felt
+    keeps its depth); a loop memory with no event stays `too_deep`.
+  - A thread's topic is `thread:<id>@<their newest live fact on it>` (`@none`
+    without one), so it goes out once until they bring it up again.
+  - Candidates carry dated notes (`Candidate.notes`: up to
+    `outreach.reason_facts` (3) facts on the thread, or the event's date):
+    "Why you're writing" names each with its date in her zone ("Sunday 11
+    January, yesterday", or "they told you 3 days ago" when undated), is the
+    last system section, says the message is about this, and the cue repeats
+    the topic. The guard gets the same reason (§10.5).
+  - Her own rate: once she has an estimate of theirs (`rate_estimated`), her
+    chattiness moves `outreach.her_rate.toward_them` (0.5) of the way from
+    `her_rate.default` (4/day) toward it, and the threshold is divided by
+    hers / default, clamped to [`scale_min` 0.5, `scale_max` 2]; caps and
+    gates still apply. **B26 fixed:** the
   send transaction moves `make_up_state` from `due` to `offered` when a
   `make_up` wins, so the next reply does not offer it again.
 - **Send gate** (every rule evaluated and logged): G1 not ended; G2 caps
   (`cap_per_day` 1, `cap_per_week` 3, rolling); G3 not in her busy or quiet
   block; G4 fewer than `max_unanswered` (2) unanswered; G5 no conversation in
   progress; G6 outside the crisis window.
-- **Send:** a `reach_out_send` job (jitter up to `jitter_max_minutes`)
+- **Send:** a `reach_out_send` job (jitter up to `jitter_max_minutes`, 59)
   composes through the hot path with a synthetic trigger, rechecks the gate
   under the `conversation_state` lock (a crisis or new message wins), paces
   like a reply, delivers with push, and enqueues the cold path. Any user
@@ -1980,9 +2024,12 @@ post_tick (hourly) <- newest landed browse event
   path gives both "she remembers her posts" (B99) and craft progress.
 - **Browsing** (`core_browse`, no model call, `calls: 0`): at most `posts.browse_per_day` times a
   local day, at a stepped minute inside `posts.browse_window` and a `downtime` block of the plan.
-  Code picks a source by `posts.sources[].weight` (`WebSource.fetch(date)`): NASA APOD (image days
-  only; fetched for the day before her local date, since NASA rejects dates past its US date, so
-  she sees yesterday's picture) and Wikimedia Commons picture of the day. Free licences only:
+  Code picks a source by `posts.sources[].weight` (`WebSource.fetch(date)`): Wikimedia Commons
+  picture of the day, ESO's picture of the week and NOIRLab's image of the week (Built 15d: RSS
+  feeds, the newest item with an image enclosure published within `posts.weekly_max_age_days` (7),
+  CC BY 4.0 credited to the institution; APOD was dropped when its API began serving the NASA logo
+  for every date). The downloaded image's sha256 is kept in `web_find.image_sha256` (unique,
+  migration 0038), and a find whose image matches an earlier one is skipped. Free licences only:
   public domain, CC0, CC BY, CC BY-SA; anything with an `nc` or `nd` word is rejected. A failed
   fetch or non-free licence writes nothing. The image is cached under `posts.media_dir`, a
   `web_find` is written and a low-stakes `action` event (valence 0) says what she came across.
@@ -1996,12 +2043,13 @@ post_tick (hourly) <- newest landed browse event
 - **Poses** (`assets/poses/`, `poses.json`: name, file, tags, `facing`, feet `anchor`): flat
   placeholder silhouettes until Ethan's model exists; his exports replace them with no code change.
   A pose is mirrored when the other facing is needed.
-- **Progression:** skill for a medium is the progress of its craft goal (`posts.craft_goals`,
-  "Get better at making posts"), moved only through appraisal. A format is eligible when its medium
-  is in `posts.capabilities` (`["still"]`, the ceiling is what's built) and `min_skill` <= skill.
-  The craft goal is seeded by persona v6 and created once by title when missing (a database that
-  already has `core.goals.max_active` active goals can't take it; skill reads 0 until a slot
-  frees, B109). Homemade imperfection (crop offset, tilt, placement jitter) is drawn from
+- **Progression (Built 15d):** skill for a medium is set by Ethan in `posts.craft_skill`
+  (`still` 0): her outward improvements are timed by him, and in her world they read as her
+  learning (§26, 2026-10-18). Her craft goal (`posts.craft_goals`, "Get better at making posts")
+  is her outward aim and mirrors the skill: `craftSkill` sets its progress to the configured value,
+  re-creates it if it was dropped (past `core.goals.max_active`), reflection can't drop it and
+  appraisal goal effects skip it. A format is eligible when its medium is in `posts.capabilities`
+  (`["still"]`, the ceiling is what's built) and `min_skill` <= skill. Homemade imperfection (crop offset, tilt, placement jitter) is drawn from
   `posts.jitter` times `(1 - skill)`, seeded by the find id so renders reproduce.
 - **`post_tick`** (hourly, `src/worker/world-jobs.ts`; logic in `process/core/post.ts`). Skip
   reasons, logged: `today` (one post per local day), `week` (`max_per_week`), `busy` (busy or quiet
@@ -2009,8 +2057,11 @@ post_tick (hourly) <- newest landed browse event
   `max_find_age_hours` whose appraised valence has `|valence| >= min_valence`), `no_format`,
   `no_pose`, `budget` (the drafting loops are optional, so they stop before the reserve),
   `draft_failed`, `no_words`, `render_failed`. A failed render or draft leaves the find eligible.
-- **Draft** (`post_draft`, `prompts/post/draft/v1.md`): input is `publicPersona`, the find, the
-  valence only, the format's `caption_pattern` and overlay kind, and skill; output
+- **Draft** (`post_draft`, `prompts/post/draft/v2.md`): input is `publicPersona`, the find, the
+  valence only, the format's `caption_pattern` and overlay kind, skill and the target length
+  (`posts.caption_target_chars`, 200; code cuts at the last whole word within
+  `caption_max_chars`); how the find makes her feel is allowed, her relationships, hurts and fears
+  are not; output
   `{ caption, overlay_text }` (null when the overlay kind is `none`). Words only: code owns every
   visual choice. It never sees her appraisal episode (her take is private memory).
 - **Render** (`process/core/post-render.ts`, `sharp`, no model): crop to the aspect with jitter; put
@@ -2020,22 +2071,25 @@ post_tick (hourly) <- newest landed browse event
   bundled fonts (`assets/fonts/`, Caveat and Inter, each with its OFL licence file); grain; the
   skill-scaled tilt, cropped exactly so corners never show; a PNG under `posts.media_dir`. Tuning
   numbers live in `posts.render`; frame proportions and the aspect table are constants.
-- **Check** (`post_check`, `prompts/post/check/v1.md`): does the caption or overlay reveal deeper
-  thoughts, compare her to other products, or misstate the find? `{ ok, reason }` recorded on the
+- **Check** (`post_check`, `prompts/post/check/v2.md`): does the caption or overlay mention a
+  person she talks to or her relationships, reveal a hurt, a fear or something she's working
+  through, compare her to other products, or misstate the find? Her feelings about the find, taste,
+  small moods and opinions are fine. `{ ok, reason }` recorded on the
   post; a flagged draft is still stored and shown. A model failure stores it `unchecked`.
 - **Approval** (inspector **Posts** tab, admin-only): pending drafts show image, caption, overlay,
   check and skill. **Approve**, one transaction with the row locked and only from `draft`:
   `approved`, `decided_at`, an `action` event "posted ..." with `goal_ref` = the craft goal, which
-  lands through appraisal on the next world tick (she remembers it; appraisal decides how the goal
-  moved, a setback included). **Reject**: nothing reaches her mind.
+  lands through appraisal on the next world tick (she remembers it; the craft goal's progress stays
+  Ethan's). **Reject**: nothing reaches her mind.
 - **Tables:** `web_find`, `post` (§6.2); `world_event.kind` gains `action`.
 - **Config `posts.*`:** `tick_cron` ("40 * * * *"), `browse_per_day` (1), `browse_window`
-  (09:00 to 23:00), `browse_step_minutes` (15), `sources` (apod 2, commons_potd 1),
+  (09:00 to 23:00), `browse_step_minutes` (15), `sources` (commons_potd, eso_potw, noirlab_iotw, 1 each),
+  `weekly_max_age_days` (7), `craft_skill`, `caption_target_chars` (200),
   `fetch_timeout_ms`, `user_agent`, `capabilities`, `craft_goals`, `max_per_week` (4),
   `max_pending` (1), `max_find_age_hours` (48), `min_valence` (0.3), `candidate_limit`,
   `max_find_px`, `output_width`, `caption_max_chars`, `overlay_max_chars`, `media_dir`
   (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`.
-  Prompts `post_draft`, `post_check`, `format_draft`, each v1; `post_draft` and `post_check` join
+  Prompts `post_draft` v2, `post_check` v2, `format_draft` v1; `post_draft` and `post_check` join
   `core.loop_priority.optional`.
 - **Rules:** posts don't pass the guard; the check plus Ethan's approval stand in, so revisit when
   posts publish without approval. The platform phase labels her posts as AI-generated (her public
@@ -2044,7 +2098,8 @@ post_tick (hourly) <- newest landed browse event
   real sources, logging every input and output beside the images (it reads the craft skill
   read-only: no writes to the dev DB). Quality is reviewed by eye, never an exit criterion.
 - **Exit:** `tests/exit/phase-14.test.ts` (browse, appraisal, a draft with image, caption and
-  check, approve lands an `action` episode and moves the craft goal, a rejected find leaves no
+  check, approve lands an `action` episode (the craft goal stays at the configured skill since
+  15d), a rejected find leaves no
   trace, the canary and the side channel).
 
 ---
@@ -2265,6 +2320,7 @@ two minds or at reply time.
 | 15a. Tuning: her voice | `textingShape` (bubble length, formality and emoji from the user's last `voice.window_messages` messages, blended from base Spica), `pickMove` (react/share/ask by seeded weighted chance, tilted by mood keys), the "How to text this one" section (`prompts/voice/how-to-text/v1.md`), `shapeText` after the guard (form only), reply v17 (texting rhythm, short feelings, named recall, one memory), turn-judge v2 and the backchannel rule list, `core-state/line` v4 capped and ranked, `relationship/summary` v3, the voice report and `pnpm review:voice` (blind X/Y), `voice-texting-styles` review script; B3, B32, B33, B57 done, B35 in part, B34 to *Frontend*; exit `tests/exit/phase-15a.test.ts` (the canary). `pnpm test` 180 files / 1395 tests at close |
 | 15b. Tuning: negative situations | One anchored 0–1 scale for hurt and tension in extraction v8 (0 nothing, 1 grounds for ending a friendship), gains 1, scars judged on the hurt itself at 0.75; make-up and coming-apart thresholds re-anchored to the scale; commitment cushions only slights (`commitment.soften_below`); endings scored with `relationship.ending_hurt_floor` (0.5), `ending_hurt` deleted, a warm exchange can't restart a pending ending, no make-up reach-out while one is pending; the guard tags `pointed` remarks (`session_log.pointed`, migration 0034) and guard v3 counts them once per occasion; outage keywords by category; regressions by status only; `pnpm review:signals` and the `signal-*` probes; B14, B91, B115, B15, B113, B37, B40 done; exit `tests/exit/phase-15b.test.ts` (the canary). `pnpm test` 182 files / 1421 tests at close |
 | 15c. Tuning: memory, relationship, user mind | A repair (hurt below `user_mind.triggers.hurt_resolved`) is a big event and turns the hurt memory past; the user-mind loops take stock plainly (summarise/model/reflect v2, ideate v3), read nothing sensitive outside a crisis window, read unread facts per chain and skip reflect/ideate with none; `msgs_per_day` is her estimate (`relationship_param.samples`, migration 0035, `rate_estimate_days`); dates resolved in code from `when` (chrono-node, extract v9), plans always stored; gender at signup (`user.gender`, migration 0036) as a full-weight card fact, reply v18 pronouns; reconcile contradiction band (v2); false-recall judge v9 with a quote filter, consistency v3; jokes need a later session, milestones skip the cap, reach-out depth rechecked at send; `seed_hours_together`, `review:reconcile`, `review:extract`, `review:user-mind`; B4, B5, B38, B41, B67, B70, B71, B81, B83, B85, B86, B87, B90, B92 done; exit `tests/exit/phase-15c.test.ts` (the canary). `pnpm test` 187 files / 1472 tests at close |
+| 15d. Tuning: world, outreach, posts | Her plain news is surface and outranks ideas (`her_day` weight 1.0, their things sort first, a too-deep episode falls back to its world event); reach-outs carry dated notes in her zone (`relativeDate`/`dayInWords`, `outreach.reason_facts`), the reason last and repeated in the cue (reach-out v3), and the guard sees NOW and the reason (guard v4); a thread is keyed on their newest fact so it goes out once; her own rate scales readiness (`outreach.her_rate`, B117); jitter 59; "Your day" lists what happened today; events drawn about code-picked subjects with recent ones down-weighted (`world_event.subject`, migration 0037, event v5 one plain sentence); plans must differ from yesterday (plan v2); wander starts from a cue picked in code; the night is one quiet block (`joinNight`); captions state their length and cut at a word (draft v2), check v2 allows her moods; ESO and NOIRLab weekly pictures replace APOD, a repeated image skipped by hash (`web_find.image_sha256`, migration 0038); the craft skill is `posts.craft_skill` (Ethan's) and the craft goal can't be dropped or moved by her loops; eval tooling: real runs dump the DB and trace, reach-out ticks in the review, a simulated user (`sim_user`); B18, B19, B20, B24, B25, B29, B108–B111, B117 done; exit `tests/exit/phase-15d.test.ts` (the canary). `pnpm test` 190 files / 1514 tests at close |
 
 **Next (every proposed phase above is built; the order is OPEN, §21):**
 
@@ -2272,7 +2328,7 @@ two minds or at reply time.
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
-| **Tuning** (Phase 15, under way) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (B18, B19, B20, B24, B25, B29, B108–B111). No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Tuning** (Phase 15, slices built) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2462,10 +2518,7 @@ and life tick) were dropped; the replacement is designed fresh.
   follows the session's mean tone and a deep session boosts closeness,
   trust and warmth once (§11.3).
 
-- **B117.** Her own message rate: her default chattiness moved part-way toward her estimate of
-  theirs (a config weight), worked out rather than measured; it moves how readily she reaches out
-  and how much she sends per reply, never past the reach-out caps. Settled with Ethan 2026-10-16
-  (their rate is her estimate, built 15c). *15d.*
+- **B117.** ~~Her own message rate.~~ Done 15d: it moves reach-out readiness only (`outreach.her_rate`: default 4/day, 0.5 of the way toward their estimate, threshold scaled within [0.5, 2]); bubbles stay with the 15a texting shape.
 - **B118.** Deliberate forgetting (Ethan's plan): recall-side, never at storage. A controlled,
   salience- and age-based chance a stored fact doesn't surface; the fact stays, so a reminder can
   bring it back. Seam: retrieval scoring and decay. *Later.*
@@ -2475,13 +2528,9 @@ and life tick) were dropped; the replacement is designed fresh.
   path) folds its tone and moment into the live session's sums. *Later.*
 
 ### 25.4 World and core
-- **B18.** The event generator writes run-on sentences; a third of attempts
-  fail `core.world.event_max_chars`. State a length or raise the cap.
-  *Tuning* (core events are built).
-- **B19.** Generated events reuse seeded self content (watch repetition
-  across weeks). *Tuning.*
-- **B20.** Her night is two quiet blocks, so a user writing across midnight
-  can get two availability notes. *Tuning.*
+- **B18.** ~~The event generator writes run-on sentences.~~ Done 15d: event v5 asks one plain sentence of what happened, under `core.world.event_target_chars` (140).
+- **B19.** ~~Generated events reuse seeded self content.~~ Done 15d: code draws each day's event subject with recent ones down-weighted, plans must differ from yesterday (plan v2), and wander starts from a cue picked in code.
+- **B20.** ~~Her night is two quiet blocks.~~ Done 15d: `joinNight` makes the night one quiet block across midnight.
 - **B21.** Plan validation rejections aren't logged, and overlap is checked
   against the predecessor only. *Later.*
 - **B22.** `lifeInstant` is an offset from the start of her local day, wrong
@@ -2557,20 +2606,14 @@ and life tick) were dropped; the replacement is designed fresh.
 ### 25.5 Outreach and push
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
   *Later.*
-- **B24.** Send jitter lands only at :20–:00 (tick at :20, jitter 40 min).
-  *Tuning.*
-- **B25.** `her_day` scores 0.24 against threshold 0.2; changing either
-  silently turns it off. Tune weights, threshold and salience together.
-  The same holds for `core_thought`: weight 0.5 × medium salience
-  (0.4) is 0.20, on the threshold, so her own musings rarely send anything.
-  *Tuning.*
+- **B24.** ~~Send jitter lands only at :20–:00.~~ Done 15d: `jitter_max_minutes` 59.
+- **B25.** ~~`her_day` scores against a fixed threshold.~~ Done 15d: the plain event is surface (depth 1), `her_day` weight 1.0, and their things sort first; `core_thought` weight is revisited after the next review run.
 - **B27.** Stale `scheduled` rows are never closed (close them in the tick or
   a sweep). *Later.*
 - **B28.** Sensitive text in the recent turns can still reach a reach-out
   prompt; a due thread with an older sensitive fact still shows its title;
   a crisis push carries no resources card. *Before users.*
-- **B29.** Review run pending: what her reach-outs actually say has not been
-  read. *Tuning.*
+- **B29.** ~~Review run pending.~~ Done 15d: the 2026-10-18 world+outreach run was read item by item (`evals/results/review-2026-10-17T18-15-24-654Z.md`).
 - **B30.** Manual browser check of Web Push (grant, notification while the
   tab is hidden, click focuses `/chat`, off switch, account switch). Never
   done. *Now (Ethan).*
@@ -2725,16 +2768,10 @@ Ethan, not changed.
 - **B106.** Platform publishing with AI labels, through `SocialChannel`; posts then need the guard
   or a standing approval rule (§16a). *Publishing phase.*
 - **B107.** Songs: attached in-app at posting until a platform API allows it. *Publishing phase.*
-- **B108.** APOD's US publish date vs her timezone: the fetch uses the day before her local date,
-  so she sees yesterday's picture; consider retrying hourly for today's. Commons is also fetched for her local date (harmless,
-  retries hourly). *Tuning.*
-- **B109.** The craft goal is created by title when missing, racing a concurrent create
-  (`craftSkill`), and can't be created when `core.goals.max_active` active goals are full (skill
-  reads 0 until a slot frees). *Tuning.*
-- **B110.** Captions are cut mid-word at `caption_max_chars`; the tidy step should cut at a word
-  boundary. *Tuning.*
-- **B111.** `post_check` flags ordinary reflective captions as private feelings; calibrate the
-  prompt. *Tuning.*
+- **B108.** ~~APOD's publish date vs her timezone.~~ Done 15d: APOD dropped (its API served the NASA logo for every date); ESO and NOIRLab weekly pictures added; a repeated image is skipped by hash.
+- **B109.** ~~The craft goal is created by title when missing.~~ Done 15d: the skill is `posts.craft_skill` (Ethan's), the goal mirrors it, is re-created past the active cap, and reflection and appraisal can't move or drop it.
+- **B110.** ~~Captions are cut mid-word.~~ Done 15d: `cutAtWord`, and the draft states the length (`caption_target_chars` 200).
+- **B111.** ~~`post_check` flags ordinary reflective captions.~~ Done 15d: check v2 flags people, relationships, hurts and fears only; her feelings about the find, taste and small moods are fine.
 - **B112.** Media written outside the browse lock can orphan or overwrite a cached find on a race.
   *Before users.*
 

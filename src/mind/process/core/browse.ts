@@ -13,7 +13,7 @@ import { errorName } from "@/mind/platform/errors";
 import { saveMedia } from "@/mind/platform/media";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { MINUTE } from "@/mind/platform/time";
-import { blockAt, blocksForDay } from "@/mind/world/blocks";
+import { blockAt, blocksForDay, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate, lifeInstant } from "@/mind/world/her-clock";
 import { WORLD_LOCK } from "./thoughts";
 
@@ -32,8 +32,9 @@ export function browseTime(
   slot: number,
 ): Date | null {
   const blocks = blocksForDay(life, day, plan);
-  const start = lifeInstant(life, day, posts.browse_window[0]).getTime();
-  const end = lifeInstant(life, day, posts.browse_window[1]).getTime();
+  // She has no night, so any free minute of her day will do.
+  const start = lifeInstant(life, day, "00:00").getTime();
+  const end = lifeInstant(life, day, "24:00").getTime();
   const free: number[] = [];
   for (let t = start; t < end; t += posts.browse_step_minutes * MINUTE)
     if (!blockAt(blocks, new Date(t))) free.push(t);
@@ -58,6 +59,8 @@ export async function browseIfDue(deps: CoreDeps, now: Date): Promise<boolean> {
   const day = lifeDate(config.life, now);
   const plan = await core.world.plan(day);
   if (!plan) return false;
+  // Busy or logged off right now: try again next tick.
+  if (blockAt(await todaysBlocks(deps, now), now)) return false;
   const slot = await core.posts.findsOn(day);
   if (slot >= cfg.browse_per_day) return false;
   const at = browseTime(config.life, cfg, day, plan, slot);

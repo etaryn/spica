@@ -40,17 +40,28 @@ async function setup(items: Parameters<typeof fakeSources>[0], over: object = {}
   return { deps, core: coreDepsOf(deps), calls };
 }
 
-test("browse time: inside the window, never inside a busy or quiet block, stable per slot", () => {
+test("browse time: any free minute of her day, never inside a busy block, stable per slot", () => {
   const c = loadConfig({ life: { timezone: "UTC" } });
-  const t = browseTime(c.life, c.posts, DAY, FREE, 0)!;
-  expect(t.getTime()).toBeGreaterThanOrEqual(at(9).getTime());
-  expect(t.getTime()).toBeLessThan(at(23).getTime());
-  expect(t.getTime() >= at(10).getTime() && t.getTime() < at(13).getTime()).toBe(false);
-  expect(browseTime(c.life, c.posts, DAY, FREE, 0)).toEqual(t);
+  const slots = Array.from({ length: 40 }, (_, i) => browseTime(c.life, c.posts, DAY, FREE, i)!);
+  expect(slots.some((t) => t.getTime() < at(9).getTime() || t.getTime() >= at(23).getTime())).toBe(
+    true,
+  );
+  for (const t of slots)
+    expect(t.getTime() >= at(10).getTime() && t.getTime() < at(13).getTime()).toBe(false);
+  expect(browseTime(c.life, c.posts, DAY, FREE, 0)).toEqual(slots[0]);
   const full = {
-    blocks: [{ start: "00:00", end: "24:00", kind: "busy" as const, busy: 0.6, label: "reading" }],
+    blocks: [{ start: "00:00", end: "24:00", kind: "busy" as const, busy: 1, label: "reading" }],
   };
   expect(browseTime(c.life, c.posts, DAY, full, 0)).toBeNull();
+});
+
+test("she doesn't browse while offline; she does once she's back", async () => {
+  const { deps, core } = await setup({ apod: await webItem() });
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
+  await deps.core.state.update({ energy: 0.1, offline_since: at(7), last_tick: at(7, 45) });
+  expect(await browseIfDue(core, at(8))).toBe(false);
+  await deps.core.state.update({ offline_since: null });
+  expect(await browseIfDue(core, at(8))).toBe(true);
 });
 
 test("free licences only", () => {

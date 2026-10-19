@@ -691,7 +691,6 @@
   "posts": {
     "tick_cron": "40 * * * *",
     "browse_per_day": 1,
-    "browse_window": ["09:00", "23:00"],
     "browse_step_minutes": 15,
     "sources": [
       { "name": "commons_potd", "weight": 1 },

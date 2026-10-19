@@ -842,68 +842,64 @@ const onboarding = z.object({
   max_name_chars: positiveInt,
 });
 
-const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^24:00$/);
 const font = z.object({ file: text, family: text });
 
-const posts = z
-  .object({
-    tick_cron: cron,
-    browse_per_day: countFromZero,
-    // Her local hours she may browse in, outside her busy and quiet blocks.
-    browse_window: z.tuple([hhmm, hhmm]),
-    browse_step_minutes: positiveInt,
-    sources: z.array(z.object({ name: text, weight: z.number().positive() })),
-    weekly_max_age_days: positiveInt,
-    fetch_timeout_ms: positiveInt,
-    // Largest image she will download; a full-size original can be tens of megabytes.
-    max_download_bytes: positiveInt,
-    user_agent: text,
-    // What's built: a medium outside this list is never posted, whatever her skill.
-    capabilities: z.array(z.enum(["still"])).min(1),
-    craft_goals: z.object({ still: text }),
-    // Set by Ethan when her posting should get better; she reads it as her own progress.
-    craft_skill: z.object({ still: unit }),
-    max_per_week: positiveInt,
-    max_pending: positiveInt,
-    max_find_age_hours: z.number().positive(),
-    min_valence: unit,
-    candidate_limit: positiveInt,
-    max_find_px: positiveInt,
-    output_width: positiveInt,
-    caption_max_chars: positiveInt,
-    caption_target_chars: positiveInt,
-    overlay_max_chars: positiveInt,
-    media_dir: text,
-    formats_dir: text,
-    poses_dir: text,
-    fonts: z.object({ plain: font, handwritten: font }),
-    // Homemade roughness at skill 0; it shrinks linearly to none at skill 1.
-    jitter: z.object({
-      crop: z.number().min(0).max(0.3),
-      tilt_deg: z.number().min(0).max(15),
-      place: z.number().min(0).max(0.3),
-    }),
-    // The look of a render: shadow, glow, caption band, type and placement.
-    render: z.object({
-      shadow_blur: z.number().positive(),
-      shadow_opacity: unit,
-      shadow_darkness: unit,
-      glow_blur: z.number().positive(),
-      band_alpha: unit,
-      label_font_size: positiveInt,
-      caption_font_size: positiveInt,
-      text_dpi: positiveInt,
-      text_width_share: unit,
-      overlay_pad_share: unit,
-      floor_line: unit,
-      foot_left: unit,
-      foot_right: unit,
-      tint_luma_divisor: z.number().positive(),
-      tint_brightness: z.tuple([z.number().positive(), z.number().positive()]),
-    }),
-    recent_limit: positiveInt,
-  })
-  .refine((p) => p.browse_window[0] < p.browse_window[1], "posts.browse_window must be ordered");
+const posts = z.object({
+  tick_cron: cron,
+  browse_per_day: countFromZero,
+  // Her local hours she may browse in, outside her busy and quiet blocks.
+  browse_step_minutes: positiveInt,
+  sources: z.array(z.object({ name: text, weight: z.number().positive() })),
+  weekly_max_age_days: positiveInt,
+  fetch_timeout_ms: positiveInt,
+  // Largest image she will download; a full-size original can be tens of megabytes.
+  max_download_bytes: positiveInt,
+  user_agent: text,
+  // What's built: a medium outside this list is never posted, whatever her skill.
+  capabilities: z.array(z.enum(["still"])).min(1),
+  craft_goals: z.object({ still: text }),
+  // Set by Ethan when her posting should get better; she reads it as her own progress.
+  craft_skill: z.object({ still: unit }),
+  max_per_week: positiveInt,
+  max_pending: positiveInt,
+  max_find_age_hours: z.number().positive(),
+  min_valence: unit,
+  candidate_limit: positiveInt,
+  max_find_px: positiveInt,
+  output_width: positiveInt,
+  caption_max_chars: positiveInt,
+  caption_target_chars: positiveInt,
+  overlay_max_chars: positiveInt,
+  media_dir: text,
+  formats_dir: text,
+  poses_dir: text,
+  fonts: z.object({ plain: font, handwritten: font }),
+  // Homemade roughness at skill 0; it shrinks linearly to none at skill 1.
+  jitter: z.object({
+    crop: z.number().min(0).max(0.3),
+    tilt_deg: z.number().min(0).max(15),
+    place: z.number().min(0).max(0.3),
+  }),
+  // The look of a render: shadow, glow, caption band, type and placement.
+  render: z.object({
+    shadow_blur: z.number().positive(),
+    shadow_opacity: unit,
+    shadow_darkness: unit,
+    glow_blur: z.number().positive(),
+    band_alpha: unit,
+    label_font_size: positiveInt,
+    caption_font_size: positiveInt,
+    text_dpi: positiveInt,
+    text_width_share: unit,
+    overlay_pad_share: unit,
+    floor_line: unit,
+    foot_left: unit,
+    foot_right: unit,
+    tint_luma_divisor: z.number().positive(),
+    tint_brightness: z.tuple([z.number().positive(), z.number().positive()]),
+  }),
+  recent_limit: positiveInt,
+});
 
 // ---------- The whole config ----------
 

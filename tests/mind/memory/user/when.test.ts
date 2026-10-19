@@ -28,6 +28,28 @@ test("'tomorrow' at 23:30 in Singapore is the next Singapore day", () => {
   );
 });
 
+test("'this week' is the week it was said in, never last Sunday", () => {
+  expect(label("this week")).toBe("the week of Monday 5 January 2026");
+  expect(label("this week", wed)).toBe("the week of Monday 5 January 2026");
+  expect(label("later this week")).toBe("the week of Monday 5 January 2026");
+  expect(label("end of the week")).toBe("the end of the week of Monday 5 January 2026");
+  expect(resolveWhen("end of this week", mon, "UTC")?.at.toISOString().slice(0, 10)).toBe(
+    "2026-01-09",
+  );
+  expect(resolveWhen("this week", wed, "UTC")?.at).toEqual(wed);
+  // Untouched neighbours.
+  expect(label("next week")).toBe("the week of Monday 12 January 2026");
+  expect(label("this weekend")).toBe("the weekend of Saturday 10 January 2026");
+  expect(label("this month")).toBe("January 2026");
+});
+
+test("'this week' on a Sunday in Singapore is the week that Sunday ends", () => {
+  // Sunday 11 January 10:00 in Singapore.
+  expect(label("this week", new Date("2026-01-11T02:00:00Z"), "Asia/Singapore")).toBe(
+    "the week of Monday 5 January 2026",
+  );
+});
+
 test("a phrase chrono can't read is null", () => {
   expect(resolveWhen("on the 18th", mon, "UTC")).toBeNull();
   expect(resolveWhen("   ", mon, "UTC")).toBeNull();

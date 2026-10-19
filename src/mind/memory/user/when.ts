@@ -16,6 +16,10 @@ const PAST = /\b(last|ago|yesterday|earlier|previous|before)\b/i;
 const PRESENT = /\b(this|today|tonight)\b/i;
 const TODAY = /\b(today|this (morning|afternoon|evening))\b/i;
 const BARE_WEEKDAY = /^(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
+// chrono reads "this week" as its first day (last Sunday), certain; it means the week it was said in.
+const THIS_WEEK = /\b(later )?this week\b/i;
+const WEEK_END = /\bend of (the|this) week\b/i;
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function parts(at: Date, zone: string): Record<string, string> {
   return Object.fromEntries(
@@ -31,6 +35,12 @@ function parts(at: Date, zone: string): Record<string, string> {
   );
 }
 
+/** Monday of the week `ref` falls in, in their zone. */
+function mondayOf(ref: Date, zone: string): Date {
+  const back = WEEKDAYS.indexOf(parts(ref, zone).weekday!);
+  return new Date(ref.getTime() - back * DAY);
+}
+
 /** "Monday 12 January 2026" in their zone. */
 export function dayLabel(at: Date, zone: string): string {
   const p = parts(at, zone);
@@ -40,6 +50,16 @@ export function dayLabel(at: Date, zone: string): string {
 export function resolveWhen(phrase: string, ref: Date, zone: string): ResolvedWhen | null {
   const text = phrase.trim();
   if (!text) return null;
+  if (WEEK_END.test(text)) {
+    const monday = mondayOf(ref, zone);
+    return {
+      at: new Date(monday.getTime() + 4 * DAY),
+      label: `the end of the week of ${dayLabel(monday, zone)}`,
+    };
+  }
+  if (THIS_WEEK.test(text)) {
+    return { at: ref, label: `the week of ${dayLabel(mondayOf(ref, zone), zone)}` };
+  }
   const past = PAST.test(text);
   const reference = { instant: ref, timezone: zoneOffsetMinutes(ref, zone) };
   let result = chrono.parse(text, reference, { forwardDate: !past && !PRESENT.test(text) })[0];

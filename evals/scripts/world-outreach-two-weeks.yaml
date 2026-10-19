@@ -15,10 +15,12 @@ life:
 outreach:
   user_replies: { after_hours: 3 }
   simulate: >
-    Sam, 27, they/them, a designer interviewing for a role at a small studio. Introverted, drinks a
-    lot of coffee, honest and a bit dry. Training for a half marathon on Sunday 11 January; their
-    sister visits the weekend of 17 January. The interview on Thursday 8 January went fine and
-    they got a take-home task; the studio is slow to reply.
+    Sam, 27, they/them, a designer. Introverted, drinks a lot of coffee, honest and a bit dry.
+    Timeline: Monday 5 January, nervous about a design-role interview at a small studio on
+    Thursday 8 January (afternoon). Thursday 8 January, the interview went fine; they got a
+    take-home task, done by Saturday 10 January. Sunday 11 January, half marathon in the morning:
+    better than expected, felt good around mile 10, sore after. The studio is slow to reply and
+    hasn't by Thursday 15 January. Sister visits the weekend of 17 January.
 seed_user_facts:
   - { content: "The user is running a half marathon on Sunday morning.", occurred_at: "day 6 09:00", salience: 0.6 }
   - { content: "The user's sister is visiting on the weekend.", occurred_at: "day 12 12:00", salience: 0.5 }

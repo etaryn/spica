@@ -17,6 +17,7 @@ import { insertLifeDay } from "@/db/repos/world/life-day";
 import { session_log } from "@/db/schema";
 import { recentTurns } from "@/db/repos/user/session-log";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { getTimezone } from "@/db/repos/user/users";
 import { simUserInput, SimUserSchema } from "./sim-user";
 import { drainUserMind, runDueJobs } from "./scheduler";
 import { BASE, type LifeScript, type OutreachScript } from "./script";
@@ -168,7 +169,9 @@ async function simulatedAnswer(deps: Deps, userId: string, card: string): Promis
     system: loadPrompt("eval/sim-user", deps.config.prompts.sim_user),
     input: simUserInput(
       card,
-      turns.map((t) => ({ role: t.role, text: t.text })),
+      turns.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      deps.clock.now(),
+      (await getTimezone(deps.db, userId)) ?? "UTC",
     ),
     schema: SimUserSchema,
     timeoutMs: deps.config.models.structured_timeout_ms,

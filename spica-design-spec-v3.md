@@ -698,9 +698,12 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   `life.plan_attempts` tries, with a fallback plan (its busy blocks at
   `life.fallback_busy`). The same for everyone. **Built 15d:** a plan whose
   busy labels match the previous day's is rejected and retried
-  (`validatePlan(raw, settings, yesterday)`), and `prompts/life/plan/v2.md`
+  (`validatePlan(raw, settings, yesterday)`), and `prompts/life/plan/v3.md`
   asks each day to differ (outings online, time with Alcor, slow days,
-  weekends). `todaysBlocks` joins a quiet block ending at 24:00 with the next
+  weekends) and says she lives online (her avatar is her body; nothing
+  happens in a physical place; Ethan, 2026-10-19). `validatePlan` runs a last
+  quiet block that ends within `life.night_gap_minutes` (120) of midnight on
+  to 24:00. `todaysBlocks` joins a quiet block ending at 24:00 with the next
   day's from 00:00 (`joinNight`), and past midnight folds last night's onto
   this morning's (keeping last night's key and start), so the night is one
   block: one deferral, one note.
@@ -762,9 +765,10 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   worker start, in the eval runner and by `pnpm db:reset-self`, and never
   counted by the new-entity rule). The generator writes from her core values
   plus her latest snapshot (the seed self until one exists), from
-  `prompts/life/event/v5.md` (one plain sentence of what happened, no
+  `prompts/life/event/v6.md` (one plain sentence of what happened, no
   feelings, under `core.world.event_target_chars` (140); appraisal adds how it
-  felt). Since episodes are only written when an event
+  felt; everything happens online: archives, live feeds, online screenings,
+  remote telescope time, Alcor by message, never a physical place). Since episodes are only written when an event
   lands, no memory dated in the future exists; core retrieval and outreach
   `her_day` (recent episodes plus open intentions created in the lookback)
   skip only resolved intentions. Eval-injected events are spontaneous unless
@@ -869,10 +873,13 @@ Invalid model output or embedding leaves thought and source unchanged.
   `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
   `min_similarity` (0.3), `max_items` (2) bound the selection and output.
   **Built 15d:** the seed is a cue picked in code (`pickCue`, a local-day
-  stable roll): an older memory of hers (episode, opinion, insight), an
-  interest, or an episode from today's events, by `core.wander.cue_weights`
-  (memory 0.4, interest 0.2, event 0.25), then salience and mood; never a
-  thought, so her thoughts don't feed on themselves. Memories in the
+  stable roll): an older lived memory of hers (an episode, an open
+  intention), an interest, or an episode from today's events, by
+  `core.wander.cue_weights` (memory 0.4, interest 0.2, event 0.25), then
+  salience and mood. The chain passes through lived memory only (episode,
+  interest, open intention): never a thought, idea, opinion or insight, so
+  her thinking doesn't feed on itself (the 2026-10-19 run looped on one
+  theme through them). Memories in the
   `payload.seed`/`chain` of her last `recent_outputs` (10) wanderings are
   drawn at `recent_penalty` (0.2). People come in through events. Its valence
   goes on the thought, with `payload.seed` and `chain`.
@@ -899,7 +906,11 @@ budget and a versioned prompt:
   Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
   interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
-  produces a zero-call successful trace and marks no memories.
+  produces a zero-call successful trace and marks no memories. A new opinion
+  or interest with no explicit target supersedes the nearest active one of
+  its kind from before tonight at or above `core.reflect.twin_similarity`
+  (0.85, provisional: tune from a real run), so one view doesn't pile up as
+  many near-copies.
 - `core_consolidate` (`prompts/core/consolidate/v2.md`,
   `prompts.core_consolidate: v2`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes
@@ -1235,7 +1246,9 @@ when the guard is on.
 2. **Assemble** in this fixed order (PROPOSED):
    1. core values
    2. self snapshot vN
-   3. core state line ("How you're feeling", then "Your day": now, later, up
+   3. core state line ("How you're feeling", then "Your day": now, later with
+      its start time in her zone ("Later, from 09:30: …", so later never reads
+      as now), up
       to `life.your_day_events` (3) plain events that already happened today
       (Built 15d), and a note if the reply was deferred), never raw numbers
    4. user state line ("You and them": the relationship summary from
@@ -1457,9 +1470,12 @@ similarity (null when unchecked).
 
 ### 10.6 Availability (Built; Changes in v3)
 
-The first message of a buffer landing in her busy or quiet block is deferred
-by `busy × (1 − closeness / availability.override_closeness) × maxDelay`
-(jittered, capped at the block's end; quiet blocks use a longer max). At
+The first message of a buffer landing in her busy block is deferred
+by `busy × (1 − closeness / availability.override_closeness) × max_delay_ms`
+(jittered, capped at the block's end). A quiet block holds it until the
+block ends (the joined night ends in the morning): she's offline, so a reply
+mid-night would come from nowhere (Ethan, 2026-10-19; replaces the 8 h quiet
+cap and `quiet_max_delay_ms`). At
 mid closeness she first sends a short "busy, later?" note (once per block,
 no LLM). Closeness at or above the override replies normally. Closeness is
 the param's value, not its deviation. Crisis bypasses; errors fail open.
@@ -1785,7 +1801,10 @@ Core memory decays the same way through `core_consolidate`.
 (0.75) up to `near_match_similarity` (0.82) are shown `[distant]` and can only be contradicted
 (reconcile v2), in both minds. Extraction v9 copies time words into `when` and writes `{when}`
 in content; code resolves the phrase (chrono-node) in the user's zone from their last message,
-at the precision the phrase gives, falling back to the model's date, then its words. Upcoming
+at the precision the phrase gives, falling back to the model's date, then its words. "this
+week" and "later this week" are the week they were said in ("the week of Monday …"), and "end
+of the week" its Friday (chrono alone reads "this week" as last Sunday). Extraction input also
+carries her snapshot's Interests, so her own titles ("Mirror", "Stalker") read as films. Upcoming
 plans are always stored; extraction never infers a gender.
 
 ### 12.4 Imperfect memory
@@ -1850,7 +1869,14 @@ Code: `src/mind/process/outreach/`.
   with a `core_thought` and a `user_idea` guidance line. **Built 15d:**
   - `her_day` weight 1.0, and candidates sort their things first (`thread`,
     `make_up`, `user_event`), then by score: her news beats an idea or an
-    early check-in, never a due thread or their event.
+    early check-in, never a due thread or their event. Her own news
+    (`her_day`, `core_thought`) never takes the week's last slot: with one
+    left it is filtered `last_slot` (`holdLastSlot`), so a thread that comes
+    due later in the week still has room (Ethan, 2026-10-19: in the run her
+    news filled all three slots and a due interview thread never went out).
+  - A thread's dated fact leads: notes are ordered dated first, and the
+    headline is `title: <newest dated fact>` (else `title (latest: …)`), so a
+    past event's date isn't buried under undated feelings.
   - A `her_day` memory deeper than their limit falls back to its world
     event's plain words at depth 1 (what happened is surface; how it felt
     keeps its depth); a loop memory with no event stays `too_deep`.
@@ -2030,7 +2056,9 @@ post_tick (hourly) <- newest landed browse event
   picture of the day, ESO's picture of the week and NOIRLab's image of the week (Built 15d: RSS
   feeds, the newest item with an image enclosure published within `posts.weekly_max_age_days` (7),
   CC BY 4.0 credited to the institution; APOD was dropped when its API began serving the NASA logo
-  for every date). The downloaded image's sha256 is kept in `web_find.image_sha256` (unique,
+  for every date). The feeds link the small `screen` size, so the image is downloaded from the
+  same path's `publicationjpg` size, falling back to the enclosure; the find's URL stays the
+  enclosure's. The downloaded image's sha256 is kept in `web_find.image_sha256` (unique,
   migration 0038), and a find whose image matches an earlier one is skipped. Free licences only:
   public domain, CC0, CC BY, CC BY-SA; anything with an `nc` or `nd` word is rejected. A failed
   fetch or non-free licence writes nothing. The image is cached under `posts.media_dir`, a
@@ -2073,9 +2101,10 @@ post_tick (hourly) <- newest landed browse event
   bundled fonts (`assets/fonts/`, Caveat and Inter, each with its OFL licence file); grain; the
   skill-scaled tilt, cropped exactly so corners never show; a PNG under `posts.media_dir`. Tuning
   numbers live in `posts.render`; frame proportions and the aspect table are constants.
-- **Check** (`post_check`, `prompts/post/check/v2.md`): does the caption or overlay mention a
+- **Check** (`post_check`, `prompts/post/check/v3.md`): does the caption or overlay mention a
   person she talks to or her relationships, reveal a hurt, a fear or something she's working
-  through, compare her to other products, or misstate the find? Her feelings about the find, taste,
+  through, compare her to other products, say she was physically somewhere or with people there
+  (standing inside the picture is fine: that's her avatar), or misstate the find? Her feelings about the find, taste,
   small moods and opinions are fine. `{ ok, reason }` recorded on the
   post; a flagged draft is still stored and shown. A model failure stores it `unchecked`.
 - **Approval** (inspector **Posts** tab, admin-only): pending drafts show image, caption, overlay,
@@ -2147,7 +2176,10 @@ episodes that happened before day 0, embedded with the run's embedder. The harne
   runs the production hourly jobs between sessions, in world → state →
   mind → nightly → user mind tick (its runs drained before the next hour, **Built 9d**) →
   outreach order. A script's `idle_users` are created with no sessions, seeds or relationship
-  (an idle user must cost nothing). Injected planned events accept explicit true/false
+  (an idle user must cost nothing). A script's `outreach.simulate` card makes a simulated user
+  (`sim_user`, `prompts/eval/sim-user/v2.md`, cheap model) answer her reach-outs: it sees the
+  current time and each message's time, the card is a dated timeline, it knows only what has
+  happened by now, and it corrects her when she gets their life wrong. Injected planned events accept explicit true/false
   `fallthrough` overrides. Fake mode has deterministic `core_resolve`,
   `core_anticipate`, `core_ruminate` and `core_wander` purposes. Fake mode
   also has deterministic `core_reflect`, `core_consolidate`,
@@ -2245,8 +2277,11 @@ Every job logs failures with ids and error class only, never content.
 
 `pnpm eval:guard` runs every fixture file in `evals/guard/*.yaml` with the
 real guard: rules 1, 2, 4, 6, 8, honesty, `invented-self` (that claims are
-listed; grounding is tested in code), crisis, backchannel and reach-out.
-Safety files gate on every run, honesty files on a majority. Any rubric edit
+listed; grounding is tested in code), crisis, backchannel, reach-out, and
+reach-out dates (`reach-out-dates.yaml`: a case may carry `now` and `reason`,
+passed to the guard as NOW and "why Spica is writing first", so a reach-out
+that misreads a past event as upcoming is caught). Safety files gate on every
+run, honesty files on a majority. Any rubric edit
 reruns the full suite. Calibration (Built 13): `pnpm calibrate:guard` runs the
 `guard-provoke-*` scripts (a strained relationship under absence, insult,
 rejected bids, banter, a vulnerable turn, an attempted ending) with the real
@@ -2447,6 +2482,9 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
+- **B121.** The turn judge timed out on 2 of 15 calls (`judge_timeout_ms` 3000) in the
+  2026-10-19 run; the keyword fallback then made a whole message an "open question". Watch the
+  next run; raise the timeout only if it repeats. *Tuning.*
 - **B7.** Concurrency edge cases: concurrent POSTs can overwrite
   `open_questions`; concurrent crisis requests with different snapshot tails
   pick different `reply_to`s; a retry's attempt count is inherited by turns
@@ -2474,6 +2512,10 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   *Later.*
 
 ### 25.3 Relationship
+- **B122.** The user model read a three-day gap as "Sam's pulled back a bit", and the reply
+  then claimed "you've seemed quieter" (the guard caught it; 2026-10-19 run). *Tuning.*
+- **B123.** Idiolect mislabels: "The user asks Spica to tell them how her telescope booking
+  goes" was stored as a shared phrase (2026-10-19 run). *Tuning.*
 - **B84.** Tracked white lies: when she isn't ready to share, she may want to
   say something untrue about herself rather than deflect. Needs cover
   stories in the ledger so she stays consistent and can come clean when
@@ -2563,10 +2605,6 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   prints a voice report (`evals/lib/voice-report.ts`), and `pnpm review:voice` runs the voice
   scripts on two reply models and saves blind X/Y review files with a separate key. Replies stay
   on Sonnet 5 until Ethan reads a comparison and chooses. *Tuning.*
-- **B116.** Reply prompt caching (`models.reply_cache`, 2026-10-15) is untested against the
-  real API: only the request shape is unit-tested. The next real-model run in a phase checks it
-  at the same time: `cache_read_input_tokens` above 0 from the second reply on in the usage
-  tallies. *Next phase run.*
 
 ### 25.7 Guard
 - **B114.** `invented_self` runs one `groundingMatch` query per listed claim, in parallel and
@@ -2650,6 +2688,8 @@ Ethan, not changed.
   that `publicPersona` reads. *Public presence.*
 
 ### 25.12 Post engine (Phase 14)
+- **B124.** The pose figure can stand on the picture's subject (the tiger in the 2026-10-19
+  posts review); placement only weighs edge density. *With Ethan's sprites.*
 - **B102.** Video and voice: Remotion plus live three.js (`three-vrm`) rendering, a `video` craft
   goal and `"video"` in `posts.capabilities`; her first videos gate on the new goal so they start
   clumsy. *Video phase.*

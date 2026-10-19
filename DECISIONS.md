@@ -180,3 +180,7 @@ code itself.
 | 2026-10-18 | Wander's "recent themes" are the memories her last 10 wanderings started from or chained through (`payload.seed`/`chain`), drawn at ×0.2; no embedding check, and people come in through events | Needs no extra embedding calls; the design doc's embedding check was simplified to this. |
 | 2026-10-18 | `pickCue` keeps a uniform pick when every weight is zero and keeps mood-congruence | Matches the old seed pick; wander skips only when there is no cue at all. |
 | 2026-10-18 | The fake `life_plan` alternates its busy label after a "reading" day | Plans now must differ from yesterday; a constant fake plan would fall back every second day. |
+| 2026-10-19 | "this week" / "later this week" resolve to the day said, labelled "the week of Monday …"; "end of the week" to its Friday | chrono reads "this week" as last Sunday; the day said keeps the event ahead of now. |
+| 2026-10-19 | `core.reflect.twin_similarity` 0.85 is provisional; twins only against memories from before tonight | The run's dump has no embeddings to measure real paraphrase similarity; same-night exclusion stops chains. |
+| 2026-10-19 | The publication-size download keeps the enclosure URL as the find's URL | `findByUrl` dedupe stays unchanged; the hash check still catches the same picture. |
+| 2026-10-19 | `ExtractArgs.herInterests` is optional | The cold path always passes it; other callers have no snapshot to give. |

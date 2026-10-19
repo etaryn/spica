@@ -118,8 +118,11 @@ guaranteed even if generation fails) · 18+ server-side · `user_id` scoping, en
 account deletion only (users can't view or edit her memory) · no explicit engagement features.
 
 ## Current phase
-**Phase 15 (tuning): all four slices (15a–15d) are built**; what each delivered is in `docs/spec-v3-history.md`. Next:
-Ethan's logged review runs (`review:world-outreach`, `posts:review`, `eval:guard`); B35 waits on
+**Phase 15 (tuning): all four slices (15a–15d) are built**; what each delivered is in `docs/spec-v3-history.md`.
+The 2026-10-19 review runs' fixes are built (`docs/2026-10-19-15d-run-fixes-design.md`: "this week",
+her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
+online, one night held). Next: Ethan's logged rerun of `review:world-outreach`, `eval:guard`
+(new date cases) and `posts:review`; B35 waits on
 his reply-model comparison; Publishing, Video and Frontend come later. Persona v6's drafted lines
 await Ethan's rewrite. Each phase or slice starts with a design doc in `docs/`; built plans are
 deleted (history is in git). Exception: the 15d design doc stays until 15d's review runs are done.

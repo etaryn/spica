@@ -848,7 +848,7 @@ const font = z.object({ file: text, family: text });
 const posts = z.object({
   tick_cron: cron,
   browse_per_day: countFromZero,
-  // Her local hours she may browse in, outside her busy and quiet blocks.
+  // Browse times are picked on this step through her free minutes, at any hour.
   browse_step_minutes: positiveInt,
   sources: z.array(z.object({ name: text, weight: z.number().positive() })),
   weekly_max_age_days: positiveInt,

@@ -121,7 +121,8 @@ account deletion only (users can't view or edit her memory) · no explicit engag
 **Phase 15 (tuning): all four slices (15a–15d) are built**; what each delivered is in `docs/spec-v3-history.md`.
 The 2026-10-19 review runs' fixes are built (`docs/2026-10-19-15d-run-fixes-design.md`: "this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
-online, one night held). Next: Ethan's logged rerun of `review:world-outreach`, `eval:guard`
+online). No night is built too (`docs/2026-10-20-no-night-design.md`, kept until its review run): her
+energy is a battery, she logs off when it runs low at any hour, and reach-outs skip their night. Next: Ethan's logged rerun of `review:world-outreach`, `eval:guard`
 (new date cases) and `posts:review`; B35 waits on
 his reply-model comparison; Publishing, Video and Frontend come later. Persona v6's drafted lines
 await Ethan's rewrite. Each phase or slice starts with a design doc in `docs/`; built plans are

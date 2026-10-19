@@ -1,7 +1,8 @@
 /**
  * Her day plan: the busy and downtime blocks of one of her local days, at any hour (she has no
- * night), shared by every user. The `life_plan` job makes sure today and tomorrow exist. The model writes the plan, code
- * validates it with one retry, and a fallback plan means she always has a day.
+ * night), shared by every user. The `life_plan` job makes sure today and tomorrow exist. The
+ * model writes the plan, code validates it with one retry, and a fallback plan means she always
+ * has a day.
  */
 import { z } from "zod";
 import type { LifeBlock, LifePlan } from "@/db/schema";

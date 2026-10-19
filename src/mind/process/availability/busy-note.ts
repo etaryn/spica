@@ -1,7 +1,7 @@
 /**
- * The "busy, later?" note: one short message, sent at most once per busy or offline block and only while
- * the deferral is still pending. Its wording is picked from a prompt file without any model
- * call, and it is never extracted into memory.
+ * The "busy, later?" note: one short message, sent at most once per busy or offline block and
+ * only while the deferral is still pending. Its wording is picked from a prompt file without any
+ * model call, and it is never extracted into memory.
  */
 import { randomUUID } from "node:crypto";
 import * as sessionLog from "@/db/repos/user/session-log";

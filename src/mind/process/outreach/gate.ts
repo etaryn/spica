@@ -1,8 +1,9 @@
 /**
  * The send gate: whether she may write first right now. The relationship must not be ended,
  * she must be within the daily and weekly caps, free (not busy or offline), outside their own
- * night, under the unanswered limit, not mid-conversation, and outside a crisis quiet window. Pure. Every rule is evaluated and
- * reported, with no short-circuit, so the log shows the whole picture.
+ * night, under the unanswered limit, not mid-conversation, and outside a crisis quiet window.
+ * Pure. Every rule is evaluated and reported, with no short-circuit, so the log shows the whole
+ * picture.
  */
 import type { OutreachConfig } from "@/mind/platform/config";
 import { HOUR } from "@/mind/platform/time";

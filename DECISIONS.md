@@ -184,3 +184,8 @@ code itself.
 | 2026-10-19 | `core.reflect.twin_similarity` 0.85 is provisional; twins only against memories from before tonight | The run's dump has no embeddings to measure real paraphrase similarity; same-night exclusion stops chains. |
 | 2026-10-19 | The publication-size download keeps the enclosure URL as the find's URL | `findByUrl` dedupe stays unchanged; the hash check still catches the same picture. |
 | 2026-10-19 | `ExtractArgs.herInterests` is optional | The cold path always passes it; other callers have no snapshot to give. |
+| 2026-10-20 | Going offline and coming back are hour-granular, decided only by `core_state_tick` | The tick already runs hourly; nothing between ticks needs finer offline timing. |
+| 2026-10-20 | While she's offline her plan's busy blocks don't happen: no drain, and offline wins `blockAt` | The plan is intent; she wasn't there. |
+| 2026-10-20 | A planned event due while she's offline still lands as planned | Marking it as fallen through is backlog if the review run reads wrong. |
+| 2026-10-20 | `estimatedBack` counts from `last_tick` at `offline_recovery_per_hour`, never under 1 h | A message between ticks never sees an offline end in the past. |
+| 2026-10-20 | Eval script users have no timezone (UTC), so `their_night` (23–08) mirrors the old quiet window | Reach-out counts in the outreach scripts hold without retuning. |

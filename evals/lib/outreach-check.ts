@@ -1,7 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import type { Config } from "@/mind/platform/config";
 import { inTheirNight } from "@/mind/process/outreach/gate";
-import { localHour } from "@/mind/platform/timezone";
+import { isValidTimeZone, localHour } from "@/mind/platform/timezone";
 import { getTimezone } from "@/db/repos/user/users";
 import { lifeInstant } from "@/mind/world/her-clock";
 import { HOUR } from "@/mind/platform/time";
@@ -114,10 +114,13 @@ export async function outreachSnapshot(
       return [];
     }),
     log,
-    timezone: (await getTimezone(db, userId)) ?? "UTC",
+    timezone: validZone(await getTimezone(db, userId)),
     ...extra,
   };
 }
+
+/** The same fallback the gate uses: an unknown or invalid zone is UTC. */
+const validZone = (tz: string | null) => (tz && isValidTimeZone(tz) ? tz : "UTC");
 
 /** Distinct crisis window starts: every crisis event, plus flagged crisis replies no crisis event followed. */
 function crisisStarts(events: Date[], flagged: Date[]): { at: Date }[] {

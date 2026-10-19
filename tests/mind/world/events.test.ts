@@ -343,14 +343,15 @@ test("a planned event carries its thought's embedding; a planned one without a t
   );
 });
 
-test("the generator's prompt is life/event v5, which explains both kinds and the subject", async () => {
+test("the generator's prompt is life/event v6: both kinds, the subject, and she lives online", async () => {
   const deps = makeTestDeps(always);
-  expect(deps.config.prompts.life_event).toBe("v5");
+  expect(deps.config.prompts.life_event).toBe("v6");
   await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain("planned");
   expect(call.system).toContain("spontaneous");
   expect(call.system).toContain("one plain sentence");
+  expect(call.system).toContain("She lives online");
 });
 
 test("the generator sees only core context: her episodes, her people, her plan", async () => {

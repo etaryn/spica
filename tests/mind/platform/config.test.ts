@@ -92,7 +92,9 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.core.state.bands.energy).toEqual([0.35, 0.7]);
   expect(c.availability.override_closeness).toBe(0.8);
   expect(c.models.life).toBe("claude-haiku-4-5");
-  expect(c.prompts.life_plan).toBe("v2");
+  expect(c.prompts.life_plan).toBe("v3");
+  expect(c.prompts.life_event).toBe("v6");
+  expect(c.prompts.post_check).toBe("v3");
 });
 
 test("life.timezone must be a real IANA zone", () => {

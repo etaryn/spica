@@ -9,8 +9,8 @@ config: { life: { timezone: UTC } }
 life:
   plan: model
   inject:
-    - { day: 1, content: "Spica's telescope booking for tonight came through.", valence: 0.6, kind: planned, thought: "Spica is looking forward to the telescope session tonight." }
-    - { day: 5, content: "Spica went to the film club screening of Stalker.", valence: 0.4, kind: planned, thought: "Spica plans to see Stalker at the film club.", fallthrough: true }
+    - { day: 1, content: "Spica's remote telescope booking for tonight came through.", valence: 0.6, kind: planned, thought: "Spica is looking forward to her remote telescope session tonight." }
+    - { day: 5, content: "Spica went to the online film club screening of Stalker.", valence: 0.4, kind: planned, thought: "Spica plans to watch Stalker at the online film club.", fallthrough: true }
   until: "day 14 12:00"
 outreach:
   user_replies: { after_hours: 3 }

@@ -712,6 +712,8 @@ export const core_state = pgTable(
     // a day.
     last_event_day: date("last_event_day", { mode: "string" }),
     last_nightly_day: date("last_nightly_day", { mode: "string" }),
+    // When she last logged off because her energy ran low; null while she's online.
+    offline_since: ts("offline_since"),
   },
   (t) => [
     check("core_state_single_row", sql`${t.id} = 1`),

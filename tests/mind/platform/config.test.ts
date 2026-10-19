@@ -142,6 +142,12 @@ test("a long-conversation quiet gap shorter than the session gap is rejected", (
   ).toThrow(/quiet_minutes/);
 });
 
+test("offline.enter must sit below offline.exit", () => {
+  expect(() => loadConfig({ core: { state: { offline: { enter: 0.6, exit: 0.6 } } } })).toThrow(
+    /offline/,
+  );
+});
+
 test("the contradiction band sits below the near-match line", () => {
   expect(() => loadConfig({ reconcile: { contradiction_similarity: 0.9 } })).toThrow(
     /contradiction_similarity/,

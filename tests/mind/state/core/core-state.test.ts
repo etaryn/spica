@@ -4,11 +4,12 @@ import {
   applyEvent,
   baselineNeeds,
   depleteNeeds,
-  dayLoad,
   driftStep,
-  energyTarget,
+  energyStep,
+  estimatedBack,
+  hourLoad,
+  nextOffline,
   preoccupationExpired,
-  rhythm,
   emotionExpired,
 } from "@/mind/state/core/core-state";
 
@@ -16,30 +17,54 @@ const cfg = loadConfig().core.state;
 const H = 3_600_000;
 const t = (h: number) => new Date(Date.UTC(2026, 0, 5) + h * H);
 
-test("rhythm peaks at energy_peak_hour", () => {
-  expect(rhythm(16, cfg)).toBeCloseTo(1 + cfg.energy_amplitude);
-  expect(rhythm(4, cfg)).toBeCloseTo(1 - cfg.energy_amplitude);
-});
-
-test("dayLoad counts busy hours only, weighted by busy level, up to now", () => {
+test("hourLoad weighs the busy part of the hour", () => {
   const blocks = [
-    { key: "k1", label: "x", start: t(9), end: t(13), busy: 1, block: "busy" as const },
-    { key: "k2", label: "y", start: t(0), end: t(8), busy: 0.9, block: "quiet" as const },
+    { key: "k1", label: "x", start: t(9), end: t(9.5), busy: 0.8, block: "busy" as const },
   ];
-  expect(dayLoad(blocks, t(0), t(11), cfg)).toBeCloseTo(2 / cfg.full_load_hours);
-  expect(dayLoad(blocks, t(0), t(20), cfg)).toBeCloseTo(4 / cfg.full_load_hours);
+  expect(hourLoad(blocks, t(9), t(10))).toEqual({ load: 0.4, covered: 0.5 });
+  expect(hourLoad(blocks, t(11), t(12))).toEqual({ load: 0, covered: 0 });
 });
 
-test("a heavy day lowers the energy target", () => {
-  const base = cfg.baseline;
-  expect(energyTarget(base, 19, 1, cfg)).toBeLessThan(energyTarget(base, 19, 0, cfg) - 0.25);
+test("energy drains with busy hours, recovers slowly when free and fast when offline", () => {
+  const e = cfg.energy;
+  expect(energyStep(0.5, { load: 1, covered: 1 }, false, 0, cfg)).toBeCloseTo(
+    0.5 - e.busy_drain_per_hour,
+  );
+  expect(energyStep(0.5, { load: 0, covered: 0 }, false, 0, cfg)).toBeCloseTo(
+    0.5 + e.free_recovery_per_hour,
+  );
+  // Offline: her plan doesn't happen, so a busy hour neither drains nor counts.
+  expect(energyStep(0.5, { load: 1, covered: 1 }, true, 0, cfg)).toBeCloseTo(
+    0.5 + e.offline_recovery_per_hour,
+  );
+  expect(energyStep(0.99, { load: 0, covered: 0 }, true, 1, cfg)).toBe(1);
 });
 
-test("driftStep moves toward the target and clamps", () => {
+test("she logs off below enter and comes back at exit, with no flicker between", () => {
+  const now = t(14);
+  expect(nextOffline(null, cfg.offline.enter - 0.01, now, cfg)).toEqual(now);
+  expect(nextOffline(null, cfg.offline.enter + 0.01, now, cfg)).toBeNull();
+  const since = t(10);
+  expect(nextOffline(since, (cfg.offline.enter + cfg.offline.exit) / 2, now, cfg)).toEqual(since);
+  expect(nextOffline(since, cfg.offline.exit, now, cfg)).toBeNull();
+});
+
+test("estimatedBack is the hour energy reaches exit, never before the next tick", () => {
+  const rate = cfg.energy.offline_recovery_per_hour;
+  const hours = Math.ceil((cfg.offline.exit - 0.2) / rate);
+  expect(estimatedBack({ energy: 0.2, last_tick: t(14), offline_since: t(14) }, cfg)).toEqual(
+    t(14 + hours),
+  );
+  expect(
+    estimatedBack({ energy: cfg.offline.exit, last_tick: t(14), offline_since: t(10) }, cfg),
+  ).toEqual(t(15));
+});
+
+test("driftStep moves mood toward the target and clamps; energy takes only noise", () => {
   const s = { mood_valence: -1, mood_arousal: 0, energy: 1 };
   const next = driftStep(s, { mood_valence: 1, mood_arousal: 1, energy: 0 }, [0, 0, 0], cfg);
   expect(next.mood_valence).toBeCloseTo(-1 + 2 * cfg.drift_rate);
-  expect(next.energy).toBeCloseTo(1 - cfg.drift_rate);
+  expect(next.energy).toBe(1);
   expect(
     driftStep(
       { mood_valence: 1, mood_arousal: 1, energy: 1 },

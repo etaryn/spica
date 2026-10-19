@@ -476,10 +476,14 @@ const coreState = z.object({
   tick_cron: cron,
   drift_rate: unit,
   noise: unit,
-  energy_peak_hour: hourOfDay,
-  energy_amplitude: unit,
-  busy_drain: unit,
-  full_load_hours: z.number().positive(),
+  energy: z.object({
+    busy_drain_per_hour: unit,
+    free_recovery_per_hour: unit,
+    offline_recovery_per_hour: unit.positive(),
+  }),
+  offline: z
+    .object({ enter: unit, exit: unit, busy: unit, label: z.string().min(1) })
+    .refine((o) => o.enter < o.exit, "core.state.offline.enter must be below exit"),
   preoccupation_hours: z.number().positive(),
   preoccupation_min_valence: unit,
   event_gain: unit,

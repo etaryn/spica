@@ -34,7 +34,7 @@ test("a busy day pulls energy lower than a free one", async () => {
       await insertLifeDay(full.db, {
         date: "2026-01-05",
         plan: {
-          blocks: [{ start: "01:00", end: "10:00", kind: "busy", busy: 1, label: "reading" }],
+          blocks: [{ start: "08:00", end: "11:00", kind: "busy", busy: 1, label: "reading" }],
         },
         source: "scripted",
         model: "none",
@@ -104,4 +104,34 @@ test("the tick depletes needs and lets an old emotion go", async () => {
   const row = (await deps.core.state.get())!;
   expect(row.emotion).toBeNull();
   expect(row.needs.autonomy).toBeCloseTo(cfg.needs_baseline - cfg.need_decay_per_day / 24);
+});
+
+test("a long busy run takes her offline at the tick she drops below enter, and back later", async () => {
+  const deps = makeTestDeps({ core: { state: { noise: 0 } }, life: { timezone: "UTC" } });
+  await insertLifeDay(deps.db, {
+    date: "2026-01-05",
+    plan: { blocks: [{ start: "00:00", end: "24:00", kind: "busy", busy: 1, label: "reading" }] },
+    source: "scripted",
+    model: "none",
+    prompt_version: "scripted",
+    generated_at: new Date("2026-01-05T00:00:00Z"),
+  });
+  const core = coreDepsOf(deps);
+  let wentOffline: Date | null = null;
+  for (let h = 1; h <= 23 && !wentOffline; h++) {
+    await coreStateTick(core, new Date(Date.UTC(2026, 0, 5, h)));
+    wentOffline = (await deps.core.state.get())!.offline_since;
+  }
+  expect(wentOffline).not.toBeNull();
+  expect((await deps.core.state.get())!.energy).toBeLessThan(deps.config.core.state.offline.enter);
+  // Offline ignores her plan, so the busy day doesn't drain her and she recovers.
+  let back = false;
+  for (let h = 1; h <= 12 && !back; h++) {
+    await coreStateTick(core, new Date(wentOffline!.getTime() + h * H));
+    back = (await deps.core.state.get())!.offline_since === null;
+  }
+  expect(back).toBe(true);
+  expect((await deps.core.state.get())!.energy).toBeGreaterThanOrEqual(
+    deps.config.core.state.offline.exit,
+  );
 });

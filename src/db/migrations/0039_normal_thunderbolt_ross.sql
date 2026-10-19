@@ -1,0 +1,1 @@
+ALTER TABLE "core_state" ADD COLUMN "offline_since" timestamp with time zone;

@@ -64,6 +64,73 @@ test("due thread: high/med only, strength by stakes, topic keys on none with no 
   expect(buildCandidates(i, cfg, now)).toHaveLength(1); // the low-stakes thread never becomes a candidate
 });
 
+test("a thread's dated fact leads its notes and its headline; the topic stays on the newest", () => {
+  const i = empty();
+  const fact = (id: string, content: string, at: string, dated: boolean) => ({
+    id,
+    content,
+    at: new Date(at),
+    dated,
+  });
+  i.dueThreads = [
+    {
+      id: "t1",
+      title: "half marathon",
+      detail: "The user is doom-scrolling about it.",
+      stakes: "med",
+      next_checkpoint: new Date("2026-01-10T09:00:00Z"),
+      fact_id: "f3",
+      sensitive: false,
+      facts: [
+        fact("f3", "The user is doom-scrolling about it.", "2026-01-06T15:00:00Z", false),
+        fact("f2", "The user is freaking out a little.", "2026-01-05T14:00:00Z", false),
+        fact(
+          "f1",
+          "The user has a half marathon Sunday 11 January 2026.",
+          "2026-01-11T12:00:00Z",
+          true,
+        ),
+      ],
+    },
+  ];
+  const [c] = buildCandidates(i, { ...cfg, reason_facts: 2 }, now);
+  expect(c!.topic).toBe("thread:t1@f3");
+  expect(c!.text).toBe("half marathon: The user has a half marathon Sunday 11 January 2026.");
+  expect(c!.notes.map((n) => n.text)).toEqual([
+    "The user has a half marathon Sunday 11 January 2026.",
+    "The user is doom-scrolling about it.",
+  ]);
+});
+
+test("a thread with only undated facts keeps its latest headline and newest-first notes", () => {
+  const i = empty();
+  const at = (iso: string) => new Date(iso);
+  i.dueThreads = [
+    {
+      id: "t1",
+      title: "new job",
+      detail: "The user is nervous.",
+      stakes: "med",
+      next_checkpoint: at("2026-01-10T09:00:00Z"),
+      fact_id: "f2",
+      sensitive: false,
+      facts: [
+        { id: "f2", content: "The user is nervous.", at: at("2026-01-06T09:00:00Z"), dated: false },
+        {
+          id: "f1",
+          content: "The user got the job.",
+          at: at("2026-01-05T09:00:00Z"),
+          dated: false,
+        },
+      ],
+    },
+  ];
+  const [c] = buildCandidates(i, cfg, now);
+  expect(c!.text).toBe("new job (latest: The user is nervous.)");
+  expect(c!.notes.map((n) => n.text)).toEqual(["The user is nervous.", "The user got the job."]);
+  expect(c!.topic).toBe("thread:t1@f2");
+});
+
 test("make-up: strength is current hurt; topic keyed by cause fact, else by last_hurt_at", () => {
   const i = empty();
   i.makeUp = {

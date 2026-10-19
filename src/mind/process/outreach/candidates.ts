@@ -38,14 +38,24 @@ export function buildCandidates(
 
   for (const thread of inputs.dueThreads) {
     if (thread.stakes !== "high" && thread.stakes !== "med") continue;
-    const facts = thread.facts.slice(0, settings.reason_facts);
+    // A date is what keeps a past event from reading as upcoming, so a dated fact goes first.
+    const dated = thread.facts.filter((f) => f.dated);
+    const facts = [...dated, ...thread.facts.filter((f) => !f.dated)].slice(
+      0,
+      settings.reason_facts,
+    );
+    const lead = dated[0]?.content;
 
     raw.push({
       kind: "thread",
       // Keyed on what they last said about it: her own reach-out adds nothing about them, so the
       // thread goes out once until they bring it up again.
-      topic: `thread:${thread.id}@${facts[0]?.id ?? "none"}`,
-      text: thread.detail ? `${thread.title} (latest: ${thread.detail})` : thread.title,
+      topic: `thread:${thread.id}@${thread.facts[0]?.id ?? "none"}`,
+      text: lead
+        ? `${thread.title}: ${lead}`
+        : thread.detail
+          ? `${thread.title} (latest: ${thread.detail})`
+          : thread.title,
       strength: settings.stakes_strength[thread.stakes],
       factId: thread.fact_id,
       coreMemoryId: null,

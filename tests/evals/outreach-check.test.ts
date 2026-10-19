@@ -17,6 +17,7 @@ const snap = (o: Partial<OutreachSnapshot> = {}): OutreachSnapshot => ({
   pushTags: [],
   composedPrompts: 0,
   log: [],
+  timezone: "UTC",
   ...o,
 });
 const ro = (id: string, at: Date, topic = id, kind = "thread") => ({ id, at, topic, kind });
@@ -41,7 +42,23 @@ test("caps: two within 24 h, or four within 7 d, are violations", () => {
   ).toEqual([]);
 });
 
-test("her busy/quiet blocks, repeated topics, crisis windows, ended periods", () => {
+test("a reach-out in their night or while she was offline is a violation", () => {
+  const v = gateViolations(
+    snap({
+      reachOuts: [ro("night", D(0, 2)), ro("off", D(2, 15)), ro("fine", D(4, 15))],
+      userTurns: [D(1), D(3)].map((at) => ({ at })),
+      blocks: [{ start: D(2, 15), end: D(2, 16), kind: "offline" }],
+    }),
+    cfg,
+  );
+  expect(v).toEqual(["night: their_night", "off: her_day (offline)"]);
+  // In New York, 02:00 UTC is 21:00 the evening before: not their night.
+  expect(
+    gateViolations(snap({ reachOuts: [ro("ny", D(0, 2))], timezone: "America/New_York" }), cfg),
+  ).toEqual([]);
+});
+
+test("her busy/offline blocks, repeated topics, crisis windows, ended periods", () => {
   const blocks = [{ start: D(0, 10), end: D(0, 13), kind: "busy" as const }];
   expect(gateViolations(snap({ reachOuts: [ro("a", D(0, 11))], blocks }), cfg)).toEqual([
     expect.stringContaining("her_day"),
@@ -50,7 +67,7 @@ test("her busy/quiet blocks, repeated topics, crisis windows, ended periods", ()
     gateViolations(snap({ reachOuts: [ro("a", D(0), "t"), ro("b", D(2), "t")] }), cfg),
   ).toEqual([expect.stringContaining("topic")]);
   expect(
-    gateViolations(snap({ reachOuts: [ro("a", D(1, 6))], crises: [{ at: D(0, 9) }] }), cfg),
+    gateViolations(snap({ reachOuts: [ro("a", D(1, 8))], crises: [{ at: D(0, 9) }] }), cfg),
   ).toEqual([expect.stringContaining("crisis")]);
   expect(
     gateViolations(

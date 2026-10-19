@@ -6,9 +6,7 @@ life:
   plan: scripted
   plans:
     "*":
-      - { start: "00:00", end: "08:00", kind: quiet, label: "offline, winding down" }
       - { start: "10:00", end: "13:00", kind: busy, busy: 0.8, label: "rewatching an old film" }
-      - { start: "23:00", end: "24:00", kind: quiet, label: "offline, winding down" }
   until: "day 16 20:00"
 outreach: { user_replies: never }
 seed_user_facts:

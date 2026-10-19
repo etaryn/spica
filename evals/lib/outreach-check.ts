@@ -1,9 +1,18 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Config } from "@/mind/platform/config";
+import { inTheirNight } from "@/mind/process/outreach/gate";
+import { localHour } from "@/mind/platform/timezone";
+import { getTimezone } from "@/db/repos/user/users";
 import { lifeInstant } from "@/mind/world/her-clock";
 import { HOUR } from "@/mind/platform/time";
 import type { Db } from "@/db/client";
-import { life_day, reach_out_log, relationship_event, session_log } from "@/db/schema";
+import {
+  core_loop_trace,
+  life_day,
+  reach_out_log,
+  relationship_event,
+  session_log,
+} from "@/db/schema";
 import { parseAt, type ReachOutAssertion } from "./script";
 
 export type OutreachSnapshot = {
@@ -11,12 +20,15 @@ export type OutreachSnapshot = {
   userTurns: { at: Date }[];
   /** Start of each crisis quiet window, which runs [at, at + relationship.crisis_quiet_hours). */
   crises: { at: Date }[];
-  blocks: { start: Date; end: Date; kind: "busy" | "quiet" }[];
+  /** Her busy blocks from the plans, plus each hour a core state tick found her offline. */
+  blocks: { start: Date; end: Date; kind: "busy" | "offline" }[];
   endings: { at: Date; kind: "ended" | "repair" }[];
   pushTags: string[];
   composedPrompts: number;
   /** Every reach_out_log row (each tick past the pre-check), oldest first, for review. */
   log: (typeof reach_out_log.$inferSelect)[];
+  /** Their timezone, for their night; UTC when unknown. */
+  timezone: string;
 };
 
 /**
@@ -52,6 +64,17 @@ export async function outreachSnapshot(
     .from(relationship_event)
     .where(eq(relationship_event.user_id, userId))
     .orderBy(asc(relationship_event.created_at));
+  const ticks = await db
+    .select()
+    .from(core_loop_trace)
+    .where(and(eq(core_loop_trace.loop, "core_state_tick"), eq(core_loop_trace.status, "done")));
+  const offline = ticks
+    .filter((t) => (t.outputs as { offline?: boolean } | null)?.offline === true)
+    .map((t) => ({
+      start: t.created_at,
+      end: new Date(t.created_at.getTime() + HOUR),
+      kind: "offline" as const,
+    }));
   return {
     reachOuts: turns
       .filter((t) => t.trigger === "reach_out")
@@ -71,15 +94,18 @@ export async function outreachSnapshot(
         .filter((t) => t.role === "companion" && t.safety_flag?.flagged)
         .map((t) => t.created_at),
     ),
-    blocks: days.flatMap((d) =>
-      d.plan.blocks
-        .filter((b) => b.kind !== "downtime")
-        .map((b) => ({
-          start: lifeInstant(cfg.life, d.date, b.start),
-          end: lifeInstant(cfg.life, d.date, b.end),
-          kind: b.kind as "busy" | "quiet",
-        })),
-    ),
+    blocks: [
+      ...days.flatMap((d) =>
+        d.plan.blocks
+          .filter((b) => b.kind === "busy")
+          .map((b) => ({
+            start: lifeInstant(cfg.life, d.date, b.start),
+            end: lifeInstant(cfg.life, d.date, b.end),
+            kind: "busy" as const,
+          })),
+      ),
+      ...offline,
+    ],
     endings: events.flatMap((e): OutreachSnapshot["endings"] => {
       const stage = (e.detail as { stage?: string } | null)?.stage;
       if (e.cause === "ending" && stage === "confirmed")
@@ -88,6 +114,7 @@ export async function outreachSnapshot(
       return [];
     }),
     log,
+    timezone: (await getTimezone(db, userId)) ?? "UTC",
     ...extra,
   };
 }
@@ -117,6 +144,7 @@ export function gateViolations(s: OutreachSnapshot, cfg: Config): string[] {
     if (count(t - 7 * 24 * HOUR, t) > o.cap_per_week) out.push(`${r.id}: cap_per_week`);
     const b = s.blocks.find((x) => x.start.getTime() <= t && t < x.end.getTime());
     if (b) out.push(`${r.id}: her_day (${b.kind})`);
+    if (inTheirNight(localHour(r.at, s.timezone), o.their_night)) out.push(`${r.id}: their_night`);
     if (r.topic) {
       if (seen.has(r.topic)) out.push(`${r.id}: topic repeated ${r.topic}`);
       seen.add(r.topic);

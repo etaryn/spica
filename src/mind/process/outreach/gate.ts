@@ -17,7 +17,7 @@ export function sentWithin(sentAt: Date[], now: Date, hours: number): number {
 }
 
 /** Their night may wrap midnight (23 → 8). */
-const inNight = (hour: number, n: { start_hour: number; end_hour: number }) =>
+export const inTheirNight = (hour: number, n: { start_hour: number; end_hour: number }) =>
   n.start_hour <= n.end_hour
     ? hour >= n.start_hour && hour < n.end_hour
     : hour >= n.start_hour || hour < n.end_hour;
@@ -42,7 +42,7 @@ export function evaluateGate(inputs: GateInputs, settings: OutreachConfig, now: 
     },
     {
       rule: "their_night",
-      pass: !inNight(inputs.theirHour, settings.their_night),
+      pass: !inTheirNight(inputs.theirHour, settings.their_night),
       detail: `their ${inputs.theirHour}:00`,
     },
     {

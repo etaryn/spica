@@ -34,11 +34,6 @@
     "runs": 1,
     "passedRuns": 1
   },
-  "avail-quiet": {
-    "status": "pass",
-    "runs": 1,
-    "passedRuns": 1
-  },
   "backchannel-rate-limit": {
     "status": "pass",
     "runs": 1,

@@ -329,6 +329,30 @@ describe("thread facts", () => {
     expect(await threads.threadUserFacts(db(), u, t.id, 1)).toHaveLength(1);
   });
 
+  test("threadUserFacts keeps the newest dated fact even behind newer undated ones", async () => {
+    const u = await createTestUser();
+    const t = await threads.insertThread(
+      db(),
+      u,
+      { title: "half marathon", subject: "user", stakes: "med", next_checkpoint: T0 },
+      T0,
+    );
+    const dated = await fact(u, "The user runs on Sunday 11 January.", ax(1), {
+      thread_id: t.id,
+      occurred_at: new Date("2026-01-11T09:00:00Z"),
+    });
+    for (const [i, text] of ["nervous", "doom-scrolling", "tapering"].entries()) {
+      await fact(u, `The user is ${text}.`, ax(2 + i), {
+        thread_id: t.id,
+        created_at: new Date(T0.getTime() + (i + 1) * 3_600_000),
+      });
+    }
+    const got = await threads.threadUserFacts(db(), u, t.id, 3);
+    expect(got).toHaveLength(4);
+    expect(got.at(-1)!.id).toBe(dated.id);
+    expect(got[0]!.content).toBe("The user is tapering.");
+  });
+
   test("threadUserFacts leaves out a sensitive fact, even an older one", async () => {
     const u = await createTestUser();
     const t = await threads.insertThread(

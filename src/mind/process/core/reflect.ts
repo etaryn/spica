@@ -21,7 +21,7 @@ async function twinOf(
   minSimilarity: number,
   now: Date,
 ): Promise<string | null> {
-  for (const n of await tx.memory.near(embedding, 5, minSimilarity)) {
+  for (const n of await tx.memory.near(embedding, 5, minSimilarity, [kind])) {
     const m = await tx.memory.get(n.id);
     if (m && active(m, kind) && m.created_at.getTime() < now.getTime()) return m.id;
   }

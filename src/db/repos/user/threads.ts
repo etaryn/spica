@@ -1,7 +1,7 @@
 /**
  * One user's threads: ongoing storylines with checkpoints and stakes, and which ones are due.
  */
-import { and, desc, eq, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { fact, thread, threadStakes } from "@/db/schema";
@@ -163,27 +163,36 @@ export async function dueThreads(
   }));
 }
 
-/** The live facts about them on a thread, newest first: what she knows behind a follow-up. */
+/**
+ * The live facts about them on a thread, newest first: what she knows behind a follow-up. The
+ * newest dated one is always included (last, when it isn't among the newest), since its date is
+ * what keeps a past event from reading as upcoming.
+ */
 export async function threadUserFacts(db: Db, userId: string, threadId: string, limit: number) {
-  return db
-    .select({
-      id: fact.id,
-      content: fact.content,
-      occurred_at: fact.occurred_at,
-      created_at: fact.created_at,
-    })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        eq(fact.thread_id, threadId),
-        eq(fact.subject, "user"),
-        eq(fact.scope, "private"),
-        notInArray(fact.status, ["superseded", "stale"]),
-        // The thread's flag only reads its latest fact; an older sensitive one never goes out.
-        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
-      ),
-    )
-    .orderBy(desc(fact.created_at))
-    .limit(limit);
+  const query = (dated: boolean, n: number) =>
+    db
+      .select({
+        id: fact.id,
+        content: fact.content,
+        occurred_at: fact.occurred_at,
+        created_at: fact.created_at,
+      })
+      .from(fact)
+      .where(
+        and(
+          eq(fact.user_id, userId),
+          eq(fact.thread_id, threadId),
+          eq(fact.subject, "user"),
+          eq(fact.scope, "private"),
+          notInArray(fact.status, ["superseded", "stale"]),
+          // The thread's flag only reads its latest fact; an older sensitive one never goes out.
+          sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
+          dated ? isNotNull(fact.occurred_at) : undefined,
+        ),
+      )
+      .orderBy(desc(fact.created_at))
+      .limit(n);
+  const newest = await query(false, limit);
+  if (newest.some((f) => f.occurred_at !== null)) return newest;
+  return [...newest, ...(await query(true, 1))];
 }

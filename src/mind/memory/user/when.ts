@@ -17,8 +17,9 @@ const PRESENT = /\b(this|today|tonight)\b/i;
 const TODAY = /\b(today|this (morning|afternoon|evening))\b/i;
 const BARE_WEEKDAY = /^(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i;
 // chrono reads "this week" as its first day (last Sunday), certain; it means the week it was said in.
-const THIS_WEEK = /\b(later )?this week\b/i;
-const WEEK_END = /\bend of (the|this) week\b/i;
+// The whole phrase only: "friday this week" names its day and stays with chrono.
+const THIS_WEEK = /^(later )?this week$/i;
+const WEEK_END = /^(by |at )?(the )?end of (the|this) week$/i;
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 function parts(at: Date, zone: string): Record<string, string> {

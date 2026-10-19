@@ -43,6 +43,12 @@ test("'this week' is the week it was said in, never last Sunday", () => {
   expect(label("this month")).toBe("January 2026");
 });
 
+test("a weekday with 'this week' keeps its day", () => {
+  expect(label("friday this week")).toBe("Friday 9 January 2026");
+  expect(label("on tuesday this week", wed)).not.toMatch(/^the week of/);
+  expect(label("in a week")).not.toMatch(/^the week of Monday 5/);
+});
+
 test("'this week' on a Sunday in Singapore is the week that Sunday ends", () => {
   // Sunday 11 January 10:00 in Singapore.
   expect(label("this week", new Date("2026-01-11T02:00:00Z"), "Asia/Singapore")).toBe(

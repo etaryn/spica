@@ -10,6 +10,7 @@ import type {
   CoreEntity,
   CoreMemory,
   CoreMemoryItem,
+  CoreMemoryKind,
   CoreSnapshot,
 } from "@/mind/memory/core/types";
 import type { Neighbor } from "@/mind/memory/shared/types";
@@ -61,6 +62,7 @@ export function coreMemoryRepo(db: Db): CoreMemory {
     k: number,
     minSimilarity: number,
     factual: boolean,
+    kinds?: CoreMemoryKind[],
   ): Promise<Neighbor[]> {
     const q = vecLiteral(embedding);
     const res = await db.execute(sql`
@@ -68,6 +70,14 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       FROM core_memory
       WHERE status NOT IN ('superseded', 'stale')
         AND ${factual ? sql`kind <> 'hypothetical'` : sql`true`}
+        AND ${
+          kinds?.length
+            ? sql`kind IN (${sql.join(
+                kinds.map((k) => sql`${k}`),
+                sql`, `,
+              )})`
+            : sql`true`
+        }
         AND (1 - (embedding <=> ${q}::vector)) >= ${minSimilarity}
       ORDER BY embedding <=> ${q}::vector, id
       LIMIT ${k}`);
@@ -268,8 +278,8 @@ export function coreMemoryRepo(db: Db): CoreMemory {
       return row ? toItem(row) : null;
     },
 
-    async near(embedding, k, minSimilarity): Promise<Neighbor[]> {
-      return neighbors(embedding, k, minSimilarity, true);
+    async near(embedding, k, minSimilarity, kinds): Promise<Neighbor[]> {
+      return neighbors(embedding, k, minSimilarity, true, kinds);
     },
 
     async dedupeNear(embedding, k, minSimilarity) {

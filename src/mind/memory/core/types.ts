@@ -144,8 +144,16 @@ export interface CoreMemory {
   ): Promise<boolean>;
   insert(item: NewCoreMemory): Promise<string>;
   get(id: string): Promise<CoreMemoryItem | null>;
-  /** Active factual memories, including resolved intentions, closest first then ID. */
-  near(embedding: number[], k: number, minSimilarity: number): Promise<Neighbor[]>;
+  /**
+   * Active factual memories, including resolved intentions, closest first then ID; `kinds` limits
+   * the search before the `k` cut, so other kinds can't crowd the wanted ones out.
+   */
+  near(
+    embedding: number[],
+    k: number,
+    minSimilarity: number,
+    kinds?: CoreMemoryKind[],
+  ): Promise<Neighbor[]>;
   /** Dedupe compares text, including hypotheticals; stale and superseded items are excluded. */
   dedupeNear(embedding: number[], k: number, minSimilarity: number): Promise<Neighbor[]>;
   anticipationCandidate(now: Date, until: Date): Promise<CoreMemoryItem | null>;

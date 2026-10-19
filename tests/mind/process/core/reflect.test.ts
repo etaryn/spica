@@ -536,3 +536,49 @@ test("two near-identical opinions in one night don't supersede each other", asyn
   const opinions = (await all.db.select().from(core_memory)).filter((m) => m.kind === "opinion");
   expect(opinions.filter((m) => m.status === "superseded")).toHaveLength(0);
 });
+
+test("a twin opinion is found even when closer thoughts crowd the neighbourhood", async () => {
+  const { all, deps } = setup();
+  const [twin] = await all.embedder.embed(["impatience: it grinds you down"]);
+  const earlier = new Date(now.getTime() - 24 * 3_600_000);
+  // A shade further than the thoughts below, which match the new opinion exactly.
+  const nearby = twin!.map((x, i) => (i === 0 ? x + 0.5 : x));
+  const old = await deps.core.memory.insert({
+    kind: "opinion",
+    content: "impatience: grinding yourself down",
+    embedding: nearby,
+    occurred_at: earlier,
+    created_at: earlier,
+    status: "recurring",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "loop",
+    source_ref: null,
+  });
+  for (let i = 0; i < 6; i++) {
+    await deps.core.memory.insert({
+      kind: "thought",
+      content: `the impatience thing, again ${i}`,
+      embedding: twin!,
+      occurred_at: earlier,
+      created_at: earlier,
+      status: "recurring",
+      salience: 0.3,
+      valence: 0,
+      confidence: 0.6,
+      source: "loop",
+      source_ref: "core_wander:t",
+    });
+  }
+  await memory(deps, "episode", "Found Orion again.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [{ subject: "impatience", stance: "it grinds you down", confidence: "medium" }],
+    interests: [],
+    goals: { add: [], drop: [] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect(await deps.core.memory.get(old)).toMatchObject({ status: "superseded" });
+});

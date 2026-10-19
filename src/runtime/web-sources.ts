@@ -68,7 +68,11 @@ function rssPictureOfWeek(
         title: decodeEntities(title),
         credit: spec.credit,
         licence: "CC BY 4.0",
-        image: await bytes(url, o),
+        // The feed links the small screen size; the publication JPEG is the same picture at a
+        // size that survives a crop to the post frame.
+        image: await bytes(url.replace("/screen/", "/publicationjpg/"), o).catch(() =>
+          bytes(url, o),
+        ),
       };
     },
   };

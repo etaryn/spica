@@ -121,3 +121,17 @@ test("an image over the download cap throws", async () => {
   });
   await expect(sources.eso_potw!.fetch("2026-10-14")).rejects.toThrow("too large");
 });
+
+test("an observatory picture downloads at publication size, falling back to the screen size", async () => {
+  const big = new Uint8Array([137, 80, 78, 71, 1]);
+  const base = "https://storage.noirlab.edu/media/archives/images";
+  const screen = `${base}/screen/iotw2641a.jpg`;
+  const publication = `${base}/publicationjpg/iotw2641a.jpg`;
+  const feed = rss(item("All-Nighter", "Wed, 14 Oct 2026 12:00:00 -0700", screen));
+  stub({ [NOIRLAB]: feed, [publication]: big, [screen]: png });
+  const found = await sources.noirlab_iotw!.fetch("2026-10-14");
+  expect(found!.image).toEqual(big);
+  expect(found!.url).toBe(screen);
+  stub({ [NOIRLAB]: feed, [screen]: png }); // publication size missing → 404
+  expect((await sources.noirlab_iotw!.fetch("2026-10-14"))!.image).toEqual(png);
+});

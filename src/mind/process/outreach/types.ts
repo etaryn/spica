@@ -16,7 +16,8 @@ export const KIND_ORDER = [
 ] as const;
 export type CandidateKind = (typeof KIND_ORDER)[number];
 
-export type FilterReason = "topic_used" | "sensitive" | "too_deep" | "below_threshold";
+export type FilterReason =
+  "topic_used" | "sensitive" | "too_deep" | "below_threshold" | "last_slot";
 
 /** Something she knows behind a topic and when it happens (ISO); `dated` when the date is real. */
 export type Note = { text: string; at: string; dated: boolean };

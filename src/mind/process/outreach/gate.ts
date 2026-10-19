@@ -9,13 +9,16 @@ import { HOUR } from "@/mind/platform/time";
 import type { GateInputs, GateOutcome, GateResult } from "./types";
 
 const DAY_HOURS = 24;
-const WEEK_HOURS = 7 * DAY_HOURS;
+export const WEEK_HOURS = 7 * DAY_HOURS;
+
+/** Sends inside the rolling window of `hours` before `now`. */
+export function sentWithin(sentAt: Date[], now: Date, hours: number): number {
+  return sentAt.filter((sent) => now.getTime() - sent.getTime() < hours * HOUR).length;
+}
 
 export function evaluateGate(inputs: GateInputs, settings: OutreachConfig, now: Date): GateOutcome {
-  const sentWithin = (hours: number) =>
-    inputs.sentAt.filter((sent) => now.getTime() - sent.getTime() < hours * HOUR).length;
-  const today = sentWithin(DAY_HOURS);
-  const thisWeek = sentWithin(WEEK_HOURS);
+  const today = sentWithin(inputs.sentAt, now, DAY_HOURS);
+  const thisWeek = sentWithin(inputs.sentAt, now, WEEK_HOURS);
 
   const crisisOver = !inputs.crisisQuietUntil || inputs.crisisQuietUntil.getTime() <= now.getTime();
 

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { evaluateGate } from "@/mind/process/outreach/gate";
+import { evaluateGate, sentWithin } from "@/mind/process/outreach/gate";
 import type { GateInputs } from "@/mind/process/outreach/types";
 
 const cfg = loadConfig().outreach;
@@ -67,4 +67,9 @@ test("every failing rule is reported, not just the first", () => {
     "unanswered",
     "in_progress",
   ]);
+});
+
+test("sentWithin counts sends inside a rolling window", () => {
+  expect(sentWithin([ago(1), ago(30), ago(200)], now, 24)).toBe(1);
+  expect(sentWithin([ago(1), ago(30), ago(200)], now, 7 * 24)).toBe(2);
 });

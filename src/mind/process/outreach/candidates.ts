@@ -227,3 +227,21 @@ export function herThreshold(theirRate: number | null, settings: OutreachConfig)
 export function pickWinner(candidates: Candidate[]): Candidate | null {
   return candidates.find((c) => c.filtered === null) ?? null;
 }
+
+/** Her own news, as opposed to something of theirs or about them. */
+const HERS: ReadonlySet<CandidateKind> = new Set(["her_day", "core_thought"]);
+
+/**
+ * The week's last slot is kept for them: with one left, her own news waits, so a thread that
+ * comes due later in the week still has room.
+ */
+export function holdLastSlot(
+  candidates: Candidate[],
+  sentThisWeek: number,
+  settings: OutreachConfig,
+): Candidate[] {
+  if (settings.cap_per_week - sentThisWeek > 1) return candidates;
+  return candidates.map((c) =>
+    HERS.has(c.kind) && c.filtered === null ? { ...c, filtered: "last_slot" as const } : c,
+  );
+}

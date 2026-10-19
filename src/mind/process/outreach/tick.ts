@@ -17,8 +17,8 @@ import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { withTimeout } from "@/mind/platform/timeout";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
-import { buildCandidates, pickWinner } from "./candidates";
-import { evaluateGate } from "./gate";
+import { buildCandidates, holdLastSlot, pickWinner } from "./candidates";
+import { evaluateGate, sentWithin, WEEK_HOURS } from "./gate";
 import * as inputs from "./inputs";
 
 const MINUTE = 60_000;
@@ -36,15 +36,14 @@ export async function outreachTickUser(
 
   if (!(await canReachOut(deps, userId, now))) return "skipped";
 
-  const candidates = buildCandidates(
-    await inputs.loadCandidateInputs(deps, userId, now),
-    settings,
-    now,
-  );
-  const winner = pickWinner(candidates);
-
   const gateInputs = await inputs.loadGateInputs(deps, userId, now);
   if (!gateInputs) return "skipped";
+  const candidates = holdLastSlot(
+    buildCandidates(await inputs.loadCandidateInputs(deps, userId, now), settings, now),
+    sentWithin(gateInputs.sentAt, now, WEEK_HOURS),
+    settings,
+  );
+  const winner = pickWinner(candidates);
   const gate = evaluateGate(gateInputs, settings, now);
 
   const status = !winner ? "none" : gate.pass ? "scheduled" : "blocked";

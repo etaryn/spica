@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
-import { buildCandidates, herThreshold, pickWinner } from "@/mind/process/outreach/candidates";
+import {
+  buildCandidates,
+  herThreshold,
+  holdLastSlot,
+  pickWinner,
+} from "@/mind/process/outreach/candidates";
 import type { CandidateInputs } from "@/mind/process/outreach/types";
 
 const cfg = loadConfig().outreach;
@@ -424,4 +429,30 @@ test("a quiet friend's raised bar filters a candidate the default bar lets throu
   expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("user_idea");
   i.theirRate = 0; // bar × 2 = 0.4
   expect(buildCandidates(i, cfg, now)[0]!.filtered).toBe("below_threshold");
+});
+
+test("with one weekly slot left her own news is held; their things and ideas still win", () => {
+  const i = empty();
+  i.herDay = [
+    { id: "h1", content: "Spica found Orion.", salience: 0.6, depth: 1, sensitive: false, at: now },
+  ];
+  i.userIdeas = [{ id: "u1", content: "ask about the studio", salience: 0.5 }];
+  const all = buildCandidates(i, cfg, now);
+  const held = holdLastSlot(all, cfg.cap_per_week - 1, cfg);
+  expect(held.find((c) => c.kind === "her_day")!.filtered).toBe("last_slot");
+  expect(pickWinner(held)!.kind).toBe("user_idea");
+  // Two slots left: nothing held.
+  expect(holdLastSlot(all, cfg.cap_per_week - 2, cfg)).toEqual(all);
+  // A cap of one: her news never sends, theirs still can.
+  expect(pickWinner(holdLastSlot(all, 0, { ...cfg, cap_per_week: 1 }))!.kind).toBe("user_idea");
+});
+
+test("an already-filtered candidate keeps its reason", () => {
+  const i = empty();
+  i.herDay = [
+    { id: "h1", content: "Spica found Orion.", salience: 0.6, depth: 3, sensitive: false, at: now },
+  ];
+  i.depthLimit = 1;
+  const held = holdLastSlot(buildCandidates(i, cfg, now), cfg.cap_per_week - 1, cfg);
+  expect(held[0]!.filtered).toBe("too_deep");
 });

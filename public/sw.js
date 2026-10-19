@@ -1,4 +1,4 @@
-// public/sw.js: Phase 6 (spec §8.3). Shows her message only when no Spica tab is visible.
+// The push service worker: shows her message only when no Spica tab is visible.
 self.addEventListener("push", (event) => {
   let data = null;
   try {

@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/paid-run-guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-edited.mjs\"",
+            "timeout": 60,
+            "statusMessage": "ESLint on the edited file"
+          }
+        ]
+      }
+    ]
+  },
+  "skillOverrides": {
+    "anthropic-skills:docx": "user-invocable-only",
+    "anthropic-skills:pptx": "user-invocable-only",
+    "anthropic-skills:xlsx": "user-invocable-only",
+    "anthropic-skills:pdf": "user-invocable-only",
+    "anthropic-skills:google-workspace": "user-invocable-only",
+    "anthropic-skills:morning": "user-invocable-only",
+    "anthropic-skills:import-memory": "user-invocable-only",
+    "anthropic-skills:computer-use": "user-invocable-only",
+    "engineering:incident-response": "user-invocable-only",
+    "engineering:deploy-checklist": "user-invocable-only",
+    "engineering:standup": "user-invocable-only"
+  }
+}

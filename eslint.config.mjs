@@ -18,6 +18,8 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      // Comments say why, not where from: a spec section number goes stale when the spec moves.
+      "no-warning-comments": ["error", { terms: ["§"], location: "anywhere" }],
     },
   },
   {

@@ -1,0 +1,3 @@
+# Hidden from ripgrep/agent search (still tracked by git). Search with --no-ignore if needed.
+src/db/migrations/meta/
+pnpm-lock.yaml

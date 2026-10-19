@@ -20,7 +20,7 @@ const blocks = [
     key: "b",
     start: d("2026-01-05T15:00:00Z"),
     end: d("2026-01-05T16:00:00Z"),
-    block: "quiet" as const,
+    block: "offline" as const,
     busy: 0.9,
     label: "offline, winding down",
   },

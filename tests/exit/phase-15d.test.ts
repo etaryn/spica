@@ -1,14 +1,13 @@
 /**
  * Phase 15d exit, all fake: her plain news reaches people under their things; reach-outs carry
  * their dates and the guard sees now and why; a thread goes out once until they revive it; her
- * own rate moves her readiness; her events, plans and wanderings vary; the night is one block;
+ * own rate moves her readiness; her events, plans and wanderings vary;
  * captions cut at a word and a picture never comes twice; her craft skill is Ethan's to set. A
  * thread's dated notes never reach another user, and a reach-out leaves core unchanged.
  */
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
-import { insertLifeDay } from "@/db/repos/world/life-day";
 import { insertFact } from "@/db/repos/user/facts";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
@@ -30,7 +29,6 @@ import { buildCandidates, herThreshold, pickWinner } from "@/mind/process/outrea
 import { runReachOutSend } from "@/mind/process/outreach/send";
 import { outreachTickUser } from "@/mind/process/outreach/tick";
 import type { CandidateInputs } from "@/mind/process/outreach/types";
-import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import { validatePlan } from "@/mind/world/day-plan";
 import { selectEventSubject, subjectKey } from "@/mind/world/events";
 import { createWebSources } from "@/runtime/web-sources";
@@ -183,33 +181,6 @@ test("7: a memory her recent wanderings used is drawn less", () => {
   const picks = (used: string[]) =>
     rolls.filter((r) => pickCue(cues, new Set(used), r, config.core.wander)?.id === "a").length;
   expect(picks(["a"])).toBeLessThan(picks([]));
-});
-
-test("8: the night is one quiet block across midnight", async () => {
-  const d = makeTestDeps({ life: { timezone: "UTC" } });
-  const night = (start: string, end: string) => ({
-    start,
-    end,
-    kind: "quiet" as const,
-    busy: 0.9,
-    label: "offline",
-  });
-  const at = new Date("2026-01-05T23:50:00Z");
-  for (const [date, block] of [
-    ["2026-01-05", night("22:00", "24:00")],
-    ["2026-01-06", night("00:00", "07:30")],
-  ] as const)
-    await insertLifeDay(d.db, {
-      date,
-      plan: { blocks: [block] },
-      source: "scripted",
-      model: "none",
-      prompt_version: "scripted",
-      generated_at: at,
-    });
-  expect(blockAt(await todaysBlocks(d, at), at)!.end.toISOString()).toBe(
-    "2026-01-06T07:30:00.000Z",
-  );
 });
 
 test("9: captions cut at a word; a repeated picture and a stale weekly feed bring nothing", async () => {

@@ -92,13 +92,11 @@ test("missing plan and empty seed pool are not due and make no trace", async () 
   expect(await traces(all)).toHaveLength(0);
 });
 
-test("quiet and busy block edges exclude their interval; free time allows wandering", async () => {
+test("busy block edges exclude their interval; free time allows wandering, at any hour", async () => {
   const cases = [
-    ["2026-01-04T16:00:00Z", false], // 00:00 local: quiet begins
-    ["2026-01-05T00:00:00Z", true], // 08:00 local: quiet ends
+    ["2026-01-04T16:00:00Z", true], // 00:00 local: no night any more
     ["2026-01-05T02:00:00Z", false], // 10:00 local: busy begins
     ["2026-01-05T05:00:00Z", true], // 13:00 local: busy ends
-    ["2026-01-05T15:00:00Z", false], // 23:00 local: quiet begins
   ] as const;
   for (const [instant, due] of cases) {
     await resetDb();
@@ -107,6 +105,15 @@ test("quiet and busy block edges exclude their interval; free time allows wander
     await seed(deps, "before the blocks", { created: before(24) });
     expect((await coreWander(deps, new Date(instant))).applied).toBe(due);
   }
+});
+
+test("she doesn't wander while she's offline", async () => {
+  const { deps } = setup();
+  await plan(deps);
+  await seed(deps, "before the blocks", { created: before(24) });
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
+  await deps.core.state.update({ energy: 0.1, offline_since: now, last_tick: now });
+  expect((await coreWander(deps, now)).applied).toBe(false);
 });
 
 test("one accepted wander stores seed context and leaves core state and source untouched", async () => {

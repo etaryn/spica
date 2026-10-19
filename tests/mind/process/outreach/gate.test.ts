@@ -45,9 +45,11 @@ test("caps are rolling windows: 1 per 24 h, 3 per 7 d", () => {
   expect(failed({ ...ok(), sentAt: [ago(30), ago(80), ago(168)] })).toEqual([]);
 });
 
-test("her day: busy and quiet block, downtime (null) passes", () => {
+test("her day: busy and offline block, downtime (null) passes", () => {
   expect(failed({ ...ok(), herBlock: { block: "busy", label: "film" } })).toEqual(["her_day"]);
-  expect(failed({ ...ok(), herBlock: { block: "quiet", label: "offline" } })).toEqual(["her_day"]);
+  expect(failed({ ...ok(), herBlock: { block: "offline", label: "offline for a while" } })).toEqual(
+    ["her_day"],
+  );
 });
 
 test("unanswered: blocks at max_unanswered (2), not at 1", () => {

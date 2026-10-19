@@ -54,7 +54,7 @@ export type BackchannelJob = {
   text: string;
   turnId: string;
   trigger?: "backchannel" | "availability";
-  blockKind?: "busy" | "quiet";
+  blockKind?: "busy" | "offline";
   blockStart?: string;
 };
 

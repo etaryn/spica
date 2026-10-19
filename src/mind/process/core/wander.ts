@@ -13,7 +13,7 @@ import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { seededUnit } from "@/mind/platform/seeded-random";
-import { blockAt, blocksForDay, todaysBlocks } from "@/mind/world/blocks";
+import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate } from "@/mind/world/her-clock";
 import { budgetDayStart, runCoreLoop } from "./runner";
 import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
@@ -36,7 +36,7 @@ const Output = z.object({
 async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope }, now: Date) {
   const day = lifeDate(deps.config.life, now);
   const plan = await deps.core.world.plan(day);
-  if (!plan || blockAt(blocksForDay(deps.config.life, day, plan), now)) return null;
+  if (!plan || blockAt(await todaysBlocks(deps, now), now)) return null;
   const to = new Date(now.getTime() + 1);
   const today = await deps.core.traces.appliedSummary(
     "core_wander",

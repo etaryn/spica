@@ -1,5 +1,5 @@
 /**
- * The "busy, later?" note: one short message, sent at most once per busy block and only while
+ * The "busy, later?" note: one short message, sent at most once per busy or offline block and only while
  * the deferral is still pending. Its wording is picked from a prompt file without any model
  * call, and it is never extracted into memory.
  */
@@ -16,7 +16,7 @@ import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
 import { parseSummaryPhrases, type Phrases } from "@/mind/platform/phrases";
 
-function pickNote(phrases: Phrases, kind: "busy" | "quiet", seed: string): string | null {
+function pickNote(phrases: Phrases, kind: "busy" | "offline", seed: string): string | null {
   const options = phrases[kind] ?? [];
   if (!options.length) return null;
   return options[Math.floor(seededUnit(seed) * options.length)]!;

@@ -95,7 +95,7 @@ export type GateInputs = {
   status: "active" | "ended_by_user" | "repairing";
   /** Sent reach-outs, covering at least the last 7 days. */
   sentAt: Date[];
-  herBlock: { block: "busy" | "quiet"; label: string } | null;
+  herBlock: { block: "busy" | "offline"; label: string } | null;
   unanswered: number;
   inProgress: boolean;
   crisisQuietUntil: Date | null;

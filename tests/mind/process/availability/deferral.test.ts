@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { availabilityDelay, deferWhileBusy, wantsNote } from "@/mind/process/availability/deferral";
 import { insertLifeDay } from "@/db/repos/world/life-day";
-import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import * as rel from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { relationship, relationship_param } from "@/db/schema";
@@ -24,45 +23,18 @@ test("delay shrinks with closeness and vanishes at the override", () => {
   expect(availabilityDelay(busy, 0.8, now, 0.5, cfg)).toBe(0);
 });
 
-test("a quiet block holds the reply until it ends; jitter stays within ±jitter for busy", () => {
-  const quiet = { busy: 0.9, block: "quiet" as const, end: new Date("2026-01-06T08:00:00Z") };
-  const untilEnd = quiet.end.getTime() - now.getTime();
-  expect(availabilityDelay(quiet, 0, now, 0.5, cfg)).toBe(untilEnd);
-  expect(availabilityDelay(quiet, 0.5, now, 0, cfg)).toBe(untilEnd);
-  expect(availabilityDelay(quiet, 0.8, now, 0.5, cfg)).toBe(0);
+test("an offline block delays like a busy one, capped at when she should be back", () => {
+  const offline = { busy: 0.9, block: "offline" as const, end: new Date(now.getTime() + 20 * MIN) };
+  expect(availabilityDelay(offline, 0.2, now, 0.5, cfg)).toBe(
+    Math.min(Math.round(0.9 * 0.75 * cfg.max_delay_ms), 20 * MIN),
+  );
+  expect(availabilityDelay(offline, 0.8, now, 0.5, cfg)).toBe(0);
   expect(availabilityDelay(busy, 0.2, now, 0, cfg)).toBe(
     Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 - cfg.jitter)),
   );
   expect(availabilityDelay(busy, 0.2, now, 1, cfg)).toBe(
     Math.round(0.8 * 0.75 * cfg.max_delay_ms * (1 + cfg.jitter)),
   );
-});
-
-test("a message at 23:30 in a joined night waits until the morning block ends", async () => {
-  const deps = makeTestDeps({ life: { timezone: "UTC" } });
-  const night = (start: string, end: string) => ({
-    start,
-    end,
-    kind: "quiet" as const,
-    busy: 0.9,
-    label: "offline",
-  });
-  for (const [date, block] of [
-    ["2026-01-05", night("22:00", "24:00")],
-    ["2026-01-06", night("00:00", "08:00")],
-  ] as const) {
-    await insertLifeDay(deps.db, {
-      date,
-      plan: { blocks: [{ ...block }] },
-      source: "scripted",
-      model: "none",
-      prompt_version: "scripted",
-      generated_at: now,
-    });
-  }
-  const at = new Date("2026-01-05T23:30:00Z");
-  const block = blockAt(await todaysBlocks(deps, at), at)!;
-  expect(availabilityDelay(block, 0.3, at, 0.5, cfg)).toBe(8.5 * 60 * MIN);
 });
 
 test("never past the block's end (review focus 2)", () => {

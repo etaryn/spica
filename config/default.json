@@ -645,6 +645,7 @@
     "cap_per_day": 1,
     "cap_per_week": 3,
     "max_unanswered": 2,
+    "their_night": { "start_hour": 23, "end_hour": 8 },
     "threshold": 0.2,
     "weights": {
       "thread": 1.0,

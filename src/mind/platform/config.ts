@@ -653,6 +653,7 @@ const outreach = z.object({
   cap_per_day: countFromZero,
   cap_per_week: countFromZero,
   max_unanswered: z.number().int().min(1),
+  their_night: z.object({ start_hour: hourOfDay, end_hour: hourOfDay }),
   threshold: nonNegative,
   weights: z.object({
     thread: unit,

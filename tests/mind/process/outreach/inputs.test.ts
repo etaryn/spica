@@ -8,7 +8,7 @@ import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertTurn } from "@/db/repos/user/session-log";
-import { relationship, conversation_state } from "@/db/schema";
+import { relationship, conversation_state, user } from "@/db/schema";
 import { closeTestDb, createTestUser, resetDb, vec, seedStageFor } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -415,4 +415,13 @@ test("a too-deep loop memory with no world event stays too deep", async () => {
     content: "Spica wants to stop hiding how lonely the nights get.",
     depth: 2,
   });
+});
+
+test("their hour is read in their timezone, UTC when they have none or a bad one", async () => {
+  const { deps, u } = await setup();
+  expect((await loadGateInputs(deps, u, now))!.theirHour).toBe(12); // null timezone → UTC
+  await deps.db.update(user).set({ timezone: "America/New_York" }).where(eq(user.id, u));
+  expect((await loadGateInputs(deps, u, now))!.theirHour).toBe(7);
+  await deps.db.update(user).set({ timezone: "Mars/Olympus" }).where(eq(user.id, u));
+  expect((await loadGateInputs(deps, u, now))!.theirHour).toBe(12);
 });

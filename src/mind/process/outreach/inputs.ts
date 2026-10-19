@@ -10,6 +10,7 @@ import { getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
 import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
+import { getTimezone } from "@/db/repos/user/users";
 import { liveIdeas } from "@/db/repos/user/user-mind";
 import { dueThreads, threadUserFacts } from "@/db/repos/user/threads";
 import { ideaCutoff } from "@/mind/process/user/ideate";
@@ -17,6 +18,7 @@ import { recallable } from "@/mind/memory/core/retrieve";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { Deps } from "@/mind/platform/deps";
 import { HOUR } from "@/mind/platform/time";
+import { isValidTimeZone, localHour } from "@/mind/platform/timezone";
 import { loadDepth } from "@/mind/state/user/relationship/depth";
 import { faded, rateEstimated } from "@/mind/state/user/relationship/params";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
@@ -221,11 +223,13 @@ export async function loadGateInputs(
     (state.buffer_turn_ids.length > 0 ||
       state.inflight_turn_ids.length > 0 ||
       state.sending_since !== null);
+  const zone = await getTimezone(db, userId);
 
   return {
     status: relationship.status,
     sentAt: await sentReachOutTimes(db, userId, new Date(now.getTime() - WEEK)),
     herBlock: block ? { block: block.block, label: block.label } : null,
+    theirHour: localHour(now, zone && isValidTimeZone(zone) ? zone : "UTC"),
     unanswered: relationship.unanswered_reach_outs,
     inProgress,
     crisisQuietUntil: await effectiveCrisisQuietUntil(

@@ -14,6 +14,7 @@ const ok = (): GateInputs => ({
   unanswered: 0,
   inProgress: false,
   crisisQuietUntil: null,
+  theirHour: 12,
 });
 const failed = (g: GateInputs) =>
   evaluateGate(g, cfg, now)
@@ -27,6 +28,7 @@ test("all clear passes and reports every rule", () => {
     "status",
     "caps",
     "her_day",
+    "their_night",
     "unanswered",
     "in_progress",
     "crisis",
@@ -50,6 +52,16 @@ test("her day: busy and offline block, downtime (null) passes", () => {
   expect(failed({ ...ok(), herBlock: { block: "offline", label: "offline for a while" } })).toEqual(
     ["her_day"],
   );
+});
+
+test("their night: no reach-out in their own night, wrapping midnight", () => {
+  expect(failed({ ...ok(), theirHour: 23 })).toEqual(["their_night"]);
+  expect(failed({ ...ok(), theirHour: 2 })).toEqual(["their_night"]);
+  expect(failed({ ...ok(), theirHour: 8 })).toEqual([]);
+  expect(failed({ ...ok(), theirHour: 22 })).toEqual([]);
+  const day = { ...cfg, their_night: { start_hour: 1, end_hour: 5 } };
+  expect(evaluateGate({ ...ok(), theirHour: 3 }, day, now).pass).toBe(false);
+  expect(evaluateGate({ ...ok(), theirHour: 6 }, day, now).pass).toBe(true);
 });
 
 test("unanswered: blocks at max_unanswered (2), not at 1", () => {

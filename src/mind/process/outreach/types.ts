@@ -88,7 +88,8 @@ export type CandidateInputs = {
   theirRate: number | null;
 };
 
-export type GateRule = "status" | "caps" | "her_day" | "unanswered" | "in_progress" | "crisis";
+export type GateRule =
+  "status" | "caps" | "her_day" | "their_night" | "unanswered" | "in_progress" | "crisis";
 export type GateResult = { rule: GateRule; pass: boolean; detail?: string };
 
 export type GateInputs = {
@@ -96,6 +97,8 @@ export type GateInputs = {
   /** Sent reach-outs, covering at least the last 7 days. */
   sentAt: Date[];
   herBlock: { block: "busy" | "offline"; label: string } | null;
+  /** Their local hour now (0–23), in their timezone; UTC when unknown. */
+  theirHour: number;
   unanswered: number;
   inProgress: boolean;
   crisisQuietUntil: Date | null;

@@ -1,7 +1,7 @@
 /**
- * Wandering associates her real memories during free time without moving her state. It starts
- * from a cue picked in code (an older memory, an interest, or something from today), drawing
- * less on what her recent wanderings already used.
+ * Wandering associates her lived memories during free time without moving her state. It starts
+ * from a cue picked in code (an older episode or plan, an interest, or something from today) and
+ * chains through lived memory only, drawing less on what her recent wanderings already used.
  */
 import { z } from "zod";
 import { DepthLabel } from "@/mind/memory/core/depth";
@@ -57,18 +57,23 @@ type CueKind = "memory" | "interest" | "event";
 type Cue = { kind: CueKind; items: CoreMemoryItem[] };
 
 /**
- * Where her mind can start: any older memory of hers, an interest, or something that happened
- * today. Never a thought, so her thoughts don't feed on themselves.
+ * Where her mind can start: an older lived memory of hers (an episode, a plan still ahead), an
+ * interest, or something that happened today. Never a thought, idea, opinion or insight, so her
+ * thinking doesn't feed on itself.
  */
 async function wanderCues(deps: CoreDeps, now: Date): Promise<Cue[]> {
   const { core, config } = deps;
   const limit = config.core.wander.seed_limit;
   const usable = (m: CoreMemoryItem) => recallable(m) && m.created_at.getTime() <= now.getTime();
+  // An opinion or insight is reflect's summary of her earlier thoughts; starting from one makes
+  // her mind circle a single theme.
   const memory = (
     await Promise.all(
-      (["episode", "opinion", "insight"] as const).map((k) => core.memory.activeByKind(k, limit)),
+      (["episode", "intention"] as const).map((k) => core.memory.activeByKind(k, limit)),
     )
-  ).flat();
+  )
+    .flat()
+    .filter((m) => m.kind !== "intention" || m.status === "open");
   const interest = await core.memory.activeByKind("interest", limit);
   const today = (await core.world.events(lifeDate(config.life, now))).filter(
     (e) => e.at.getTime() <= now.getTime(),
@@ -134,6 +139,9 @@ async function recentlyUsed(deps: CoreDeps, now: Date): Promise<Set<string>> {
   );
 }
 
+/** What a chain may pass through: what happened, what she loves, what she means to do. */
+const LIVED: ReadonlySet<string> = new Set(["episode", "interest", "intention"]);
+
 async function chainFor(deps: CoreDeps, seed: CoreMemoryItem, vector: number[]) {
   const { chain, min_similarity, seed_limit } = deps.config.core.wander;
   let limit = Math.max(seed_limit, chain + 1);
@@ -145,7 +153,7 @@ async function chainFor(deps: CoreDeps, seed: CoreMemoryItem, vector: number[]) 
       const memory = await deps.core.memory.get(item.id);
       if (
         !memory ||
-        memory.kind === "hypothetical" ||
+        !LIVED.has(memory.kind) ||
         (memory.kind === "intention" && memory.status === "resolved")
       )
         continue;

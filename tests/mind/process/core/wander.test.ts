@@ -403,3 +403,68 @@ test("an old memory can start a wandering, and a thought never does", async () =
   const mine = (await thoughts(all)).filter((t) => t.content !== "the wanting does the work");
   expect(mine[0]?.payload).toMatchObject({ seed: old });
 });
+
+test("the chain is lived memory only: her thoughts and opinions never join it", async () => {
+  const { all, deps } = setup();
+  await plan(deps);
+  const picked = await seed(deps, "the central memory", { salience: 1, created: before(0.5) });
+  const loop = (kind: "thought" | "idea" | "opinion" | "insight", content: string) =>
+    deps.core.memory.insert({
+      kind,
+      content,
+      payload: {},
+      embedding: vec(),
+      entity_refs: [],
+      occurred_at: before(2),
+      created_at: before(2),
+      status: "recurring",
+      salience: 0.01,
+      valence: 0.5,
+      confidence: 1,
+      source: "loop",
+      source_ref: "core_reflect:t",
+    });
+  await loop("thought", "the anger was never about orion");
+  await loop("idea", "maybe the posts just need to exist");
+  await loop("opinion", "impatience with learning: grinding yourself down");
+  await loop("insight", "she treats her beginning like a failure");
+  const lived = [
+    await seed(deps, "lived one", { salience: 0.01, created: before(3) }),
+    await seed(deps, "lived two", { salience: 0.01, created: before(4) }),
+    await seed(deps, "lived three", { salience: 0.01, created: before(5) }),
+  ];
+  expect((await coreWander(deps, now)).applied).toBe(true);
+  const payload = (await thoughts(all)).find((t) => t.source_ref?.startsWith("core_wander:"))!
+    .payload as { seed: string; chain: string[] };
+  expect(payload.seed).toBe(picked);
+  expect([...payload.chain].sort()).toEqual([...lived].sort());
+  const input = all.llm.structuredCalls[0]!.input;
+  for (const text of ["orion", "posts just need", "impatience", "beginning like a failure"])
+    expect(input).not.toContain(text);
+});
+
+test("an opinion never starts a wandering", async () => {
+  const { all, deps } = setup();
+  await plan(deps);
+  const episode = await seed(deps, "Spica watched Stalker last month.", {
+    created: before(24 * 30),
+  });
+  await deps.core.memory.insert({
+    kind: "opinion",
+    content: "impatience with learning is grinding yourself down",
+    payload: {},
+    embedding: vec(),
+    entity_refs: [],
+    occurred_at: before(1),
+    created_at: before(1),
+    status: "recurring",
+    salience: 1,
+    valence: 0.5,
+    confidence: 1,
+    source: "loop",
+    source_ref: "core_reflect:t",
+  });
+  expect(await coreWander(deps, now)).toMatchObject({ applied: true });
+  const mine = (await thoughts(all)).filter((t) => t.source_ref?.startsWith("core_wander:"));
+  expect(mine[0]?.payload).toMatchObject({ seed: episode });
+});

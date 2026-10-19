@@ -446,6 +446,7 @@ const life = z.object({
   plan_attempts: positiveInt,
   max_busy_blocks: positiveInt,
   min_quiet_hours: z.number().min(0).max(24),
+  night_gap_minutes: positiveInt,
   quiet_busy: unit,
   min_busy: unit,
   fallback_busy: unit,
@@ -638,7 +639,6 @@ const core = z
 const availability = z.object({
   override_closeness: z.number().gt(0).max(1),
   max_delay_ms: countFromZero,
-  quiet_max_delay_ms: countFromZero,
   jitter: z.number().min(0).max(0.5),
   note_min_delay_ms: countFromZero,
   note_min_closeness: unit,

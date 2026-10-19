@@ -461,6 +461,7 @@
     "plan_attempts": 2,
     "max_busy_blocks": 3,
     "min_quiet_hours": 6,
+    "night_gap_minutes": 120,
     "quiet_busy": 0.9,
     "min_busy": 0.3,
     "fallback_busy": 0.5,
@@ -628,7 +629,6 @@
   "availability": {
     "override_closeness": 0.8,
     "max_delay_ms": 2700000,
-    "quiet_max_delay_ms": 28800000,
     "jitter": 0.15,
     "note_min_delay_ms": 600000,
     "note_min_closeness": 0.4,

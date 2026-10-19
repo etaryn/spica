@@ -118,3 +118,32 @@ test("a plan doing the same busy things as yesterday is rejected", () => {
   const again = validatePlan(raw, cfg, yesterday.ok ? yesterday.plan : null);
   expect(again).toEqual({ ok: false, violations: [expect.stringContaining("same as yesterday")] });
 });
+
+test("an evening quiet block ending near midnight runs on to 24:00; an early one doesn't", () => {
+  const plan = (end: string) => ({
+    blocks: [
+      { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0, label: "offline" },
+      { start: "10:00", end: "13:00", kind: "busy" as const, busy: 0.6, label: "reading" },
+      { start: "20:30", end, kind: "quiet" as const, busy: 0, label: "offline" },
+    ],
+  });
+  const ended = (end: string) => {
+    const r = validatePlan(plan(end), cfg, null);
+    return r.ok ? r.plan.blocks.at(-1)!.end : null;
+  };
+  expect(ended("22:30")).toBe("24:00");
+  expect(ended("22:00")).toBe("24:00"); // exactly night_gap_minutes (120) before midnight
+  expect(ended("21:30")).toBe("21:30");
+  // A last block that isn't quiet is left alone.
+  const busyLast = validatePlan(
+    {
+      blocks: [
+        { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0, label: "offline" },
+        { start: "21:00", end: "23:00", kind: "busy" as const, busy: 0.6, label: "reading" },
+      ],
+    },
+    { ...cfg, min_quiet_hours: 0 },
+    null,
+  );
+  expect(busyLast.ok && busyLast.plan.blocks.at(-1)!.end).toBe("23:00");
+});

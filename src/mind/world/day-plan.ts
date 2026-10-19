@@ -59,6 +59,17 @@ export function validatePlan(
   blocks.sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
   violations.push(...overlaps(blocks));
 
+  // An evening quiet block that stops just short of midnight leaves a sliver of free time in her
+  // night; it runs on to 24:00 so the night is one block.
+  const last = blocks.at(-1);
+  if (
+    last?.kind === "quiet" &&
+    last.end !== "24:00" &&
+    24 * 60 - minutesOf(last.end) <= settings.night_gap_minutes
+  ) {
+    last.end = "24:00";
+  }
+
   const busyCount = blocks.filter((b) => b.kind === "busy").length;
   if (busyCount < 1 || busyCount > settings.max_busy_blocks) {
     violations.push(`busy blocks: ${busyCount} (need 1-${settings.max_busy_blocks})`);

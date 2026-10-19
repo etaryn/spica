@@ -1,6 +1,7 @@
 /**
- * Availability: when a message lands while she's busy or in a quiet block, the reply waits. How
- * long depends on how busy she is and how close she is to this user. A close enough friend gets
+ * Availability: when a message lands while she's busy or in a quiet block, the reply waits. A
+ * quiet block holds it until the block ends; a busy one for as long as how busy she is and how
+ * close she is to this user say. A close enough friend gets
  * answered as usual; a mid-closeness one gets a short "busy, later?" note first. It fails open:
  * any error means no delay, and a crisis is never deferred.
  */
@@ -31,9 +32,10 @@ export const NO_DELAY: Availability = {
 };
 
 /**
- * busy × (1 − closeness / override) × max delay, jittered by `unit` (0–1), and capped at the
- * block's end. Closeness is the param's value, not its deviation. At or above
- * `override_closeness` there's no delay.
+ * A quiet block holds the reply until it ends: she's offline, so a reply in the middle of it would
+ * be a reply from nowhere. A busy block delays by busy × (1 − closeness / override) × max delay,
+ * jittered by `unit` (0–1), capped at the block's end. Closeness is the param's value, not its
+ * deviation. At or above `override_closeness` there's no delay.
  */
 export function availabilityDelay(
   block: Pick<WorldBlock, "busy" | "block" | "end">,
@@ -43,13 +45,12 @@ export function availabilityDelay(
   settings: AvailabilityConfig,
 ): number {
   if (closeness >= settings.override_closeness) return 0;
+  const untilBlockEnds = Math.max(0, block.end.getTime() - now.getTime());
+  if (block.block === "quiet") return untilBlockEnds;
 
-  const maxDelay = block.block === "quiet" ? settings.quiet_max_delay_ms : settings.max_delay_ms;
   const distance = 1 - closeness / settings.override_closeness;
   const jitter = 1 - settings.jitter + 2 * settings.jitter * unit;
-  const delay = block.busy * distance * maxDelay * jitter;
-
-  const untilBlockEnds = block.end.getTime() - now.getTime();
+  const delay = block.busy * distance * settings.max_delay_ms * jitter;
   return Math.max(0, Math.round(Math.min(delay, untilBlockEnds)));
 }
 

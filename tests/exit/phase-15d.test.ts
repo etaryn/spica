@@ -87,7 +87,7 @@ test("1: her plain news beats an idea, never their thread", () => {
 });
 
 test("2: 'Your day' lists what already happened today", () => {
-  expect(yourDayLines([], now, null, ["Spica went to the screening."])).toContain(
+  expect(yourDayLines([], now, null, ["Spica went to the screening."], "UTC")).toContain(
     "Earlier today: Spica went to the screening.",
   );
 });

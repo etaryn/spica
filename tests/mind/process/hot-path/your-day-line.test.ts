@@ -26,14 +26,17 @@ const blocks = [
   },
 ];
 
-test("now, later and the deferred line", () => {
-  expect(yourDayLines(blocks, d("2026-01-05T03:00:00Z"), null, [])).toBe(
-    "Right now you're rewatching an old film (busy).\nLater: offline, winding down.",
+test("now, later (with its time) and the deferred line", () => {
+  expect(yourDayLines(blocks, d("2026-01-05T03:00:00Z"), null, [], "UTC")).toBe(
+    "Right now you're rewatching an old film (busy).\nLater, from 15:00: offline, winding down.",
   );
-  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film", [])).toBe(
-    "Right now you're free.\nLater: offline, winding down.\nThey wrote while you were rewatching an old film; you're only getting to it now.",
+  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), "rewatching an old film", [], "UTC")).toBe(
+    "Right now you're free.\nLater, from 15:00: offline, winding down.\nThey wrote while you were rewatching an old film; you're only getting to it now.",
   );
-  expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null, [])).toBeNull();
+  expect(yourDayLines(blocks, d("2026-01-05T06:00:00Z"), null, [], "Asia/Singapore")).toContain(
+    "Later, from 23:00:",
+  );
+  expect(yourDayLines([], d("2026-01-05T06:00:00Z"), null, [], "UTC")).toBeNull();
 });
 
 test("a deferred block that is in the plan gives the 'while you were' line", async () => {
@@ -57,8 +60,12 @@ test("an unknown deferred block key just drops the 'while you were' line", async
 });
 
 test("lists what happened earlier today, plain", () => {
-  const text = yourDayLines([], new Date("2026-01-10T15:00:00Z"), null, [
-    "Spica went to the film club screening of Stalker.",
-  ]);
+  const text = yourDayLines(
+    [],
+    new Date("2026-01-10T15:00:00Z"),
+    null,
+    ["Spica went to the film club screening of Stalker."],
+    "UTC",
+  );
   expect(text).toContain("Earlier today: Spica went to the film club screening of Stalker.");
 });

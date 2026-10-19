@@ -4,7 +4,8 @@
  */
 import type { Deps } from "@/mind/platform/deps";
 import { blockAt, blockByKey, todaysBlocks, type WorldBlock } from "@/mind/world/blocks";
-import { lifeDate } from "@/mind/world/her-clock";
+import { localTime } from "@/mind/platform/timezone";
+import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 
 /** Null when she has no blocks today, nothing happened yet and the reply wasn't deferred. */
 export function yourDayLines(
@@ -12,6 +13,7 @@ export function yourDayLines(
   now: Date,
   deferredLabel: string | null,
   happened: string[],
+  tz: string,
 ): string | null {
   if (blocks.length === 0 && !deferredLabel && happened.length === 0) return null;
 
@@ -25,7 +27,8 @@ export function yourDayLines(
   );
 
   const next = blocks.find((b) => b.start.getTime() > now.getTime());
-  if (next) lines.push(`Later: ${next.label}.`);
+  // The time keeps "later" from reading as now.
+  if (next) lines.push(`Later, from ${localTime(next.start, tz)}: ${next.label}.`);
   lines.push(...happened.map((h) => `Earlier today: ${h}`));
 
   if (deferredLabel) {
@@ -48,5 +51,11 @@ export async function loadYourDayLine(
     .sort((a, b) => a.at.getTime() - b.at.getTime())
     .slice(-deps.config.life.your_day_events)
     .map((e) => e.content);
-  return yourDayLines(blocks, now, deferred?.label ?? null, happened);
+  return yourDayLines(
+    blocks,
+    now,
+    deferred?.label ?? null,
+    happened,
+    lifeTimezone(deps.config.life, now),
+  );
 }

@@ -43,6 +43,16 @@ export function formatLocal(at: Date, tz: string | null): string {
   return `${parts.weekday} ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} (${zone})`;
 }
 
+/** "09:30": the local clock time of `at` in `tz`. */
+export function localTime(at: Date, tz: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(at);
+}
+
 /** The calendar date of `at` in `tz`, as "YYYY-MM-DD" (en-CA formats in ISO order). */
 export function localDateString(at: Date, tz: string): string {
   return new Intl.DateTimeFormat("en-CA", {

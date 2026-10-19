@@ -9,7 +9,7 @@ import { closeTestDb, createTestUser, getTestDb, resetDb, testDbUrl } from "../h
 const cfg = loadConfig();
 const t0 = new Date("2026-01-05T10:00:00Z");
 const plan = {
-  blocks: [{ start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.9, label: "offline" }],
+  blocks: [{ start: "00:00", end: "08:00", kind: "busy" as const, busy: 0.9, label: "reading" }],
 };
 
 beforeEach(resetDb);

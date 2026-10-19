@@ -29,11 +29,7 @@ async function plan(deps: ReturnType<typeof setup>["deps"], day = "2026-01-05", 
     plan: {
       blocks: free
         ? []
-        : [
-            { start: "00:00", end: "08:00", kind: "quiet", busy: 0, label: "sleep" },
-            { start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" },
-            { start: "23:00", end: "24:00", kind: "quiet", busy: 0, label: "rest" },
-          ],
+        : [{ start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" }],
     },
     source: "scripted",
     model: "fake",

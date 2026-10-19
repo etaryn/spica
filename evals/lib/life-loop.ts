@@ -109,7 +109,7 @@ export function makeLifeLoop(
         plan: {
           blocks: blocks.map((b) => ({
             ...b,
-            busy: b.kind === "quiet" ? cfg.quiet_busy : b.kind === "downtime" ? 0 : b.busy,
+            busy: b.kind === "downtime" ? 0 : b.busy,
           })),
         },
       });

@@ -55,7 +55,7 @@ async function setup() {
   await seedCore(coreDepsOf(deps));
   await deps.core.world.insertPlan({
     date: DAY,
-    plan: { blocks: [{ start: "00:00", end: "06:00", kind: "quiet", busy: 0, label: "offline" }] },
+    plan: { blocks: [{ start: "00:00", end: "06:00", kind: "busy", busy: 0.6, label: "reading" }] },
     source: "scripted",
     model: "none",
     prompt_version: "none",

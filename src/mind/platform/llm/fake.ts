@@ -18,11 +18,7 @@ export { keywordClassifier } from "@/mind/process/crisis/keywords";
 type Handler = (input: string) => unknown | Promise<unknown>;
 
 const FAKE_DAY_PLAN = {
-  blocks: [
-    { start: "00:00", end: "08:00", kind: "quiet", busy: 0, label: "offline, winding down" },
-    { start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" },
-    { start: "23:00", end: "24:00", kind: "quiet", busy: 0, label: "offline, winding down" },
-  ],
+  blocks: [{ start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" }],
 };
 
 const FAKE_DAY_EVENT = {
@@ -62,7 +58,7 @@ export class FakeLLMProvider implements LLMProvider {
           .split("\n")
           .filter((l) => l.startsWith("- "))
           .at(-1) ?? "";
-      if (lastDay.includes("busy (reading)")) plan.blocks[1]!.label = "rewatching an old film";
+      if (lastDay.includes("busy (reading)")) plan.blocks[0]!.label = "rewatching an old film";
       return plan;
     },
     // A plain caption about the find, with a short overlay only when the format asks for one.

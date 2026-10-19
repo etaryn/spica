@@ -445,9 +445,6 @@ const life = z.object({
   plan_label_max_chars: positiveInt,
   plan_attempts: positiveInt,
   max_busy_blocks: positiveInt,
-  min_quiet_hours: z.number().min(0).max(24),
-  night_gap_minutes: positiveInt,
-  quiet_busy: unit,
   min_busy: unit,
   fallback_busy: unit,
   fallback_plan: z
@@ -455,7 +452,7 @@ const life = z.object({
       z.object({
         start: blockTime,
         end: blockTime,
-        kind: z.enum(["busy", "downtime", "quiet"]),
+        kind: z.enum(["busy", "downtime"]),
         label: text,
       }),
     )

@@ -148,11 +148,7 @@ test("6: event subjects vary; a plan can't repeat yesterday's", () => {
     ).length;
   expect(alcor(["person:Alcor"])).toBeLessThan(alcor([]));
   const raw = {
-    blocks: [
-      { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
-      { start: "09:00", end: "12:00", kind: "busy" as const, busy: 0.8, label: "reading" },
-      { start: "22:00", end: "24:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
-    ],
+    blocks: [{ start: "09:00", end: "12:00", kind: "busy" as const, busy: 0.8, label: "reading" }],
   };
   const first = validatePlan(raw, config.life, null);
   expect(first.ok).toBe(true);

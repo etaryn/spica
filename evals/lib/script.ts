@@ -236,7 +236,7 @@ const Hhmm = z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/);
 const ScriptBlock = z.object({
   start: Hhmm,
   end: Hhmm,
-  kind: z.enum(["busy", "downtime", "quiet"]),
+  kind: z.enum(["busy", "downtime"]),
   busy: z.number().min(0).max(1).default(0.5),
   label: z.string().min(1),
 });

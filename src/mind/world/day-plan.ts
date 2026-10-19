@@ -1,6 +1,6 @@
 /**
- * Her day plan: the busy, downtime and quiet blocks of one of her local days, shared by every
- * user. The `life_plan` job makes sure today and tomorrow exist. The model writes the plan, code
+ * Her day plan: the busy and downtime blocks of one of her local days, at any hour (she has no
+ * night), shared by every user. The `life_plan` job makes sure today and tomorrow exist. The model writes the plan, code
  * validates it with one retry, and a fallback plan means she always has a day.
  */
 import { z } from "zod";
@@ -20,7 +20,7 @@ const PlanSchema = z.object({
     z.object({
       start: z.string(),
       end: z.string(),
-      kind: z.enum(["busy", "downtime", "quiet"]),
+      kind: z.enum(["busy", "downtime"]),
       busy: z.number(),
       label: z.string(),
     }),
@@ -32,7 +32,7 @@ export type PlanCheck = { ok: true; plan: LifePlan } | { ok: false; violations: 
 
 const BLOCK_TIME = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
-/** Normalises busy levels and labels, then checks times, overlaps, the busy count and total quiet. */
+/** Normalises busy levels and labels, then checks kinds, times, overlaps and the busy count. */
 export function validatePlan(
   raw: RawPlan,
   settings: LifeConfig,
@@ -59,29 +59,9 @@ export function validatePlan(
   blocks.sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
   violations.push(...overlaps(blocks));
 
-  // An evening quiet block that stops just short of midnight leaves a sliver of free time in her
-  // night; it runs on to 24:00 so the night is one block.
-  const last = blocks.at(-1);
-  if (
-    last?.kind === "quiet" &&
-    last.end !== "24:00" &&
-    24 * 60 - minutesOf(last.end) <= settings.night_gap_minutes
-  ) {
-    last.end = "24:00";
-  }
-
   const busyCount = blocks.filter((b) => b.kind === "busy").length;
   if (busyCount < 1 || busyCount > settings.max_busy_blocks) {
     violations.push(`busy blocks: ${busyCount} (need 1-${settings.max_busy_blocks})`);
-  }
-
-  const quietMinutes = blocks
-    .filter((b) => b.kind === "quiet")
-    .reduce((total, b) => total + minutesOf(b.end) - minutesOf(b.start), 0);
-  if (quietMinutes < settings.min_quiet_hours * 60) {
-    violations.push(
-      `quiet time ${(quietMinutes / 60).toFixed(1)}h (need at least ${settings.min_quiet_hours}h)`,
-    );
   }
 
   // Her days narrow to one template unless each must differ from the last.
@@ -102,6 +82,9 @@ function tidyLabel(label: string): string {
 }
 
 function blockProblem(block: RawPlan["blocks"][number], maxLabel: number): string | null {
+  // She has no night: a quiet block, from an old plan or a model slip, is no kind she has.
+  if (block.kind !== "busy" && block.kind !== "downtime")
+    return `unknown kind ${String(block.kind)}`;
   if (!BLOCK_TIME.test(block.start) || !BLOCK_TIME.test(block.end)) {
     return `bad time ${block.start}-${block.end}`;
   }
@@ -114,9 +97,8 @@ function blockProblem(block: RawPlan["blocks"][number], maxLabel: number): strin
   return null;
 }
 
-/** Quiet and downtime have fixed levels; a busy block is clamped into [min_busy, 1]. */
+/** Downtime is 0; a busy block is clamped into [min_busy, 1]. */
 function busyLevel(block: RawPlan["blocks"][number], settings: LifeConfig): number {
-  if (block.kind === "quiet") return settings.quiet_busy;
   if (block.kind === "downtime") return 0;
 
   const level = Number.isFinite(block.busy) ? block.busy : settings.min_busy;
@@ -138,8 +120,7 @@ function overlaps(blocks: LifeBlock[]): string[] {
 
 /** `life.fallback_plan` with busy levels filled in. */
 export function fallbackPlan(settings: LifeConfig): LifePlan {
-  const busyFor = (kind: LifeBlock["kind"]) =>
-    kind === "quiet" ? settings.quiet_busy : kind === "busy" ? settings.fallback_busy : 0;
+  const busyFor = (kind: LifeBlock["kind"]) => (kind === "busy" ? settings.fallback_busy : 0);
 
   return {
     blocks: settings.fallback_plan.map((block) => ({ ...block, busy: busyFor(block.kind) })),

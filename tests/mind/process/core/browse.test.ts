@@ -48,7 +48,7 @@ test("browse time: inside the window, never inside a busy or quiet block, stable
   expect(t.getTime() >= at(10).getTime() && t.getTime() < at(13).getTime()).toBe(false);
   expect(browseTime(c.life, c.posts, DAY, FREE, 0)).toEqual(t);
   const full = {
-    blocks: [{ start: "00:00", end: "24:00", kind: "quiet" as const, busy: 0, label: "off" }],
+    blocks: [{ start: "00:00", end: "24:00", kind: "busy" as const, busy: 0.6, label: "reading" }],
   };
   expect(browseTime(c.life, c.posts, DAY, full, 0)).toBeNull();
 });

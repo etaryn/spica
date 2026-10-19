@@ -226,7 +226,7 @@
     "relationship_summary": "v3",
     "relationship_openness": "v1",
     "relationship_stage": "v1",
-    "life_plan": "v3",
+    "life_plan": "v4",
     "life_event": "v6",
     "life_availability": "v2",
     "core_state_line": "v4",
@@ -460,14 +460,11 @@
     "plan_label_max_chars": 80,
     "plan_attempts": 2,
     "max_busy_blocks": 3,
-    "min_quiet_hours": 6,
-    "night_gap_minutes": 120,
-    "quiet_busy": 0.9,
     "min_busy": 0.3,
     "fallback_busy": 0.5,
     "fallback_plan": [
-      { "start": "00:00", "end": "08:00", "kind": "quiet", "label": "offline, winding down" },
-      { "start": "23:30", "end": "24:00", "kind": "quiet", "label": "offline, winding down" }
+      { "start": "10:00", "end": "12:00", "kind": "busy", "label": "reading" },
+      { "start": "19:00", "end": "21:00", "kind": "busy", "label": "rewatching an old film" }
     ]
   },
   "core": {

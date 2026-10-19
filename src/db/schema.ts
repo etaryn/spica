@@ -498,7 +498,7 @@ export const relationship_event = pgTable(
 
 export type OpenQuestion = { turn_id: string; text: string };
 
-export type LifeBlockKind = "busy" | "downtime" | "quiet";
+export type LifeBlockKind = "busy" | "downtime";
 /** One block of her shared day plan; times are "HH:MM" in her zone, "24:00" = midnight. */
 export type LifeBlock = {
   start: string;

@@ -14,8 +14,14 @@ const cfg = makeTestDeps().config.life;
 const good = {
   blocks: [
     { start: "10:00", end: "13:00", kind: "busy" as const, busy: 1.4, label: " reading  " },
-    { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.1, label: "offline" },
-    { start: "23:00", end: "24:00", kind: "quiet" as const, busy: 0, label: "offline" },
+    {
+      start: "20:00",
+      end: "22:00",
+      kind: "busy" as const,
+      busy: 0.1,
+      label: "rewatching an old film",
+    },
+    { start: "14:00", end: "15:00", kind: "downtime" as const, busy: 0.5, label: "coffee" },
   ],
 };
 
@@ -23,16 +29,17 @@ test("validatePlan sorts, normalises busy levels and labels", () => {
   const r = validatePlan(good, cfg, null);
   expect(r.ok).toBe(true);
   if (!r.ok) return;
-  expect(r.plan.blocks.map((b) => b.start)).toEqual(["00:00", "10:00", "23:00"]);
-  expect(r.plan.blocks[1]).toMatchObject({ busy: 1, label: "reading" }); // clamped to [0.3, 1]
-  expect(r.plan.blocks[0]!.busy).toBe(cfg.quiet_busy);
+  expect(r.plan.blocks.map((b) => b.start)).toEqual(["10:00", "14:00", "20:00"]);
+  expect(r.plan.blocks[0]).toMatchObject({ busy: 1, label: "reading" }); // clamped to [0.3, 1]
+  expect(r.plan.blocks[1]!.busy).toBe(0);
+  expect(r.plan.blocks[2]!.busy).toBe(cfg.min_busy);
 });
 
-test("validatePlan rejects overlap, bad times, no busy block and too little quiet", () => {
+test("validatePlan rejects overlap, bad times, and no busy block", () => {
   const bad = validatePlan(
     {
       blocks: [
-        { start: "00:00", end: "05:00", kind: "quiet", busy: 0, label: "offline" },
+        { start: "00:00", end: "05:00", kind: "downtime", busy: 0, label: "offline" },
         { start: "04:00", end: "06:00", kind: "downtime", busy: 0, label: "x" },
         { start: "25:00", end: "26:00", kind: "busy", busy: 0.5, label: "y" },
       ],
@@ -45,7 +52,6 @@ test("validatePlan rejects overlap, bad times, no busy block and too little quie
   expect(bad.violations.join(" | ")).toMatch(/bad time/);
   expect(bad.violations.join(" | ")).toMatch(/overlap/);
   expect(bad.violations.join(" | ")).toMatch(/busy blocks: 0/);
-  expect(bad.violations.join(" | ")).toMatch(/quiet time/);
 });
 
 test("ensurePlans creates today and tomorrow once, in her dates", async () => {
@@ -101,7 +107,6 @@ test("over budget the fallback plan is written without calling the model", async
 test("a plan doing the same busy things as yesterday is rejected", () => {
   const raw = {
     blocks: [
-      { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
       { start: "09:00", end: "12:00", kind: "busy" as const, busy: 0.8, label: "reading fiction" },
       {
         start: "19:00",
@@ -110,7 +115,6 @@ test("a plan doing the same busy things as yesterday is rejected", () => {
         busy: 0.9,
         label: "rewatching an old film",
       },
-      { start: "22:00", end: "24:00", kind: "quiet" as const, busy: 0.9, label: "offline" },
     ],
   };
   const yesterday = validatePlan(raw, cfg, null);
@@ -119,31 +123,28 @@ test("a plan doing the same busy things as yesterday is rejected", () => {
   expect(again).toEqual({ ok: false, violations: [expect.stringContaining("same as yesterday")] });
 });
 
-test("an evening quiet block ending near midnight runs on to 24:00; an early one doesn't", () => {
-  const plan = (end: string) => ({
-    blocks: [
-      { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0, label: "offline" },
-      { start: "10:00", end: "13:00", kind: "busy" as const, busy: 0.6, label: "reading" },
-      { start: "20:30", end, kind: "quiet" as const, busy: 0, label: "offline" },
-    ],
-  });
-  const ended = (end: string) => {
-    const r = validatePlan(plan(end), cfg, null);
-    return r.ok ? r.plan.blocks.at(-1)!.end : null;
-  };
-  expect(ended("22:30")).toBe("24:00");
-  expect(ended("22:00")).toBe("24:00"); // exactly night_gap_minutes (120) before midnight
-  expect(ended("21:30")).toBe("21:30");
-  // A last block that isn't quiet is left alone.
-  const busyLast = validatePlan(
+test("a plan with a quiet block is rejected: she has no night", () => {
+  const r = validatePlan(
     {
       blocks: [
-        { start: "00:00", end: "08:00", kind: "quiet" as const, busy: 0, label: "offline" },
-        { start: "21:00", end: "23:00", kind: "busy" as const, busy: 0.6, label: "reading" },
+        { start: "00:00", end: "08:00", kind: "quiet" as never, busy: 0, label: "offline" },
+        { start: "10:00", end: "13:00", kind: "busy", busy: 0.6, label: "reading" },
       ],
     },
-    { ...cfg, min_quiet_hours: 0 },
+    cfg,
     null,
   );
-  expect(busyLast.ok && busyLast.plan.blocks.at(-1)!.end).toBe("23:00");
+  expect(r.ok).toBe(false);
+  expect(!r.ok && r.violations.join(" ")).toContain("kind");
+});
+
+test("busy blocks can fall at any hour, and the fallback is busy and free only", () => {
+  const late = validatePlan(
+    { blocks: [{ start: "01:00", end: "04:00", kind: "busy", busy: 0.7, label: "reading" }] },
+    cfg,
+    null,
+  );
+  expect(late.ok).toBe(true);
+  expect(fallbackPlan(cfg).blocks.every((b) => b.kind !== ("quiet" as never))).toBe(true);
+  expect(fallbackPlan(cfg).blocks.some((b) => b.kind === "busy")).toBe(true);
 });

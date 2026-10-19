@@ -3,7 +3,7 @@ import { z } from "zod";
 import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { CoreMemoryItem, NewCoreMemory } from "@/mind/memory/core/types";
 import type { CoreDeps } from "@/mind/platform/deps";
-import type { LoopStatus } from "@/mind/platform/core";
+import type { CoreScope, LoopStatus } from "@/mind/platform/core";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
@@ -12,6 +12,21 @@ import { runCoreLoop } from "./runner";
 
 const active = (item: CoreMemoryItem | null, kind: CoreMemoryItem["kind"]) =>
   item?.kind === kind && item.status !== "stale" && item.status !== "superseded";
+
+/** The nearest active memory of `kind` written before tonight, at or above `minSimilarity`. */
+async function twinOf(
+  tx: Pick<CoreScope, "memory">,
+  kind: "opinion" | "interest",
+  embedding: number[],
+  minSimilarity: number,
+  now: Date,
+): Promise<string | null> {
+  for (const n of await tx.memory.near(embedding, 5, minSimilarity)) {
+    const m = await tx.memory.get(n.id);
+    if (m && active(m, kind) && m.created_at.getTime() < now.getTime()) return m.id;
+  }
+  return null;
+}
 
 export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus> {
   const { config, core } = deps;
@@ -147,6 +162,12 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       for (const [index, proposal] of proposals.entries()) {
         const priorNarrative =
           proposal.kind === "narrative" ? await tx.memory.latestNarrative() : null;
+        // Nightly reflection restates what she already thinks; a near-twin replaces the old row so
+        // one view doesn't pile up as many. Only memories from before tonight count.
+        const twin =
+          (proposal.kind === "opinion" || proposal.kind === "interest") && !proposal.target
+            ? await twinOf(tx, proposal.kind, embeddings[index]!, bounds.twin_similarity, now)
+            : null;
         const item: NewCoreMemory = {
           kind: proposal.kind,
           content: proposal.content,
@@ -168,6 +189,8 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         } else if (proposal.kind === "opinion" && proposal.target) {
           if (active(await tx.memory.get(proposal.target), "opinion"))
             await tx.memory.supersede(proposal.target, id);
+        } else if (twin) {
+          await tx.memory.supersede(twin, id);
         }
       }
       for (const interest of result.interests) {

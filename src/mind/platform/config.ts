@@ -598,6 +598,7 @@ const core = z
       confidence: z.object({ low: unit, medium: unit, high: unit }),
       salience: z.object({ insight: unit, opinion: unit, interest: unit, narrative: unit }),
       fade_factor: unit,
+      twin_similarity: unit,
       max_tokens: positiveInt,
     }),
     decay: z.object({ grace_days: nonNegative, rate: unit, stale_floor: unit }),

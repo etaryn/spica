@@ -470,3 +470,69 @@ test("reflection can't drop the craft goal; others drop as before", async () => 
   expect((await deps.core.goals.get(craft))?.status).toBe("active");
   expect((await deps.core.goals.get(other))?.status).toBe("dropped");
 });
+
+test("a near-twin opinion or interest supersedes the old one instead of piling up", async () => {
+  const { all, deps } = setup();
+  const twinOf = (text: string) => all.embedder.embed([text]).then(([v]) => v!);
+  const earlier = new Date(now.getTime() - 24 * 3_600_000); // a previous night's view
+  const old = await deps.core.memory.insert({
+    kind: "opinion",
+    content: "impatience: grinding yourself down",
+    embedding: await twinOf("impatience: it grinds you down"),
+    occurred_at: earlier,
+    created_at: earlier,
+    status: "recurring",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "loop",
+    source_ref: null,
+  });
+  const interest = await deps.core.memory.insert({
+    kind: "interest",
+    content: "the winter constellations",
+    embedding: await twinOf("winter constellations by sight"),
+    occurred_at: earlier,
+    created_at: earlier,
+    status: "recurring",
+    salience: 0.4,
+    valence: 0,
+    confidence: 0.6,
+    source: "loop",
+    source_ref: null,
+  });
+  await memory(deps, "episode", "Found Orion again.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    // Same text as the stored embedding's source, so the fake embedder returns the identical vector.
+    opinions: [{ subject: "impatience", stance: "it grinds you down", confidence: "medium" }],
+    interests: [{ status: "new", content: "winter constellations by sight" }],
+    goals: { add: [], drop: [] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect(await deps.core.memory.get(old)).toMatchObject({ status: "superseded" });
+  expect(await deps.core.memory.get(interest)).toMatchObject({ status: "superseded" });
+  const active = (await all.db.select().from(core_memory)).filter(
+    (m) => m.kind === "opinion" && m.status !== "superseded",
+  );
+  expect(active).toHaveLength(1);
+});
+
+test("two near-identical opinions in one night don't supersede each other", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "Found Orion again.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [
+      { subject: "impatience", stance: "it grinds you down", confidence: "medium" },
+      { subject: "impatience", stance: "it grinds you down", confidence: "medium" },
+    ],
+    interests: [],
+    goals: { add: [], drop: [] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const opinions = (await all.db.select().from(core_memory)).filter((m) => m.kind === "opinion");
+  expect(opinions.filter((m) => m.status === "superseded")).toHaveLength(0);
+});

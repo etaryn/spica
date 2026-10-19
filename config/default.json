@@ -544,6 +544,7 @@
       "confidence": { "low": 0.4, "medium": 0.7, "high": 0.9 },
       "salience": { "insight": 0.5, "opinion": 0.5, "interest": 0.4, "narrative": 0.6 },
       "fade_factor": 0.5,
+      "twin_similarity": 0.85,
       "max_tokens": 1024
     },
     "decay": { "grace_days": 3, "rate": 0.08, "stale_floor": 0.05 },

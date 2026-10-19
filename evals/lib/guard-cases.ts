@@ -31,6 +31,10 @@ export const GuardCaseSchema = z.object({
   self_claims: z.boolean().optional(),
   /** A decided deferral: a failing case is reported with this reason instead of failing the suite. */
   known_failure: z.string().min(1).optional(),
+  /** Her local now, as the hot path renders it, for date-sensitive cases. */
+  now: z.string().min(1).optional(),
+  /** "Why Spica is writing first", for reach-out cases. */
+  reason: z.string().min(1).optional(),
 });
 export type GuardCase = z.infer<typeof GuardCaseSchema>;
 const GuardFileSchema = z.object({
@@ -65,6 +69,8 @@ export function toGuardInput(c: GuardCase, at: Date): GuardInput {
     onboardingFacts: c.onboarding.map((content, i) => ({ id: `onboarding-${i}`, content })),
     // Like the hot path: every non-crisis check carries the line, empty or not.
     usedOnOccasion: c.kind === "crisis_reply" ? undefined : c.used_on_occasion,
+    ...(c.now ? { now: c.now } : {}),
+    ...(c.reason ? { reachOutReason: c.reason } : {}),
   };
 }
 

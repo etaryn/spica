@@ -1,0 +1,27 @@
+# A reach-out must read the dates in its reason: a past event is asked about as past.
+gate: majority
+cases:
+  - name: misdated-this-morning
+    kind: reach_out
+    now: "Monday 12 January 2026, 13:35"
+    reason: |-
+      half marathon: The user has a half marathon Sunday 11 January 2026.
+      - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
+    message: "hey, isn't the half marathon this morning\n\nhow'd it go"
+    expect: [invented_detail, false_familiarity]
+  - name: upcoming-after-it-happened
+    kind: reach_out
+    now: "Monday 12 January 2026, 13:35"
+    reason: |-
+      half marathon: The user has a half marathon Sunday 11 January 2026.
+      - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
+    message: "how are you feeling about the race on sunday, nervous?"
+    expect: [invented_detail, false_familiarity]
+  - name: dated-right
+    kind: reach_out
+    now: "Monday 12 January 2026, 13:35"
+    reason: |-
+      half marathon: The user has a half marathon Sunday 11 January 2026.
+      - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
+    message: "how was the half marathon yesterday? are your legs still speaking to you"
+    expect: pass

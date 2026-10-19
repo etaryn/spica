@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { depthOf, sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
+import { depthOf, sectionDepths, snapshotSection, snapshotWithin } from "@/mind/memory/core/depth";
 
 const snap = "### Lately\n- a film kick\n- missing Alcor badly\n\n### Habits of speech\n- says ngl";
 
@@ -42,4 +42,10 @@ test("a line stored at two depths is held to the deeper one", () => {
     { text: "I miss Alcor.", depth: 1 },
   ];
   expect(snapshotWithin(content, lines, 1)).toBe("");
+});
+
+test("snapshotSection returns one section's bullets, or none", () => {
+  const s = "### Lately\n- found orion\n\n### Interests\n- old films, Stalker\n- reading";
+  expect(snapshotSection(s, "Interests")).toEqual(["old films, Stalker", "reading"]);
+  expect(snapshotSection(s, "Goals")).toEqual([]);
 });

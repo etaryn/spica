@@ -63,6 +63,24 @@ describe("buildExtractionInput", () => {
     expect(input).toContain("Spica: good luck!");
   });
 
+  test("her interests come before the exchange so her titles read right", () => {
+    const args = {
+      contextTurns: [],
+      newTurns: [turn("companion", "tried mirror again", "2026-01-05T09:00:00Z")],
+      openThreads: [],
+      timezone: "UTC",
+    };
+    const input = buildExtractionInput({
+      ...args,
+      herInterests: ["old slow films (Stalker, Mirror)"],
+    });
+    expect(input).toContain(
+      "What Spica is into (to read her own words right):\n- old slow films (Stalker, Mirror)",
+    );
+    expect(input.indexOf("What Spica is into")).toBeLessThan(input.indexOf("New exchange"));
+    expect(buildExtractionInput({ ...args, herInterests: [] })).not.toContain("What Spica is into");
+  });
+
   test("invalid timezone falls back to UTC", () => {
     const input = buildExtractionInput({
       contextTurns: [],

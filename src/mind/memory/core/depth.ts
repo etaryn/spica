@@ -64,3 +64,10 @@ export function sectionDepths(
     });
   });
 }
+
+/** The bullets under one `### <name>` section of a snapshot. */
+export function snapshotSection(content: string, name: string): string[] {
+  return blocks(content)
+    .filter((b) => b.heading?.slice(4).trim() === name)
+    .flatMap((b) => b.lines.map(bullet).filter((t): t is string => t !== null));
+}

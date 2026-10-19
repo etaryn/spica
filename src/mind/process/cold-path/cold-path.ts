@@ -29,6 +29,7 @@ import { exchangeTone } from "@/mind/state/user/relationship/affect";
 import { bidAfter, hurtFactContent, type Signals } from "@/mind/state/user/relationship/signals";
 import type { ParamName } from "@/mind/state/user/relationship/types";
 import { movedParams, updateRelationship } from "@/mind/state/user/relationship/update";
+import { snapshotSection } from "@/mind/memory/core/depth";
 
 export class LockBusyError extends Error {}
 
@@ -189,6 +190,10 @@ async function extractExchange(
     contextTurns: context,
     openThreads: await listOpenThreads(tx, userId, config.extraction.open_threads_in_prompt),
     timezone: await getTimezone(tx, userId),
+    herInterests: snapshotSection(
+      (await deps.core.memory.latestSnapshot())?.content ?? "",
+      "Interests",
+    ),
   });
   return { extraction, context };
 }

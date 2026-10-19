@@ -128,6 +128,8 @@ export type ExtractArgs = {
   contextTurns: Turn[];
   openThreads: { id: string; title: string }[];
   timezone: string | null;
+  /** Her snapshot's Interests, so her own film and book titles read right. */
+  herInterests?: string[];
 };
 
 /** Clamps into [low, high]; anything not finite becomes `low`. */
@@ -158,6 +160,13 @@ export function buildExtractionInput(args: ExtractArgs): string {
   };
 
   const sections = [`User's timezone: ${zone}`];
+
+  // Her film and book titles read as apps or games without this ("Mirror", "Stalker").
+  if (args.herInterests?.length) {
+    sections.push(
+      `What Spica is into (to read her own words right):\n${args.herInterests.map((i) => `- ${i}`).join("\n")}`,
+    );
+  }
 
   sections.push(
     args.openThreads.length

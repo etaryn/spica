@@ -38,6 +38,8 @@ export interface CoreGoals {
   /** The newest goal with this exact title, in any status. */
   byTitle(title: string): Promise<CoreGoal | null>;
   insert(goal: NewCoreGoal): Promise<string>;
+  /** The nearest active goal at least `minSimilarity` similar to `embedding`, or null. */
+  nearActive(embedding: number[], minSimilarity: number): Promise<string | null>;
   setProgress(id: string, progress: number, now: Date): Promise<void>;
   /** Terminal transitions only apply while active; true means the transition won. */
   setStatus(id: string, status: Exclude<CoreGoalStatus, "active">, now: Date): Promise<boolean>;

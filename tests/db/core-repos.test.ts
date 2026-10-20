@@ -883,3 +883,25 @@ test("groundingMatch names what it matched: a memory or a self line, with its de
     depth: 1,
   });
 });
+
+test("nearActive finds the closest active goal over the line, never a dropped one", async () => {
+  const goals = core().goals;
+  const row = (title: string, embedding: number[]) =>
+    goals.insert({
+      title,
+      why: "x",
+      status: "active",
+      progress: 0,
+      source: "reflect",
+      source_ref: null,
+      started_at: now,
+      target_at: null,
+      embedding,
+    });
+  const id = await row("Read", vec());
+  expect(await goals.nearActive(vec(), 0.85)).toBe(id);
+  const away = Array.from({ length: 1024 }, (_, i) => (i % 2 ? 0.01 : -0.01));
+  expect(await goals.nearActive(away, 0.85)).toBeNull();
+  await goals.setStatus(id, "dropped", now);
+  expect(await goals.nearActive(vec(), 0.85)).toBeNull();
+});

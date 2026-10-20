@@ -9,6 +9,10 @@ import { makeTestDeps } from "../../../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 const now = new Date("2026-01-05T09:00:00Z");
+// Goals made long before tonight, with vectors far from any fake embedding, so neither the seed
+// week nor goal twins get in the way of a test about something else.
+const longAgo = new Date(now.getTime() - 30 * 86_400_000);
+const apart = () => Array.from({ length: 1024 }, (_, i) => (i % 2 ? 0.01 : -0.01));
 
 function setup(overrides: unknown = {}) {
   const all = makeTestDeps(overrides);
@@ -204,9 +208,9 @@ test("bounded proposals supersede opinions and narrative, fade interests, and ch
     progress: 0.2,
     source: "seed",
     source_ref: null,
-    started_at: now,
+    started_at: longAgo,
     target_at: null,
-    embedding: vec(),
+    embedding: apart(),
   });
   all.llm.handlers.core_reflect = () => ({
     insights: [{ content: "A film can change her mind.", depth: null }],
@@ -356,9 +360,9 @@ test("fade and drop only needs no document embeddings and traces both accepted I
     progress: 0,
     source: "seed",
     source_ref: null,
-    started_at: now,
+    started_at: longAgo,
     target_at: null,
-    embedding: vec(),
+    embedding: apart(),
   });
   const embed = deps.embedder.embed.bind(deps.embedder);
   vi.spyOn(deps.embedder, "embed").mockImplementation((texts, kind) => {
@@ -394,9 +398,9 @@ test("drops never leave her fewer active goals than the floor unless she adds re
       progress: 0,
       source: "seed",
       source_ref: null,
-      started_at: now,
+      started_at: longAgo,
       target_at: null,
-      embedding: vec(),
+      embedding: apart(),
     });
   const first = await goal("Learn the constellations");
   const second = await goal("Finish the film list");
@@ -453,9 +457,9 @@ test("reflection can't drop the craft goal; others drop as before", async () => 
       progress: 0,
       source: "seed",
       source_ref: null,
-      started_at: now,
+      started_at: longAgo,
       target_at: null,
-      embedding: vec(),
+      embedding: apart(),
     });
   const craft = await goal(deps.config.posts.craft_goals.still);
   const other = await goal("Watch");
@@ -581,4 +585,55 @@ test("a twin opinion is found even when closer thoughts crowd the neighbourhood"
   });
   expect(await coreReflect(deps, now)).toBe("done");
   expect(await deps.core.memory.get(old)).toMatchObject({ status: "superseded" });
+});
+
+const goalRow = async (deps: ReturnType<typeof setup>["deps"], title: string, o: object = {}) =>
+  deps.core.goals.insert({
+    title,
+    why: "x",
+    status: "active",
+    progress: 0.2,
+    source: "reflect",
+    source_ref: null,
+    started_at: longAgo,
+    target_at: null,
+    embedding: (await deps.embedder.embed([`${title}: x`], "document"))[0]!,
+    ...o,
+  });
+
+test("a goal that's a near-twin of an active one isn't added, and that one isn't dropped", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "A day.");
+  const old = await goalRow(deps, "Send the post rough");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: { add: [{ title: "Send the post rough", why: "x" }], drop: [old] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const active = await deps.core.goals.active();
+  expect(active.map((g) => g.id)).toEqual([old]);
+  expect(active[0]!.progress).toBeCloseTo(0.2);
+});
+
+test("a seed goal can't be dropped in its first week", async () => {
+  const { all, deps } = setup({ core: { goals: { min_active: 0 } } });
+  await memory(deps, "episode", "A day.");
+  const young = await goalRow(deps, "Learn the constellations", {
+    source: "seed",
+    started_at: now,
+  });
+  const old = await goalRow(deps, "Finish the film list", { source: "seed" });
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: { add: [], drop: [young, old] },
+    narrative: null,
+  });
+  await coreReflect(deps, now);
+  expect((await deps.core.goals.get(young))!.status).toBe("active");
+  expect((await deps.core.goals.get(old))!.status).toBe("dropped");
 });

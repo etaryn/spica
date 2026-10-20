@@ -629,6 +629,8 @@ const core = z
       max_active: positiveInt,
       min_active: z.number().int().min(0),
       step: z.object({ small: unit, medium: unit, large: unit }),
+      twin_similarity: unit,
+      seed_keep_days: positiveInt,
     }),
     state: coreState,
     world: coreWorld,

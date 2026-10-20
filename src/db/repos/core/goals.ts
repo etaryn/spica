@@ -5,7 +5,7 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { core_goal } from "@/db/schema";
 import type { CoreGoal, CoreGoals } from "@/mind/state/core/types";
-import { one } from "../util";
+import { one, vecLiteral } from "../util";
 
 function toGoal(r: typeof core_goal.$inferSelect): CoreGoal {
   const { embedding: _embedding, ...goal } = r;
@@ -62,6 +62,23 @@ export function coreGoalsRepo(db: Db): CoreGoals {
         .where(and(eq(core_goal.id, id), eq(core_goal.status, "active")))
         .returning({ id: core_goal.id });
       return rows.length > 0;
+    },
+    async nearActive(embedding, minSimilarity) {
+      const q = vecLiteral(embedding);
+      const row = (
+        await db
+          .select({ id: core_goal.id })
+          .from(core_goal)
+          .where(
+            and(
+              eq(core_goal.status, "active"),
+              sql`(1 - (${core_goal.embedding} <=> ${q}::vector)) >= ${minSimilarity}`,
+            ),
+          )
+          .orderBy(sql`${core_goal.embedding} <=> ${q}::vector`)
+          .limit(1)
+      )[0];
+      return row?.id ?? null;
     },
   };
 }

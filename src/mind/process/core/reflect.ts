@@ -7,6 +7,7 @@ import type { CoreScope, LoopStatus } from "@/mind/platform/core";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { DAY } from "@/mind/platform/time";
 import { isCraftGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
 
@@ -202,27 +203,41 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
             fadedInterestIds.push(interest.target_id);
         }
       }
+      // Reflection rewords a goal it already has: the near-twin stays (with its progress), the
+      // rewording isn't added, and the original isn't dropped for it.
+      const twins = new Set<string>();
+      const adds: { goal: (typeof goalAdds)[number]; embedding: number[] }[] = [];
+      for (const [index, goal] of goalAdds.entries()) {
+        const embedding = embeddings[proposals.length + index]!;
+        const twin = await tx.goals.nearActive(embedding, config.core.goals.twin_similarity);
+        if (twin) twins.add(twin);
+        else adds.push({ goal, embedding });
+      }
       // Drops stop at the floor unless replacements come in: with no goal, nothing pulls her
       // events or recall toward anything.
-      let droppable =
-        (await tx.goals.active()).length + goalAdds.length - config.core.goals.min_active;
+      let droppable = (await tx.goals.active()).length + adds.length - config.core.goals.min_active;
+      const seedKeep = config.core.goals.seed_keep_days * DAY;
       for (const id of result.goals.drop) {
         if (droppable <= 0) break;
+        if (twins.has(id)) continue;
         const goal = await tx.goals.get(id);
+        // A seed goal gets its first week before reflection can give it up.
+        const young =
+          goal?.source === "seed" && now.getTime() - goal.started_at.getTime() < seedKeep;
         // Her craft goal is her outward aim: its progress is Ethan's to set, so it stays.
-        if (goal?.status === "active" && !isCraftGoal(goal, config))
+        if (goal?.status === "active" && !young && !isCraftGoal(goal, config))
           if (await tx.goals.setStatus(id, "dropped", now)) {
             droppedGoalIds.push(id);
             droppable--;
           }
       }
       let available = config.core.goals.max_active - (await tx.goals.active()).length;
-      for (const [index, goal] of goalAdds.entries()) {
+      for (const { goal, embedding } of adds) {
         if (available <= 0) break;
         goalIds.push(
           await tx.goals.insert({
             ...goal,
-            embedding: embeddings[proposals.length + index]!,
+            embedding,
             status: "active",
             progress: 0,
             source: "reflect",

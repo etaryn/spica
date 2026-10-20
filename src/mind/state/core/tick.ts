@@ -8,7 +8,8 @@
 import type { CoreDeps } from "@/mind/platform/deps";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { HOUR } from "@/mind/platform/time";
-import { todaysBlocks } from "@/mind/world/blocks";
+import { blocksForDay, todaysBlocks } from "@/mind/world/blocks";
+import { lifeDate } from "@/mind/world/her-clock";
 import {
   baselineNeeds,
   depleteNeeds,
@@ -16,7 +17,6 @@ import {
   emotionExpired,
   energyStep,
   hourLoad,
-  moodOf,
   nextOffline,
   preoccupationExpired,
 } from "./core-state";
@@ -30,8 +30,17 @@ export async function coreStateTick(deps: CoreDeps, now: Date): Promise<"not_due
   await core.state.ensure(cfg.baseline, baselineNeeds(cfg));
   if (sameHour((await core.state.get())?.last_tick ?? null, now)) return "not_due";
 
-  const blocks = await todaysBlocks(deps, now);
-  const hour = hourLoad(blocks, new Date(now.getTime() - HOUR), now);
+  // The hour just past can start on yesterday's plan: a block running to midnight still drains.
+  const hourAgo = new Date(now.getTime() - HOUR);
+  const today = lifeDate(config.life, now);
+  const yesterday = lifeDate(config.life, hourAgo);
+  const blocks = [
+    ...(await todaysBlocks(deps, now)),
+    ...(yesterday === today
+      ? []
+      : blocksForDay(config.life, yesterday, await core.world.plan(yesterday))),
+  ];
+  const hour = hourLoad(blocks, hourAgo, now);
   const hourIso = new Date(Math.floor(now.getTime() / HOUR) * HOUR).toISOString();
   const noise = (["v", "a", "e"] as const).map(
     (d) => seededUnit(`core:${hourIso}:${d}`) * 2 - 1,
@@ -42,9 +51,8 @@ export async function coreStateTick(deps: CoreDeps, now: Date): Promise<"not_due
     if (sameHour(row.last_tick, now)) return "not_due";
 
     const offline = row.offline_since !== null;
-    const target = { ...row.baseline, energy: row.energy };
     const next = {
-      ...driftStep(moodOf(row), target, noise, cfg),
+      ...driftStep(row, row.baseline, [noise[0], noise[1]], cfg),
       energy: energyStep(row.energy, hour, offline, noise[2], cfg),
     };
     const offlineSince = nextOffline(row.offline_since, next.energy, now, cfg);

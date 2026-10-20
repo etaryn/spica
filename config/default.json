@@ -169,7 +169,7 @@
       "evening",
       "good"
     ],
-    "judge_timeout_ms": 3000,
+    "judge_timeout_ms": 5000,
     "judge_context_turns": 6,
     "retry_limit": 2,
     "retry_delay_ms": 5000,

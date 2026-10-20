@@ -2503,7 +2503,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B120).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B124).
 
 ### 25.1 Memory and recall
 - **B1.** Extraction sometimes turns her words into user facts (after a bare

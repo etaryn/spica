@@ -98,20 +98,23 @@ export function estimatedBack(
   return new Date(from + Math.max(1, hours) * HOUR);
 }
 
-/** One hourly step of mood toward `target`, plus bounded noise (`noise` entries in [-1, 1], scaled by `core.state.noise`). */
+type Mood = Omit<CoreMood, "energy">;
+
+/**
+ * One hourly step of mood toward `target`, plus bounded noise (`noise` entries in [-1, 1], scaled
+ * by `core.state.noise`). Energy is the battery's (`energyStep`), not drift's.
+ */
 export function driftStep(
-  s: CoreMood,
-  target: CoreMood,
-  noise: [number, number, number],
+  s: Mood,
+  target: Mood,
+  noise: [number, number],
   cfg: CoreStateConfig,
-): CoreMood {
+): Mood {
   const step = (x: number, t: number, n: number) => x + cfg.drift_rate * (t - x) + n * cfg.noise;
-  return clampMood({
-    mood_valence: step(s.mood_valence, target.mood_valence, noise[0]),
-    mood_arousal: step(s.mood_arousal, target.mood_arousal, noise[1]),
-    // Energy is a battery, moved by energyStep; here it only takes noise.
-    energy: s.energy + noise[2] * cfg.noise,
-  });
+  return {
+    mood_valence: clamp(step(s.mood_valence, target.mood_valence, noise[0]), -1, 1),
+    mood_arousal: clamp(step(s.mood_arousal, target.mood_arousal, noise[1]), 0, 1),
+  };
 }
 
 export function applyEvent(

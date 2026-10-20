@@ -60,19 +60,19 @@ test("estimatedBack is the hour energy reaches exit, never before the next tick"
   ).toEqual(t(15));
 });
 
-test("driftStep moves mood toward the target and clamps; energy takes only noise", () => {
-  const s = { mood_valence: -1, mood_arousal: 0, energy: 1 };
-  const next = driftStep(s, { mood_valence: 1, mood_arousal: 1, energy: 0 }, [0, 0, 0], cfg);
+test("driftStep moves mood toward the target and clamps; energy is the battery's, not drift's", () => {
+  const s = { mood_valence: -1, mood_arousal: 0 };
+  const next = driftStep(s, { mood_valence: 1, mood_arousal: 1 }, [0, 0], cfg);
   expect(next.mood_valence).toBeCloseTo(-1 + 2 * cfg.drift_rate);
-  expect(next.energy).toBe(1);
+  expect(next).not.toHaveProperty("energy");
   expect(
     driftStep(
-      { mood_valence: 1, mood_arousal: 1, energy: 1 },
-      { mood_valence: 1, mood_arousal: 1, energy: 1 },
-      [1, 1, 1],
+      { mood_valence: 1, mood_arousal: 1 },
+      { mood_valence: 1, mood_arousal: 1 },
+      [1, 1],
       cfg,
     ),
-  ).toEqual({ mood_valence: 1, mood_arousal: 1, energy: 1 });
+  ).toEqual({ mood_valence: 1, mood_arousal: 1 });
 });
 
 test("event nudges", () => {

@@ -135,3 +135,24 @@ test("a long busy run takes her offline at the tick she drops below enter, and b
     deps.config.core.state.offline.exit,
   );
 });
+
+test("a busy block running to midnight drains her in the first tick after it", async () => {
+  const run = async (busy: boolean) => {
+    await resetDb();
+    const full = makeTestDeps({ core: { state: { noise: 0 } }, life: { timezone: "UTC" } });
+    if (busy)
+      await insertLifeDay(full.db, {
+        date: "2026-01-04",
+        plan: {
+          blocks: [{ start: "22:00", end: "24:00", kind: "busy", busy: 1, label: "reading" }],
+        },
+        source: "scripted",
+        model: "none",
+        prompt_version: "scripted",
+        generated_at: at,
+      });
+    await coreStateTick(coreDepsOf(full), new Date("2026-01-05T00:45:00Z"));
+    return (await full.core.state.get())!.energy;
+  };
+  expect(await run(true)).toBeLessThan(await run(false));
+});

@@ -148,3 +148,26 @@ test("busy blocks can fall at any hour, and the fallback is busy and free only",
   expect(fallbackPlan(cfg).blocks.every((b) => b.kind !== ("quiet" as never))).toBe(true);
   expect(fallbackPlan(cfg).blocks.some((b) => b.kind === "busy")).toBe(true);
 });
+
+test("an unlabelled downtime block is skipped, not a reason to reject the plan", () => {
+  const r = validatePlan(
+    {
+      blocks: [
+        { start: "09:00", end: "12:00", kind: "busy", busy: 0.8, label: "reading" },
+        { start: "12:00", end: "15:00", kind: "downtime", busy: 0, label: "" },
+        { start: "15:00", end: "17:00", kind: "busy", busy: 0.7, label: "writing a post" },
+      ],
+    },
+    cfg,
+    null,
+  );
+  expect(r.ok).toBe(true);
+  expect(r.ok && r.plan.blocks.map((b) => b.start)).toEqual(["09:00", "15:00"]);
+  // A busy block still needs its label.
+  const bad = validatePlan(
+    { blocks: [{ start: "09:00", end: "12:00", kind: "busy", busy: 0.8, label: " " }] },
+    cfg,
+    null,
+  );
+  expect(bad.ok).toBe(false);
+});

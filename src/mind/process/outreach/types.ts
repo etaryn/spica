@@ -17,7 +17,7 @@ export const KIND_ORDER = [
 export type CandidateKind = (typeof KIND_ORDER)[number];
 
 export type FilterReason =
-  "topic_used" | "sensitive" | "too_deep" | "below_threshold" | "last_slot";
+  "topic_used" | "sensitive" | "too_deep" | "below_threshold" | "last_slot" | "idea_again";
 
 /** Something she knows behind a topic and when it happens (ISO); `dated` when the date is real. */
 export type Note = { text: string; at: string; dated: boolean };
@@ -78,14 +78,19 @@ export type CandidateInputs = {
   }[];
   /** Her own recent thoughts and ideas (core memory, never sensitive). */
   coreThoughts: { id: string; content: string; salience: number; depth: number }[];
-  /** Her live ideas about this user, from her user mind; never from sensitive memories. */
-  userIdeas: { id: string; content: string; salience: number }[];
+  /**
+   * Her live ideas about this user, from her user mind; never from sensitive memories. Notes are
+   * the dated facts the idea came from.
+   */
+  userIdeas: { id: string; content: string; salience: number; notes?: Note[] }[];
   checkIn: { lastContact: Date | null; medianGapHours: number };
   usedTopics: string[];
   /** The deepest of her own tiers she'd bring up unprompted with them: no stretch when writing first. */
   depthLimit: number;
   /** Her estimate of how many messages a day they send; null until she has one. */
   theirRate: number | null;
+  /** The kind of the last reach-out she sent them; null before the first. */
+  lastSentKind: CandidateKind | null;
 };
 
 export type GateRule =

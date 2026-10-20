@@ -22,6 +22,7 @@ const empty = (): CandidateInputs => ({
   usedTopics: [],
   depthLimit: 3,
   theirRate: null,
+  lastSentKind: null,
 });
 
 test("nothing eligible → no candidates, no winner", () => {
@@ -260,6 +261,42 @@ test("user_idea: topic idea:<id>, weighted, fact id set", () => {
     filtered: null,
   });
   expect(c!.score).toBeCloseTo(cfg.weights.user_idea * 0.5);
+});
+
+test("user_idea carries the dates of the facts it came from", () => {
+  const i = empty();
+  const at = new Date("2026-01-08T14:00:00Z");
+  i.userIdeas = [
+    {
+      id: "i1",
+      content: "Ask if they get a break after Thursday.",
+      salience: 0.5,
+      notes: [
+        {
+          text: "The user has a job interview on Thursday afternoon.",
+          at: at.toISOString(),
+          dated: true,
+        },
+      ],
+    },
+  ];
+  expect(buildCandidates(i, cfg, now)[0]!.notes).toEqual([
+    {
+      text: "The user has a job interview on Thursday afternoon.",
+      at: at.toISOString(),
+      dated: true,
+    },
+  ]);
+});
+
+test("an idea can't win straight after an idea; other kinds can", () => {
+  const i = empty();
+  i.userIdeas = [{ id: "i1", content: "ask about the task", salience: 0.5 }];
+  i.lastSentKind = "user_idea";
+  expect(buildCandidates(i, cfg, now)[0]!.filtered).toBe("idea_again");
+  expect(pickWinner(buildCandidates(i, cfg, now))).toBeNull();
+  i.lastSentKind = "thread";
+  expect(pickWinner(buildCandidates(i, cfg, now))?.kind).toBe("user_idea");
 });
 
 test("core_thought shares her_day's topic, so one memory is offered once", () => {

@@ -54,6 +54,7 @@ const empty = (): CandidateInputs => ({
   usedTopics: [],
   depthLimit: 1,
   theirRate: null,
+  lastSentKind: null,
 });
 const thread = (facts: CandidateInputs["dueThreads"][number]["facts"]) => ({
   id: "t1",

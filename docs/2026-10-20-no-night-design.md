@@ -73,7 +73,7 @@ Proposed defaults, aimed at about one log-off every day or so, at any hour, not 
 | Key | Default |
 |---|---|
 | `busy_drain_per_hour` | 0.12 (per busy-weighted hour) |
-| `free_recovery_per_hour` | 0.005 |
+| `free_recovery_per_hour` | 0.02 (was 0.005; tuned 2026-10-21) |
 | `offline_recovery_per_hour` | 0.15 |
 
 A typical plan has about 3.5 busy-weighted hours (0.42 drain) against about 18 free hours (0.09

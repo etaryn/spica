@@ -126,6 +126,7 @@ export function buildCandidates(
       coreMemoryId: null,
       threadId: null,
       sensitive: false,
+      notes: idea.notes,
     });
   }
 
@@ -137,14 +138,12 @@ export function buildCandidates(
   return raw
     .map(({ sensitive, tooDeep, notes, ...candidate }): Candidate => {
       const score = settings.weights[candidate.kind] * candidate.strength;
-      const filtered = filterReason(
-        candidate.topic,
-        sensitive,
-        tooDeep ?? false,
-        score,
-        usedTopics,
-        threshold,
-      );
+      const filtered =
+        filterReason(candidate.topic, sensitive, tooDeep ?? false, score, usedTopics, threshold) ??
+        // Ideas are her questions about them: two in a row reads as an interview.
+        (candidate.kind === "user_idea" && inputs.lastSentKind === "user_idea"
+          ? "idea_again"
+          : null);
       return { ...candidate, notes: notes ?? [], score, filtered };
     })
     .sort(

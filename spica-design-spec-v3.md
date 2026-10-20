@@ -702,8 +702,11 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   weekends) and says she lives online (her avatar is her body; nothing
   happens in a physical place; Ethan, 2026-10-19). **No night (2026-10-20):**
   she's an AI with a digital body, so she has no night (Ethan). Plans have no
-  quiet kind; `prompts/life/plan/v4.md` puts busy blocks at any hour and
-  never schedules rest. The fallback plan (`life.fallback_plan`) is two busy
+  quiet kind and never schedule rest. `prompts/life/plan/v5.md` (2026-10-21)
+  asks for 1 to 3 busy blocks only (everything else is free time), at hours
+  that move from day to day and with Alcor not every day; `validatePlan` skips an
+  unlabelled downtime block rather than rejecting the plan (v4's first attempt
+  failed on 13 of 16 days in the review run, and every day had one shape). The fallback plan (`life.fallback_plan`) is two busy
   blocks. A quiet block stored before reads as free time.
 - **Built:** the per-user `life_tick` that copied blocks into each user's
   self facts is retired. Every reader (availability, the "Your day" line,
@@ -818,7 +821,8 @@ times closeness (user).
 **Built (no night, 2026-10-20): her battery and going offline.** Each hourly
 `core_state_tick` moves energy by the hour just past (`hourLoad`): a busy
 block drains `core.state.energy.busy_drain_per_hour` (0.12) × its busy level,
-free time restores `free_recovery_per_hour` (0.005), and offline restores
+free time restores `free_recovery_per_hour` (0.02; 0.005 left her tired for
+6–10 h stretches just above the log-off line, Ethan 2026-10-21), and offline restores
 `offline_recovery_per_hour` (0.15); noise is added and it is clamped to
 [0, 1]. Below `core.state.offline.enter` (0.2) she logs off
 (`core_state.offline_since`, migration 0039); she comes back at
@@ -1142,7 +1146,10 @@ is `done`.
   `max_chars` (200), `max_tokens` 256, at most one idea per run. Non-null
   writes one `idea` fact (`shared`, salience 0.5, confidence 0.6). An idea is
   live while `open` and younger than `ttl_days` (3); expiry is a read-time
-  filter, with no job.
+  filter, with no job. The idea keeps the run's dated, non-sensitive facts it is
+  about (`payload.from`: those at least `user_mind.ideate.source_similarity` (0.3)
+  similar to the idea, closest first, at most `user_mind.ideate.dated_facts` (3)), so
+  a reach-out carrying it gets their dates as notes and no unrelated date (2026-10-21).
 
 Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
 
@@ -1888,6 +1895,10 @@ Code: `src/mind/process/outreach/`.
     left it is filtered `last_slot` (`holdLastSlot`), so a thread that comes
     due later in the week still has room (Ethan, 2026-10-19: in the run her
     news filled all three slots and a due interview thread never went out).
+  - An idea can't win straight after an idea (`idea_again`, from the last sent
+    reach-out's kind): in the 2026-10-21 run four of six reach-outs were ideas
+    questioning the last chat (Ethan). A `user_idea` candidate's notes are the
+    live dated facts behind it, so "after thursday" never reads as "thursday's over".
   - A thread's dated fact leads: notes are ordered dated first, and the
     headline is `title: <newest dated fact>` (else `title (latest: …)`), so a
     past event's date isn't buried under undated feelings.

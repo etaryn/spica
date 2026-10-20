@@ -425,3 +425,58 @@ test("their hour is read in their timezone, UTC when they have none or a bad one
   await deps.db.update(user).set({ timezone: "Mars/Olympus" }).where(eq(user.id, u));
   expect((await loadGateInputs(deps, u, now))!.theirHour).toBe(12);
 });
+
+test("an idea's notes are the live, non-sensitive dated facts it came from", async () => {
+  const { deps, u } = await setup();
+  const when = ago(-30);
+  const dated = await insertFact(
+    deps.db,
+    u,
+    fact({ content: "The user has an interview on Thursday.", occurred_at: when }),
+  );
+  const hidden = await insertFact(
+    deps.db,
+    u,
+    fact({ content: "secret", occurred_at: when, payload: { sensitive: true } }),
+  );
+  const old = await insertFact(
+    deps.db,
+    u,
+    fact({ content: "The interview is on Wednesday.", occurred_at: when, status: "superseded" }),
+  );
+  await insertFact(
+    deps.db,
+    u,
+    fact({
+      kind: "idea",
+      content: "Ask if they get a break after Thursday.",
+      created_at: ago(2),
+      payload: { from: [dated.id, hidden.id, old.id, "not-a-uuid"] },
+    }),
+  );
+  const [idea] = (await loadCandidateInputs(deps, u, now)).userIdeas;
+  expect(idea!.notes).toEqual([
+    { text: "The user has an interview on Thursday.", at: when.toISOString(), dated: true },
+  ]);
+});
+
+test("the last sent reach-out's kind is known; null before the first", async () => {
+  const { deps, u } = await setup();
+  expect((await loadCandidateInputs(deps, u, now)).lastSentKind).toBeNull();
+  // Ordered by when it went out, not when it was logged; an unsent row never counts.
+  for (const [kind, status, sent, logged] of [
+    ["user_idea", "sent", 20, 60],
+    ["thread", "sent", 50, 10],
+    ["her_day", "blocked", null, 5],
+  ] as const)
+    await insertReachOutLog(deps.db, u, {
+      candidates: [],
+      winner: { kind } as never,
+      gate_results: [],
+      status,
+      topic: kind,
+      send_at: sent === null ? null : ago(sent),
+      created_at: ago(logged),
+    });
+  expect((await loadCandidateInputs(deps, u, now)).lastSentKind).toBe("user_idea");
+});

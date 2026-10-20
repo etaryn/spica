@@ -189,3 +189,5 @@ code itself.
 | 2026-10-20 | A planned event due while she's offline still lands as planned | Marking it as fallen through is backlog if the review run reads wrong. |
 | 2026-10-20 | `estimatedBack` counts from `last_tick` at `offline_recovery_per_hour`, never under 1 h | A message between ticks never sees an offline end in the past. |
 | 2026-10-20 | Eval script users have no timezone (UTC), so `their_night` (23–08) mirrors the old quiet window | Reach-out counts in the outreach scripts hold without retuning. |
+| 2026-10-21 | An idea's sources are the ideate run's dated facts nearest the idea by embedding (`source_similarity` 0.3, provisional), not ones the model names | The model writes one free-text idea; similarity keeps an unrelated date out of the reach-out without a prompt change. |
+| 2026-10-21 | `idea_again` reads the winner kind of the last sent reach-out only | "Not twice running" is about consecutive messages; older history doesn't matter. |

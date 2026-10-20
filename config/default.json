@@ -226,7 +226,7 @@
     "relationship_summary": "v3",
     "relationship_openness": "v1",
     "relationship_stage": "v1",
-    "life_plan": "v4",
+    "life_plan": "v5",
     "life_event": "v6",
     "life_availability": "v2",
     "core_state_line": "v4",
@@ -583,7 +583,7 @@
       "noise": 0.03,
       "energy": {
         "busy_drain_per_hour": 0.12,
-        "free_recovery_per_hour": 0.005,
+        "free_recovery_per_hour": 0.02,
         "offline_recovery_per_hour": 0.15
       },
       "offline": {
@@ -779,7 +779,9 @@
       "ttl_days": 3,
       "recent_days": 14,
       "max_planned": 20,
-      "slot_max": 1
+      "slot_max": 1,
+      "dated_facts": 3,
+      "source_similarity": 0.3
     },
     "consolidate": {
       "gist_after_days": 7,

@@ -6,8 +6,8 @@
  */
 import type { Db } from "@/db/client";
 import { getState, type ConvState } from "@/db/repos/user/conversation-state";
-import { getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
-import { sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
+import { datedFactsByIds, getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
+import { lastSentKind, sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
@@ -22,7 +22,7 @@ import { isValidTimeZone, localHour } from "@/mind/platform/timezone";
 import { loadDepth } from "@/mind/state/user/relationship/depth";
 import { faded, rateEstimated } from "@/mind/state/user/relationship/params";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
-import type { CandidateInputs, GateInputs } from "./types";
+import { KIND_ORDER, type CandidateInputs, type CandidateKind, type GateInputs } from "./types";
 
 const DAY = 24 * HOUR;
 const WEEK = 7 * DAY;
@@ -77,14 +77,25 @@ export async function loadCandidateInputs(
   )
     .filter(recallable)
     .map((m) => ({ id: m.id, content: m.content, salience: m.salience, depth: m.depth }));
-  const userIdeas = (
-    await liveIdeas(
-      db,
-      userId,
-      ideaCutoff(now, config.user_mind.ideate.ttl_days),
-      settings.user_idea_limit,
-    )
-  ).map((f) => ({ id: f.id, content: f.content, salience: f.salience }));
+  const ideas = await liveIdeas(
+    db,
+    userId,
+    ideaCutoff(now, config.user_mind.ideate.ttl_days),
+    settings.user_idea_limit,
+  );
+  const userIdeas = await Promise.all(
+    ideas.map(async (idea) => ({
+      id: idea.id,
+      content: idea.content,
+      salience: idea.salience,
+      // The dated facts behind an idea keep "after thursday" from reading as "thursday's over".
+      notes: (await datedFactsByIds(db, userId, ideaSources(idea.payload))).map((f) => ({
+        text: f.content,
+        at: f.occurred_at.toISOString(),
+        dated: true,
+      })),
+    })),
+  );
 
   return {
     dueThreads: await Promise.all(
@@ -130,8 +141,18 @@ export async function loadCandidateInputs(
       params && rateEstimated(params.msgs_per_day, config.relationship)
         ? params.msgs_per_day.baseline
         : null,
+    lastSentKind: kindOf(await lastSentKind(db, userId)),
   };
 }
+
+const kindOf = (k: string | null): CandidateKind | null =>
+  k && (KIND_ORDER as readonly string[]).includes(k) ? (k as CandidateKind) : null;
+
+/** The fact ids an idea came from (`payload.from`); none for an idea written before they were kept. */
+const ideaSources = (payload: unknown): string[] => {
+  const from = (payload as { from?: unknown } | null)?.from;
+  return Array.isArray(from) ? from.filter((x): x is string => typeof x === "string") : [];
+};
 
 /**
  * Her recent episodes and the plans on her mind (open intentions from the same window), plus her

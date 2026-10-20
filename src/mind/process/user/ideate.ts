@@ -5,7 +5,7 @@
  * never reads anything a crisis touched.
  */
 import { z } from "zod";
-import { insertFact } from "@/db/repos/user/facts";
+import { insertFact, nearestDated } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
 import {
   latestNonSensitiveModel,
@@ -93,6 +93,18 @@ export async function userIdeate(
         confidence: settings.confidence,
         source: "generated",
         source_ref: `user_ideate:${ctx.traceId}`,
+        // The dated facts it's about, so a reach-out carrying it knows their dates; a date it
+        // isn't about would ride along into the message.
+        payload: {
+          from: await nearestDated(
+            db,
+            userId,
+            facts.filter((f) => f.occurred_at !== null).map((f) => f.id),
+            embedding!,
+            settings.source_similarity,
+            settings.dated_facts,
+          ),
+        },
       });
       ideaId = row.id;
     }

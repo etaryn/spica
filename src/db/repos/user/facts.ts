@@ -254,6 +254,7 @@ export async function listUnreadFacts(
       kind: fact.kind,
       content: fact.content,
       salience: fact.salience,
+      occurred_at: fact.occurred_at,
       sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
     })
     .from(fact)
@@ -391,4 +392,55 @@ export async function listOutreachUserEvents(
         sql`(${fact.last_recalled_at} IS NULL OR ${fact.last_recalled_at} < ${fact.occurred_at})`,
       ),
     );
+}
+
+/** The live, non-sensitive dated facts among `ids` (unknown or malformed ids are skipped), in that order. */
+export async function datedFactsByIds(
+  db: Db,
+  userId: string,
+  ids: string[],
+): Promise<{ id: string; content: string; occurred_at: Date }[]> {
+  const valid = ids.filter((id) => z.uuid().safeParse(id).success);
+  if (!valid.length) return [];
+  const rows = await db
+    .select({ id: fact.id, content: fact.content, occurred_at: fact.occurred_at })
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        inArray(fact.id, valid),
+        notInArray(fact.status, [...INACTIVE]),
+        sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false`,
+        sql`${fact.occurred_at} IS NOT NULL`,
+      ),
+    );
+  const byId = new Map(rows.map((r) => [r.id, { ...r, occurred_at: r.occurred_at! }]));
+  return valid.flatMap((id) => byId.get(id) ?? []);
+}
+
+/** Of `ids`, the dated facts at least `minSim` similar to `vec`, closest first. */
+export async function nearestDated(
+  db: Db,
+  userId: string,
+  ids: string[],
+  vec: number[],
+  minSim: number,
+  limit: number,
+): Promise<string[]> {
+  if (!ids.length || limit < 1) return [];
+  const q = vecLiteral(vec);
+  const rows = await db
+    .select({ id: fact.id })
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        inArray(fact.id, ids),
+        sql`${fact.occurred_at} IS NOT NULL`,
+        sql`(1 - (${fact.embedding} <=> ${q}::vector)) >= ${minSim}`,
+      ),
+    )
+    .orderBy(sql`${fact.embedding} <=> ${q}::vector`)
+    .limit(limit);
+  return rows.map((r) => r.id);
 }

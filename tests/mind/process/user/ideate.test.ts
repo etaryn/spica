@@ -57,6 +57,59 @@ test("writes one open idea; null writes nothing; live ideas are passed back", as
   ]);
 });
 
+test("an idea keeps the dated facts it was written from, so a reach-out knows their dates", async () => {
+  const { deps, userId, run } = await setup();
+  const dated = await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "They have an interview on Thursday.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    occurred_at: new Date(deps.clock.now().getTime() + 48 * 3_600_000),
+    status: "open",
+    salience: 0.8,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask if they get a break after Thursday." });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const [idea] = await liveIdeas(deps.db, userId, ideaCutoff(deps.clock.now(), 3), 5);
+  // The undated audition fact isn't kept: only a date helps the reach-out.
+  expect(idea!.payload).toEqual({ from: [dated.id] });
+});
+
+test("only the dated facts near the idea come with it, closest first", async () => {
+  const { deps, userId, run } = await setup();
+  const idea = "Ask if they get a break after Thursday.";
+  const [near] = await deps.embedder.embed([idea], "document");
+  const dated = (content: string, embedding: number[]) =>
+    insertFact(deps.db, userId, {
+      subject: "user",
+      kind: "event",
+      content,
+      embedding,
+      created_at: deps.clock.now(),
+      occurred_at: new Date(deps.clock.now().getTime() + 48 * 3_600_000),
+      status: "open",
+      salience: 0.8,
+      valence: 0,
+      confidence: 0.9,
+      source: "turn",
+    });
+  // Unrelated: a vector pointing away from the idea's.
+  const dentist = await dated(
+    "They have a dentist appointment on Monday.",
+    Array.from({ length: 1024 }, (_, i) => (i % 2 ? 0.01 : -0.01)),
+  );
+  const interview = await dated("They have an interview on Thursday.", near!);
+  deps.llm.handlers.user_ideate = () => ({ idea });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const [row] = await liveIdeas(deps.db, userId, ideaCutoff(deps.clock.now(), 3), 5);
+  expect(row!.payload).toEqual({ from: [interview.id] });
+  expect(dentist.id).not.toBe(interview.id);
+});
+
 test("ideaCutoff is ttl days back", () => {
   const now = new Date("2026-01-10T00:00:00Z");
   expect(ideaCutoff(now, 3).toISOString()).toBe("2026-01-07T00:00:00.000Z");

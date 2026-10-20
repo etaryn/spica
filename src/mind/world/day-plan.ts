@@ -43,6 +43,8 @@ export function validatePlan(
   const blocks: LifeBlock[] = [];
 
   for (const [i, block] of raw.blocks.entries()) {
+    // Free time needs no name; an unlabelled downtime block is just a gap.
+    if (block.kind === "downtime" && !tidyLabel(block.label)) continue;
     const problem = blockProblem(block, settings.plan_label_max_chars);
     if (problem) {
       violations.push(`block ${i + 1}: ${problem}`);

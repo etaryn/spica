@@ -154,3 +154,20 @@ export async function markLatestAnswered(db: Db, userId: string, at: Date): Prom
     .returning({ id: reach_out_log.id });
   return updated[0]?.id ?? null;
 }
+
+/** The winner kind of the last reach-out she sent them; null before the first. */
+export async function lastSentKind(db: Db, userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ winner: reach_out_log.winner })
+    .from(reach_out_log)
+    .where(
+      and(
+        eq(reach_out_log.user_id, userId),
+        eq(reach_out_log.status, "sent"),
+        isNotNull(reach_out_log.send_at),
+      ),
+    )
+    .orderBy(desc(reach_out_log.send_at))
+    .limit(1);
+  return (row?.winner as { kind?: string } | null)?.kind ?? null;
+}

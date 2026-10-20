@@ -89,7 +89,7 @@ export type CandidateInputs = {
   depthLimit: number;
   /** Her estimate of how many messages a day they send; null until she has one. */
   theirRate: number | null;
-  /** The kind of the last reach-out she sent them; null before the first. */
+  /** The kind of the last reach-out she sent them while it's unanswered; null otherwise. */
   lastSentKind: CandidateKind | null;
 };
 

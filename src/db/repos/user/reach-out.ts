@@ -155,10 +155,13 @@ export async function markLatestAnswered(db: Db, userId: string, at: Date): Prom
   return updated[0]?.id ?? null;
 }
 
-/** The winner kind of the last reach-out she sent them; null before the first. */
+/**
+ * The winner kind of the last reach-out she sent them while it's unanswered; null once they've
+ * written since, or before the first.
+ */
 export async function lastSentKind(db: Db, userId: string): Promise<string | null> {
   const [row] = await db
-    .select({ winner: reach_out_log.winner })
+    .select({ winner: reach_out_log.winner, answered_at: reach_out_log.answered_at })
     .from(reach_out_log)
     .where(
       and(
@@ -169,5 +172,6 @@ export async function lastSentKind(db: Db, userId: string): Promise<string | nul
     )
     .orderBy(desc(reach_out_log.send_at))
     .limit(1);
-  return (row?.winner as { kind?: string } | null)?.kind ?? null;
+  if (!row || row.answered_at) return null;
+  return (row.winner as { kind?: string } | null)?.kind ?? null;
 }

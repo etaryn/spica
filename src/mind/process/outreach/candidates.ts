@@ -140,7 +140,8 @@ export function buildCandidates(
       const score = settings.weights[candidate.kind] * candidate.strength;
       const filtered =
         filterReason(candidate.topic, sensitive, tooDeep ?? false, score, usedTopics, threshold) ??
-        // Ideas are her questions about them: two in a row reads as an interview.
+        // Ideas are her questions about them: two in a row without a word from them reads as an
+        // interview.
         (candidate.kind === "user_idea" && inputs.lastSentKind === "user_idea"
           ? "idea_again"
           : null);

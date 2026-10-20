@@ -8,7 +8,7 @@ import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertReachOutLog } from "@/db/repos/user/reach-out";
 import { insertThread } from "@/db/repos/user/threads";
 import { insertTurn } from "@/db/repos/user/session-log";
-import { relationship, conversation_state, user } from "@/db/schema";
+import { relationship, conversation_state, reach_out_log, user } from "@/db/schema";
 import { closeTestDb, createTestUser, resetDb, vec, seedStageFor } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -479,4 +479,10 @@ test("the last sent reach-out's kind is known; null before the first", async () 
       created_at: ago(logged),
     });
   expect((await loadCandidateInputs(deps, u, now)).lastSentKind).toBe("user_idea");
+  // Once they've written since, it no longer counts.
+  await deps.db
+    .update(reach_out_log)
+    .set({ answered_at: ago(1) })
+    .where(eq(reach_out_log.topic, "user_idea"));
+  expect((await loadCandidateInputs(deps, u, now)).lastSentKind).toBeNull();
 });

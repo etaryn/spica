@@ -15,9 +15,8 @@ import { runCoreLoop } from "./runner";
 export function sectionLines(markdown: string): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   let current: string | null = null;
-  for (const raw of markdown.split(/?
-/)) {
-    const heading = /^###s+(.+?)s*$/.exec(raw);
+  for (const raw of markdown.split(/\r?\n/)) {
+    const heading = /^###\s+(.+?)\s*$/.exec(raw);
     if (heading) {
       current = heading[1]!;
       out[current] = [];

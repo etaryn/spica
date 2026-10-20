@@ -637,3 +637,25 @@ test("a seed goal can't be dropped in its first week", async () => {
   expect((await deps.core.goals.get(young))!.status).toBe("active");
   expect((await deps.core.goals.get(old))!.status).toBe("dropped");
 });
+
+test("two near-twin goals proposed the same night become one", async () => {
+  const { all, deps } = setup();
+  await memory(deps, "episode", "A day.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [],
+    opinions: [],
+    interests: [],
+    goals: {
+      add: [
+        { title: "Send posts rough", why: "x" },
+        { title: "Send posts rough", why: "x" },
+      ],
+      drop: [],
+    },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect(
+    (await deps.core.goals.active()).filter((g) => g.title === "Send posts rough"),
+  ).toHaveLength(1);
+});

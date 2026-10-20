@@ -7,6 +7,7 @@ import type { CoreScope, LoopStatus } from "@/mind/platform/core";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { cosine } from "@/mind/platform/math";
 import { DAY } from "@/mind/platform/time";
 import { isCraftGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
@@ -209,9 +210,12 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       const adds: { goal: (typeof goalAdds)[number]; embedding: number[] }[] = [];
       for (const [index, goal] of goalAdds.entries()) {
         const embedding = embeddings[proposals.length + index]!;
-        const twin = await tx.goals.nearActive(embedding, config.core.goals.twin_similarity);
+        const min = config.core.goals.twin_similarity;
+        const twin = await tx.goals.nearActive(embedding, min);
         if (twin) twins.add(twin);
-        else adds.push({ goal, embedding });
+        // Two rewordings of one goal in the same night are one goal too.
+        else if (!adds.some((a) => cosine(a.embedding, embedding) >= min))
+          adds.push({ goal, embedding });
       }
       // Drops stop at the floor unless replacements come in: with no goal, nothing pulls her
       // events or recall toward anything.

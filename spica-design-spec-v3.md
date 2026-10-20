@@ -505,8 +505,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `resolves_memory_id` (→ target `core_memory`; deletion sets null), `created_at`, and
   `appraised_at` (when it landed with her; null until its time comes, §8.3).
 - **`web_find`** (Built 14; no `user_id`): what she came across while browsing: `source`, `url`,
-  `title`, `credit`, `licence`, `media_path` (the cached image), `world_event_id` (→ the `action`
-  event), `found_at`.
+  `title`, `description` (what the source says the picture shows, or null; migration 0040),
+  `credit`, `licence`, `media_path` (the cached image), `image_sha256`, `world_event_id` (→ the
+  `action` event), `found_at`.
 - **`post`** (Built 14; no `user_id`): `find_id` (→ `web_find`, unique), `medium`, `format`, `pose`,
   `caption`, `overlay_text`, `media_path`, `skill`, `check` (`ok | flagged | unchecked`),
   `check_reason`, `status` (`draft | approved | rejected`), `decided_at`, `action_event_id`
@@ -929,7 +930,10 @@ budget and a versioned prompt:
   or interest with no explicit target supersedes the nearest active one of
   its kind from before tonight at or above `core.reflect.twin_similarity`
   (0.85, provisional: tune from a real run), so one view doesn't pile up as
-  many near-copies.
+  many near-copies. **Goals (2026-10-21):** a proposed goal within
+  `core.goals.twin_similarity` (0.85) of an active goal (`CoreGoals.nearActive`) isn't
+  added, and that goal isn't dropped the same night, so a rewording never replaces a goal and
+  its progress; a `seed` goal younger than `core.goals.seed_keep_days` (7) can't be dropped.
 - `core_consolidate` (`prompts/core/consolidate/v2.md`,
   `prompts.core_consolidate: v2`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes
@@ -945,7 +949,12 @@ budget and a versioned prompt:
   `prompts.core_snapshot: v2`) reads at most `core.snapshot.max_items` (8)
   per active kind, with `max_tokens` 1024. It writes six sections and their
   embedded bullet lines in one transaction with version N+1 and its trace;
-  a failed render preserves the previous version and lines.
+  a failed render preserves the previous version and lines. A section the
+  render returns empty, which had lines last night (or in the seed self on
+  the first night), keeps those lines and their self lines (2026-10-21: the
+  night-1 render once wiped her seed self); a kept line keeps the depth its self
+  line had, so nothing kept reaches someone it was held back from. Two near-twin
+  goals proposed the same night are one.
 - `core_drift_watch` (`prompts/core/drift/v1.md`) writes the diagnostic
   rows described in §7.3. A finding never blocks the new snapshot.
 - **Built 10b: depth.** Every loop that writes memory judges each item's
@@ -1186,6 +1195,14 @@ model output, is traced `failed`; the next still runs).
   simply inserted. A read or belief is marked `sensitive` when it read a sensitive memory,
   summary, reflection, previous read or belief.
 - **`user_ideate`** also gets `your_read_on_them`: the newest read that read nothing sensitive.
+- **Built 2026-10-21: now, dates, and her reads stay hers.** Every user-mind loop's input has
+  `now` (`formatLocal` in their zone, `RunInputs.timezone`) and each memory's `when` (its
+  `occurred_at`, or null), so a plan that passed never reads as ahead. Prompts: summarise v3,
+  reflect v3, model v3, ideate v4. Her reads can come through her own lens (Ethan: assumptions
+  about the user are fine at a moderate level, as people's are) but are written as her
+  impressions, never as something they said or a habit they have unless a memory says so, and
+  not every read about one theme; an idea starts from something they told her and never puts
+  words in their mouth.
 - **`user_consolidate`** (`src/mind/process/user/consolidate.ts`, repo
   `src/db/repos/user/gist.ts`, `prompts/user-mind/consolidate/v1.md`,
   `prompts.user_consolidate` v1). Runs only in a triggered batch, never nightly. Eligible: kind
@@ -1895,8 +1912,8 @@ Code: `src/mind/process/outreach/`.
     left it is filtered `last_slot` (`holdLastSlot`), so a thread that comes
     due later in the week still has room (Ethan, 2026-10-19: in the run her
     news filled all three slots and a due interview thread never went out).
-  - An idea can't win straight after an idea (`idea_again`, from the last sent
-    reach-out's kind): in the 2026-10-21 run four of six reach-outs were ideas
+  - An idea can't win straight after an idea while that one is unanswered (`idea_again`,
+    from the last sent reach-out's kind and `answered_at`; once they've written, ideas can go): in the 2026-10-21 run four of six reach-outs were ideas
     questioning the last chat (Ethan). A `user_idea` candidate's notes are the
     live dated facts behind it, so "after thursday" never reads as "thursday's over".
   - A thread's dated fact leads: notes are ordered dated first, and the
@@ -2087,7 +2104,10 @@ post_tick (hourly) <- newest landed browse event
   for every date). The feeds link the small `screen` size, so the image is downloaded from the
   same path's `publicationjpg` size, falling back to the enclosure; the find's URL stays the
   enclosure's. The downloaded image's sha256 is kept in `web_find.image_sha256` (unique,
-  migration 0038), and a find whose image matches an earlier one is skipped. Free licences only:
+  migration 0038), and a find whose image matches an earlier one is skipped. The feeds'
+  `<description>` is kept, tags stripped and cut at a word at `posts.description_max_chars`
+  (300), as `web_find.description` (migration 0040; Commons' is already its title, so null),
+  and the draft and the check see it as "What it shows" (2026-10-21). Free licences only:
   public domain, CC0, CC BY, CC BY-SA; anything with an `nc` or `nd` word is rejected. A failed
   fetch or non-free licence writes nothing. The image is cached under `posts.media_dir`, a
   `web_find` is written and a low-stakes `action` event (valence 0) says what she came across.
@@ -2513,9 +2533,6 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
-- **B121.** The turn judge timed out on 2 of 15 calls (`judge_timeout_ms` 3000) in the
-  2026-10-19 run; the keyword fallback then made a whole message an "open question". Watch the
-  next run; raise the timeout only if it repeats. *Tuning.*
 - **B7.** Concurrency edge cases: concurrent POSTs can overwrite
   `open_questions`; concurrent crisis requests with different snapshot tails
   pick different `reply_to`s; a retry's attempt count is inherited by turns

@@ -43,7 +43,7 @@ export async function userSummarise(
       model: "user_mind",
       system: loadPrompt("user-mind/summarise", config.prompts.user_summarise),
       input: JSON.stringify({
-        now: formatLocal(deps.clock.now(), inputs.timezone),
+        now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
         previous: previous?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),

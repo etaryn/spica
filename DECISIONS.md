@@ -191,3 +191,8 @@ code itself.
 | 2026-10-20 | Eval script users have no timezone (UTC), so `their_night` (23–08) mirrors the old quiet window | Reach-out counts in the outreach scripts hold without retuning. |
 | 2026-10-21 | An idea's sources are the ideate run's dated facts nearest the idea by embedding (`source_similarity` 0.3, provisional), not ones the model names | The model writes one free-text idea; similarity keeps an unrelated date out of the reach-out without a prompt change. |
 | 2026-10-21 | `idea_again` reads the winner kind of the last sent reach-out only | "Not twice running" is about consecutive messages; older history doesn't matter. |
+| 2026-10-21 | A kept snapshot line keeps its previous self line's depth (matched by text); the section default only when none matches | Depth decides who sees a line; a kept intimate line must not widen to acquaintances. |
+| 2026-10-21 | A goal twin skips the reworded add rather than replacing the old goal | Replacing would drop the old goal's progress; the old wording is as good. |
+| 2026-10-21 | `core.goals.twin_similarity` 0.85, matching the opinion twin threshold (provisional) | No measurement of real goal paraphrases yet. |
+| 2026-10-21 | A seed goal's first week counts from its `started_at` | Seed goals start when her core is seeded. |
+| 2026-10-21 | The feed description is cut at a word, trailing punctuation dropped (`cutAtWord`) | Same rule as captions. |

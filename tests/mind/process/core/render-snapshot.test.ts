@@ -3,7 +3,8 @@ import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { core_snapshot, core_loop_trace } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { seedSnapshot } from "@/mind/memory/core/seed";
-import { coreRenderSnapshot, sectionLines } from "@/mind/process/core/render-snapshot";
+import { coreRenderSnapshot } from "@/mind/process/core/render-snapshot";
+import { snapshotSection } from "@/mind/memory/core/depth";
 import { closeTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -205,7 +206,11 @@ test("an emptied section keeps last night's lines, here the seed self on night 1
   const all = makeTestDeps();
   const deps = coreDepsOf(all);
   await seedSnapshot(deps);
-  const seed = sectionLines((await deps.core.memory.latestSnapshot())!.content);
+  const content = (await deps.core.memory.latestSnapshot())!.content;
+  const seed = {
+    Lately: snapshotSection(content, "Lately"),
+    Goals: snapshotSection(content, "Goals"),
+  };
   expect(seed.Lately?.length).toBeGreaterThan(0);
   all.llm.handlers.core_render_snapshot = () => ({
     Lately: [],
@@ -217,15 +222,38 @@ test("an emptied section keeps last night's lines, here the seed self on night 1
   });
   expect(await coreRenderSnapshot(deps, now)).toBe("done");
   const snap = (await deps.core.memory.latestSnapshot())!;
-  expect(sectionLines(snap.content).Lately).toEqual(seed.Lately);
-  expect(sectionLines(snap.content).Goals).toEqual(seed.Goals);
+  expect(snapshotSection(snap.content, "Lately")).toEqual(seed.Lately);
+  expect(snapshotSection(snap.content, "Goals")).toEqual(seed.Goals);
   expect(snap.sections.Opinions).toBe("- Solaris is overrated");
   expect(snap.sections.People).toBe("");
   const lines = (await deps.core.memory.selfLines(snap.version)).map((l) => l.text);
   for (const kept of seed.Lately!) expect(lines).toContain(kept);
 });
 
-test("sectionLines reads the bullets under each heading", () => {
-  const md = ["### Lately", "- a", "- b", "", "### Goals", "- c"].join(String.fromCharCode(10));
-  expect(sectionLines(md)).toEqual({ Lately: ["a", "b"], Goals: ["c"] });
+test("a kept line keeps the depth it had, so an intimate line never widens", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  const empty = {
+    Lately: [],
+    Opinions: [],
+    Interests: [],
+    Goals: [],
+    People: [],
+    "Habits of speech": [],
+  };
+  all.llm.handlers.core_render_snapshot = () => ({
+    ...empty,
+    Opinions: [{ text: "she trusts Alcor more than anyone", depth: "intimate" }],
+  });
+  await coreRenderSnapshot(deps, now);
+  all.llm.handlers.core_render_snapshot = () => ({
+    ...empty,
+    Lately: [{ text: "new", depth: null }],
+  });
+  await coreRenderSnapshot(deps, new Date(now.getTime() + 86_400_000));
+  const snap = (await deps.core.memory.latestSnapshot())!;
+  expect(snap.version).toBe(2);
+  const kept = (await deps.core.memory.selfLines(2)).find((l) => l.text.startsWith("she trusts"));
+  expect(kept?.depth).toBe(3);
 });

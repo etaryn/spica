@@ -159,3 +159,16 @@ test("an observatory picture downloads at publication size, falling back to the 
   stub({ [NOIRLAB]: feed, [screen]: png }); // publication size missing → 404
   expect((await sources.noirlab_iotw!.fetch("2026-10-14"))!.image).toEqual(png);
 });
+
+test("a CDATA description reads too, numeric entities decoded", async () => {
+  stub({
+    [ESO]: rss(
+      item("Dome", "Mon, 12 Oct 2026 06:00:00 +0200", "https://cdn.eso.org/c.jpg").replace(
+        "</item>",
+        "<description><![CDATA[<p>Paranal&#8217;s dome</p>]]></description></item>",
+      ),
+    ),
+    "https://cdn.eso.org/c.jpg": png,
+  });
+  expect((await sources.eso_potw!.fetch("2026-10-14"))!.description).toBe("Paranal’s dome");
+});

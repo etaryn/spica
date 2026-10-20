@@ -41,6 +41,9 @@ const decodeEntities = (s: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&");
 
 /**
@@ -62,10 +65,10 @@ function rssPictureOfWeek(
       const date = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(first)?.[1];
       const url = /<enclosure[^>]*url="([^"]+)"/.exec(first)?.[1];
       if (!title || !date || !url) return null;
-      // The description is HTML escaped into the XML: decode, drop the tags, keep the words.
+      // The description is HTML, escaped or in CDATA: unwrap, decode, drop the tags, keep the words.
       const raw = /<description>([\s\S]*?)<\/description>/.exec(first)?.[1];
       const text = raw
-        ? decodeEntities(raw)
+        ? decodeEntities(raw.replace(/^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/, "$1"))
             .replace(/<[^>]+>/g, " ")
             .replace(/\s+/g, " ")
             .trim()

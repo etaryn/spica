@@ -67,7 +67,7 @@ export async function userIdeate(
       model: "user_mind",
       system: loadPrompt("user-mind/ideate", config.prompts.user_ideate),
       input: JSON.stringify({
-        now: formatLocal(deps.clock.now(), inputs.timezone),
+        now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
         summary: summary?.payload ?? null,
         noticed: noticed?.content ?? null,

@@ -119,6 +119,7 @@ export async function browseIfDue(deps: CoreDeps, now: Date): Promise<boolean> {
       source: found.source,
       url: found.url,
       title: found.title,
+      description: found.description ?? null,
       credit: found.credit,
       licence: found.licence,
       media_path: media,

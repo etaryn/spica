@@ -215,6 +215,7 @@ test("9: captions cut at a word; a repeated picture and a stale weekly feed brin
     timeoutMs: 1000,
     maxDownloadBytes: 1000,
     weeklyMaxAgeDays: 7,
+    descriptionMaxChars: 300,
   });
   const original = globalThis.fetch;
   globalThis.fetch = (async () => new Response(xml)) as typeof fetch;

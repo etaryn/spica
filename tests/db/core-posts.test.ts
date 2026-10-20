@@ -23,6 +23,7 @@ async function find(layer = createCoreLayer(getTestDb()), url = "https://x/1.png
     source: "apod",
     url,
     title: "A",
+    description: null,
     credit: "NASA",
     licence: "public domain",
     media_path: ".data/media/finds/a.png",

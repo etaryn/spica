@@ -11,7 +11,10 @@ import type { StillFormat } from "./post-library";
 import type { PublicPersona } from "./public-persona";
 
 export type Draft = { caption: string; overlay_text: string | null };
-type Find = Pick<WebFindRow, "title" | "source" | "credit">;
+type Find = Pick<WebFindRow, "title" | "source" | "credit"> & { description?: string | null };
+
+/** What the source says the picture shows, so a punning title doesn't stand in for the picture. */
+const shows = (find: Find) => (find.description ? [`What it shows: ${find.description}`] : []);
 export type DraftInput = {
   persona: PublicPersona;
   find: Find;
@@ -61,6 +64,7 @@ export async function draftPost(
     ].join("\n\n"),
     input: [
       `What you found: "${find.title}" (${find.source}, credit ${find.credit})`,
+      ...shows(find),
       `How much it moved you: ${input.valence.toFixed(2)}`,
       `Who you are in public:\n${persona.lines.map((l) => `- ${l}`).join("\n")}`,
       `Your day so far: ${persona.today.happened.join("; ") || "nothing much yet"}`,
@@ -96,6 +100,7 @@ export async function checkPost(
       `Caption: ${draft.caption}`,
       `Text on the image: ${draft.overlay_text ?? "none"}`,
       `The find: "${find.title}" (${find.source}, credit ${find.credit})`,
+      ...shows(find),
     ].join("\n"),
     schema: CheckSchema,
     timeoutMs: config.models.structured_timeout_ms,

@@ -281,6 +281,13 @@
       "when": 1792430190388,
       "tag": "0039_normal_thunderbolt_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792519450992,
+      "tag": "0040_nice_black_bolt",
+      "breakpoints": true
     }
   ]
 }

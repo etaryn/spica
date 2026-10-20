@@ -55,6 +55,7 @@ async function landedFind(
     source: "apod",
     url,
     title: "The Pillars",
+    description: null,
     credit: "NASA",
     licence: "public domain",
     media_path: media,

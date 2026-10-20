@@ -156,3 +156,11 @@ test("an apod fetch failure inside the world tick doesn't fail the tick", async 
   const { core } = await setup({ apod: new Error("HTTP 404") });
   await expect(coreWorldTick(core, at(8))).resolves.toMatchObject({ browsed: false });
 });
+
+test("a find keeps the feed's description of the picture; none is null", async () => {
+  const { deps, core } = await setup({ apod: await webItem({ description: "A dome at night." }) });
+  expect(await browseIfDue(core, at(8))).toBe(true);
+  expect((await deps.core.posts.findByUrl("https://apod.nasa.gov/p.jpg"))!.description).toBe(
+    "A dome at night.",
+  );
+});

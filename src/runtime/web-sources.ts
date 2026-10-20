@@ -5,6 +5,7 @@
  * again next hour.
  */
 import { z } from "zod";
+import { cutAtWord } from "@/mind/process/core/post-words";
 import type { WebItem, WebSource, WebSources } from "@/mind/world/types";
 
 type Options = {
@@ -12,6 +13,7 @@ type Options = {
   timeoutMs: number;
   maxDownloadBytes: number;
   weeklyMaxAgeDays: number;
+  descriptionMaxChars: number;
 };
 
 async function get(url: string, o: Options): Promise<Response> {
@@ -60,12 +62,21 @@ function rssPictureOfWeek(
       const date = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(first)?.[1];
       const url = /<enclosure[^>]*url="([^"]+)"/.exec(first)?.[1];
       if (!title || !date || !url) return null;
+      // The description is HTML escaped into the XML: decode, drop the tags, keep the words.
+      const raw = /<description>([\s\S]*?)<\/description>/.exec(first)?.[1];
+      const text = raw
+        ? decodeEntities(raw)
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+        : "";
       const ageDays = (Date.parse(`${day}T23:59:59Z`) - Date.parse(date)) / 864e5;
       if (!(ageDays >= 0 && ageDays <= o.weeklyMaxAgeDays)) return null;
       return {
         source: spec.source,
         url,
         title: decodeEntities(title),
+        description: text ? cutAtWord(text, o.descriptionMaxChars) : null,
         credit: spec.credit,
         licence: "CC BY 4.0",
         // The feed links the small screen size; the publication JPEG is the same picture at a
@@ -108,6 +119,8 @@ function commons(o: Options): WebSource {
         title: (i.description?.text ?? i.title.replace(/^File:/, "").replace(/\.\w+$/, "")).trim(),
         credit: i.artist?.text.trim() || "Wikimedia Commons",
         licence: i.license?.type ?? "unknown",
+        // Commons' description is already the title.
+        description: null,
         image: await bytes(i.image.source, o),
       };
     },

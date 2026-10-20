@@ -835,6 +835,8 @@ export const web_find = pgTable(
     source: text("source").notNull(),
     url: text("url").notNull().unique(),
     title: text("title").notNull(),
+    // What the source says the picture shows; null when it says nothing beyond the title.
+    description: text("description"),
     credit: text("credit").notNull(),
     licence: text("licence").notNull(),
     media_path: text("media_path").notNull(),

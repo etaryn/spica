@@ -695,6 +695,7 @@
     "tick_cron": "40 * * * *",
     "browse_per_day": 1,
     "browse_step_minutes": 15,
+    "description_max_chars": 300,
     "sources": [
       { "name": "commons_potd", "weight": 1 },
       { "name": "eso_potw", "weight": 1 },

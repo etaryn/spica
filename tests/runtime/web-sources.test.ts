@@ -7,6 +7,7 @@ const sources = createWebSources({
   timeoutMs: 1000,
   maxDownloadBytes: 1000,
   weeklyMaxAgeDays: 7,
+  descriptionMaxChars: 40,
 });
 const png = new Uint8Array([137, 80, 78, 71]);
 
@@ -54,6 +55,29 @@ test("eso: the newest picture within a week, CC BY 4.0, credit ESO", async () =>
   });
   expect(found!.image).toEqual(png);
   expect(fetch.mock.calls[0]![1]).toMatchObject({ headers: { "User-Agent": "UA" } });
+});
+
+test("an rss item's description comes with it, tags stripped and cut at a word; none is null", async () => {
+  const desc =
+    "<description>&lt;p&gt;A telescope dome under the Milky Way, &lt;b&gt;high&lt;/b&gt; in the Chilean desert.&lt;/p&gt;</description>";
+  stub({
+    [ESO]: rss(
+      item(
+        "Observing the unpredictable",
+        "Mon, 12 Oct 2026 06:00:00 +0200",
+        "https://cdn.eso.org/a.jpg",
+      ).replace("</item>", desc + "</item>"),
+    ),
+    "https://cdn.eso.org/a.jpg": png,
+  });
+  expect((await sources.eso_potw!.fetch("2026-10-14"))!.description).toBe(
+    "A telescope dome under the Milky Way",
+  );
+  stub({
+    [ESO]: rss(item("Plain", "Mon, 12 Oct 2026 06:00:00 +0200", "https://cdn.eso.org/b.jpg")),
+    "https://cdn.eso.org/b.jpg": png,
+  });
+  expect((await sources.eso_potw!.fetch("2026-10-14"))!.description).toBeNull();
 });
 
 test("noirlab: an enclosure with its url last still reads", async () => {

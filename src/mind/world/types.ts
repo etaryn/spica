@@ -83,6 +83,8 @@ export type WebItem = {
   credit: string;
   licence: string;
   image: Uint8Array;
+  /** What the source says the picture shows, when it says; a title alone can be a pun. */
+  description?: string | null;
 };
 export interface WebSource {
   label: string;
@@ -93,6 +95,7 @@ export type NewWebFind = {
   source: string;
   url: string;
   title: string;
+  description: string | null;
   credit: string;
   licence: string;
   media_path: string;

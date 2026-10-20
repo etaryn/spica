@@ -26,6 +26,7 @@ async function draft(deps: ReturnType<typeof makeTestDeps>) {
     source: "apod",
     url: "https://x/a.png",
     title: "The Pillars",
+    description: null,
     credit: "NASA",
     licence: "public domain",
     media_path: "a.png",

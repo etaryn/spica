@@ -49,6 +49,20 @@ test("the draft call sees her public self, the find, the valence and the format;
     expect(seen).toContain(s);
 });
 
+test("the draft and the check see what the picture shows, when the feed says", async () => {
+  const llm = new FakeLLMProvider();
+  const shown = { ...find, description: "A dome under the Milky Way." };
+  await draftPost({ llm, config }, { persona, find: shown, valence: 0.5, format, skill: 0 });
+  await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 });
+  const [withIt, without] = llm.structuredCalls.filter((c) => c.purpose === "post_draft");
+  expect(withIt!.input).toContain("What it shows: A dome under the Milky Way.");
+  expect(without!.input).not.toContain("What it shows");
+  await checkPost({ llm, config }, { draft: { caption: "c", overlay_text: null }, find: shown });
+  expect(llm.structuredCalls.find((c) => c.purpose === "post_check")!.input).toContain(
+    "What it shows: A dome under the Milky Way.",
+  );
+});
+
 test("a two-line caption keeps its line break", async () => {
   const llm = new FakeLLMProvider();
   llm.handlers.post_draft = () => ({ caption: "one  line \n\n\n\n two", overlay_text: null });

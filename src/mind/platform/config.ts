@@ -854,6 +854,7 @@ const posts = z.object({
   browse_per_day: countFromZero,
   // Browse times are picked on this step through her free minutes, at any hour.
   browse_step_minutes: positiveInt,
+  description_max_chars: positiveInt,
   sources: z.array(z.object({ name: text, weight: z.number().positive() })),
   weekly_max_age_days: positiveInt,
   fetch_timeout_ms: positiveInt,

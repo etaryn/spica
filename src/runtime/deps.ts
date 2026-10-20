@@ -76,6 +76,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
       timeoutMs: config.posts.fetch_timeout_ms,
       maxDownloadBytes: config.posts.max_download_bytes,
       weeklyMaxAgeDays: config.posts.weekly_max_age_days,
+      descriptionMaxChars: config.posts.description_max_chars,
     }),
   };
   return { deps, boss };

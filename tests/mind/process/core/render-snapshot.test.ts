@@ -3,7 +3,7 @@ import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { core_snapshot, core_loop_trace } from "@/db/schema";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { seedSnapshot } from "@/mind/memory/core/seed";
-import { coreRenderSnapshot } from "@/mind/process/core/render-snapshot";
+import { coreRenderSnapshot, sectionLines } from "@/mind/process/core/render-snapshot";
 import { closeTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
@@ -199,4 +199,33 @@ test("each rendered line keeps its depth; an untagged line takes its section's d
     all.config.core.depth.by_section.Opinions,
   );
   expect(snapshot.content).toContain("### Lately\n- misses Alcor more than she says");
+});
+
+test("an emptied section keeps last night's lines, here the seed self on night 1", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  const seed = sectionLines((await deps.core.memory.latestSnapshot())!.content);
+  expect(seed.Lately?.length).toBeGreaterThan(0);
+  all.llm.handlers.core_render_snapshot = () => ({
+    Lately: [],
+    Opinions: [{ text: "Solaris is overrated", depth: null }],
+    Interests: [],
+    Goals: [],
+    People: [],
+    "Habits of speech": [],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const snap = (await deps.core.memory.latestSnapshot())!;
+  expect(sectionLines(snap.content).Lately).toEqual(seed.Lately);
+  expect(sectionLines(snap.content).Goals).toEqual(seed.Goals);
+  expect(snap.sections.Opinions).toBe("- Solaris is overrated");
+  expect(snap.sections.People).toBe("");
+  const lines = (await deps.core.memory.selfLines(snap.version)).map((l) => l.text);
+  for (const kept of seed.Lately!) expect(lines).toContain(kept);
+});
+
+test("sectionLines reads the bullets under each heading", () => {
+  const md = ["### Lately", "- a", "- b", "", "### Goals", "- c"].join(String.fromCharCode(10));
+  expect(sectionLines(md)).toEqual({ Lately: ["a", "b"], Goals: ["c"] });
 });

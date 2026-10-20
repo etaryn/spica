@@ -1,4 +1,7 @@
-/** Render a durable self description from bounded core evidence, preserving the prior version on failure. */
+/**
+ * Render a durable self description from bounded core evidence, preserving the prior version on
+ * failure and a prior section when a render empties it.
+ */
 import { z } from "zod";
 import { DepthLabel, depthOf } from "@/mind/memory/core/depth";
 import type { CoreDeps } from "@/mind/platform/deps";
@@ -7,6 +10,21 @@ import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
+
+/** The bullet lines under each `### Name` heading of a snapshot or seed self. */
+export function sectionLines(markdown: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  let current: string | null = null;
+  for (const raw of markdown.split(/?
+/)) {
+    const heading = /^###s+(.+?)s*$/.exec(raw);
+    if (heading) {
+      current = heading[1]!;
+      out[current] = [];
+    } else if (current && raw.startsWith("- ")) out[current]!.push(raw.slice(2).trim());
+  }
+  return out;
+}
 
 export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<LoopStatus> {
   const { core, config } = deps;
@@ -60,8 +78,17 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
-    const sections = Object.fromEntries(
+    // A night's render can come back with a section emptied; her self doesn't vanish overnight,
+    // so an empty section keeps last night's lines.
+    const before = sectionLines(previous?.content ?? persona.seedSelf);
+    const kept = Object.fromEntries(
       Object.entries(result).map(([name, items]) => [
+        name,
+        items.length ? items : (before[name] ?? []).map((text) => ({ text, depth: null })),
+      ]),
+    ) as typeof result;
+    const sections = Object.fromEntries(
+      Object.entries(kept).map(([name, items]) => [
         name,
         items.map((item) => `- ${item.text}`).join("\n"),
       ]),
@@ -69,7 +96,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
     const content = Object.entries(sections)
       .map(([name, text]) => `### ${name}\n${text}`)
       .join("\n\n");
-    const lines = Object.entries(result).flatMap(([name, items]) =>
+    const lines = Object.entries(kept).flatMap(([name, items]) =>
       items.map((item) => ({
         text: item.text,
         depth: depthOf(item.depth, config.core.depth.by_section[name] ?? 1),

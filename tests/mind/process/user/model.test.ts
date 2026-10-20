@@ -191,7 +191,7 @@ test("a model or belief that read anything sensitive is marked; an ordinary one 
   // The mark carries through the previous model even when the new memories are ordinary.
   deps.clock.advance(60_000);
   deps.llm.handlers.user_model = sequence(read([]));
-  await userModel(deps, run, { previous: null, facts: [], clean: false });
+  await userModel(deps, run, { previous: null, facts: [], clean: false, timezone: null });
   expect((await liveModel(deps.db, userId))!.payload).toMatchObject({ sensitive: true });
 });
 

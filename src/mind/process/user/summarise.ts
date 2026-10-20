@@ -13,6 +13,7 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
+import { formatLocal } from "@/mind/platform/timezone";
 import { memoryLines, triggerText, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -42,11 +43,12 @@ export async function userSummarise(
       model: "user_mind",
       system: loadPrompt("user-mind/summarise", config.prompts.user_summarise),
       input: JSON.stringify({
+        now: formatLocal(deps.clock.now(), inputs.timezone),
         who_you_are: deps.snapshot,
         previous: previous?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(facts),
+        new_memories: memoryLines(facts, inputs.timezone),
         open_threads: threads.map((t) => t.title),
       }),
       schema: Output,

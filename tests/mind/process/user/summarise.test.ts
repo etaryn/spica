@@ -5,6 +5,7 @@ import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
+import { formatLocal } from "@/mind/platform/timezone";
 import {
   closeTestDb,
   createTestUser,
@@ -208,4 +209,32 @@ test("a summary from ordinary memories is not marked", async () => {
   await fact("They started a pottery class.", 0.9);
   await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId));
   expect((await liveSummary(deps.db, userId))!.payload).not.toHaveProperty("sensitive");
+});
+
+test("the loop sees now and each memory's date, in their zone", async () => {
+  const { deps, userId, run } = await setup();
+  const at = new Date("2026-01-08T14:00:00Z");
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "They have an interview on Thursday.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    occurred_at: at,
+    status: "open",
+    salience: 0.9,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  await userSummarise(deps, await run("exchange:d"), await loadRunInputs(deps, userId));
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
+  const input = JSON.parse(call.input);
+  expect(input.now).toBe(formatLocal(deps.clock.now(), null));
+  expect(input.new_memories).toContainEqual(
+    expect.objectContaining({
+      content: "They have an interview on Thursday.",
+      when: formatLocal(at, null),
+    }),
+  );
 });

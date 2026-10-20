@@ -15,6 +15,7 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
+import { formatLocal } from "@/mind/platform/timezone";
 import { memoryLines, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -41,11 +42,12 @@ export async function userReflect(
       model: "user_mind",
       system: loadPrompt("user-mind/reflect", config.prompts.user_reflect),
       input: JSON.stringify({
+        now: formatLocal(deps.clock.now(), inputs.timezone),
         who_you_are: deps.snapshot,
         summary: summary?.payload ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts),
+        new_memories: memoryLines(inputs.facts, inputs.timezone),
         already_noticed: earlier.map((r) => r.content),
       }),
       schema: Output,

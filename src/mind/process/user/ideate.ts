@@ -18,6 +18,7 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
+import { formatLocal } from "@/mind/platform/timezone";
 import { memoryLines, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
@@ -66,11 +67,12 @@ export async function userIdeate(
       model: "user_mind",
       system: loadPrompt("user-mind/ideate", config.prompts.user_ideate),
       input: JSON.stringify({
+        now: formatLocal(deps.clock.now(), inputs.timezone),
         who_you_are: deps.snapshot,
         summary: summary?.payload ?? null,
         noticed: noticed?.content ?? null,
         your_read_on_them: read,
-        new_memories: memoryLines(facts),
+        new_memories: memoryLines(facts, inputs.timezone),
         open_threads: threads.map((t) => t.title),
         already_planned: planned.map((i) => i.content),
       }),

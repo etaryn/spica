@@ -6,9 +6,11 @@
  */
 import { listUnreadFacts, type FactRow, type UnreadFact } from "@/db/repos/user/facts";
 import { getRelationshipRow } from "@/db/repos/user/relationship";
+import { getTimezone } from "@/db/repos/user/users";
 import { latestNonSensitiveSummary, liveSummary, type Trigger } from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { DAY } from "@/mind/platform/time";
+import { formatLocal } from "@/mind/platform/timezone";
 import { effectiveCrisisQuietUntil } from "@/mind/process/outreach/inputs";
 import type { UserLoopDeps } from "./runner";
 
@@ -17,6 +19,8 @@ export type RunInputs = {
   facts: UnreadFact[];
   /** Outside an open crisis window: nothing a crisis touched is read, so nothing written is marked. */
   clean: boolean;
+  /** Their timezone, for dating what the loops read; null means UTC. */
+  timezone: string | null;
 };
 
 export async function loadRunInputs(
@@ -43,7 +47,7 @@ export async function loadRunInputs(
     clean,
     limit: settings.max_facts,
   });
-  return { previous, facts, clean };
+  return { previous, facts, clean, timezone: await getTimezone(db, userId) };
 }
 
 /** What a run may read: outside a crisis window, nothing a crisis touched. */
@@ -99,7 +103,15 @@ export function triggerText(t: Trigger): string {
   }
 }
 
-/** The memories as a loop's prompt shows them. */
-export function memoryLines(facts: RunInputs["facts"]) {
-  return facts.map(({ subject, kind, content }) => ({ subject, kind, content }));
+/**
+ * The memories as a loop's prompt shows them, each with when it happens or happened in their zone,
+ * so a plan that's passed never reads as still ahead.
+ */
+export function memoryLines(facts: RunInputs["facts"], tz: string | null) {
+  return facts.map(({ subject, kind, content, occurred_at }) => ({
+    subject,
+    kind,
+    content,
+    when: occurred_at ? formatLocal(occurred_at, tz) : null,
+  }));
 }

@@ -16,7 +16,8 @@ import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { formatLocal } from "@/mind/platform/timezone";
-import { memoryLines, triggerText, visible, type RunInputs } from "./inputs";
+import { noteRelativeWords } from "@/mind/platform/relative-date";
+import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userReflect(
@@ -44,16 +45,17 @@ export async function userReflect(
       input: JSON.stringify({
         now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
-        summary: summary?.payload ?? null,
+        summary: stampedNote(summary, now, inputs.timezone),
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts, inputs.timezone),
+        new_memories: memoryLines(inputs.facts, inputs.timezone, now),
         already_noticed: earlier.map((r) => r.content),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    noteRelativeWords(deps.log, "user_reflect", [out.reflection]);
     let reflectionId: string | null = null;
     if (out.reflection) {
       const [embedding] = await deps.embedder.embed([out.reflection], "document");

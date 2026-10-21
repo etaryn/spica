@@ -25,7 +25,8 @@ import {
   nextLocalDate,
   zoneOrUtc,
 } from "@/mind/platform/timezone";
-import { memoryLines, type RunInputs } from "./inputs";
+import { noteRelativeWords, writtenOn } from "@/mind/platform/relative-date";
+import { memoryLines, threadLines, stampedNote, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -94,17 +95,20 @@ export async function userIdeate(
       input: JSON.stringify({
         now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
-        summary: summary?.payload ?? null,
+        summary: stampedNote(summary, now, inputs.timezone),
         noticed: noticed?.content ?? null,
-        your_read_on_them: read,
-        new_memories: memoryLines(facts, inputs.timezone),
-        open_threads: threads.map((t) => t.title),
+        your_read_on_them: read
+          ? { written: writtenOn(readRow!.created_at, now, zoneOrUtc(inputs.timezone)), ...read }
+          : null,
+        new_memories: memoryLines(facts, inputs.timezone, now),
+        open_threads: threadLines(threads, now, inputs.timezone),
         already_planned: planned.map((i) => i.content),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    noteRelativeWords(deps.log, "user_ideate", [out.idea]);
     let ideaId: string | null = null;
     if (out.idea) {
       const [embedding] = await deps.embedder.embed([out.idea], "document");

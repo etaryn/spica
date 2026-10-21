@@ -171,3 +171,34 @@ test("a run with nothing unread skips reflect and ideate", async () => {
   expect(purposes).not.toContain("user_reflect");
   expect(purposes).not.toContain("user_ideate");
 });
+
+test("the loops read her self headed by the night it was written", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  await deps.core.memory.insertSnapshot({
+    version: 0,
+    content: "### Lately\n- tides",
+    sections: {},
+    embedding: vec(),
+    source_ids: [],
+    rendered_at: deps.clock.now(),
+    model: "m",
+    prompt_version: "v",
+  });
+  await insertFact(deps.db, u, {
+    subject: "user",
+    kind: "event",
+    content: "They passed the exam.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.9,
+    valence: 0.5,
+    confidence: 0.9,
+    source: "turn",
+  });
+  const runId = (await recordBigEvents(deps, deps.db, u, "exchange:s", trig))!;
+  expect(await runUserMind(deps, { runId })).toBe("done");
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
+  expect(JSON.parse(call.input).who_you_are).toMatch(/^\(written \w+ \d+ \w+, today\)\n### Lately/);
+});

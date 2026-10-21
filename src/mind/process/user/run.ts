@@ -16,7 +16,9 @@ import {
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { USER_MIND_RUN_QUEUE, type UserMindRunJob } from "@/mind/platform/jobs";
+import { stamped } from "@/mind/platform/relative-date";
 import { MINUTE } from "@/mind/platform/time";
+import { lifeTimezone } from "@/mind/world/her-clock";
 import { loadRunInputs } from "./inputs";
 import { userConsolidate } from "./consolidate";
 import { userIdeate } from "./ideate";
@@ -72,7 +74,12 @@ export async function runUserMind(
   const { db, embedder, config, clock, log, llm, modules } = deps;
   let status: "done" | "failed";
   try {
-    const snapshot = (await deps.core.memory.latestSnapshot())?.content ?? null;
+    // Her self is dated on her calendar: "lately" lines from two nights ago read as that old.
+    const now = clock.now();
+    const latest = await deps.core.memory.latestSnapshot();
+    const snapshot = latest
+      ? stamped(latest.content, latest.rendered_at, now, lifeTimezone(config.life, now))
+      : null;
     const loopDeps = { db, embedder, config, clock, log, llm, modules, snapshot };
     const inputs = await loadRunInputs(loopDeps, run.user_id);
     // In order, each reading what the one before wrote; a failed loop doesn't stop the next.

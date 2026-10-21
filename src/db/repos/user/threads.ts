@@ -28,15 +28,19 @@ export async function listOpenThreads(
   userId: string,
   limit: number,
   opts: { excludeSensitive?: boolean } = {},
-): Promise<{ id: string; title: string }[]> {
+): Promise<{ id: string; title: string; next_checkpoint: Date | null }[]> {
   const res = await db.execute(sql`
-    SELECT t.id, t.title FROM thread t
+    SELECT t.id, t.title, t.next_checkpoint FROM thread t
     LEFT JOIN LATERAL (${latestFact}) lf ON true
     WHERE t.user_id = ${userId} AND t.status = 'open'
       ${opts.excludeSensitive ? sql`AND COALESCE(lf.sensitive, false) = false` : sql``}
     ORDER BY t.last_touched DESC
     LIMIT ${limit}`);
-  return res.rows.map((r) => ({ id: String(r.id), title: String(r.title) }));
+  return res.rows.map((r) => ({
+    id: String(r.id),
+    title: String(r.title),
+    next_checkpoint: r.next_checkpoint ? new Date(r.next_checkpoint as string | Date) : null,
+  }));
 }
 
 export async function findOpenThreadByTitle(

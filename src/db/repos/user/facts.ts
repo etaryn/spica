@@ -255,6 +255,7 @@ export async function listUnreadFacts(
       content: fact.content,
       salience: fact.salience,
       occurred_at: fact.occurred_at,
+      created_at: fact.created_at,
       sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
     })
     .from(fact)

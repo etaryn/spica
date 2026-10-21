@@ -10,7 +10,8 @@ import { getTimezone } from "@/db/repos/user/users";
 import { latestNonSensitiveSummary, liveSummary, type Trigger } from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { DAY } from "@/mind/platform/time";
-import { formatLocal } from "@/mind/platform/timezone";
+import { dayInWords, itemWhen, writtenOn } from "@/mind/platform/relative-date";
+import { zoneOrUtc } from "@/mind/platform/timezone";
 import { effectiveCrisisQuietUntil } from "@/mind/process/outreach/inputs";
 import type { UserLoopDeps } from "./runner";
 
@@ -104,14 +105,40 @@ export function triggerText(t: Trigger): string {
 }
 
 /**
- * The memories as a loop's prompt shows them, each with when it happens or happened in their zone,
- * so a plan that's passed never reads as still ahead.
+ * The memories as a loop's prompt shows them, each with its day and how far that is from now (and
+ * when she learned it, if another day), so the model never counts days.
  */
-export function memoryLines(facts: RunInputs["facts"], tz: string | null) {
-  return facts.map(({ subject, kind, content, occurred_at }) => ({
+export function memoryLines(facts: RunInputs["facts"], tz: string | null, now: Date) {
+  const zone = zoneOrUtc(tz);
+  return facts.map(({ subject, kind, content, occurred_at, created_at }) => ({
     subject,
     kind,
     content,
-    when: occurred_at ? formatLocal(occurred_at, tz) : null,
+    when: occurred_at ? itemWhen(occurred_at, created_at, now, zone) : null,
   }));
+}
+
+/** One of her notes as a loop reads it, headed by when she wrote it: its "today" was that day's. */
+export function stampedNote(
+  row: { payload: unknown; created_at: Date } | null,
+  now: Date,
+  tz: string | null,
+): Record<string, unknown> | null {
+  if (!row?.payload || typeof row.payload !== "object") return null;
+  return {
+    written: writtenOn(row.created_at, now, zoneOrUtc(tz)),
+    ...(row.payload as Record<string, unknown>),
+  };
+}
+
+/** Open storylines, each with the next day to check in when there is one. */
+export function threadLines(
+  threads: { title: string; next_checkpoint: Date | null }[],
+  now: Date,
+  tz: string | null,
+): string[] {
+  const zone = zoneOrUtc(tz);
+  return threads.map((t) =>
+    t.next_checkpoint ? `${t.title} (next: ${dayInWords(t.next_checkpoint, now, zone)})` : t.title,
+  );
 }

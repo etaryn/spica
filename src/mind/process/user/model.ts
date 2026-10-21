@@ -23,7 +23,9 @@ import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { formatLocal } from "@/mind/platform/timezone";
-import { memoryLines, triggerText, visible, type RunInputs } from "./inputs";
+import { noteRelativeWords, writtenOn } from "@/mind/platform/relative-date";
+import { zoneOrUtc } from "@/mind/platform/timezone";
+import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export const modelPayload = z.object({
@@ -53,6 +55,7 @@ export async function userModel(
       ? await latestNonSensitiveModel(db, userId)
       : await liveModel(db, userId);
     const beliefs = visible(inputs, await liveBeliefs(db, userId, settings.belief_context));
+    const previousRead = previous ? modelPayload.safeParse(previous.payload).data : undefined;
     const Output = z.object({
       how_they_are: fitText(settings.max_chars),
       what_they_want: fitText(settings.max_chars),
@@ -69,18 +72,29 @@ export async function userModel(
       input: JSON.stringify({
         now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
-        summary: summary?.payload ?? null,
+        summary: stampedNote(summary, now, inputs.timezone),
         noticed: noticed?.content ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts, inputs.timezone),
-        previous_read: previous ? (modelPayload.safeParse(previous.payload).data ?? null) : null,
+        new_memories: memoryLines(inputs.facts, inputs.timezone, now),
+        previous_read: previousRead
+          ? {
+              written: writtenOn(previous!.created_at, now, zoneOrUtc(inputs.timezone)),
+              ...previousRead,
+            }
+          : null,
         beliefs: beliefs.map((b) => ({ id: b.id, text: b.content })),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    noteRelativeWords(deps.log, "user_model", [
+      out.how_they_are,
+      out.what_they_want,
+      out.what_lands,
+      ...out.beliefs.map((b) => b.text),
+    ]);
     const read: ModelPayload = {
       how_they_are: out.how_they_are,
       what_they_want: out.what_they_want,

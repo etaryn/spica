@@ -6,6 +6,7 @@ import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { formatLocal } from "@/mind/platform/timezone";
+import { dayInWords, itemWhen, writtenOn } from "@/mind/platform/relative-date";
 import {
   closeTestDb,
   createTestUser,
@@ -234,7 +235,102 @@ test("the loop sees now and each memory's date, in their zone", async () => {
   expect(input.new_memories).toContainEqual(
     expect.objectContaining({
       content: "They have an interview on Thursday.",
-      when: formatLocal(at, null),
+      when: itemWhen(at, deps.clock.now(), deps.clock.now(), "UTC"),
     }),
   );
+});
+
+test("summarise reads a stamped previous note and dated threads; no zone means UTC", async () => {
+  const { deps, userId, run } = await setup();
+  const now = deps.clock.now();
+  const D = 86_400_000;
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "Their sister visits on Saturday.",
+    embedding: vec(),
+    created_at: now,
+    occurred_at: new Date(now.getTime() + 2 * D),
+    status: "open",
+    salience: 0.8,
+    valence: 0.3,
+    confidence: 0.9,
+    source: "turn",
+  });
+  await insertFact(deps.db, userId, {
+    subject: "shared",
+    kind: "summary",
+    content: "old",
+    payload: { where_things_stand: "a", whats_live: "sister visits tomorrow", how_i_feel: "c" },
+    embedding: vec(),
+    created_at: new Date(now.getTime() - 2 * D),
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.6,
+    source: "generated",
+  });
+  await insertThread(
+    deps.db,
+    userId,
+    {
+      title: "sister's visit",
+      subject: "user",
+      stakes: "med",
+      next_checkpoint: new Date(now.getTime() + 2 * D),
+    },
+    now,
+  );
+  await userSummarise(deps, await run("exchange:t"), await loadRunInputs(deps, userId));
+  const input = JSON.parse(
+    deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise").at(-1)!.input,
+  );
+  const sat = dayInWords(new Date(now.getTime() + 2 * D), now, "UTC");
+  expect(input.new_memories).toContainEqual(
+    expect.objectContaining({
+      content: "Their sister visits on Saturday.",
+      when: itemWhen(new Date(now.getTime() + 2 * D), now, now, "UTC"),
+    }),
+  );
+  expect(input.previous.written).toBe(writtenOn(new Date(now.getTime() - 2 * D), now, "UTC"));
+  expect(input.previous.whats_live).toBe("sister visits tomorrow");
+  expect(input.open_threads).toContain(`sister's visit (next: ${sat})`);
+});
+
+test("a summary that slips a relative word is stored and the slip logged", async () => {
+  const { deps, userId, run } = await setup();
+  const logs: { msg: string; meta?: Record<string, unknown> }[] = [];
+  const log = {
+    info: (msg: string, meta?: Record<string, unknown>) => logs.push({ msg, meta }),
+    error: () => {},
+  };
+  deps.llm.handlers.user_summarise = () => ({
+    where_things_stand: "Fine.",
+    whats_live: "Their sister visits tomorrow.",
+    how_i_feel: "Glad.",
+  });
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "Their sister is visiting.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.8,
+    valence: 0.3,
+    confidence: 0.9,
+    source: "turn",
+  });
+  expect(
+    await userSummarise(
+      { ...deps, log },
+      await run("exchange:u"),
+      await loadRunInputs(deps, userId),
+    ),
+  ).toBe("done");
+  expect((await liveSummary(deps.db, userId))!.content).toContain("visits tomorrow");
+  expect(logs).toContainEqual({
+    msg: "relative words in stored text",
+    meta: { writer: "user_summarise", words: ["tomorrow"] },
+  });
 });

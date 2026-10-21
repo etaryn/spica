@@ -14,7 +14,8 @@ import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
 import { formatLocal } from "@/mind/platform/timezone";
-import { memoryLines, triggerText, type RunInputs } from "./inputs";
+import { noteRelativeWords } from "@/mind/platform/relative-date";
+import { memoryLines, stampedNote, threadLines, triggerText, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userSummarise(
@@ -45,16 +46,21 @@ export async function userSummarise(
       input: JSON.stringify({
         now: formatLocal(now, inputs.timezone),
         who_you_are: deps.snapshot,
-        previous: previous?.payload ?? null,
+        previous: stampedNote(previous, now, inputs.timezone),
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(facts, inputs.timezone),
-        open_threads: threads.map((t) => t.title),
+        new_memories: memoryLines(facts, inputs.timezone, now),
+        open_threads: threadLines(threads, now, inputs.timezone),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    noteRelativeWords(deps.log, "user_summarise", [
+      out.where_things_stand,
+      out.whats_live,
+      out.how_i_feel,
+    ]);
     const content = [out.where_things_stand, out.whats_live, out.how_i_feel].join(" ");
     const [embedding] = await deps.embedder.embed([content], "document");
     // What a crisis told her stays out of anything a reach-out reads; a summary carries its

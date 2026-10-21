@@ -120,14 +120,16 @@ account deletion only (users can't view or edit her memory) · no explicit engag
 ## Current phase
 **Phase 15 (tuning) is closed** (2026-10-21): slices 15a–15d, the 15d run fixes, no night and
 its rerun fixes are built; what each delivered is in `docs/spec-v3-history.md`.
-The 2026-10-19 review runs' fixes are built (`docs/2026-10-19-15d-run-fixes-design.md`: "this week",
+The 2026-10-19 review runs' fixes are built ("this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
 online). No night: her energy is a battery, she logs off when it runs low at any hour, and
 reach-outs skip their night. **Next: Phase 16, the time model** (spec §20: times stored as data,
-distances rendered by code, time-bound items expire; B125, B126), starting with its design doc.
+distances rendered by code, time-bound items expire; B125, B126), draft design doc
+`docs/2026-10-21-phase-16-time-model-design.md` (approach settled; its "Open for Ethan" list is
+next; B127, the guard's `in_person` false block, may ride along).
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
-or slice starts with a design doc in `docs/`; built plans are deleted (history is in git). Exception: the 15d design doc stays until 15d's review runs are done.
+or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).
 CI (`.github/workflows/ci.yml`) runs typecheck, lint and tests on every push to main.
 
 ## Open decisions (v3 §21): ask Ethan, don't settle

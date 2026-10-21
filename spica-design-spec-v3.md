@@ -2427,7 +2427,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
-| **Time model** (Phase 16, next; PROPOSED, design doc to come) | Stored times as data, never relative words in stored text (writers use dates or no time); one helper renders each item's distance from the reader's now ("Sat 17 Jan, in 2 days"); time-bound items (ideas, her news) get a code-set stale-after and the day sweep retires them through the `stale` status. Settled with Ethan 2026-10-21 after the no-night rerun: many slips come from text written for one day and read on another | B125, B126 |
+| **Time model** (Phase 16, next; PROPOSED, draft design doc `docs/2026-10-21-phase-16-time-model-design.md`) | Stored times as data, never relative words in stored text (writers use dates or no time); one helper renders each item's distance from the reader's now ("Sat 17 Jan, in 2 days"); time-bound items (ideas, her news) get a code-set stale-after and the day sweep retires them through the `stale` status. Settled with Ethan 2026-10-21 after the no-night rerun: many slips come from text written for one day and read on another | B125, B126, B127 (with Ethan) |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2532,7 +2532,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B126).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B127).
 
 ### 25.1 Memory and recall
 - **B1.** Extraction sometimes turns her words into user facts (after a bare
@@ -2675,6 +2675,11 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 ### 25.7 Guard
 - **B114.** `invented_self` runs one `groundingMatch` query per listed claim, in parallel and
   uncapped; cap the claims (a config count) or batch them in one query. *Before users.*
+- **B127.** Guard v5 flags text support as `in_person`: "can't do coffee obviously but i'm around by
+  text, message me when you're heading in" failed 0/3 in the 2026-10-21 `eval:guard` (it reads
+  "heading in" as her coming along). Proposed fix: guard v6 says being there by text before, during
+  or after their plan is never `in_person`. Also weak there: `callback-tally` and
+  `misdated-this-morning` 1/3. *Phase 16, if Ethan wants the guard touched there.*
 
 ### 25.8 Evals and tests
 - **B42.** Evals don't report turn-judge fallbacks (`source =

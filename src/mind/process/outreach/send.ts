@@ -39,7 +39,7 @@ import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
 import { evaluateGate } from "./gate";
 import { loadDepth } from "@/mind/state/user/relationship/depth";
-import { loadGateInputs } from "./inputs";
+import { loadGateInputs, planPassed } from "./inputs";
 import type { Candidate, GateOutcome, GateResult } from "./types";
 
 const MINUTE = 60_000;
@@ -222,7 +222,10 @@ async function checkGateAndTopic(
   return { gate, topicUsed };
 }
 
-/** An idea still open and within its chance; a make-up still due. Other kinds always are. */
+/**
+ * An idea still open and within its chance; a make-up still due; an anticipation whose plan
+ * hasn't started. Other kinds always are.
+ */
 export async function winnerLive(
   deps: Deps,
   db: Db,
@@ -245,6 +248,11 @@ export async function winnerLive(
   }
   if (winner.kind === "make_up") {
     return (await getRelationshipRow(db, userId))?.make_up_state === "due";
+  }
+  // An anticipation picked before its plan can be sent after it has started.
+  if (winner.kind === "core_thought" && winner.coreMemoryId) {
+    const thought = await deps.core.memory.get(winner.coreMemoryId);
+    return !thought || !(await planPassed(deps, thought, at));
   }
   return true;
 }

@@ -477,3 +477,38 @@ test("a reach-out whose memory became too deep for them before send isn't live",
   expect(await winnerLive(deps, deps.db, u, hers(2), now)).toBe(false);
   expect(await winnerLive(deps, deps.db, u, hers(1), now)).toBe(true);
 });
+
+test("an anticipation whose plan has started by send time is dropped", async () => {
+  const core = makeTestDeps().core.memory;
+  const memory = (kind: "intention" | "thought", content: string, payload: unknown) =>
+    core.insert({
+      kind,
+      content,
+      payload,
+      embedding: vec(),
+      occurred_at: new Date(now.getTime() - 3_600_000),
+      created_at: new Date(now.getTime() - 3_600_000),
+      status: "open",
+      salience: 0.4,
+      valence: 0,
+      confidence: 1,
+      source: "loop",
+      source_ref: null,
+    });
+  const plan = await memory("intention", "Gig at 15:00.", {
+    event_at: new Date(now.getTime() - 30 * 60_000).toISOString(),
+  });
+  const thought = await memory("thought", "Can't wait for the gig.", { anticipates: plan });
+  const { deps, u, logId } = await setup({
+    winner: {
+      ...winner,
+      kind: "core_thought",
+      topic: `core:${thought}`,
+      text: "Can't wait for the gig.",
+      threadId: null,
+      coreMemoryId: thought,
+    },
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  expect(await reachOuts(deps, u)).toEqual([]);
+});

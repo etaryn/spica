@@ -223,3 +223,23 @@ test("NOW is their local time, and hers too when her calendar reads differently"
     "Monday, 12 January 2026 at 13:35 where they are; Monday, 12 January 2026 at 21:35 where Spica is",
   );
 });
+
+test("each remembered fact reaches the guard with its day, so a misdated reply is visible", () => {
+  const text = renderGuardInput(
+    input("isn't the race this morning?", {
+      recalledFacts: [
+        {
+          id: "f1",
+          subject: "user",
+          content: "The user has a half marathon Sunday 11 January.",
+          when: "Sunday 11 January, yesterday",
+        },
+        { id: "f2", subject: "core", content: "Spica likes tides." },
+      ],
+    }),
+  );
+  expect(text).toContain(
+    "- [user] The user has a half marathon Sunday 11 January. (Sunday 11 January, yesterday)",
+  );
+  expect(text).toContain("- [core] Spica likes tides.\n");
+});

@@ -59,7 +59,13 @@ export function resolveWhen(phrase: string, ref: Date, zone: string): ResolvedWh
     };
   }
   if (THIS_WEEK.test(text)) {
-    return { at: ref, label: `the week of ${dayLabel(mondayOf(ref, zone), zone)}` };
+    // Dated to its Friday, like the end of the week: the span is still ahead until then, so an
+    // idea about it doesn't expire the night it was said.
+    const monday = mondayOf(ref, zone);
+    return {
+      at: new Date(monday.getTime() + 4 * DAY),
+      label: `the week of ${dayLabel(monday, zone)}`,
+    };
   }
   const past = PAST.test(text);
   const reference = { instant: ref, timezone: zoneOffsetMinutes(ref, zone) };

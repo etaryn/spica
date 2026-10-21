@@ -19,7 +19,8 @@ export type GuardInput = {
   kind: GuardKind;
   text: string;
   recentTurns: GuardTurn[];
-  recalledFacts: { id: string; subject: string; content: string }[];
+  /** `when` is its day and how far that is from NOW, rendered by code. */
+  recalledFacts: { id: string; subject: string; content: string; when?: string }[];
   onboardingFacts: { id: string; content: string }[];
   /** What the reply was told about her own day and state, so a claim drawn from it counts as true. */
   ownContext?: string[];
@@ -86,7 +87,9 @@ export function guardNow(at: Date, theirs: string, hers: string): string {
 
 export function renderGuardInput(input: GuardInput): string {
   const onboarding = bulletList(input.onboardingFacts.map((f) => f.content));
-  const remembered = bulletList(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`));
+  const remembered = bulletList(
+    input.recalledFacts.map((f) => `[${f.subject}] ${f.content}${f.when ? ` (${f.when})` : ""}`),
+  );
   const turns = input.recentTurns
     .map((t) => `${t.role === "user" ? "User" : "Spica"}: ${t.text}`)
     .join("\n");

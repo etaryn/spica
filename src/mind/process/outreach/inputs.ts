@@ -154,7 +154,7 @@ const ideaSources = (payload: unknown): string[] => {
  * An anticipation is about its plan: once the plan's time has passed it's no longer news, whatever
  * the thought window says. A thought without a readable plan stays.
  */
-async function planPassed(deps: Pick<Deps, "core">, m: CoreMemoryItem, now: Date) {
+export async function planPassed(deps: Pick<Deps, "core">, m: CoreMemoryItem, now: Date) {
   const id = (m.payload as { anticipates?: unknown } | null)?.anticipates;
   if (typeof id !== "string") return false;
   const plan = await deps.core.memory.get(id);

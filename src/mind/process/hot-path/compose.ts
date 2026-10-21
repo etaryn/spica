@@ -35,7 +35,13 @@ import { guardNow } from "@/mind/process/guard/guard";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
-import { dayInWords, relativeDate, stamped, writtenOn } from "@/mind/platform/relative-date";
+import {
+  dayInWords,
+  itemWhen,
+  relativeDate,
+  stamped,
+  writtenOn,
+} from "@/mind/platform/relative-date";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import {
@@ -109,16 +115,25 @@ type ComposeInput = {
 function guardFacts(
   retrieval: RetrievalResult,
   coreMemories: RetrievedFact[],
-): { id: string; subject: string; content: string }[] {
+  now: Date,
+  tz: string,
+): { id: string; subject: string; content: string; when?: string }[] {
+  // Dated like NOW, so the guard compares days instead of counting them.
+  const when = (f: RetrievedFact) => itemWhen(f.when, f.noted ?? null, now, tz);
   const facts = (["user", "self", "shared"] as const).flatMap((subject) =>
-    retrieval.facts[subject].map((f) => ({ id: f.id, subject, content: f.content })),
+    retrieval.facts[subject].map((f) => ({ id: f.id, subject, content: f.content, when: when(f) })),
   );
   const threads = retrieval.dueThreads.map((t) => ({
     id: t.id,
     subject: "thread",
     content: t.detail ? `${t.title} (latest: ${t.detail})` : t.title,
   }));
-  const core = coreMemories.map((m) => ({ id: m.id, subject: "core", content: m.content }));
+  const core = coreMemories.map((m) => ({
+    id: m.id,
+    subject: "core",
+    content: m.content,
+    when: when(m),
+  }));
   return [...facts, ...threads, ...core];
 }
 
@@ -522,6 +537,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     });
   }
 
+  const theirZone = await userZone(deps, userId);
   const guarded = await guardOutgoing(deps, {
     userId,
     turnId: input.anchor.id,
@@ -532,14 +548,14 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
       recalledFacts: [
-        ...guardFacts(retrieval, herMemories),
+        ...guardFacts(retrieval, herMemories, clock.now(), theirZone),
         // Their things together are shared memory too: a callback to one isn't invented.
         ...shownIdiolect.map((i) => ({ id: i.id, subject: "shared", content: i.content })),
       ],
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
       usedOnOccasion: await occasion,
-      now: guardNow(clock.now(), await userZone(deps, userId), herZone),
+      now: guardNow(clock.now(), theirZone, herZone),
       ...(reachOutText ? { reachOutReason: reachOutText.reason } : {}),
     },
   });

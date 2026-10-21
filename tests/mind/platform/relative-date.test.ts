@@ -19,9 +19,7 @@ test("day counts cross midnight by the calendar, not by 24 hours", () => {
 test("day counts hold across a DST change", () => {
   // Clocks went forward in London on 29 March 2026: the 28th is still two calendar days back.
   const now = new Date("2026-03-30T00:30:00Z");
-  expect(relativeDate(new Date("2026-03-28T12:00:00Z"), now, "Europe/London")).toBe(
-    "2 days ago",
-  );
+  expect(relativeDate(new Date("2026-03-28T12:00:00Z"), now, "Europe/London")).toBe("2 days ago");
 });
 
 test("writtenOn and stamped date a note by the day it was written", () => {

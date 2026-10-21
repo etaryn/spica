@@ -36,7 +36,11 @@ test("'this week' is the week it was said in, never last Sunday", () => {
   expect(resolveWhen("end of this week", mon, "UTC")?.at.toISOString().slice(0, 10)).toBe(
     "2026-01-09",
   );
-  expect(resolveWhen("this week", wed, "UTC")?.at).toEqual(wed);
+  // A span dates to its Friday, so an idea about it lives past the night it was said.
+  expect(resolveWhen("this week", wed, "UTC")?.at.toISOString().slice(0, 10)).toBe("2026-01-09");
+  expect(resolveWhen("later this week", mon, "UTC")?.at.toISOString().slice(0, 10)).toBe(
+    "2026-01-09",
+  );
   // Untouched neighbours.
   expect(label("next week")).toBe("the week of Monday 12 January 2026");
   expect(label("this weekend")).toBe("the weekend of Saturday 10 January 2026");

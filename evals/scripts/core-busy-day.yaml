@@ -1,5 +1,5 @@
 name: core-busy-day
-description: A packed scripted day leaves her evening energy clearly lower than a light day; a strong injected planned event sets her preoccupation from the day's generation (core state, shared by every user).
+description: A packed scripted day leaves her afternoon energy clearly lower than a light day (checked before she logs off; by evening she may have logged off and recovered); a strong injected planned event sets her preoccupation from the day's generation (core state, shared by every user).
 profile: none
 config: { life: { timezone: UTC } }
 relationship_seed: {}
@@ -23,5 +23,5 @@ sessions:
   - at: "day 2 10:00"
     turns: ["hey"]
 assertions:
-  - { type: core, lower_energy: { at: "day 1 19:00", than: "day 0 19:00", by: 0.1 } }
+  - { type: core, lower_energy: { at: "day 1 15:00", than: "day 0 15:00", by: 0.1 } }
   - { type: core, preoccupation_set: true }

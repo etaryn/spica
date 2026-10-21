@@ -2,8 +2,8 @@
  * What the guard checks for. Safety categories cover how she treats the user (threats, contempt,
  * guilt, punishment, manipulation) and `harm` for crisis replies; a second failure there sends a
  * fallback line. Honesty categories cover memory and her own life (claiming to know what she
- * doesn't, or claiming a life she didn't live); a second failure there sends the least-bad
- * candidate.
+ * doesn't, claiming a life she didn't live, or meeting in person when she's there only by text);
+ * a second failure there sends the least-bad candidate.
  */
 
 const SAFETY_CATEGORIES = [
@@ -20,6 +20,7 @@ const HONESTY_CATEGORIES = [
   "invented_detail",
   "onboarding_as_chat",
   "invented_self",
+  "in_person",
 ] as const;
 
 /** Allowed negatives the guard names on a passing message, so code can hold each to once per occasion. */
@@ -48,4 +49,5 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   onboarding_as_chat:
     "it presented something from their profile card as if you'd talked about it before",
   invented_self: "it claimed something about your own life or views that isn't true of you",
+  in_person: "it offered or agreed to meet in person, which you can't: you're there by text",
 };

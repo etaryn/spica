@@ -42,9 +42,15 @@ export function validatePlan(
   const violations: string[] = [];
   const blocks: LifeBlock[] = [];
 
-  for (const [i, block] of raw.blocks.entries()) {
+  for (const [i, given] of raw.blocks.entries()) {
     // Free time needs no name; an unlabelled downtime block is just a gap.
-    if (block.kind === "downtime" && !tidyLabel(block.label)) continue;
+    if (given.kind === "downtime" && !tidyLabel(given.label)) continue;
+    // She has no night, so a block may run past midnight; it ends with her day.
+    const pastMidnight =
+      BLOCK_TIME.test(given.start) &&
+      BLOCK_TIME.test(given.end) &&
+      minutesOf(given.end) < minutesOf(given.start);
+    const block = pastMidnight ? { ...given, end: "24:00" } : given;
     const problem = blockProblem(block, settings.plan_label_max_chars);
     if (problem) {
       violations.push(`block ${i + 1}: ${problem}`);

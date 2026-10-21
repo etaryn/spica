@@ -16,7 +16,7 @@ test("seeds version 0 from the seed self, once", async () => {
   expect(await seedSnapshot(deps)).toBe(true);
   expect(await seedSnapshot(deps)).toBe(false);
   const snap = await deps.core.memory.latestSnapshot();
-  expect(snap).toMatchObject({ version: 0, model: "seed", prompt_version: "v6" });
+  expect(snap).toMatchObject({ version: 0, model: "seed", prompt_version: "v7" });
   expect(snap!.content).toBe(loadPersona(deps.config).seedSelf);
   expect(snap!.embedding).toHaveLength(1024);
 });

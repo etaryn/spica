@@ -118,15 +118,16 @@ guaranteed even if generation fails) · 18+ server-side · `user_id` scoping, en
 account deletion only (users can't view or edit her memory) · no explicit engagement features.
 
 ## Current phase
-**Phase 15 (tuning): all four slices (15a–15d) are built**; what each delivered is in `docs/spec-v3-history.md`.
+**Phase 15 (tuning) is closed** (2026-10-21): slices 15a–15d, the 15d run fixes, no night and
+its rerun fixes are built; what each delivered is in `docs/spec-v3-history.md`.
 The 2026-10-19 review runs' fixes are built (`docs/2026-10-19-15d-run-fixes-design.md`: "this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
-online). No night is built too (`docs/2026-10-20-no-night-design.md`, kept until its review run): her
-energy is a battery, she logs off when it runs low at any hour, and reach-outs skip their night. Next: Ethan's logged rerun of `review:world-outreach`, `eval:guard`
-(new date cases) and `posts:review`; B35 waits on
-his reply-model comparison; Publishing, Video and Frontend come later. Persona v6's drafted lines
-await Ethan's rewrite. Each phase or slice starts with a design doc in `docs/`; built plans are
-deleted (history is in git). Exception: the 15d design doc stays until 15d's review runs are done.
+online). No night: her energy is a battery, she logs off when it runs low at any hour, and
+reach-outs skip their night. **Next: Phase 16, the time model** (spec §20: times stored as data,
+distances rendered by code, time-bound items expire; B125, B126), starting with its design doc.
+B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
+drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
+or slice starts with a design doc in `docs/`; built plans are deleted (history is in git). Exception: the 15d design doc stays until 15d's review runs are done.
 CI (`.github/workflows/ci.yml`) runs typecheck, lint and tests on every push to main.
 
 ## Open decisions (v3 §21): ask Ethan, don't settle

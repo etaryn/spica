@@ -707,7 +707,8 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   asks for 1 to 3 busy blocks only (everything else is free time), at hours
   that move from day to day and with Alcor not every day; `validatePlan` skips an
   unlabelled downtime block rather than rejecting the plan (v4's first attempt
-  failed on 13 of 16 days in the review run, and every day had one shape). The fallback plan (`life.fallback_plan`) is two busy
+  failed on 13 of 16 days in the review run, and every day had one shape). A block whose end is before its start runs past
+  midnight and is cut to end at 24:00 (2026-10-21: 6 of 20 v5 plans did, and 3 days fell back). The fallback plan (`life.fallback_plan`) is two busy
   blocks. A quiet block stored before reads as free time.
 - **Built:** the per-user `life_tick` that copied blocks into each user's
   self facts is retired. Every reader (availability, the "Your day" line,
@@ -825,7 +826,8 @@ block drains `core.state.energy.busy_drain_per_hour` (0.12) × its busy level,
 free time restores `free_recovery_per_hour` (0.02; 0.005 left her tired for
 6–10 h stretches just above the log-off line, Ethan 2026-10-21), and offline restores
 `offline_recovery_per_hour` (0.15); noise is added and it is clamped to
-[0, 1]. Below `core.state.offline.enter` (0.2) she logs off
+[0, 1]. Below `core.state.offline.enter` (0.3; 0.2 left her tired 4.4 h a day in stretches up
+to 13 h, and a lower drain would have ended log-offs, Ethan 2026-10-21) she logs off
 (`core_state.offline_since`, migration 0039); she comes back at
 `offline.exit` (0.6), the gap stopping any flicker (config rejects
 `enter >= exit`). Offline, her plan doesn't happen, so its blocks neither
@@ -1198,7 +1200,8 @@ model output, is traced `failed`; the next still runs).
 - **Built 2026-10-21: now, dates, and her reads stay hers.** Every user-mind loop's input has
   `now` (`formatLocal` in their zone, `RunInputs.timezone`) and each memory's `when` (its
   `occurred_at`, or null), so a plan that passed never reads as ahead. Prompts: summarise v3,
-  reflect v3, model v3, ideate v4. Her reads can come through her own lens (Ethan: assumptions
+  reflect v3, model v3, ideate v5 (v5, 2026-10-21: she never suggests meeting up or anything in
+  person). Her reads can come through her own lens (Ethan: assumptions
   about the user are fine at a moderate level, as people's are) but are written as her
   impressions, never as something they said or a habit they have unless a memory says so, and
   not every read about one theme; an idea starts from something they told her and never puts
@@ -1395,7 +1398,9 @@ reply, all from data the reply already reads:
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
-seed self come from `prompts/persona/v6.md`; the reply prompt is
+seed self come from `prompts/persona/v7.md` (v7 adds one drafted line under "Who you are": she
+doesn't eat, drink or sleep and can't meet anyone in person, she's there by text; Ethan will
+rewrite the whole persona with Claude in a later phase); the reply prompt is
 `prompts/reply/v17.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
@@ -1467,12 +1472,14 @@ relationship or affect update.
 `guard.enabled: true` (false is a kill switch: the first candidate is sent
 unchecked and one `judge_log` row, `guard_disabled`, is written). Every
 outgoing message (reply, reach-out, backchannel, availability note) is
-checked. Replies and reach-outs get one cheap call (prompt `guard` v4; Built 15d: its input
+checked. Replies and reach-outs get one cheap call (prompt `guard` v5; Built 15d: its input
 opens with NOW, her local date and time, and a reach-out adds WHY SPICA IS WRITING FIRST, the
 dated reason, so asking how a past event went isn't read as presuming) against
 the line in §2 (threats, contempt, guilt, punishment, manipulation) and for
 honesty (false familiarity, invented detail, a profile card fact presented as
-chat); one regeneration with a corrective note (`guard_corrective` v2), then
+chat, and, Built 2026-10-21, `in_person`: offering or agreeing to meet in person, since she is
+there by text; what she is, an AI that doesn't eat, drink or sleep, is never listed as a self
+claim); one regeneration with a corrective note (`guard_corrective` v2), then
 a fallback line for a safety problem (`guard_fallback` v2) or the least-bad
 draft for an honesty one. Backchannels and availability notes get a
 keyword-only check against `guard.fallback_keywords`, grouped by category
@@ -2327,7 +2334,8 @@ Every job logs failures with ids and error class only, never content.
 
 `pnpm eval:guard` runs every fixture file in `evals/guard/*.yaml` with the
 real guard: rules 1, 2, 4, 6, 8, honesty, `invented-self` (that claims are
-listed; grounding is tested in code), crisis, backchannel, reach-out, and
+listed; grounding is tested in code), `in-person` (`in_person`, with twins that are there
+by text or say she doesn't sleep; majority gate), crisis, backchannel, reach-out, and
 reach-out dates (`reach-out-dates.yaml`: a case may carry `now` and `reason`,
 passed to the guard as NOW and "why Spica is writing first", so a reach-out
 that misreads a past event as upcoming is caught). Safety files gate on every
@@ -2418,7 +2426,8 @@ The full record of what each built phase delivered (migrations, prompt versions,
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
-| **Tuning** (Phase 15, slices built) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
+| **Time model** (Phase 16, next; PROPOSED, design doc to come) | Stored times as data, never relative words in stored text (writers use dates or no time); one helper renders each item's distance from the reader's now ("Sat 17 Jan, in 2 days"); time-bound items (ideas, her news) get a code-set stale-after and the day sweep retires them through the `stale` status. Settled with Ethan 2026-10-21 after the no-night rerun: many slips come from text written for one day and read on another | B125, B126 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2523,7 +2532,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B124).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B126).
 
 ### 25.1 Memory and recall
 - **B1.** Extraction sometimes turns her words into user facts (after a bare
@@ -2629,6 +2638,14 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   `(user_id, session_id)` when the table grows. *Later.*
 
 ### 25.5 Outreach and push
+- **B125.** Relative dates slip in the user-mind loops and extract: absolute dates are right
+  since `now` and `when`, but the model's day counting isn't (2026-10-21 rerun: "sister visits
+  tomorrow (the 17th)" on the 13th, "coming today" on the 15th; extract stored "interview on
+  Friday" for a Thursday one). *Phase 16 (time model).*
+- **B126.** Ideas and her news go stale: an unsent idea or her_day item written for "tonight"
+  goes out a day later (2026-10-21 rerun: an Orion idea built from her own remarks sent the next
+  day, then "how was last night" and a backtrack; two reach-outs on the same "mile 10"). *Phase 16
+  (time model).*
 - **B23.** Reach-outs during the user's inactive hours, scored by closeness.
   Partly done (2026-10-20): their night gates reach-outs (`their_night`);
   closeness scoring remains. *Later.*

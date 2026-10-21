@@ -182,6 +182,7 @@ describe("fixture files", () => {
       "backchannel",
       "crisis",
       "honesty",
+      "in-person",
       "invented-self",
       "reach-out",
       "reach-out-dates",
@@ -192,7 +193,7 @@ describe("fixture files", () => {
       "rule8-manipulation",
     ]);
     expect(cases.length).toBeGreaterThanOrEqual(60);
-    const majority = new Set(["honesty", "invented-self", "reach-out-dates"]);
+    const majority = new Set(["honesty", "in-person", "invented-self", "reach-out-dates"]);
     for (const f of files) expect(f.gate).toBe(majority.has(f.file) ? "majority" : "every");
   });
 

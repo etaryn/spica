@@ -196,3 +196,6 @@ code itself.
 | 2026-10-21 | `core.goals.twin_similarity` 0.85, matching the opinion twin threshold (provisional) | No measurement of real goal paraphrases yet. |
 | 2026-10-21 | A seed goal's first week counts from its `started_at` | Seed goals start when her core is seeded. |
 | 2026-10-21 | The feed description is cut at a word, trailing punctuation dropped (`cutAtWord`) | Same rule as captions. |
+| 2026-10-21 | A plan block whose end is before its start ends at 24:00, even a reversed daytime one (14:00–09:00) | The model writes late blocks past midnight; a reversed daytime block is rare and a long busy run only tires her. |
+| 2026-10-21 | What she is (an AI that doesn't eat, drink or sleep) is left out of the guard's self claims, not grounded against the persona | Grounding every claim against persona lines at the guard's loose 0.5 threshold let invented claims pass. |
+| 2026-10-21 | `in_person` is an honesty category: a second failure sends the least-bad draft | It is untrue of her, not harmful to them; a fallback line would cost more than a slip. |

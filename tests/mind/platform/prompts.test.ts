@@ -46,12 +46,14 @@ test("loads the turn judge prompt", () => {
   expect(p).toMatch(/backchannel/);
 });
 
-test("persona v6 is the configured persona", () => {
+test("persona v7 is the configured persona", () => {
   const c = loadConfig();
-  expect(c.prompts.persona).toBe("v6");
+  expect(c.prompts.persona).toBe("v7");
   const p = loadPrompt("persona", c.prompts.persona);
   expect(p).toMatch(/Alcor/);
   expect(p).not.toMatch(/Pesto/);
+  // Her digital body: no sleep and no meeting in person, so neither reads as invented.
+  expect(p).toMatch(/can't meet anyone in person/);
 });
 
 test("the configured reply prompt tells her the feeling and day lines are her own state", () => {

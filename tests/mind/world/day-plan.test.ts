@@ -149,6 +149,20 @@ test("busy blocks can fall at any hour, and the fallback is busy and free only",
   expect(fallbackPlan(cfg).blocks.some((b) => b.kind === "busy")).toBe(true);
 });
 
+test("a block running past midnight ends at 24:00; an empty block is still rejected", () => {
+  const plan = (start: string, end: string) =>
+    validatePlan(
+      { blocks: [{ start, end, kind: "busy", busy: 0.8, label: "reading" }] },
+      cfg,
+      null,
+    );
+  for (const end of ["02:20", "00:00"]) {
+    const r = plan("23:00", end);
+    expect(r.ok && r.plan.blocks[0]).toMatchObject({ start: "23:00", end: "24:00" });
+  }
+  expect(plan("10:00", "10:00").ok).toBe(false);
+});
+
 test("an unlabelled downtime block is skipped, not a reason to reject the plan", () => {
   const r = validatePlan(
     {

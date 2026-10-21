@@ -9,7 +9,15 @@ import {
   previousLocalDate,
   shiftLocalDate,
   zoneOffsetMinutes,
+  zoneOrUtc,
 } from "@/mind/platform/timezone";
+
+test("zoneOrUtc falls back to UTC for a missing or unknown zone", () => {
+  expect(zoneOrUtc("Asia/Singapore")).toBe("Asia/Singapore");
+  expect(zoneOrUtc(null)).toBe("UTC");
+  expect(zoneOrUtc(undefined)).toBe("UTC");
+  expect(zoneOrUtc("Mars/Olympus")).toBe("UTC");
+});
 
 test("validates IANA names", () => {
   expect(isValidTimeZone("Europe/London")).toBe(true);

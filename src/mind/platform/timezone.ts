@@ -21,12 +21,17 @@ export function isValidTimeZone(tz: string): boolean {
   }
 }
 
+/** Their zone when it's a real one; UTC otherwise, so a bad zone never breaks a prompt. */
+export function zoneOrUtc(tz: string | null | undefined): string {
+  return tz && isValidTimeZone(tz) ? tz : "UTC";
+}
+
 /**
  * "Mon 2026-01-05 09:00 (Europe/London)": local time with the weekday, so the extractor can
  * resolve "Friday". ISO date order on purpose: the model misread "05/01/2026" as 5 May.
  */
 export function formatLocal(at: Date, tz: string | null): string {
-  const zone = tz && isValidTimeZone(tz) ? tz : "UTC";
+  const zone = zoneOrUtc(tz);
 
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: zone,

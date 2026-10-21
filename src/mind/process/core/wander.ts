@@ -14,7 +14,9 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
-import { lifeDate } from "@/mind/world/her-clock";
+import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
+import { latestSelf } from "@/mind/memory/core/self";
+import { dayInWords } from "@/mind/platform/relative-date";
 import { budgetDayStart, runCoreLoop } from "./runner";
 import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
 import type { ApplyOutput, ThinkingResult } from "./thoughts";
@@ -189,11 +191,14 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
     if (!query) throw new Error("missing wander seed embedding");
     const chain = await chainFor(ctx.deps, seed, query);
     const persona = loadPersona(config);
-    const self = (await core.memory.latestSnapshot())?.content ?? persona.seedSelf;
+    const tz = lifeTimezone(config.life, now);
+    const self = await latestSelf(core.memory, persona.seedSelf, now, tz);
+    const dated = (m: CoreMemoryItem) =>
+      `${m.content} (${dayInWords(m.occurred_at ?? m.created_at, now, tz)})`;
     const goals = await core.goals.active();
     const input = [
-      `Seed memory: ${seed.content}`,
-      `Associated memories: ${chain.length ? chain.map((item) => item.content).join("\n") : "none"}`,
+      `Seed memory: ${dated(seed)}`,
+      `Associated memories: ${chain.length ? chain.map(dated).join("\n") : "none"}`,
       state
         ? `Mood: ${state.mood_valence.toFixed(2)}; energy: ${state.energy.toFixed(2)}; needs: autonomy ${state.needs.autonomy.toFixed(2)}, competence ${state.needs.competence.toFixed(2)}`
         : "Mood, energy and needs: unknown",

@@ -106,6 +106,10 @@ test("now is excluded, twelve hours included, and the accepted thought moves onl
     },
   });
   expect(traces).toMatchObject([{ loop: "core_anticipate", status: "done", calls: 1 }]);
+  // The plan's time reaches the model as her local day and clock, never as ISO.
+  const input = all.llm.structuredCalls.find((c) => c.purpose === "core_anticipate")!.input;
+  expect(input).not.toMatch(/When: \d{4}-\d{2}-\d{2}T/);
+  expect(input).toMatch(/When: \w+day \d+ \w+, (today|in \d+ days?) at \d{2}:\d{2}/);
 });
 
 test("already anticipated plans are skipped and same-time plans break ties by ID", async () => {

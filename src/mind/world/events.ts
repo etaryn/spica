@@ -19,6 +19,7 @@ import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant, lifeTimezone } from "@/mind/world/her-clock";
 import { DAY } from "@/mind/platform/time";
 import { shiftLocalDate } from "@/mind/platform/timezone";
+import { latestSelf } from "@/mind/memory/core/self";
 
 /** Sent to the model. No numeric bounds (unsupported); `checkEvent` validates and clamps. */
 const EventSchema = z.object({
@@ -298,7 +299,12 @@ export async function generateCoreEvents(
   let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
   // Events are written for who she is lately; before any snapshot exists that's the seed self.
   const persona = loadPersona(config);
-  const self = (await deps.core.memory.latestSnapshot())?.content ?? persona.seedSelf;
+  const self = await latestSelf(
+    deps.core.memory,
+    persona.seedSelf,
+    now,
+    lifeTimezone(config.life, now),
+  );
   const system = [
     persona.coreValues,
     self,

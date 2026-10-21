@@ -27,7 +27,10 @@ test("render writes six sections, embeddings, bullet lines, provenance and N+1 a
   const lines = await deps.core.memory.selfLines(1);
   expect(lines.length).toBeGreaterThan(0);
   expect(lines.every((line) => line.embedding.length === 1024)).toBe(true);
-  expect(snapshot).toMatchObject({ model: all.config.models.core, prompt_version: "v2" });
+  expect(snapshot).toMatchObject({
+    model: all.config.models.core,
+    prompt_version: all.config.prompts.core_snapshot,
+  });
   expect(await all.db.select().from(core_loop_trace)).toMatchObject([{ status: "done", calls: 1 }]);
 });
 

@@ -7,6 +7,8 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { LoopContext } from "./runner";
 import { eventRef } from "./appraise";
+import { latestSelf } from "@/mind/memory/core/self";
+import { lifeTimezone } from "@/mind/world/her-clock";
 
 const ResolutionSchema = z.object({
   content: z.string(),
@@ -28,7 +30,8 @@ export async function proposeResolution(
   if (!ctx.canCall()) return null;
 
   const persona = loadPersona(config);
-  const self = (await core.memory.latestSnapshot())?.content ?? persona.seedSelf;
+  const now = ctx.deps.clock.now();
+  const self = await latestSelf(core.memory, persona.seedSelf, now, lifeTimezone(config.life, now));
   const intention = await core.memory.bySourceRef("intention", eventRef(event.id));
   const prompt = loadPrompt("core/resolve", config.prompts.core_resolve);
   const input = [

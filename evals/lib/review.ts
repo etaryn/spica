@@ -1,4 +1,5 @@
 import type { Phrases } from "@/mind/platform/phrases";
+import { relativeWords } from "@/mind/platform/relative-date";
 import type { GroundedClaim } from "@/mind/process/guard/self-claims";
 import type { Candidate, GateResult } from "@/mind/process/outreach/types";
 import type { OutreachSnapshot } from "./outreach-check";
@@ -207,6 +208,16 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
           : ["- (none)"]),
         "",
       );
+      const slips = facts
+        .map((f) => ({ f, words: relativeWords(String(f.content ?? "")) }))
+        .filter((s) => s.words.length);
+      if (slips.length)
+        out.push(
+          "Relative words in stored text:",
+          "",
+          ...slips.map((s) => `- ${fmt(s.f.kind)} (${s.words.join(", ")}): ${fmt(s.f.content)}`),
+          "",
+        );
       const ticks = trace?.outreach?.[user]?.log;
       if (ticks) out.push(...reachOutTicks(ticks));
     }
@@ -243,6 +254,16 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
           "",
         );
     }
+    const loopSlips = calls
+      .map((c) => ({ purpose: c.purpose, words: relativeWords(JSON.stringify(c.output)) }))
+      .filter((s) => s.words.length);
+    if (loopSlips.length)
+      out.push(
+        "### Relative words in her loops",
+        "",
+        ...loopSlips.map((s) => `- ${s.purpose}: ${s.words.join(", ")}`),
+        "",
+      );
     out.push("### Checks", "");
     out.push(
       ...(result.assertions.length

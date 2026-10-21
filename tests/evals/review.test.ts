@@ -160,3 +160,57 @@ test("the signals line lists raw hurt and tension readings in order", () => {
   ).toBe("Signals: hurt 0.4 · tension 0.3");
   expect(signalsLine([])).toBe("Signals: none");
 });
+
+test("the review lists stored text with relative words", () => {
+  const md = renderReview(
+    [
+      {
+        script: "s",
+        attempt: 1,
+        result: {
+          name: "s",
+          status: "pass",
+          meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
+          assertions: [],
+          annotations: [],
+          trace: {
+            transcripts: {},
+            memory: {
+              sam: {
+                facts: [
+                  {
+                    status: "open",
+                    subject: "shared",
+                    kind: "summary",
+                    content: "Sister visits tomorrow.",
+                  },
+                  {
+                    status: "open",
+                    subject: "user",
+                    kind: "event",
+                    content: "Interview on Thursday 8 January.",
+                  },
+                ],
+                threads: [],
+                entities: [],
+              },
+            },
+            coreCalls: [
+              {
+                purpose: "core_wander",
+                input: "i",
+                output: { items: [{ content: "clear tonight" }] },
+              },
+            ],
+          },
+        },
+      },
+    ],
+    { stamp: "t", real: [], annotate: false },
+  );
+  expect(md).toContain(
+    "Relative words in stored text:\n\n- summary (tomorrow): Sister visits tomorrow.\n",
+  );
+  expect(md).not.toMatch(/\): Interview on Thursday/);
+  expect(md).toContain("### Relative words in her loops\n\n- core_wander: tonight");
+});

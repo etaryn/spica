@@ -69,6 +69,21 @@ function bulletList(items: string[]): string {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : "- (nothing)";
 }
 
+/**
+ * NOW as the guard reads it: their local time, since the message's day words land on their
+ * calendar, plus hers when it reads differently, since her own news is dated on hers.
+ */
+export function guardNow(at: Date, theirs: string, hers: string): string {
+  const local = (tz: string) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      dateStyle: "full",
+      timeStyle: "short",
+    }).format(at);
+  const them = `${local(theirs)} where they are`;
+  return local(hers) === local(theirs) ? them : `${them}; ${local(hers)} where Spica is`;
+}
+
 export function renderGuardInput(input: GuardInput): string {
   const onboarding = bulletList(input.onboardingFacts.map((f) => f.content));
   const remembered = bulletList(input.recalledFacts.map((f) => `[${f.subject}] ${f.content}`));

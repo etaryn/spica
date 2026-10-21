@@ -218,7 +218,7 @@
     "judge_false_recall": "v9",
     "judge_consistency": "v3",
     "judge_turn": "v1",
-    "guard": "v5",
+    "guard": "v6",
     "guard_crisis": "v1",
     "guard_corrective": "v2",
     "guard_fallback": "v2",

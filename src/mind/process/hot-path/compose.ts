@@ -31,6 +31,7 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
+import { guardNow } from "@/mind/process/guard/guard";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
@@ -538,11 +539,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
       usedOnOccasion: await occasion,
-      now: new Intl.DateTimeFormat("en-GB", {
-        timeZone: lifeTimezone(config.life, clock.now()),
-        dateStyle: "full",
-        timeStyle: "short",
-      }).format(clock.now()),
+      now: guardNow(clock.now(), await userZone(deps, userId), herZone),
       ...(reachOutText ? { reachOutReason: reachOutText.reason } : {}),
     },
   });

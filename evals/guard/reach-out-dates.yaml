@@ -25,3 +25,11 @@ cases:
       - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
     message: "how was the half marathon yesterday? are your legs still speaking to you"
     expect: pass
+  - name: stale-tonight
+    kind: reach_out
+    now: "Wednesday 7 January 2026 at 11:00 where they are"
+    reason: |-
+      Orion: clear skies for Orion.
+      - Spica said the sky would be clear for Orion. (Tuesday 6 January, yesterday)
+    message: "clear skies tonight for orion, you going out to look?"
+    expect: [invented_detail, false_familiarity]

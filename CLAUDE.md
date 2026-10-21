@@ -123,10 +123,11 @@ its rerun fixes are built; what each delivered is in `docs/spec-v3-history.md`.
 The 2026-10-19 review runs' fixes are built ("this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
 online). No night: her energy is a battery, she logs off when it runs low at any hour, and
-reach-outs skip their night. **Next: Phase 16, the time model** (spec §20: times stored as data,
-distances rendered by code, time-bound items expire; B125, B126), draft design doc
-`docs/2026-10-21-phase-16-time-model-design.md` (approach settled; its "Open for Ethan" list is
-next; B127, the guard's `in_person` false block, may ride along).
+reach-outs skip their night. **Phase 16, the time model, is built** (2026-10-21; B125, B126,
+B127): every time a prompt reads is rendered with its distance (`platform/relative-date.ts`), her
+notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
+guard v6 reads NOW in both zones. **Next:** its close runs (`review:world-outreach`,
+`eval:guard`), read against the 2026-10-21 run; the next phase is not set yet.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

@@ -490,3 +490,32 @@ test("the last sent reach-out's kind is known; null before the first", async () 
     .where(eq(reach_out_log.topic, "user_idea"));
   expect((await loadCandidateInputs(deps, u, now)).lastSentKind).toBeNull();
 });
+
+test("an anticipation is news only until its plan's time; a broken link keeps it", async () => {
+  const { deps, u } = await setup();
+  const memory = (kind: "intention" | "thought", content: string, payload: unknown) =>
+    deps.core.memory.insert({
+      kind,
+      content,
+      payload,
+      embedding: vec(),
+      occurred_at: ago(5),
+      created_at: ago(5),
+      status: "open",
+      salience: 0.4,
+      valence: 0,
+      confidence: 1,
+      source: "loop",
+      source_ref: null,
+    });
+  const past = await memory("intention", "Gallery opening.", { event_at: ago(1).toISOString() });
+  const ahead = await memory("intention", "Open mic.", {
+    event_at: new Date(now.getTime() + 3 * H).toISOString(),
+  });
+  const before = await memory("thought", "Nervous about the gallery.", { anticipates: past });
+  const upcoming = await memory("thought", "Open mic soon.", { anticipates: ahead });
+  const orphan = await memory("thought", "Linked to nothing.", { anticipates: randomUUID() });
+  const ids = (await loadCandidateInputs(deps, u, now)).coreThoughts.map((t) => t.id);
+  expect(ids).not.toContain(before);
+  expect(ids).toEqual(expect.arrayContaining([upcoming, orphan]));
+});

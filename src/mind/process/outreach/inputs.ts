@@ -71,10 +71,12 @@ export async function loadCandidateInputs(
   );
 
   const thoughtsFrom = new Date(now.getTime() - settings.core_thought_lookback_hours * HOUR);
-  const coreThoughts = (
+  const recent = (
     await deps.core.memory.recentThoughts(thoughtsFrom, now, settings.core_thought_limit)
-  )
-    .filter(recallable)
+  ).filter(recallable);
+  const passed = await Promise.all(recent.map((m) => planPassed(deps, m, now)));
+  const coreThoughts = recent
+    .filter((_, i) => !passed[i])
     .map((m) => ({ id: m.id, content: m.content, salience: m.salience, depth: m.depth }));
   const ideas = await liveIdeas(db, userId, now, settings.user_idea_limit);
   const userIdeas = await Promise.all(
@@ -147,6 +149,18 @@ const ideaSources = (payload: unknown): string[] => {
   const from = (payload as { from?: unknown } | null)?.from;
   return Array.isArray(from) ? from.filter((x): x is string => typeof x === "string") : [];
 };
+
+/**
+ * An anticipation is about its plan: once the plan's time has passed it's no longer news, whatever
+ * the thought window says. A thought without a readable plan stays.
+ */
+async function planPassed(deps: Pick<Deps, "core">, m: CoreMemoryItem, now: Date) {
+  const id = (m.payload as { anticipates?: unknown } | null)?.anticipates;
+  if (typeof id !== "string") return false;
+  const plan = await deps.core.memory.get(id);
+  const at = (plan?.payload as { event_at?: unknown } | null)?.event_at;
+  return typeof at === "string" && new Date(at).getTime() <= now.getTime();
+}
 
 /**
  * Her recent episodes and the plans on her mind (open intentions from the same window), plus her

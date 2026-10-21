@@ -59,6 +59,9 @@ async function setup(
         content: "send her that old film",
         embedding: vec(),
         created_at: opts.ideaAt,
+        stale_after: new Date(
+          opts.ideaAt.getTime() + deps.config.user_mind.ideate.ttl_days * 86_400_000,
+        ),
         status: "open",
         salience: 0.5,
         valence: 0,

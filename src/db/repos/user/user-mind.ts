@@ -2,7 +2,7 @@
  * One user's mind runs: the durable row behind each batch of her thinking about them, the trace
  * of every loop in it, the live summary and read she keeps of them, and her beliefs about them.
  */
-import { and, desc, eq, gt, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
 import { fact, user_loop_trace, user_mind_run } from "@/db/schema";
@@ -211,11 +211,11 @@ export async function recentReflections(db: Db, userId: string, limit: number): 
     .limit(limit);
 }
 
-/** Ideas she hasn't had her chance with yet: open, and not older than `since`. */
+/** Ideas she hasn't had her chance with yet: open, and still worth raising at `now`. */
 export async function liveIdeas(
   db: Db,
   userId: string,
-  since: Date,
+  now: Date,
   limit: number,
 ): Promise<FactRow[]> {
   return db
@@ -227,7 +227,7 @@ export async function liveIdeas(
         eq(fact.scope, "private"),
         eq(fact.kind, "idea"),
         eq(fact.status, "open"),
-        gt(fact.created_at, since),
+        or(isNull(fact.stale_after), gt(fact.stale_after, now)),
       ),
     )
     .orderBy(desc(fact.created_at))

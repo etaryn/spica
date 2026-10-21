@@ -34,7 +34,6 @@ import { withTimeout } from "@/mind/platform/timeout";
 import { deliverPart } from "@/mind/process/deliver";
 import { composeReachOut, type Composed } from "@/mind/process/hot-path/compose";
 import { resolveSessionId } from "@/mind/process/receive/session";
-import { ideaCutoff } from "@/mind/process/user/ideate";
 import { sleepUntil, typingMs } from "@/mind/process/turn-taking/pacing";
 import { mutateState } from "@/mind/process/turn-taking/state";
 import * as T from "@/mind/process/turn-taking/transitions";
@@ -238,8 +237,11 @@ export async function winnerLive(
   }
   if (winner.kind === "user_idea") {
     const idea = winner.factId ? await getFact(db, userId, winner.factId) : null;
-    const cutoff = ideaCutoff(at, deps.config.user_mind.ideate.ttl_days);
-    return idea?.kind === "idea" && idea.status === "open" && idea.created_at > cutoff;
+    return (
+      idea?.kind === "idea" &&
+      idea.status === "open" &&
+      (idea.stale_after === null || idea.stale_after > at)
+    );
   }
   if (winner.kind === "make_up") {
     return (await getRelationshipRow(db, userId))?.make_up_state === "due";

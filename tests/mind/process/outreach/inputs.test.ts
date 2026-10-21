@@ -169,7 +169,11 @@ test("core thoughts and live user ideas feed the candidates; a stale idea is abs
     u,
     fact({ kind: "idea", content: "Ask about the audition.", created_at: ago(2) }),
   );
-  await insertFact(deps.db, u, fact({ kind: "idea", content: "stale", created_at: ago(24 * 30) }));
+  await insertFact(
+    deps.db,
+    u,
+    fact({ kind: "idea", content: "stale", created_at: ago(24 * 30), stale_after: ago(24) }),
+  );
   const thought = await deps.core.memory.insert({
     kind: "thought",
     content: "Spica keeps thinking about tides.",

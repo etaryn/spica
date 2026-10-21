@@ -1,6 +1,7 @@
 /**
- * The daily decay pass over every user's memories: weights fade and memories go `stale`. One
- * cross-user statement, run by the `decay_pass` job.
+ * The daily decay pass over every user's memories: weights fade, memories go `stale`, and
+ * time-bound ones retire once their time has passed. Cross-user statements, run by the
+ * `decay_pass` job.
  */
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
@@ -10,7 +11,7 @@ export async function adminDecayFacts(
   db: Db,
   now: Date,
   cfg: { grace_days: number; rate: number; stale_floor: number; dormant_after_days: number },
-): Promise<{ decayed: number; staled: number; dormant: number }> {
+): Promise<{ decayed: number; staled: number; expired: number; dormant: number }> {
   const decayed = await db.execute(sql`
     UPDATE fact SET salience = salience * (1 - ${cfg.rate}::real * (1 - salience))
     WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea', 'model')
@@ -19,6 +20,12 @@ export async function adminDecayFacts(
     UPDATE fact SET status = 'stale'
     WHERE scope = 'private' AND status NOT IN ('superseded', 'stale') AND kind NOT IN ('summary', 'idea', 'model')
       AND salience < ${cfg.stale_floor}::real`);
+  // Time-bound items retire when their time has passed. Only open ones: a used idea stays
+  // resolved, so ideate still sees it among what she already brought up.
+  const expired = await db.execute(sql`
+    UPDATE fact SET status = 'stale'
+    WHERE scope = 'private' AND status = 'open' AND stale_after IS NOT NULL
+      AND stale_after <= ${now}::timestamptz`);
   const dormant = await db.execute(sql`
     UPDATE thread SET status = 'dormant'
     WHERE status = 'open' AND next_checkpoint IS NOT NULL
@@ -27,6 +34,7 @@ export async function adminDecayFacts(
   return {
     decayed: decayed.rowCount ?? 0,
     staled: staled.rowCount ?? 0,
+    expired: expired.rowCount ?? 0,
     dormant: dormant.rowCount ?? 0,
   };
 }

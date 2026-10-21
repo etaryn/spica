@@ -16,7 +16,6 @@ import {
   type Trigger,
 } from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
-import { ideaCutoff } from "@/mind/process/user/ideate";
 import { triggerText } from "@/mind/process/user/inputs";
 import styles from "../inspector.module.css";
 import { eventStatus } from "./event-status";
@@ -647,12 +646,7 @@ export async function MindTab({
   const reflections = await recentReflections(db, userId, cfg.reflect.recent);
   const model = await liveModel(db, userId);
   const beliefs = await liveBeliefs(db, userId, cfg.model.belief_context);
-  const ideas = await liveIdeas(
-    db,
-    userId,
-    ideaCutoff(now, cfg.ideate.ttl_days),
-    cfg.ideate.max_planned,
-  );
+  const ideas = await liveIdeas(db, userId, now, cfg.ideate.max_planned);
   const mark = (f: { payload: unknown }) => (isSensitive(f) ? " (sensitive)" : "");
   if (!runs.length && !summary) return <Empty phase={9} />;
   return (

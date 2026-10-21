@@ -89,3 +89,34 @@ test("decays only facts past the grace period, stales below the floor, leaves su
   expect(Number(grpRow.salience)).toBeCloseTo(0.06, 6);
   expect((await threads.getOwnedThread(getTestDb(), u, t.id))!.status).toBe("dormant");
 });
+
+test("the sweep retires open facts past stale_after; a used idea keeps its status", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const now = new Date("2026-01-10T00:00:00Z");
+  const idea = (content: string, status: "open" | "resolved", staleAfter: Date | null) =>
+    facts.insertFact(getTestDb(), u, {
+      subject: "shared",
+      kind: "idea",
+      content,
+      embedding: vec(),
+      created_at: new Date("2026-01-08T00:00:00Z"),
+      stale_after: staleAfter,
+      status,
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.6,
+      source: "generated",
+    });
+  const past = await idea("clear skies tonight", "open", new Date("2026-01-09T00:00:00Z"));
+  const ahead = await idea("good luck thursday", "open", new Date("2026-01-11T00:00:00Z"));
+  const used = await idea("asked already", "resolved", new Date("2026-01-09T00:00:00Z"));
+  const forever = await idea("no expiry", "open", null);
+  const out = await decayPass(deps, now);
+  expect(out.expired).toBe(1);
+  const status = async (id: string) => (await facts.getFact(getTestDb(), u, id))!.status;
+  expect(await status(past.id)).toBe("stale");
+  expect(await status(ahead.id)).toBe("open");
+  expect(await status(used.id)).toBe("resolved");
+  expect(await status(forever.id)).toBe("open");
+});

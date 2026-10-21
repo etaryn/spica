@@ -1,7 +1,7 @@
 /**
  * Her idea for one user after a big event: one thing she wants to bring up with them next time,
  * or nothing. An idea gets one chance, in her next reply or as a reason to write first, and
- * expires unused after a few days. Ideas can become reach-outs and push notifications, so ideate
+ * expires unused once the event it's about has passed, or after a few days. Ideas can become reach-outs and push notifications, so ideate
  * never reads anything a crisis touched.
  */
 import { z } from "zod";
@@ -18,14 +18,39 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
-import { formatLocal } from "@/mind/platform/timezone";
+import {
+  formatLocal,
+  localDateString,
+  localMidnight,
+  nextLocalDate,
+  zoneOrUtc,
+} from "@/mind/platform/timezone";
 import { memoryLines, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
-/** Ideas created at or before this are past their chance. */
-export function ideaCutoff(now: Date, ttlDays: number): Date {
-  return new Date(now.getTime() - ttlDays * DAY);
+/**
+ * When an idea stops being worth raising: the end of the day, in their zone, of the latest event
+ * it's about that hasn't passed when it's written, and never later than its few days' chance. An
+ * idea from events already past (how did it go) keeps the few days; asking after an event is the
+ * job of threads and their events.
+ */
+export function ideaStaleAfter(
+  createdAt: Date,
+  sourceDates: Date[],
+  ttlDays: number,
+  tz: string,
+): Date {
+  const chance = new Date(createdAt.getTime() + ttlDays * DAY);
+  const today = localDateString(createdAt, tz);
+  const last = sourceDates
+    .map((d) => localDateString(d, tz))
+    .filter((d) => d >= today)
+    .sort()
+    .at(-1);
+  if (!last) return chance;
+  const end = localMidnight(nextLocalDate(last), tz);
+  return end < chance ? end : chance;
 }
 
 export async function userIdeate(
@@ -46,7 +71,7 @@ export async function userIdeate(
       latest && latest.created_at >= run.created_at && !isSensitive(latest) ? latest : null;
     // Ideas she already brought up count too, so she doesn't pitch the same one twice.
     const planned = [
-      ...(await liveIdeas(db, userId, ideaCutoff(now, settings.ttl_days), settings.max_planned)),
+      ...(await liveIdeas(db, userId, now, settings.max_planned)),
       ...(await recentlyRaisedIdeas(
         db,
         userId,
@@ -83,12 +108,26 @@ export async function userIdeate(
     let ideaId: string | null = null;
     if (out.idea) {
       const [embedding] = await deps.embedder.embed([out.idea], "document");
+      const from = await nearestDated(
+        db,
+        userId,
+        facts.filter((f) => f.occurred_at !== null).map((f) => f.id),
+        embedding!,
+        settings.source_similarity,
+        settings.dated_facts,
+      );
       const row = await insertFact(db, userId, {
         subject: "shared",
         kind: "idea",
         content: out.idea,
         embedding: embedding!,
         created_at: now,
+        stale_after: ideaStaleAfter(
+          now,
+          facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!),
+          settings.ttl_days,
+          zoneOrUtc(inputs.timezone),
+        ),
         status: "open",
         salience: settings.salience,
         valence: 0,
@@ -97,16 +136,7 @@ export async function userIdeate(
         source_ref: `user_ideate:${ctx.traceId}`,
         // The dated facts it's about, so a reach-out carrying it knows their dates; a date it
         // isn't about would ride along into the message.
-        payload: {
-          from: await nearestDated(
-            db,
-            userId,
-            facts.filter((f) => f.occurred_at !== null).map((f) => f.id),
-            embedding!,
-            settings.source_similarity,
-            settings.dated_facts,
-          ),
-        },
+        payload: { from },
       });
       ideaId = row.id;
     }

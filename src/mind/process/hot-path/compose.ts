@@ -35,7 +35,6 @@ import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
 import { dayInWords, relativeDate } from "@/mind/platform/relative-date";
-import { ideaCutoff } from "@/mind/process/user/ideate";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import {
@@ -365,13 +364,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
           deps,
           "ideas",
           userId,
-          () =>
-            liveIdeas(
-              db,
-              userId,
-              ideaCutoff(clock.now(), config.user_mind.ideate.ttl_days),
-              config.user_mind.ideate.slot_max,
-            ),
+          () => liveIdeas(db, userId, clock.now(), config.user_mind.ideate.slot_max),
           [] as { id: string; content: string }[],
         );
   // Their things together; nothing playful in a crisis.

@@ -4,7 +4,7 @@ import { insertRun, liveIdeas, retireIdeas } from "@/db/repos/user/user-mind";
 import { userReflect } from "@/mind/process/user/reflect";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { loadRunInputs } from "@/mind/process/user/inputs";
-import { ideaCutoff, userIdeate } from "@/mind/process/user/ideate";
+import { ideaStaleAfter, userIdeate } from "@/mind/process/user/ideate";
 import { closeTestDb, createTestUser, openCrisisWindow, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 import { sequence } from "../../../helpers/llm";
@@ -47,8 +47,7 @@ test("writes one open idea; null writes nothing; live ideas are passed back", as
   const inputs = await loadRunInputs(deps, userId);
   expect(await userIdeate(deps, run, inputs)).toBe("done");
   expect(await userIdeate(deps, run, inputs)).toBe("done");
-  const now = deps.clock.now();
-  const ideas = await liveIdeas(deps.db, userId, ideaCutoff(now, 3), 5);
+  const ideas = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   expect(ideas).toHaveLength(1);
   expect(ideas[0]).toMatchObject({ kind: "idea", subject: "shared", status: "open" });
   const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_ideate")[1]!;
@@ -74,7 +73,7 @@ test("an idea keeps the dated facts it was written from, so a reach-out knows th
   });
   deps.llm.handlers.user_ideate = () => ({ idea: "Ask if they get a break after Thursday." });
   await userIdeate(deps, run, await loadRunInputs(deps, userId));
-  const [idea] = await liveIdeas(deps.db, userId, ideaCutoff(deps.clock.now(), 3), 5);
+  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   // The undated audition fact isn't kept: only a date helps the reach-out.
   expect(idea!.payload).toEqual({ from: [dated.id] });
 });
@@ -105,14 +104,64 @@ test("only the dated facts near the idea come with it, closest first", async () 
   const interview = await dated("They have an interview on Thursday.", near!);
   deps.llm.handlers.user_ideate = () => ({ idea });
   await userIdeate(deps, run, await loadRunInputs(deps, userId));
-  const [row] = await liveIdeas(deps.db, userId, ideaCutoff(deps.clock.now(), 3), 5);
+  const [row] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   expect(row!.payload).toEqual({ from: [interview.id] });
   expect(dentist.id).not.toBe(interview.id);
 });
 
-test("ideaCutoff is ttl days back", () => {
-  const now = new Date("2026-01-10T00:00:00Z");
-  expect(ideaCutoff(now, 3).toISOString()).toBe("2026-01-07T00:00:00.000Z");
+const D = 86_400_000;
+
+test("an idea about an upcoming event goes stale at the end of that event's day", () => {
+  const written = new Date("2026-01-06T09:00:00Z"); // Tue
+  const event = new Date("2026-01-08T19:00:00Z"); // Thu evening
+  expect(ideaStaleAfter(written, [event], 3, "UTC").toISOString()).toBe("2026-01-09T00:00:00.000Z");
+});
+
+test("an idea for tonight east of UTC ends at their midnight, not UTC's", () => {
+  // 10:00 in Singapore on Tue 6th; "tonight" is 22:00 there (14:00 UTC).
+  const written = new Date("2026-01-06T02:00:00Z");
+  const tonight = new Date("2026-01-06T14:00:00Z");
+  expect(ideaStaleAfter(written, [tonight], 3, "Asia/Singapore").toISOString()).toBe(
+    "2026-01-06T16:00:00.000Z",
+  );
+});
+
+test("an idea about a past event keeps its few days' chance; so does an undated one", () => {
+  const written = new Date("2026-01-12T09:00:00Z"); // Mon
+  const race = new Date("2026-01-11T08:00:00Z"); // Sun, already run
+  const chance = new Date(written.getTime() + 3 * D);
+  expect(ideaStaleAfter(written, [race], 3, "UTC")).toEqual(chance);
+  expect(ideaStaleAfter(written, [], 3, "UTC")).toEqual(chance);
+});
+
+test("a far-off event never stretches an idea past its chance", () => {
+  const written = new Date("2026-01-06T09:00:00Z");
+  const later = new Date("2026-02-20T09:00:00Z");
+  expect(ideaStaleAfter(written, [later], 3, "UTC")).toEqual(new Date(written.getTime() + 3 * D));
+});
+
+test("ideate stores stale_after from the dated facts it was written from", async () => {
+  const { deps, userId, run } = await setup();
+  const thursday = new Date(deps.clock.now().getTime() + 48 * 3_600_000);
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "They have an interview on Thursday.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    occurred_at: thursday,
+    status: "open",
+    salience: 0.8,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask if they get a break after Thursday." });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
+  expect(idea!.stale_after).toEqual(
+    ideaStaleAfter(deps.clock.now(), [thursday], deps.config.user_mind.ideate.ttl_days, "UTC"),
+  );
 });
 
 test("only a reflection from this run counts as noticed", async () => {

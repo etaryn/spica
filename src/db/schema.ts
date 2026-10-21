@@ -274,6 +274,8 @@ export const fact = pgTable(
     entity_refs: uuid("entity_refs").array().notNull().default(emptyUuidArray),
     thread_id: uuid("thread_id").references(() => thread.id, { onDelete: "set null" }),
     occurred_at: ts("occurred_at"),
+    // Past this, the item is no longer worth raising; the day sweep retires it. Null: no expiry.
+    stale_after: ts("stale_after"),
     created_at: ts("created_at").notNull(),
     last_recalled_at: ts("last_recalled_at"),
     status: factStatus("status").notNull(),

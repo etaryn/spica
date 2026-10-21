@@ -131,12 +131,16 @@ async function put(
   });
 }
 
-test("live ideas are open and newer than the cut-off, newest first", async () => {
+test("live ideas are open and not yet stale, newest first", async () => {
   const u = await createTestUser();
   const old = await put(u, "idea", new Date(T0.getTime() - 4 * DAY), "old");
+  await getTestDb()
+    .update(fact)
+    .set({ stale_after: new Date(T0.getTime() - DAY) })
+    .where(eq(fact.id, old.id));
   const a = await put(u, "idea", new Date(T0.getTime() - DAY), "a");
   const b = await put(u, "idea", T0, "b");
-  const ideas = await liveIdeas(getTestDb(), u, new Date(T0.getTime() - 3 * DAY), 5);
+  const ideas = await liveIdeas(getTestDb(), u, T0, 5);
   expect(ideas.map((i) => i.id)).toEqual([b.id, a.id]);
   expect(ideas.some((i) => i.id === old.id)).toBe(false);
 });
@@ -150,7 +154,7 @@ test("retiring is idempotent and touches only open ideas of this user", async ()
   expect(await retireIdeas(getTestDb(), u, [idea.id, event.id, foreign.id])).toBe(1);
   expect(await retireIdeas(getTestDb(), u, [idea.id])).toBe(0);
   expect(await retireIdeas(getTestDb(), u, [])).toBe(0);
-  expect(await liveIdeas(getTestDb(), other, new Date(0), 5)).toHaveLength(1);
+  expect(await liveIdeas(getTestDb(), other, T0, 5)).toHaveLength(1);
 });
 
 test("recent reflections, newest first", async () => {
@@ -201,7 +205,7 @@ test("group-scoped reflections, ideas and summaries are never read as hers", asy
     });
   }
   expect(await recentReflections(getTestDb(), u, 5)).toEqual([]);
-  expect(await liveIdeas(getTestDb(), u, new Date(0), 5)).toEqual([]);
+  expect(await liveIdeas(getTestDb(), u, T0, 5)).toEqual([]);
   expect(await liveSummary(getTestDb(), u)).toBeNull();
 });
 

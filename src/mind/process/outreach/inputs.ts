@@ -13,7 +13,6 @@ import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
 import { getTimezone } from "@/db/repos/user/users";
 import { liveIdeas } from "@/db/repos/user/user-mind";
 import { dueThreads, threadUserFacts } from "@/db/repos/user/threads";
-import { ideaCutoff } from "@/mind/process/user/ideate";
 import { recallable } from "@/mind/memory/core/retrieve";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { Deps } from "@/mind/platform/deps";
@@ -77,12 +76,7 @@ export async function loadCandidateInputs(
   )
     .filter(recallable)
     .map((m) => ({ id: m.id, content: m.content, salience: m.salience, depth: m.depth }));
-  const ideas = await liveIdeas(
-    db,
-    userId,
-    ideaCutoff(now, config.user_mind.ideate.ttl_days),
-    settings.user_idea_limit,
-  );
+  const ideas = await liveIdeas(db, userId, now, settings.user_idea_limit);
   const userIdeas = await Promise.all(
     ideas.map(async (idea) => ({
       id: idea.id,

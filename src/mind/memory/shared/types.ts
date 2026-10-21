@@ -18,6 +18,8 @@ export type RetrievedFact = {
   id: string;
   content: string;
   when: Date;
+  /** When she learned it, shown when that was another day than `when`. */
+  noted?: Date;
   onMind?: boolean;
   /** Hers only: how much of herself it reveals, 1–3. */
   depth?: number;

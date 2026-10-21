@@ -354,6 +354,25 @@ describe("composeReply", () => {
     expect(deps.llm.calls.at(-1)!.system).toContain("## Who you are lately");
   });
 
+  test("her snapshot is headed by its night, the same for two users, so it stays cached", async () => {
+    const deps = makeTestDeps();
+    await seedSnapshot(coreDepsOf(deps));
+    const selfSection = async (name: string) => {
+      const u = await createTestUser(name);
+      await composeReply(deps, u, {
+        turns: [await userTurn(deps, u, "hi")],
+        openQuestions: [],
+        flag: null,
+      });
+      const system = deps.llm.calls.at(-1)!.system;
+      const start = system.indexOf("## Who you are lately");
+      return system.slice(start, system.indexOf("\n## ", start + 1));
+    };
+    const a = await selfSection("a");
+    expect(a).toMatch(/^## Who you are lately\n\(written \w+ \d+ \w+, today\)\n/);
+    expect(await selfSection("b")).toBe(a);
+  });
+
   test("with no snapshot the reply still goes out, with no version", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
@@ -445,8 +464,8 @@ describe("composeReply", () => {
       return deps.llm.calls.at(-1)!.system;
     };
 
-    expect(await ask(null)).toContain(
-      "## Where things stand with them\n- Stand.\n- Live.\n- Feel.",
+    expect(await ask(null)).toMatch(
+      /## Where things stand with them\n\(written \w+ \d+ \w+, today\)\n- Stand\.\n- Live\.\n- Feel\./,
     );
 
     await getTestDb().delete(factTable).where(eq(factTable.id, summary.id));

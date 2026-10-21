@@ -34,7 +34,7 @@ import type { Pointed } from "@/mind/process/guard/categories";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
-import { dayInWords, relativeDate } from "@/mind/platform/relative-date";
+import { dayInWords, relativeDate, stamped, writtenOn } from "@/mind/platform/relative-date";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import {
@@ -323,6 +323,8 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   });
 
   const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
+  // Her notes are dated on her calendar, like her memories, so one prompt counts days one way.
+  const herZone = lifeTimezone(config.life, clock.now());
   // A malformed payload renders nothing rather than failing the reply.
   const summary = inCrisis
     ? Promise.resolve(null)
@@ -336,7 +338,9 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             ? await latestNonSensitiveSummary(db, userId)
             : await liveSummary(db, userId);
           const parsed = summaryPayload.safeParse(row?.payload);
-          return parsed.success ? parsed.data : null;
+          return parsed.success
+            ? { ...parsed.data, written: writtenOn(row!.created_at, clock.now(), herZone) }
+            : null;
         },
         null,
       );
@@ -352,20 +356,22 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             ? await latestNonSensitiveModel(db, userId)
             : await liveModel(db, userId);
           const parsed = modelPayload.safeParse(row?.payload);
-          return parsed.success ? parsed.data : null;
+          return parsed.success
+            ? { ...parsed.data, written: writtenOn(row!.created_at, clock.now(), herZone) }
+            : null;
         },
         null,
       );
   // An idea gets one chance in a reply; a reach-out has its own reason, and a crisis has none.
   const ideas =
     inCrisis || input.reachOut
-      ? Promise.resolve([] as { id: string; content: string }[])
+      ? Promise.resolve([] as { id: string; content: string; created_at: Date }[])
       : bounded(
           deps,
           "ideas",
           userId,
           () => liveIdeas(db, userId, clock.now(), config.user_mind.ideate.slot_max),
-          [] as { id: string; content: string }[],
+          [] as { id: string; content: string; created_at: Date }[],
         );
   // Their things together; nothing playful in a crisis.
   const idiolect = inCrisis
@@ -472,8 +478,14 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const prompt = assemblePrompt({
     valuesDoc: `${loadPersona(config).coreValues}\n\n${loadPrompt("reply", config.prompts.reply)}`,
     // The snapshot never stretches: only her memories can be drawn out as a hint.
+    // Stamped on her calendar, so it's the same for every user and stays the cached prefix.
     snapshot: latestSnapshot
-      ? snapshotWithin(latestSnapshot.content, selfLines, allowed.open)
+      ? stamped(
+          snapshotWithin(latestSnapshot.content, selfLines, allowed.open),
+          latestSnapshot.rendered_at,
+          clock.now(),
+          herZone,
+        )
       : null,
     coreMemories: herMemories,
     heldBack: heldBack ? "There's something here you're not ready to share with them yet." : null,
@@ -486,7 +498,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     yourDay: await yourDay,
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,
-    ideas: shownIdeas.map((i) => i.content),
+    ideas: shownIdeas.map((i) => `${i.content} (${writtenOn(i.created_at, clock.now(), herZone)})`),
     idiolect: shownIdiolect.map((i) => ({ content: i.content, started_by: i.payload.started_by })),
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,

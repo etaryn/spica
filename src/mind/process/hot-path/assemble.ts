@@ -9,7 +9,7 @@
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import type { ChatMessage, ReplyRequest } from "@/mind/platform/llm/types";
-import { relativeDate } from "@/mind/platform/relative-date";
+import { itemWhen, relativeDate } from "@/mind/platform/relative-date";
 import { HOUR } from "@/mind/platform/time";
 
 export interface AssembleInput {
@@ -25,9 +25,20 @@ export interface AssembleInput {
   /** Something of hers that came up which she isn't ready to share with them. */
   heldBack?: string | null;
   /** Her latest summary of where things stand with them; null before one exists or in a crisis. */
-  summary?: { where_things_stand: string; whats_live: string; how_i_feel: string } | null;
+  summary?: {
+    where_things_stand: string;
+    whats_live: string;
+    how_i_feel: string;
+    /** When she wrote it ("written Tuesday 13 January, 2 days ago"). */
+    written?: string | null;
+  } | null;
   /** Her latest read on them; null before one exists or in a crisis. */
-  read?: { how_they_are: string; what_they_want: string; what_lands: string } | null;
+  read?: {
+    how_they_are: string;
+    what_they_want: string;
+    what_lands: string;
+    written?: string | null;
+  } | null;
   /** Her day: what she's doing now and next. */
   yourDay?: string | null;
   retrieval: RetrievalResult;
@@ -74,21 +85,27 @@ export function assemblePrompt(input: AssembleInput): ReplyRequest {
     section(
       "Where things stand with them",
       input.summary
-        ? [input.summary.where_things_stand, input.summary.whats_live, input.summary.how_i_feel]
-            .map((line) => `- ${line}`)
-            .join("\n")
+        ? [
+            ...writtenLine(input.summary.written),
+            ...[
+              input.summary.where_things_stand,
+              input.summary.whats_live,
+              input.summary.how_i_feel,
+            ].map((line) => `- ${line}`),
+          ].join("\n")
         : null,
     ),
     section(
       "Your read on them",
       input.read
         ? [
-            `How they are: ${input.read.how_they_are}`,
-            `What they want: ${input.read.what_they_want}`,
-            `What lands: ${input.read.what_lands}`,
-          ]
-            .map((line) => `- ${line}`)
-            .join("\n")
+            ...writtenLine(input.read.written),
+            ...[
+              `How they are: ${input.read.how_they_are}`,
+              `What they want: ${input.read.what_they_want}`,
+              `What lands: ${input.read.what_lands}`,
+            ].map((line) => `- ${line}`),
+          ].join("\n")
         : null,
     ),
     section(
@@ -125,6 +142,9 @@ export function assemblePrompt(input: AssembleInput): ReplyRequest {
 function joinSections(sections: (string | null)[]): string {
   return sections.filter((s): s is string => s !== null).join("\n\n");
 }
+
+/** A note's written-on day, as its first line: what it calls today was that day's. */
+const writtenLine = (written: string | null | undefined) => (written ? [`(${written})`] : []);
 
 function section(heading: string, body: string | null): string | null {
   return body ? `## ${heading}\n${body}` : null;
@@ -167,7 +187,7 @@ function factList(title: string, facts: RetrievedFact[], now: Date, tz: string):
       Boolean,
     );
     const tail = notes.length ? ` (${notes.join("; ")})` : "";
-    return `- ${fact.content} (${relativeDate(fact.when, now, tz)})${onMind}${tail}`;
+    return `- ${fact.content} (${itemWhen(fact.when, fact.noted ?? null, now, tz)})${onMind}${tail}`;
   });
   return `### ${title}\n${lines.join("\n")}`;
 }

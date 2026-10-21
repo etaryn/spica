@@ -115,7 +115,7 @@ describe("assemblePrompt", () => {
     );
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(p.system).toContain("(yesterday)");
+    expect(p.system).toContain("(Sunday 11 January, yesterday)");
     expect(p.system).not.toContain("### About you");
   });
 });
@@ -404,7 +404,9 @@ test("'Your day' sits before 'You and them'; the preoccupation is labelled", () 
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## Your day"));
   expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## You and them"));
   expect(system.indexOf("## You and them")).toBeLessThan(system.indexOf("## What you remember"));
-  expect(system).toContain("Spica got the telescope images. (today) (on your mind lately)");
+  expect(system).toContain(
+    "Spica got the telescope images. (Monday 5 January, today) (on your mind lately)",
+  );
 });
 
 describe("reach-out slot 7b", () => {
@@ -470,7 +472,7 @@ test("sections come in the two-mind order", () => {
   expect(system).toContain("## Who you are lately\nSNAPSHOT");
   expect(system).toContain("### What you've told them");
   expect(system).toContain("### From your own life");
-  expect(system).toContain("HERLIFE (today) (on your mind lately)");
+  expect(system).toContain("HERLIFE (Monday 12 January, today) (on your mind lately)");
 });
 
 describe("ideas slot", () => {
@@ -533,13 +535,21 @@ test("her items carry share tags, theirs carry origin marks; held back has its o
     heldBack: "There's something here you're not ready to share with them yet.",
   });
   expect(system).toContain(
-    "- They hate mornings. (today) (from their profile card, a first impression)",
+    "- They hate mornings. (Monday 12 January, today) (from their profile card, a first impression)",
   );
-  expect(system).toContain("- They seem lonely. (today) (your own guess, they never said this)");
-  expect(system).toContain("- They have a dog. (today)\n");
-  expect(system).toContain("- She fears being forgotten. (today) (only hint at this)");
-  expect(system).toContain("- She loves Paper Moon. (today) (they already know this)");
-  expect(system).toContain("- She misses Alcor. (today) (you've hinted at this before)");
+  expect(system).toContain(
+    "- They seem lonely. (Monday 12 January, today) (your own guess, they never said this)",
+  );
+  expect(system).toContain("- They have a dog. (Monday 12 January, today)\n");
+  expect(system).toContain(
+    "- She fears being forgotten. (Monday 12 January, today) (only hint at this)",
+  );
+  expect(system).toContain(
+    "- She loves Paper Moon. (Monday 12 January, today) (they already know this)",
+  );
+  expect(system).toContain(
+    "- She misses Alcor. (Monday 12 January, today) (you've hinted at this before)",
+  );
   expect(system).toContain(
     "## Not ready to share\nThere's something here you're not ready to share with them yet.",
   );
@@ -576,5 +586,51 @@ test("how to text this one is the last section before why you're writing", () =>
   );
   expect(system.indexOf("## How to text this one")).toBeGreaterThan(
     system.indexOf("## They asked and you haven't answered yet"),
+  );
+});
+
+test("summary and read are headed by the day she wrote them; facts carry day and distance", () => {
+  const at = new Date("2026-01-15T10:00:00Z");
+  const D = 86_400_000;
+  const { system } = assemblePrompt({
+    ...base,
+    now: at,
+    recentTurns: [],
+    summary: {
+      where_things_stand: "a",
+      whats_live: "b",
+      how_i_feel: "c",
+      written: "written Tuesday 13 January, 2 days ago",
+    },
+    read: {
+      how_they_are: "x",
+      what_they_want: "y",
+      what_lands: "z",
+      written: "written Wednesday 14 January, yesterday",
+    },
+    retrieval: {
+      ...emptyRetrieval(),
+      facts: {
+        user: [
+          {
+            id: "f1",
+            content: "Their sister visits on Saturday 17 January.",
+            when: new Date(at.getTime() + 2 * D),
+            noted: new Date(at.getTime() - 2 * D),
+          },
+        ],
+        self: [],
+        shared: [],
+      },
+    },
+  });
+  expect(system).toContain(
+    "## Where things stand with them\n(written Tuesday 13 January, 2 days ago)\n- a",
+  );
+  expect(system).toContain(
+    "## Your read on them\n(written Wednesday 14 January, yesterday)\n- How they are: x",
+  );
+  expect(system).toContain(
+    "- Their sister visits on Saturday 17 January. (Saturday 17 January, in 2 days; noted Tuesday 13 January, 2 days ago)",
   );
 });

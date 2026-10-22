@@ -31,7 +31,7 @@ export class PgBossQueue implements JobQueue {
   start(): Promise<void> {
     this.ready ??= (async () => {
       await this.boss.start();
-      // Failed cold-path jobs retry with backoff; turns stay extracted=false until one succeeds.
+      // Only a busy cold-path lock throws (no prompt has run yet), so only that retries, with backoff.
       // createQueue is create-only (ON CONFLICT DO NOTHING), so a queue created by an earlier
       // deploy keeps its old policy unless we also updateQueue it here; updateQueue is a safe
       // no-op WHERE-matched UPDATE when the queue doesn't exist yet.

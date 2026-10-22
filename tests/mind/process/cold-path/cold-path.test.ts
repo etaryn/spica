@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
-import { runColdPath, LockBusyError } from "@/mind/process/cold-path/cold-path";
+import { runColdPath, runColdPathJob, LockBusyError } from "@/mind/process/cold-path/cold-path";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { getFact, insertFact } from "@/db/repos/user/facts";
 import { getParams } from "@/db/repos/user/relationship";
@@ -198,10 +198,26 @@ test("a busy per-user lock rejects with LockBusyError", async () => {
   await holder.query("SELECT pg_advisory_lock(hashtext($1))", [`cold_path:${u}`]);
   try {
     await expect(runColdPath(deps, job)).rejects.toBeInstanceOf(LockBusyError);
+    // The job still throws it, so pg-boss retries: no prompt has run yet.
+    await expect(runColdPathJob(deps, job)).rejects.toBeInstanceOf(LockBusyError);
   } finally {
     await holder.query("SELECT pg_advisory_unlock_all()");
     await holder.end();
   }
+});
+
+test("any other failure is never retried: the job logs it and counts it on the exchange", async () => {
+  const deps = depsWith();
+  deps.llm.handlers.extract = () => {
+    throw new Error("Failed to parse structured output");
+  };
+  const error = vi.spyOn(deps.log, "error");
+  const u = await createTestUser();
+  const { ct, job } = await exchange(u, "my dog Biscuit", "cute", 0);
+  await expect(runColdPathJob(deps, job)).resolves.toBeUndefined();
+  expect(error).toHaveBeenCalledWith("cold_path failed", { userId: u, error: "Error" });
+  const row = await getTurn(getTestDb(), u, ct.id);
+  expect(row).toMatchObject({ extracted: false, extract_attempts: 1 });
 });
 
 test("context turns are passed as context; crisis exchange marks facts sensitive; recall write-back applied", async () => {

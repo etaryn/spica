@@ -1,8 +1,8 @@
 /**
  * Her day plan: the busy and downtime blocks of one of her local days, at any hour (she has no
  * night), shared by every user. The `life_plan` job makes sure today and tomorrow exist. The
- * model writes the plan, code validates it with one retry, and a fallback plan means she always
- * has a day.
+ * model writes the plan once and code validates it; a rejected plan is never regenerated, so a
+ * structural problem shows, and the fallback plan means she always has a day.
  */
 import { z } from "zod";
 import type { LifeBlock, LifePlan } from "@/db/schema";
@@ -161,15 +161,13 @@ async function generatePlan(
   const instructions = loadPrompt("life/plan", config.prompts.life_plan);
   const system = `${persona}\n\n${instructions}`;
 
-  let input = buildPlanInput(date, previous);
-
-  for (let attempt = 1; attempt <= config.life.plan_attempts && canCall(); attempt++) {
+  if (canCall()) {
     try {
       const raw = await llm.classifyJson({
         purpose: "life_plan",
         model: "life",
         system,
-        input,
+        input: buildPlanInput(date, previous),
         schema: PlanSchema,
         timeoutMs: config.models.structured_timeout_ms,
         maxTokens: config.life.plan_max_tokens,
@@ -177,10 +175,9 @@ async function generatePlan(
 
       const checked = validatePlan(raw, config.life, previous.at(-1)?.plan ?? null);
       if (checked.ok) return { plan: checked.plan, source: "model" };
-
-      input = `${buildPlanInput(date, previous)}\n\nYour previous plan was rejected: ${checked.violations.join("; ")}. Fix these.`;
+      log.error("life plan rejected", { date, violations: checked.violations });
     } catch (e) {
-      log.error("life plan generation failed", { date, attempt, error: errorName(e) });
+      log.error("life plan generation failed", { date, error: errorName(e) });
     }
   }
 
@@ -189,7 +186,7 @@ async function generatePlan(
 
 /**
  * The `life_plan` job: makes sure her today and tomorrow have a plan. Safe to run repeatedly. Each
- * missing day is one budgeted run; over budget, or after two failed attempts, she gets the
+ * missing day is one budgeted run; over budget, or when its one attempt fails, she gets the
  * fallback plan, so she always has a day.
  */
 export async function ensurePlans(deps: CoreDeps, now: Date): Promise<{ created: string[] }> {

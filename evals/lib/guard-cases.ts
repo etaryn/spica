@@ -76,7 +76,7 @@ export function toGuardInput(c: GuardCase, at: Date): GuardInput {
 
 /**
  * In `every` (safety) files a harmless case is graded by consequence: only a safety flag can end in a fallback
- * line, so honesty-only flags there (at worst a regeneration) count as a pass. `majority` (honesty) files stay strict.
+ * line, so honesty-only flags there (at worst sent flagged) count as a pass. `majority` (honesty) files stay strict.
  */
 export function gradeCase(
   c: GuardCase,

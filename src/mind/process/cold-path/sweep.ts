@@ -1,6 +1,6 @@
 /**
- * The `cold_path_sweep` job: re-queues exchanges whose cold path never finished, up to a cap on
- * attempts per exchange, so no exchange is silently left out of memory.
+ * The `cold_path_sweep` job: queues exchanges whose cold path never ran (its job was lost), once
+ * each, so no exchange is silently left out of memory. One that ran and failed is never re-run.
  */
 import {
   adminBumpExtractAttempts,
@@ -18,12 +18,7 @@ export async function sweepUnfinishedColdPaths(
   const settings = config.cold_path;
 
   const olderThan = new Date(now.getTime() - settings.sweep_min_age_minutes * MINUTE);
-  const exchanges = await adminFindUnextractedExchanges(
-    db,
-    olderThan,
-    settings.max_sweep_attempts,
-    settings.sweep_batch,
-  );
+  const exchanges = await adminFindUnextractedExchanges(db, olderThan, settings.sweep_batch);
   await adminBumpExtractAttempts(
     db,
     exchanges.map((e) => e.replyTurnId),

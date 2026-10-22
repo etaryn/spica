@@ -81,7 +81,6 @@
   "cold_path": {
     "retry_limit": 3,
     "retry_delay_seconds": 30,
-    "max_sweep_attempts": 3,
     "sweep_cron": "30 4 * * *",
     "sweep_min_age_minutes": 10,
     "sweep_batch": 500
@@ -123,7 +122,6 @@
   "guard": {
     "enabled": true,
     "timeout_ms": 6000,
-    "retry_limit": 1,
     "log_timeout_ms": 2000,
     "self_claim_similarity": 0.5,
     "grounding_timeout_ms": 2000,
@@ -220,14 +218,13 @@
     "judge_turn": "v1",
     "guard": "v6",
     "guard_crisis": "v1",
-    "guard_corrective": "v2",
     "guard_fallback": "v2",
     "turn_judge": "v2",
     "relationship_summary": "v3",
     "relationship_openness": "v1",
     "relationship_stage": "v1",
     "life_plan": "v5",
-    "life_event": "v6",
+    "life_event": "v7",
     "life_availability": "v2",
     "core_state_line": "v4",
     "voice_how_to_text": "v1",
@@ -458,7 +455,6 @@
     "your_day_events": 3,
     "plan_max_tokens": 1200,
     "plan_label_max_chars": 80,
-    "plan_attempts": 2,
     "max_busy_blocks": 3,
     "min_busy": 0.3,
     "fallback_busy": 0.5,
@@ -627,7 +623,6 @@
       "event_salience": 0.4,
       "event_confidence": 1.0,
       "entity_salience": 0.5,
-      "regen_attempts": 2,
       "new_entity_days": 7,
       "high_stakes_min_days": 14,
       "canon_entities": ["Alcor"]

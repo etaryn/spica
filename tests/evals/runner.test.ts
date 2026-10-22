@@ -340,7 +340,7 @@ test("the false-recall judge sees session timing and the onboarding profile as k
   );
 });
 
-test("a transient cold-path failure is retried like pg-boss would (up to cold_path.retry_limit)", async () => {
+test("a cold-path failure is never retried: it fails the script so it shows", async () => {
   const llm = new FakeLLMProvider({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
@@ -363,8 +363,8 @@ test("a transient cold-path failure is retried like pg-boss would (up to cold_pa
     real: false,
     annotate: false,
   });
-  expect(r.status).toBe("pass");
-  expect(calls).toBe(2);
+  expect(r.status).toBe("error");
+  expect(calls).toBe(1);
 });
 
 test("false-recall: every category quoting her words counts as a violation", async () => {

@@ -4,7 +4,7 @@
  * core, encode, then update the
  * relationship, including her feelings toward them. It all runs in one transaction holding a
  * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
- * reconcile at once. It throws on failure so pg-boss retries, and it never delays a reply.
+ * reconcile at once. It never delays a reply, and a failure is never retried (`runColdPathJob`).
  */
 import { noteRelativeWords } from "@/mind/platform/relative-date";
 import type { GroundRef } from "@/mind/memory/core/types";
@@ -12,7 +12,12 @@ import { recordDisclosures } from "@/mind/memory/user/disclosure";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { nearFacts } from "@/db/repos/user/facts";
-import { getTurnsByIds, turnsUpTo, type Turn } from "@/db/repos/user/session-log";
+import {
+  bumpExtractAttempts,
+  getTurnsByIds,
+  turnsUpTo,
+  type Turn,
+} from "@/db/repos/user/session-log";
 import { listOpenThreads } from "@/db/repos/user/threads";
 import { retireIdeas } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
@@ -42,6 +47,28 @@ export type ColdPathOutcome = {
 };
 
 type CandidateFact = { fact: ExtractedFact; source: "turn" | "inferred" };
+
+/**
+ * The `cold_path` job. Only a busy lock throws for pg-boss to retry, since no prompt has run yet.
+ * Any other failure is logged and counted on the exchange, so neither pg-boss nor the sweep runs
+ * its prompts again and a structural problem stays visible.
+ */
+export async function runColdPathJob(deps: Deps, job: ColdPathJob): Promise<void> {
+  try {
+    await runColdPath(deps, job);
+  } catch (e) {
+    if (e instanceof LockBusyError) throw e;
+    deps.log.error("cold_path failed", { userId: job.userId, error: errorName(e) });
+    // Never thrown either: a throw here would have pg-boss re-run the prompts.
+    if (job.replyTurnId)
+      await bumpExtractAttempts(deps.db, job.userId, job.replyTurnId).catch((err: unknown) =>
+        deps.log.error("cold_path failure count failed", {
+          userId: job.userId,
+          error: errorName(err),
+        }),
+      );
+  }
+}
 
 export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
   const { db, config, clock, log } = deps;

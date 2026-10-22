@@ -210,3 +210,8 @@ code itself.
 | 2026-10-21 | Threads render their next check-in day in the user mind, not when they opened | The open date never moved a slip in the runs; the next check-in is what a loop needs to keep "tomorrow" out. |
 | 2026-10-21 | "this week" and "later this week" are dated to that week's Friday, like "end of the week" | Dated to the moment said, an idea about the span expired that night; the alternative (only future sources count) would keep "good luck today" ideas alive into the next day. |
 | 2026-10-21 | The guard dates each remembered fact in their zone, like NOW | One calendar per check: the guard compares days instead of counting them. |
+| 2026-10-22 | A busy cold-path lock still retries through pg-boss; every other cold-path failure is logged and counted, never retried | No prompt has run when the lock is busy, so its retry can't hide a structural failure; without it a lock clash would drop the exchange. |
+| 2026-10-22 | The sweep queues only exchanges with `extract_attempts` 0 (the job was lost), once | A failed run is counted on the exchange, so the sweep can tell lost from failed and never re-runs a failure. |
+| 2026-10-22 | A database failure before the reply row exists still re-buffers the turn for a retry; only a failed generation gives up at once | The database retry isn't a prompt failure; it re-composes only because nothing was stored. |
+| 2026-10-22 | `judge_log.attempt`, `life_event_log.attempt` and the `regenerated` guard outcome stay, written as 1 / never produced | Older rows hold real regeneration counts and outcomes; dropping them would erase that history from the inspector. |
+| 2026-10-22 | The eval runner's judge retry (`retrying(1, …)`) stays | It grades a run and isn't part of her pipeline. |

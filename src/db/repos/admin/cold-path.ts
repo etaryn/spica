@@ -1,18 +1,13 @@
 /**
- * Cross-user queries for the cold-path sweep: exchanges whose cold path never finished, and
- * their attempt counts.
+ * Cross-user queries for the cold-path sweep: exchanges whose cold path never ran, and marking
+ * them as queued.
  */
 import { inArray, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { session_log } from "@/db/schema";
 
-/** System job, unscoped by design: exchanges whose extraction never completed, with every user turn the reply answered. */
-export async function adminFindUnextractedExchanges(
-  db: Db,
-  olderThan: Date,
-  maxAttempts: number,
-  limit: number,
-) {
+/** System job, unscoped by design: unextracted exchanges no cold path has run or failed on yet, with every user turn the reply answered. */
+export async function adminFindUnextractedExchanges(db: Db, olderThan: Date, limit: number) {
   const res = await db.execute(sql`
     SELECT c.user_id, c.id AS reply_turn_id,
       (SELECT array_agg(x.id ORDER BY x.created_at, x.id) FROM session_log x
@@ -22,7 +17,7 @@ export async function adminFindUnextractedExchanges(
       ) AS user_turn_ids
     FROM session_log c JOIN session_log u ON u.id = c.reply_to AND u.user_id = c.user_id
     WHERE c.role = 'companion' AND (c.extracted = false OR u.extracted = false)
-      AND c.extract_attempts < ${maxAttempts} AND c.created_at < ${olderThan}
+      AND c.extract_attempts = 0 AND c.created_at < ${olderThan}
     ORDER BY c.created_at ASC
     LIMIT ${limit}`);
   return res.rows.map((r) => ({

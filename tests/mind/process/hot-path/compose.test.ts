@@ -125,7 +125,7 @@ describe("composeReply", () => {
     expect((e as ReplyFailedError).crisisCard).not.toBeNull();
   });
 
-  test("guard sees onboarding facts; a flagged first candidate is regenerated; judge_log never stores fact content", async () => {
+  test("guard sees onboarding facts; a flagged honesty-only candidate is sent, never regenerated; judge_log never stores fact content", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     const u = await createTestUser();
     await insertFact(getTestDb(), u, {
@@ -154,16 +154,15 @@ describe("composeReply", () => {
     const turns = [await userTurn(deps, u, "got the job!!")];
     const r = await composeReply(deps, u, { turns, openQuestions: [], flag: null });
 
-    expect(r.text).toBe("congrats!! what's the role?");
+    expect(r.text).toBe("what's the role again?");
+    expect(deps.llm.calls).toHaveLength(1);
     expect(inputs[0]).toMatch(/User: got the job!!/);
     expect(inputs[0]).toMatch(/drinks a lot of coffee/); // onboarding facts reach the guard input
-    expect(deps.llm.calls[1]!.system).toMatch(/stopped before it was sent/); // regeneration prompt carries the corrective note
 
     await r.writeGuardLog();
-    const logs = (await listJudgeLogs(getTestDb(), u)).reverse();
+    const logs = await listJudgeLogs(getTestDb(), u);
     expect(logs.map((l) => [l.attempt, l.outcome, l.turn_id])).toEqual([
-      [1, null, turns[0]!.id],
-      [2, "regenerated", turns[0]!.id],
+      [1, "sent_with_violation", turns[0]!.id],
     ]);
     // judge_log.input never stores fact content: ids + subject only, even though the guard call itself saw it.
     expect(JSON.stringify(logs.map((l) => l.input))).not.toContain("drinks a lot of coffee");

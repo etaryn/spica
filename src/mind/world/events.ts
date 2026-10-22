@@ -1,8 +1,8 @@
 /**
  * Her events, generated once for her whole world, not per user. A candidate is generated from her
  * plan, her recent episodes and the people she knows, checked by rules (how often someone new
- * appears, how often something big happens), and reconciled against her core memory; a duplicate
- * or contradiction is regenerated. A planned event comes with her thought about it now (the plan
+ * appears, how often something big happens), and reconciled against her core memory. A rejected
+ * candidate is logged and never regenerated, so a structural problem shows. A planned event comes with her thought about it now (the plan
  * is on her mind before it happens); a spontaneous one has none, since nobody sees a surprise
  * coming. Read-only: the world tick applies what's accepted.
  */
@@ -50,7 +50,6 @@ export type EventDecision =
   | "invalid";
 export type EventAttempt = {
   key: string;
-  attempt: number;
   candidate: unknown;
   decision: EventDecision;
   targetMemoryId: string | null;
@@ -166,7 +165,6 @@ async function coreEventContext(
 export function buildEventInput(
   ctx: CoreEventContext,
   day: string,
-  rejected: { candidate: unknown; reason: string }[],
   now: Date,
   tz: string,
   targetChars: number,
@@ -198,10 +196,6 @@ export function buildEventInput(
   parts.push(
     `Write the event as one plain sentence, under ${targetChars} characters: what happened, no feelings.`,
   );
-  if (rejected.length)
-    parts.push(
-      `Rejected attempts (write something different):\n${rejected.map((r) => `- ${JSON.stringify(r.candidate)}: ${r.reason}`).join("\n")}`,
-    );
   return parts.join("\n\n");
 }
 
@@ -241,18 +235,10 @@ export function checkRules(
   return null;
 }
 
-const REASON: Record<Exclude<EventDecision, "accepted" | "resolves">, string> = {
-  invalid:
-    "it wasn't a valid event (one sentence, a time HH:MM between 00:00 and 23:59, and a thought if it's planned)",
-  "rule:new_entity": "it introduces a new person too soon; use people she already knows",
-  "rule:high_stakes": "it's high-stakes too soon after the last one; keep it small",
-  duplicate: "it repeats something that already happened to her",
-  contradicts: "it contradicts something that already happened to her",
-};
-
 /**
- * Her events for one day: generate → rules → reconcile against her core memory, rejecting
- * duplicates and contradictions and regenerating up to `core.world.regen_attempts` times. The
+ * Her events for one day: generate → rules → reconcile against her core memory. Each drawn event
+ * gets one candidate; an invalid, rule-breaking, duplicate or contradicting one is logged and the
+ * slot stays empty that day. The
  * draws depend on the day alone, so every user shares them. An LLM or embed error propagates
  * (the tick retries next hour).
  */
@@ -313,100 +299,93 @@ export async function generateCoreEvents(
 
   for (const [i, kept] of draws.entries()) {
     if (!kept) continue;
-    const rejected: { candidate: unknown; reason: string }[] = [];
-    for (let attempt = 1; attempt <= 1 + cfg.regen_attempts; attempt++) {
-      const key = `${i}:${attempt}`;
-      const useInjected = !!injected && i === 0 && attempt === 1;
-      if (!useInjected && !canCall()) return { accepted, attempts, budgetExhausted: true };
-      const raw: EventCandidate = useInjected
-        ? {
-            content: injected!.content,
-            at: cfg.injected_event_at,
-            valence: injected!.valence,
-            stakes: "low",
-            entity_names: [],
-            kind: injected!.kind ?? "spontaneous",
-            thought: injected!.thought ?? null,
-          }
-        : await llm.classifyJson({
-            purpose: "life_event",
-            model: "life",
-            system,
-            input: buildEventInput(
-              ctx,
-              day,
-              rejected,
-              now,
-              lifeTimezone(config.life, now),
-              cfg.event_target_chars,
-            ),
-            schema: EventSchema,
-            timeoutMs: config.models.structured_timeout_ms,
-            maxTokens: cfg.event_max_tokens,
-          });
-      const source = useInjected ? ("injected" as const) : ("model" as const);
-      const reject = (decision: keyof typeof REASON, targetMemoryId: string | null = null) => {
-        attempts.push({ key, attempt, candidate: raw, decision, targetMemoryId, source });
-        rejected.push({ candidate: raw, reason: REASON[decision] });
-      };
-      const c = checkEvent(raw, cfg.event_max_chars);
-      if (!c) {
-        reject("invalid");
-        continue;
-      }
-      const rule = checkRules(c, { known, lastNewEntityAt, lastHighStakesAt }, now, cfg);
-      if (rule) {
-        reject(rule);
-        continue;
-      }
-      const [embedding] = await embedder.embed([c.content], "document");
-      if (!embedding) throw new Error("embedder returned no vector");
-      const neighbors = await deps.core.memory.near(
-        embedding,
-        config.reconcile.neighbor_k,
-        config.reconcile.contradiction_similarity,
-      );
-      if (neighbors.length && !canCall()) return { accepted, attempts, budgetExhausted: true };
-      const decision = await reconcileAgainstNeighbours(
-        deps,
-        { label: "episode", content: c.content },
-        neighbors,
-      );
-      if (decision.relation === "duplicate" || decision.relation === "contradicts") {
-        reject(decision.relation, decision.targetId);
-        continue;
-      }
-      attempts.push({
-        key,
-        attempt,
-        candidate: c,
-        decision: decision.relation === "resolves" ? "resolves" : "accepted",
-        targetMemoryId: decision.targetId,
-        source,
-      });
-      let thoughtEmbedding: number[] | null = null;
-      if (c.thought !== null) {
-        [thoughtEmbedding = null] = await embedder.embed([c.thought], "document");
-        if (!thoughtEmbedding) throw new Error("embedder returned no vector");
-      }
-      accepted.push({
-        key,
-        candidate: c,
-        embedding,
-        thoughtEmbedding,
-        at: lifeInstant(config.life, day, c.at),
-        goalRef: useInjected ? null : (goal?.id ?? null),
-        subject: useInjected ? null : subjectKey(subject),
-        resolvesMemoryId: decision.relation === "resolves" ? decision.targetId : null,
-        fallthrough: useInjected ? (injected!.fallthrough ?? null) : null,
-      });
-      if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {
-        lastNewEntityAt = now;
-        for (const name of c.entity_names) known.add(normalizeName(name));
-      }
-      if (c.stakes === "high") lastHighStakesAt = now;
-      break;
+    const key = `${i}`;
+    const useInjected = !!injected && i === 0;
+    if (!useInjected && !canCall()) return { accepted, attempts, budgetExhausted: true };
+    const raw: EventCandidate = useInjected
+      ? {
+          content: injected!.content,
+          at: cfg.injected_event_at,
+          valence: injected!.valence,
+          stakes: "low",
+          entity_names: [],
+          kind: injected!.kind ?? "spontaneous",
+          thought: injected!.thought ?? null,
+        }
+      : await llm.classifyJson({
+          purpose: "life_event",
+          model: "life",
+          system,
+          input: buildEventInput(
+            ctx,
+            day,
+            now,
+            lifeTimezone(config.life, now),
+            cfg.event_target_chars,
+          ),
+          schema: EventSchema,
+          timeoutMs: config.models.structured_timeout_ms,
+          maxTokens: cfg.event_max_tokens,
+        });
+    const source = useInjected ? ("injected" as const) : ("model" as const);
+    const reject = (decision: EventDecision, targetMemoryId: string | null = null) => {
+      attempts.push({ key, candidate: raw, decision, targetMemoryId, source });
+    };
+    const c = checkEvent(raw, cfg.event_max_chars);
+    if (!c) {
+      reject("invalid");
+      continue;
     }
+    const rule = checkRules(c, { known, lastNewEntityAt, lastHighStakesAt }, now, cfg);
+    if (rule) {
+      reject(rule);
+      continue;
+    }
+    const [embedding] = await embedder.embed([c.content], "document");
+    if (!embedding) throw new Error("embedder returned no vector");
+    const neighbors = await deps.core.memory.near(
+      embedding,
+      config.reconcile.neighbor_k,
+      config.reconcile.contradiction_similarity,
+    );
+    if (neighbors.length && !canCall()) return { accepted, attempts, budgetExhausted: true };
+    const decision = await reconcileAgainstNeighbours(
+      deps,
+      { label: "episode", content: c.content },
+      neighbors,
+    );
+    if (decision.relation === "duplicate" || decision.relation === "contradicts") {
+      reject(decision.relation, decision.targetId);
+      continue;
+    }
+    attempts.push({
+      key,
+      candidate: c,
+      decision: decision.relation === "resolves" ? "resolves" : "accepted",
+      targetMemoryId: decision.targetId,
+      source,
+    });
+    let thoughtEmbedding: number[] | null = null;
+    if (c.thought !== null) {
+      [thoughtEmbedding = null] = await embedder.embed([c.thought], "document");
+      if (!thoughtEmbedding) throw new Error("embedder returned no vector");
+    }
+    accepted.push({
+      key,
+      candidate: c,
+      embedding,
+      thoughtEmbedding,
+      at: lifeInstant(config.life, day, c.at),
+      goalRef: useInjected ? null : (goal?.id ?? null),
+      subject: useInjected ? null : subjectKey(subject),
+      resolvesMemoryId: decision.relation === "resolves" ? decision.targetId : null,
+      fallthrough: useInjected ? (injected!.fallthrough ?? null) : null,
+    });
+    if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {
+      lastNewEntityAt = now;
+      for (const name of c.entity_names) known.add(normalizeName(name));
+    }
+    if (c.stakes === "high") lastHighStakesAt = now;
   }
   return { accepted, attempts, budgetExhausted: false };
 }

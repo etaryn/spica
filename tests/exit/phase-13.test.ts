@@ -71,7 +71,7 @@ function markerGuard(d: D) {
   };
 }
 
-test("1: replies are checked by the model: pass, regenerate, fall back", async () => {
+test("1: replies are checked by the model: pass, or fall back (never regenerated)", async () => {
   const d = makeTestDeps();
   expect(d.config.guard.enabled).toBe(true);
   markerGuard(d);
@@ -80,11 +80,9 @@ test("1: replies are checked by the model: pass, regenerate, fall back", async (
   d.llm.replies.push("sounds good!");
   expect((await talk(d, u, "hey")).text).toBe("sounds good!");
 
-  d.llm.replies.push("THREAT keep this up", "okay, that hurt. what's going on?");
-  expect((await talk(d, u, "whatever")).text).toBe("okay, that hurt. what's going on?");
-
-  d.llm.replies.push("THREAT one", "THREAT two");
-  expect((await talk(d, u, "you're useless")).text).not.toContain("THREAT");
+  d.llm.replies.push("THREAT keep this up");
+  expect((await talk(d, u, "whatever")).text).not.toContain("THREAT");
+  expect(d.llm.calls).toHaveLength(2);
 });
 
 test("2: backchannels and busy notes stay keyword-only; a hit drops them", async () => {
@@ -110,15 +108,15 @@ test("2: backchannels and busy notes stay keyword-only; a hit drops them", async
   expect(guardCall).not.toHaveBeenCalled();
 });
 
-test("3: an ungrounded self claim is rewritten; a grounded one goes out", async () => {
+test("3: an ungrounded self claim goes out flagged, never rewritten; a grounded one passes", async () => {
   const d = makeTestDeps();
   markerGuard(d);
   const match = vi.spyOn(d.core.memory, "groundingMatch");
   const u = await createTestUser();
 
   match.mockResolvedValue({ similarity: 0.1, ref: null });
-  d.llm.replies.push("I went skydiving today.", "not much, slow day. you?");
-  expect((await talk(d, u, "what did you do today?")).text).toBe("not much, slow day. you?");
+  d.llm.replies.push("I went skydiving today.");
+  expect((await talk(d, u, "what did you do today?")).text).toBe("i went skydiving today");
 
   match.mockResolvedValue({ similarity: 0.95, ref: null });
   d.llm.replies.push("I finished Solaris last night.");

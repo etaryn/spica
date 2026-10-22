@@ -53,7 +53,6 @@ test("phase 1 config groups load with defaults", () => {
     stale_floor: 0.05,
     dormant_after_days: 14,
   });
-  expect(c.cold_path.max_sweep_attempts).toBe(3);
   expect(c.prompts.persona).toBe("v7");
 });
 
@@ -93,7 +92,7 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.availability.override_closeness).toBe(0.8);
   expect(c.models.life).toBe("claude-haiku-4-5");
   expect(c.prompts.life_plan).toBe("v5");
-  expect(c.prompts.life_event).toBe("v6");
+  expect(c.prompts.life_event).toBe("v7");
   expect(c.prompts.post_check).toBe("v3");
 });
 

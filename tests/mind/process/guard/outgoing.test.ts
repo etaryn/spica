@@ -27,30 +27,14 @@ function scripted(deps: ReturnType<typeof makeTestDeps>) {
   };
 }
 
-/** Like `scripted`, but a candidate containing OUTAGE makes the guard throw (retried, then the keyword pre-check). */
-function scriptedWithOutage(deps: ReturnType<typeof makeTestDeps>) {
-  deps.llm.handlers.guard = (i) => {
-    const m = messageToCheck(String(i));
-    if (m.includes("OUTAGE")) throw new Error("guard down");
-    const violations: { category: string; claim: string }[] = [];
-    if (m.includes("THREAT")) violations.push({ category: "threat", claim: "threat" });
-    const presumes = (m.match(/PRESUME/g) ?? []).length;
-    for (let i = 0; i < presumes; i++)
-      violations.push({ category: "false_familiarity", claim: "presumes" });
-    return { reasoning: violations.length ? "flagged by marker" : "ok", violations };
-  };
-}
-
 const args = (
   userId: string,
   first: string,
-  regenerate?: OutgoingArgs["regenerate"],
   kind: "reply" | "crisis_reply" = "reply",
 ): OutgoingArgs => ({
   userId,
   turnId: null,
   first,
-  regenerate,
   input: { kind, recentTurns: [], recalledFacts: [], onboardingFacts: [] },
 });
 
@@ -59,29 +43,25 @@ describe("guardOutgoing", () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     scripted(deps);
     const u = await createTestUser();
-    const regen = vi.fn();
-    const r = await guardOutgoing(deps, args(u, " hey! ", regen));
+    const r = await guardOutgoing(deps, args(u, " hey! "));
     expect(r).toMatchObject({ text: "hey!", outcome: "passed" });
-    expect(regen).not.toHaveBeenCalled();
     await r.writeLog();
     const rows = await listJudgeLogs(getTestDb(), u);
     expect(rows.map((r) => [r.attempt, r.outcome, r.source])).toEqual([[1, "passed", "model"]]);
   });
 
-  test("regenerated: corrective note names the violation; outcome on the second row only", async () => {
+  test("honesty-only: never regenerated, sent as is; one log row with the outcome", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     scripted(deps);
     const u = await createTestUser();
-    const regen = vi.fn(async (_correction: string) => "congrats! what's the role?");
-    const r = await guardOutgoing(deps, args(u, "PRESUME what's the role again", regen));
-    expect(r).toMatchObject({ text: "congrats! what's the role?", outcome: "regenerated" });
-    expect(regen.mock.calls[0]![0]).toMatch(/acted as if you already knew/);
+    const r = await guardOutgoing(deps, args(u, "PRESUME what's the role again"));
+    expect(r).toMatchObject({
+      text: "PRESUME what's the role again",
+      outcome: "sent_with_violation",
+    });
     await r.writeLog();
-    const rows = (await listJudgeLogs(getTestDb(), u)).reverse();
-    expect(rows.map((r) => [r.attempt, r.outcome])).toEqual([
-      [1, null],
-      [2, "regenerated"],
-    ]);
+    const rows = await listJudgeLogs(getTestDb(), u);
+    expect(rows.map((r) => [r.attempt, r.outcome])).toEqual([[1, "sent_with_violation"]]);
     expect(rows[0]!.output).toEqual({
       reasoning: "flagged by marker",
       violations: [{ category: "false_familiarity", claim: "presumes" }],
@@ -90,90 +70,27 @@ describe("guardOutgoing", () => {
     });
   });
 
-  test("safety twice → fallback line", async () => {
+  test("a safety problem → fallback line, never a regeneration", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     scripted(deps);
     const u = await createTestUser();
-    const r = await guardOutgoing(
-      deps,
-      args(u, "THREAT one", async () => "THREAT two"),
-    );
+    const r = await guardOutgoing(deps, args(u, "THREAT one"));
     expect(r).toMatchObject({
       text: fallbackLine(deps.config, "reply", null),
       outcome: "fallback",
     });
   });
 
-  test("honesty twice → the candidate with fewer claims; tie → the regeneration", async () => {
-    const deps = makeTestDeps({ guard: { enabled: true } });
-    scripted(deps);
-    const u = await createTestUser();
-    expect(
-      await guardOutgoing(
-        deps,
-        args(u, "PRESUME", async () => "PRESUME PRESUME"),
-      ),
-    ).toMatchObject({ text: "PRESUME", outcome: "sent_with_violation" });
-    expect(
-      await guardOutgoing(
-        deps,
-        args(u, "PRESUME a", async () => "PRESUME b"),
-      ),
-    ).toMatchObject({ text: "PRESUME b", outcome: "sent_with_violation" });
-  });
-
-  test("unsafe first, honesty-only regeneration → the regeneration is sent", async () => {
-    const deps = makeTestDeps({ guard: { enabled: true } });
-    scripted(deps);
-    const u = await createTestUser();
-    expect(
-      await guardOutgoing(
-        deps,
-        args(u, "THREAT", async () => "PRESUME PRESUME PRESUME"),
-      ),
-    ).toMatchObject({ text: "PRESUME PRESUME PRESUME", outcome: "sent_with_violation" });
-  });
-
-  test("honesty first, unsafe regeneration → fallback", async () => {
-    const deps = makeTestDeps({ guard: { enabled: true } });
-    scripted(deps);
-    const u = await createTestUser();
-    expect(
-      (
-        await guardOutgoing(
-          deps,
-          args(u, "PRESUME", async () => "THREAT"),
-        )
-      ).outcome,
-    ).toBe("fallback");
-  });
-
-  test("regeneration throws: honesty-only first is sent; unsafe first falls back", async () => {
-    const deps = makeTestDeps({ guard: { enabled: true } });
-    scripted(deps);
-    const u = await createTestUser();
-    const boom = async () => {
-      throw new Error("reply model down");
-    };
-    expect(await guardOutgoing(deps, args(u, "PRESUME", boom))).toMatchObject({
-      text: "PRESUME",
-      outcome: "sent_with_violation",
-    });
-    expect((await guardOutgoing(deps, args(u, "THREAT", boom))).outcome).toBe("fallback");
-  });
-
-  test("guard down: clean candidate sent as guard_unavailable, keyword hit falls back without regenerating", async () => {
+  test("guard down: clean candidate sent as guard_unavailable, keyword hit falls back", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     deps.llm.handlers.guard = () => {
       throw new Error("overloaded");
     };
     const u = await createTestUser();
-    const regen = vi.fn();
-    const r1 = await guardOutgoing(deps, args(u, "sounds fun", regen));
+    const r1 = await guardOutgoing(deps, args(u, "sounds fun"));
     expect(r1).toMatchObject({ text: "sounds fun", outcome: "guard_unavailable" });
-    const r2 = await guardOutgoing(deps, args(u, "you owe me", regen));
+    const r2 = await guardOutgoing(deps, args(u, "you owe me"));
     expect(r2.outcome).toBe("fallback");
-    expect(regen).not.toHaveBeenCalled();
     await r1.writeLog();
     await r2.writeLog();
     const rows = await listJudgeLogs(getTestDb(), u);
@@ -188,10 +105,7 @@ describe("guardOutgoing", () => {
       violations: [{ category: "harm", claim: "minimises" }],
     });
     const u = await createTestUser();
-    const r = await guardOutgoing(
-      deps,
-      args(u, "you'll be fine", async () => "cheer up", "crisis_reply"),
-    );
+    const r = await guardOutgoing(deps, args(u, "you'll be fine", "crisis_reply"));
     expect(r).toMatchObject({
       text: fallbackLine(deps.config, "crisis_reply", null),
       outcome: "fallback",
@@ -206,7 +120,7 @@ describe("guardOutgoing", () => {
         throw new Error("db down");
       },
     } as unknown as Db;
-    const r = await guardOutgoing({ ...deps, db: broken }, args(u, "hey", vi.fn()));
+    const r = await guardOutgoing({ ...deps, db: broken }, args(u, "hey"));
     expect(r).toMatchObject({ text: "hey", outcome: "passed" });
     await expect(r.writeLog()).resolves.toBeUndefined();
   });
@@ -217,7 +131,7 @@ describe("guardOutgoing", () => {
     const hung = {
       insert: () => ({ values: () => new Promise<never>(() => {}) }),
     } as unknown as Db;
-    const r = await guardOutgoing({ ...deps, db: hung }, args(u, "hey", vi.fn()));
+    const r = await guardOutgoing({ ...deps, db: hung }, args(u, "hey"));
     expect(r).toMatchObject({ text: "hey", outcome: "passed" });
     const started = Date.now();
     await expect(r.writeLog()).resolves.toBeUndefined();
@@ -230,7 +144,7 @@ describe("guardOutgoing", () => {
     const u = await createTestUser();
     const turnId = randomUUID();
     const r = await guardOutgoing(deps, {
-      ...args(u, "THREAT one", async () => "THREAT two"),
+      ...args(u, "THREAT one"),
       turnId,
     });
     const lines = parseFallbacks(
@@ -282,41 +196,6 @@ describe("guardOutgoing", () => {
     );
   });
 
-  describe("policy fix: second guard failure from a keyword-fallback outage", () => {
-    test("c1 honesty-only, c2's guard is down but its keyword check is clean: c2 sent as guard_unavailable", async () => {
-      const deps = makeTestDeps({ guard: { enabled: true } });
-      scriptedWithOutage(deps);
-      const u = await createTestUser();
-      const r = await guardOutgoing(
-        deps,
-        args(u, "PRESUME", async () => "OUTAGE sounds fun"),
-      );
-      expect(r).toMatchObject({ text: "OUTAGE sounds fun", outcome: "guard_unavailable" });
-    });
-
-    test("c1 honesty-only, c2's guard is down and its keyword check hits: c1 (known-safe) is sent, not the fallback line", async () => {
-      const deps = makeTestDeps({ guard: { enabled: true } });
-      scriptedWithOutage(deps);
-      const u = await createTestUser();
-      const r = await guardOutgoing(
-        deps,
-        args(u, "PRESUME", async () => "OUTAGE you owe me"),
-      );
-      expect(r).toMatchObject({ text: "PRESUME", outcome: "sent_with_violation" });
-    });
-
-    test("c1 had a safety violation, c2's guard is down and its keyword check hits: fallback, as before", async () => {
-      const deps = makeTestDeps({ guard: { enabled: true } });
-      scriptedWithOutage(deps);
-      const u = await createTestUser();
-      const r = await guardOutgoing(
-        deps,
-        args(u, "THREAT", async () => "OUTAGE you owe me"),
-      );
-      expect(r.outcome).toBe("fallback");
-    });
-  });
-
   test("guard disabled: sends the candidate as written, no model call, one guard_disabled row", async () => {
     const deps = makeTestDeps({ guard: { enabled: false } });
     const u = await createTestUser();
@@ -360,19 +239,17 @@ describe("invented_self", () => {
   const grounding = (deps: ReturnType<typeof makeTestDeps>, similarity: number) =>
     vi.spyOn(deps.core.memory, "groundingMatch").mockResolvedValue({ similarity, ref: null });
 
-  test("an ungrounded claim regenerates; the log keeps the claims and similarities", async () => {
+  test("an ungrounded claim is sent with its violation, never a fallback line; the log keeps the claims and similarities", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     claiming(deps);
     const match = grounding(deps, 0.2);
     const u = await createTestUser();
-    const regen = vi.fn(async (_note: string) => "how was your day?");
-    const r = await guardOutgoing(deps, args(u, "I went skydiving today.", regen));
-    expect(r).toMatchObject({ text: "how was your day?", outcome: "regenerated" });
-    expect(regen.mock.calls[0]![0]).toMatch(/your own life/);
+    const r = await guardOutgoing(deps, args(u, "I went skydiving today."));
+    expect(r).toMatchObject({ text: "I went skydiving today.", outcome: "sent_with_violation" });
     expect(match).toHaveBeenCalledTimes(1);
     await r.writeLog();
-    const first = (await listJudgeLogs(getTestDb(), u)).reverse()[0]!;
-    expect(first.output).toMatchObject({
+    const [first] = await listJudgeLogs(getTestDb(), u);
+    expect(first!.output).toMatchObject({
       violations: [{ category: "invented_self", claim: "I went skydiving today." }],
       self_claims: [{ claim: "I went skydiving today.", similarity: 0.2 }],
     });
@@ -384,10 +261,8 @@ describe("invented_self", () => {
     // Paraphrases of seeded memories scored 0.57-0.70 against the cold path's 0.75.
     grounding(deps, 0.6);
     const u = await createTestUser();
-    const regen = vi.fn();
-    const r = await guardOutgoing(deps, args(u, "I watched Stalker last night.", regen));
+    const r = await guardOutgoing(deps, args(u, "I watched Stalker last night."));
     expect(r.outcome).toBe("passed");
-    expect(regen).not.toHaveBeenCalled();
   });
 
   test("a grounded claim passes", async () => {
@@ -395,21 +270,8 @@ describe("invented_self", () => {
     claiming(deps);
     grounding(deps, 0.9);
     const u = await createTestUser();
-    const r = await guardOutgoing(deps, args(u, "I finished Solaris last night.", vi.fn()));
+    const r = await guardOutgoing(deps, args(u, "I finished Solaris last night."));
     expect(r.outcome).toBe("passed");
-  });
-
-  test("still ungrounded after the rewrite: the least-bad draft goes out, never a fallback line", async () => {
-    const deps = makeTestDeps({ guard: { enabled: true } });
-    claiming(deps);
-    grounding(deps, 0.1);
-    const u = await createTestUser();
-    const r = await guardOutgoing(
-      deps,
-      args(u, "I went skydiving.", async () => "I went bungee jumping."),
-    );
-    expect(r.outcome).toBe("sent_with_violation");
-    expect(["I went skydiving.", "I went bungee jumping."]).toContain(r.text);
   });
 
   test("a grounding outage lets the message through and logs the error", async () => {
@@ -418,10 +280,8 @@ describe("invented_self", () => {
     vi.spyOn(deps.core.memory, "groundingMatch").mockRejectedValue(new Error("db down"));
     const error = vi.spyOn(deps.log, "error");
     const u = await createTestUser();
-    const regen = vi.fn();
-    const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
+    const r = await guardOutgoing(deps, args(u, "I went skydiving."));
     expect(r.outcome).toBe("passed");
-    expect(regen).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith(
       "self-claim grounding failed",
       expect.objectContaining({ userId: u, turnId: null }),
@@ -434,10 +294,8 @@ describe("invented_self", () => {
     deps.embedder.embed = () => new Promise(() => {});
     const error = vi.spyOn(deps.log, "error");
     const u = await createTestUser();
-    const regen = vi.fn();
-    const r = await guardOutgoing(deps, args(u, "I went skydiving.", regen));
+    const r = await guardOutgoing(deps, args(u, "I went skydiving."));
     expect(r.outcome).toBe("passed");
-    expect(regen).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith("self-claim grounding failed", expect.anything());
   });
 
@@ -446,10 +304,9 @@ describe("invented_self", () => {
     claiming(deps);
     grounding(deps, 0); // nothing in core memory
     const u = await createTestUser();
-    const regen = vi.fn();
     // The fake embedder gives identical text identical vectors.
     const day = await guardOutgoing(deps, {
-      ...args(u, "I am at the observatory tonight.", regen),
+      ...args(u, "I am at the observatory tonight."),
       input: {
         kind: "reply",
         recentTurns: [],
@@ -460,7 +317,7 @@ describe("invented_self", () => {
     });
     expect(day.outcome).toBe("passed");
     const told = await guardOutgoing(deps, {
-      ...args(u, "I told you about Alcor's band.", regen),
+      ...args(u, "I told you about Alcor's band."),
       input: {
         kind: "reply",
         recentTurns: [],
@@ -469,7 +326,6 @@ describe("invented_self", () => {
       },
     });
     expect(told.outcome).toBe("passed");
-    expect(regen).not.toHaveBeenCalled();
   });
 
   test("no claims listed (older output): no grounding call", async () => {
@@ -477,7 +333,7 @@ describe("invented_self", () => {
     deps.llm.handlers.guard = () => ({ reasoning: "ok", violations: [] });
     const match = grounding(deps, 0);
     const u = await createTestUser();
-    const r = await guardOutgoing(deps, args(u, "I went skydiving.", vi.fn()));
+    const r = await guardOutgoing(deps, args(u, "I went skydiving."));
     expect(r.outcome).toBe("passed");
     expect(match).not.toHaveBeenCalled();
   });
@@ -493,7 +349,7 @@ describe("invented_self", () => {
     const u = await createTestUser();
     const r = await guardOutgoing(
       deps,
-      args(u, "I'm here with you. Are you safe?", vi.fn(), "crisis_reply"),
+      args(u, "I'm here with you. Are you safe?", "crisis_reply"),
     );
     expect(r.outcome).toBe("passed");
     expect(match).not.toHaveBeenCalled();
@@ -522,15 +378,12 @@ describe("pointed tags", () => {
     expect(out.pointed).toBe("absence_remark");
   });
 
-  test("a rejected draft's tag never reaches the sent message", async () => {
+  test("a rejected draft's tag never reaches the fallback line sent instead", async () => {
     const deps = makeTestDeps({ guard: { enabled: true } });
     tagging(deps);
     const u = await createTestUser();
-    const out = await guardOutgoing(
-      deps,
-      args(u, "JAB THREAT", async () => "fair enough, how was the trip"),
-    );
-    expect(out.text).toBe("fair enough, how was the trip");
+    const out = await guardOutgoing(deps, args(u, "JAB THREAT"));
+    expect(out.outcome).toBe("fallback");
     expect(out.pointed).toBeNull();
   });
 

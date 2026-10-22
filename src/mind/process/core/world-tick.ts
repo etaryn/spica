@@ -184,7 +184,7 @@ async function applyDay(
     await tx.world.logEventAttempts(
       attempts.map((a) => ({
         life_day: day,
-        attempt: a.attempt,
+        attempt: 1, // one candidate per event; the column keeps older rows' regeneration counts
         candidate: { ...(a.candidate as object), source: a.source },
         decision: staleGoalKeys.has(a.key) ? "stale_goal" : a.decision,
         target_memory_id: a.targetMemoryId,

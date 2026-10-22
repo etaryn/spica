@@ -158,6 +158,18 @@ export async function markExtracted(db: Db, userId: string, ids: string[]): Prom
     .where(and(eq(session_log.user_id, userId), inArray(session_log.id, ids)));
 }
 
+/** Counts a failed cold path on its reply turn, so the sweep never runs that exchange again. */
+export async function bumpExtractAttempts(
+  db: Db,
+  userId: string,
+  replyTurnId: string,
+): Promise<void> {
+  await db
+    .update(session_log)
+    .set({ extract_attempts: sql`${session_log.extract_attempts} + 1` })
+    .where(and(eq(session_log.user_id, userId), eq(session_log.id, replyTurnId)));
+}
+
 /** The reply that answers `turn`, if any: a companion turn whose `reply_to` turn is at or after `turn` (a buffered reply answers every earlier turn). */
 export async function answeringReply(db: Db, userId: string, turn: Turn): Promise<Turn | null> {
   const res = await db.execute(sql`

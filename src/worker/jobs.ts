@@ -25,7 +25,7 @@ import { errorName } from "@/mind/platform/errors";
 /**
  * Wraps a pg-boss work handler so a failure is logged with ids and the error name only, then
  * rethrown as a bare `Error(name)`: pg-boss persists the thrown error in the job's output.
- * Still a throw, so retryable failures (e.g. LockBusyError) are retried.
+ * Still a throw, so a queue with retries left (a busy cold-path lock) retries it.
  */
 export function scrubErrors<J extends { id: string }>(
   queue: string,

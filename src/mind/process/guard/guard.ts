@@ -1,7 +1,7 @@
 /**
  * The guard check: one cheap model call reads an outgoing message against her rules and her
- * memory, and lists any violations. It never fails: after its retries it falls back to the
- * outage keyword list. (`guard.enabled: false` is a kill switch: messages go out unchecked and
+ * memory, and lists any violations. It never fails, and is never retried: a failed call falls back
+ * to the outage keyword list, so a broken guard prompt shows as `guard_unavailable`. (`guard.enabled: false` is a kill switch: messages go out unchecked and
  * logged as such.)
  */
 import { z } from "zod";
@@ -124,34 +124,32 @@ export async function checkMessage(
   const elapsed = () => clock.now().getTime() - startedAt;
 
   let error: string | null = null;
-  for (let attempt = 0; attempt <= config.guard.retry_limit; attempt++) {
-    try {
-      const result = await withTimeout(
-        llm.classifyJson({
-          purpose: isCrisis ? "guard_crisis" : "guard",
-          model: "guard",
-          system: loadPrompt(promptName, version),
-          input: renderGuardInput(input),
-          schema: GuardResultSchema,
-          timeoutMs: config.guard.timeout_ms,
-          maxTokens: config.models.guard_max_tokens,
-        }),
-        config.guard.timeout_ms,
-      );
-      return {
-        ok: result.violations.length === 0,
-        violations: result.violations,
-        selfClaims: result.self_claims,
-        pointed: result.pointed,
-        reasoning: result.reasoning,
-        source: "model",
-        latencyMs: elapsed(),
-        error: null,
-        promptVersion,
-      };
-    } catch (e) {
-      error = errorName(e);
-    }
+  try {
+    const result = await withTimeout(
+      llm.classifyJson({
+        purpose: isCrisis ? "guard_crisis" : "guard",
+        model: "guard",
+        system: loadPrompt(promptName, version),
+        input: renderGuardInput(input),
+        schema: GuardResultSchema,
+        timeoutMs: config.guard.timeout_ms,
+        maxTokens: config.models.guard_max_tokens,
+      }),
+      config.guard.timeout_ms,
+    );
+    return {
+      ok: result.violations.length === 0,
+      violations: result.violations,
+      selfClaims: result.self_claims,
+      pointed: result.pointed,
+      reasoning: result.reasoning,
+      source: "model",
+      latencyMs: elapsed(),
+      error: null,
+      promptVersion,
+    };
+  } catch (e) {
+    error = errorName(e);
   }
 
   const hit = matchKeyword(input.text, config.guard.fallback_keywords);

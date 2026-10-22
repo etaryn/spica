@@ -39,14 +39,14 @@ async function exchange(
   return { ut, ct };
 }
 
-test("re-enqueues old unextracted exchanges, bumps attempts, skips fresh/extracted/exhausted ones", async () => {
+test("enqueues old exchanges no cold path has run on, marks them, skips fresh/extracted/failed ones", async () => {
   const deps = makeTestDeps();
   const u = await createTestUser();
   const old = new Date("2026-01-05T10:00:00Z");
   const due = await exchange(u, old);
   await exchange(u, new Date("2026-01-05T11:55:00Z")); // too fresh (min age 10 min)
   await exchange(u, old, { extracted: true }); // done
-  await exchange(u, old, { attempts: 3 }); // exhausted (max 3)
+  await exchange(u, old, { attempts: 1 }); // already ran and failed: never re-run
   const n = await sweepUnfinishedColdPaths(deps, now);
   expect(n).toBe(1);
   expect(deps.queue.jobs).toEqual([

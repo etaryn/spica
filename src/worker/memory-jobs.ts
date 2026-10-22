@@ -6,7 +6,7 @@ import type { PgBoss } from "pg-boss";
 import { decayPass } from "@/mind/memory/user/decay";
 import type { Deps } from "@/mind/platform/deps";
 import { COLD_PATH_QUEUE, type ColdPathJob, DECAY_QUEUE, SWEEP_QUEUE } from "@/mind/platform/jobs";
-import { runColdPath } from "@/mind/process/cold-path/cold-path";
+import { runColdPathJob } from "@/mind/process/cold-path/cold-path";
 import { sweepUnfinishedColdPaths } from "@/mind/process/cold-path/sweep";
 import { scrubErrors } from "./jobs";
 
@@ -16,7 +16,7 @@ export async function registerMemoryJobs(boss: PgBoss, deps: Deps): Promise<void
   await boss.work<ColdPathJob>(
     COLD_PATH_QUEUE,
     scrubErrors(COLD_PATH_QUEUE, deps.log, async (jobs) => {
-      for (const job of jobs) await runColdPath(deps, job.data);
+      for (const job of jobs) await runColdPathJob(deps, job.data);
     }),
   );
   await boss.work(

@@ -48,7 +48,7 @@ export function decisionLine(d: TraceDecision): string {
   if (d.kind === "guard") {
     const violations = (o.violations ?? o.keyword_violations ?? []) as unknown[];
     const parts = [
-      `outcome: ${d.outcome ?? "(regenerated)"}`,
+      `outcome: ${d.outcome ?? "(none)"}`,
       `violations: ${violations.length ? fmt(violations) : "none"}`,
       ...(Array.isArray(o.self_claims) && o.self_claims.length
         ? [`self claims: ${selfClaims(o.self_claims as GroundedClaim[])}`]

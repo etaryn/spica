@@ -63,25 +63,25 @@ test("ensurePlans creates today and tomorrow once, in her dates", async () => {
   expect((await getLifeDay(getTestDb(), "2026-01-06"))?.source).toBe("model");
 });
 
-test("an invalid plan is retried with its violations, then replaced by the fallback", async () => {
+test("an invalid plan is never retried: one call per day, then the fallback", async () => {
   const deps = makeTestDeps({ life: { plan_context_days: 0 } });
   deps.llm.handlers.life_plan = () => ({ blocks: [] });
   await ensurePlans(coreDepsOf(deps), new Date("2026-01-05T02:00:00Z"));
   const calls = deps.llm.structuredCalls.filter((c) => c.purpose === "life_plan");
-  expect(calls).toHaveLength(4); // 2 days × 2 attempts
-  expect(calls[1]!.input).toMatch(/rejected/);
+  expect(calls).toHaveLength(2); // 2 days × 1 attempt
   const row = await getLifeDay(getTestDb(), "2026-01-05");
   expect(row?.source).toBe("fallback");
   expect(row?.plan).toEqual(fallbackPlan(deps.config.life));
 });
 
-test("an LLM error on both attempts also falls back", async () => {
+test("an LLM error also falls back, without a retry", async () => {
   const deps = makeTestDeps();
   deps.llm.handlers.life_plan = () => {
     throw new Error("down");
   };
   await ensurePlans(coreDepsOf(deps), new Date("2026-01-05T02:00:00Z"));
   expect((await getLifeDay(getTestDb(), "2026-01-05"))?.source).toBe("fallback");
+  expect(deps.llm.structuredCalls.filter((c) => c.purpose === "life_plan")).toHaveLength(2);
 });
 
 test("each generated plan writes a life_plan trace with its calls", async () => {

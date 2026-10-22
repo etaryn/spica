@@ -11,7 +11,7 @@
   each writes `core_loop_trace` within `core.daily_call_budget`. ESLint stops core, world and
   shared code importing user, process or admin-repo code: don't work around it.
 - Message flow: POST → crisis check ∥ turn judge → `turn-taking/` → `hot-path/` (`composeFrom`:
-  retrieve → assemble → one generation) → `guard/` (one check, one regeneration, fallback) →
+  retrieve → assemble → one generation) → `guard/` (one check, no regeneration, fallback) →
   `shapeText` → pacing/`availability/` → SSE + push → `cold-path/` (extract → reconcile → update
   state; tone nudges the user's affect, never core mood → big-event check). A reach-out is a reply
   with a synthetic trigger through the same hot path.

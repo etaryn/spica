@@ -137,9 +137,10 @@ async function sendWhileTyping(
 
   try {
     const composed = await composing;
+    // A failed reply is never composed again, so a structural problem in it stays visible.
     if (!composed.ok) {
       log.error("turn reply failed", { userId, turnId: last.id, error: errorName(composed.error) });
-      return await retryOrGiveUp(deps, job, committed, composed.error);
+      return await giveUp(deps, userId, committed);
     }
 
     const reply = composed.value;
@@ -245,9 +246,8 @@ async function releaseSending(deps: Deps, userId: string, epoch: number): Promis
 }
 
 /**
- * A failure after commit and before the reply row exists must not strand the committed turns.
- * They go back in the buffer with a retry queued. Past `retry_limit` it gives up instead, and
- * since no reply row exists yet, `reply_failed` is the right thing to tell the client.
+ * A database failure after commit and before the reply row exists must not strand the committed
+ * turns. They go back in the buffer with a retry queued. Past `retry_limit` it gives up instead.
  */
 async function retryOrGiveUp(
   deps: Deps,
@@ -283,7 +283,17 @@ async function retryOrGiveUp(
     return "retry";
   }
 
-  const cleared = await mutateState(db, userId, now, (state) =>
+  return giveUp(deps, userId, committed);
+}
+
+/** No reply row exists yet, so `reply_failed` is the right thing to tell the client. */
+async function giveUp(
+  deps: Deps,
+  userId: string,
+  committed: Committed,
+): Promise<"abandoned" | "failed"> {
+  const now = deps.clock.now();
+  const cleared = await mutateState(deps.db, userId, now, (state) =>
     T.giveUp(state, { epoch: committed.epoch, now }),
   );
   if (!cleared) return "abandoned";

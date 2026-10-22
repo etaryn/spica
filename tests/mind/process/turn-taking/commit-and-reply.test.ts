@@ -207,17 +207,15 @@ describe("runTurnTimer", () => {
     expect(companions[0]!.safety_flag?.flagged).toBe(true);
   });
 
-  test("generation failure: turns go back to the buffer and retry; after retry_limit, reply_failed is emitted", async () => {
+  test("generation failure is never retried: reply_failed is emitted at once", async () => {
     const deps = makeTestDeps({ turn: { retry_limit: 1 } });
     const u = await createTestUser();
     const m = msg("hello there friend");
     await receiveMessage(deps, u, m);
+    const timers = deps.queue.jobs.filter((j) => j.name === "turn_timer").length;
     deps.llm.failReplies = 5;
-    expect(await runTurnTimer(deps, lastTimer(deps))).toBe("retry");
-    expect((await getState(getTestDb(), u))!.buffer_turn_ids).toEqual([m.clientMessageId]);
-    const retry = lastTimer(deps);
-    expect(retry.attempt).toBe(1);
-    expect(await runTurnTimer(deps, retry)).toBe("failed");
+    expect(await runTurnTimer(deps, lastTimer(deps))).toBe("failed");
+    expect(deps.queue.jobs.filter((j) => j.name === "turn_timer")).toHaveLength(timers);
     expect((await getState(getTestDb(), u))!).toMatchObject({
       buffer_turn_ids: [],
       inflight_turn_ids: [],
@@ -305,8 +303,8 @@ describe("runTurnTimer", () => {
     expect(events.at(-1)).toEqual({ type: "typing", on: false });
   });
 
-  test("round 1 fix: a crisis during the final failed retry suppresses reply_failed (the crisis reply already covers the turns)", async () => {
-    const deps = makeTestDeps({ turn: { retry_limit: 0 } });
+  test("round 1 fix: a crisis during a failed reply suppresses reply_failed (the crisis reply already covers the turns)", async () => {
+    const deps = makeTestDeps();
     const u = await createTestUser();
     const m = msg("hello there friend");
     await receiveMessage(deps, u, m);

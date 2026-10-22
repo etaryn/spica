@@ -24,15 +24,8 @@ const due = (j: QueuedJob, now: number) => j.startAfter?.getTime() ?? now;
 async function drainColdPath(deps: Deps, queue: RecordingQueue): Promise<void> {
   for (const job of queue.drain((j) => j.name === COLD_PATH_QUEUE)) {
     if (job.name !== COLD_PATH_QUEUE) continue;
-    // pg-boss retries a failed cold_path job up to cold_path.retry_limit times; do the same here.
-    for (let attempt = 0; ; attempt++) {
-      try {
-        await runColdPath(deps, job.data);
-        break;
-      } catch (e) {
-        if (attempt >= deps.config.cold_path.retry_limit) throw e;
-      }
-    }
+    // Never retried, as in production; a failure fails the script so it shows.
+    await runColdPath(deps, job.data);
   }
   await drainUserMind(deps, queue);
 }

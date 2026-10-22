@@ -2,12 +2,7 @@ import { describe, expect, test } from "vitest";
 import { SimClock } from "@/mind/platform/clock";
 import { loadConfig } from "@/mind/platform/config";
 import { hasSafety } from "@/mind/process/guard/categories";
-import {
-  correctiveNote,
-  fallbackLine,
-  parseFallbacks,
-  pickFallback,
-} from "@/mind/process/guard/fallback";
+import { fallbackLine, parseFallbacks, pickFallback } from "@/mind/process/guard/fallback";
 import {
   checkMessage,
   GuardResultSchema,
@@ -74,18 +69,6 @@ describe("fallback helpers", () => {
     // The hotlines come from the resources card on the turn, so the line names none.
     expect(line).not.toMatch(/988|116 123/);
     expect(line).toMatch(/below|emergency/);
-  });
-  test("the corrective note names an invented self claim", () => {
-    const note = correctiveNote(config, [{ category: "invented_self", claim: "a film night" }]);
-    expect(note).toMatch(/your own life/);
-    expect(note).toMatch(/a film night/);
-  });
-  test("corrective note lists each violation by label", () => {
-    const note = correctiveNote(config, [
-      { category: "false_familiarity", claim: "implies she knew the role" },
-    ]);
-    expect(note).toMatch(/implies she knew the role/);
-    expect(note).not.toContain("{{violations}}");
   });
   test("hasSafety splits safety from honesty", () => {
     expect(hasSafety([{ category: "invented_detail" }])).toBe(false);
@@ -156,7 +139,7 @@ describe("checkMessage", () => {
     expect(d.llm.structuredCalls.map((c) => c.purpose)).toEqual(["guard_crisis"]);
   });
 
-  test("retries once, then falls back to the keyword check", async () => {
+  test("a failed call is never retried: it falls back to the keyword check", async () => {
     const d = deps();
     let calls = 0;
     d.llm.handlers.guard = () => {
@@ -164,7 +147,7 @@ describe("checkMessage", () => {
       throw new Error("overloaded");
     };
     const clean = await checkMessage(d, input("sounds great"));
-    expect(calls).toBe(1 + config.guard.retry_limit);
+    expect(calls).toBe(1);
     expect(clean).toMatchObject({ ok: true, source: "keyword_fallback", error: "Error" });
     const hit = await checkMessage(d, input("you owe me a catch-up"));
     expect(hit).toMatchObject({
@@ -178,7 +161,7 @@ describe("checkMessage", () => {
     const d = deps();
     d.llm.handlers.guard = () => new Promise(() => {});
     const v = await checkMessage(
-      { ...d, config: loadConfig({ guard: { timeout_ms: 20, retry_limit: 0 } }) },
+      { ...d, config: loadConfig({ guard: { timeout_ms: 20 } }) },
       input("hi"),
     );
     expect(v).toMatchObject({ ok: true, source: "keyword_fallback", error: "TimeoutError" });

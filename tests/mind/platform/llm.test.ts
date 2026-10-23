@@ -107,7 +107,7 @@ describe("AnthropicProvider.classifyJson", () => {
       maxTokens: 256,
     });
     expect(out).toEqual({ flag: true });
-    expect(parse.mock.calls[0]![0]).toMatchObject({ model: "claude-haiku-4-5", max_tokens: 256 });
+    expect(parse.mock.calls[0]![0]).toMatchObject({ model: "claude-haiku-5-5", max_tokens: 256 });
     expect(parse.mock.calls[0]![0].system).toBe("s");
     expect(parse.mock.calls[0]![1]).toMatchObject({ timeout: 3000, maxRetries: 0 });
   });
@@ -203,12 +203,13 @@ describe("structured model roles", () => {
 });
 
 describe("judge effort and thinking", () => {
-  test("judge calls carry judge_effort and judge_thinking; other structured calls carry neither", async () => {
+  test("judge calls carry judge_effort and judge_thinking; other structured calls carry structured_thinking and no effort", async () => {
     const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
     const p = new AnthropicProvider(client, {
       ...models,
       judge_effort: "low",
       judge_thinking: "disabled",
+      structured_thinking: "adaptive",
     });
     const schema = z.object({ ok: z.boolean() });
     await p.classifyJson({
@@ -236,7 +237,7 @@ describe("judge effort and thinking", () => {
     });
     expect(judge.output_config.format).toBeDefined();
     expect(guard.output_config).not.toHaveProperty("effort");
-    expect(guard).not.toHaveProperty("thinking");
+    expect(guard).toMatchObject({ thinking: { type: "adaptive" } });
   });
 
   test("a null effort sends none, so Haiku can serve the reply or judge role", async () => {
@@ -315,7 +316,7 @@ describe("usage sink", () => {
       },
       {
         purpose: "extract",
-        model: "claude-haiku-4-5",
+        model: "claude-haiku-5-5",
         input_tokens: 100,
         output_tokens: 20,
         cache_read_input_tokens: 0,

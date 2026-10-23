@@ -48,16 +48,18 @@ const models = z.object({
   guard_max_tokens: positiveInt,
   turn_judge_max_tokens: positiveInt,
   structured_timeout_ms: positiveInt,
-  // null sends no `effort` at all (Haiku 4.5 rejects it).
+  // null sends no `effort` at all.
   reply_effort: effort.nullable(),
   reply_thinking: thinking,
   judge_effort: effort.nullable(),
   judge_thinking: thinking,
+  // Every structured call but the judge's.
+  structured_thinking: thinking,
   reply_timeout_ms: positiveInt,
   reply_max_retries: countFromZero,
   // Caches the reply's shared prefix (values + snapshot); "off" is the kill switch.
   reply_cache: cacheTtl,
-  // Extraction's fixed prefix (prompt + output schema) is ~4.6k tokens, past Haiku's 4,096 minimum.
+  // Extraction's fixed prefix (prompt + output schema) is ~4.6k tokens, past the cache minimum.
   extract_cache: cacheTtl,
 });
 

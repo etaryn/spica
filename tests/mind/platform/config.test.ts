@@ -38,8 +38,8 @@ describe("loadConfig", () => {
 
 test("phase 1 config groups load with defaults", () => {
   const c = loadConfig();
-  expect(c.models.extract).toBe("claude-haiku-4-5");
-  expect(c.models.judge).toBe("claude-haiku-4-5");
+  expect(c.models.extract).toBe("claude-haiku-5-5");
+  expect(c.models.judge).toBe("claude-haiku-5-5");
   expect(c.retrieval).toMatchObject({
     candidate_pool: 200,
     top_n: 12,
@@ -90,7 +90,7 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.outreach.her_day_limit).toBe(5);
   expect(c.core.state.bands.energy).toEqual([0.35, 0.7]);
   expect(c.availability.override_closeness).toBe(0.8);
-  expect(c.models.life).toBe("claude-haiku-4-5");
+  expect(c.models.life).toBe("claude-haiku-5-5");
   expect(c.prompts.life_plan).toBe("v5");
   expect(c.prompts.life_event).toBe("v7");
   expect(c.prompts.post_check).toBe("v3");

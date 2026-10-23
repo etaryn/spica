@@ -69,9 +69,11 @@ export class AnthropicProvider implements LLMProvider {
     onUsage,
   }: ClassifyRequest<T>): Promise<T> {
     const modelId = this.modelIdFor(model);
-    // Only the judge takes effort and thinking settings; a null effort sends none (Haiku rejects it).
+    // Only the judge takes an effort; a null effort sends none. Thinking is always sent, since the
+    // model thinks by default when the request leaves it out.
     const isJudge = model === "judge";
     const effort = isJudge ? this.models.judge_effort : null;
+    const thinking = isJudge ? this.models.judge_thinking : this.models.structured_thinking;
     const cacheControl = cacheControlFor(cache);
 
     const response = await this.client.messages.parse(
@@ -84,7 +86,7 @@ export class AnthropicProvider implements LLMProvider {
         messages: [{ role: "user", content: input }],
         // If the SDK's zod helper needs a narrower type, cast here rather than widening the interface.
         output_config: { format: zodOutputFormat(schema as never), ...(effort ? { effort } : {}) },
-        ...(isJudge ? { thinking: { type: this.models.judge_thinking } } : {}),
+        thinking: { type: thinking },
       },
       { timeout: timeoutMs, maxRetries },
     );

@@ -1,0 +1,22 @@
+name: core-one-day
+description: >
+  One of her days with the core loops and her real world: a model day plan, a daily event, a
+  planned event she looks forward to and one nightly snapshot. A cheap smoke run for a model swap
+  (pnpm exit:core-day).
+profile: none
+relationship_seed: {}
+config:
+  core: { world: { event_probability: 1 } }
+life:
+  plan: model
+  inject:
+    - { day: 0, content: "Spica's telescope booking for tonight came through.", valence: 0.6, kind: planned, thought: "Spica is looking forward to the telescope session tonight." }
+  until: "day 1 12:00"
+sessions:
+  - at: "day 0 10:00"
+    turns: ["hey, how's your week going?"]
+assertions:
+  - { type: core, snapshot_versions: { min: 1 } }
+  - { type: core, drift_rows: { values: 1, diff: 1, trend: 1 } }
+  - type: core
+    loops_done: [life_plan, life_event, core_appraise, core_reflect, core_render_snapshot, core_drift_watch]

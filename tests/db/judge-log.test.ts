@@ -19,7 +19,7 @@ const row = (over: Partial<NewJudgeLog> = {}): NewJudgeLog => ({
   outcome: null,
   source: "model",
   latency_ms: 5,
-  model: "claude-haiku-4-5",
+  model: "claude-haiku-5-5",
   prompt_version: "guard@v1",
   created_at: new Date("2026-01-05T09:00:00Z"),
   ...over,

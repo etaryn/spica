@@ -215,3 +215,5 @@ code itself.
 | 2026-10-22 | A database failure before the reply row exists still re-buffers the turn for a retry; only a failed generation gives up at once | The database retry isn't a prompt failure; it re-composes only because nothing was stored. |
 | 2026-10-22 | `judge_log.attempt`, `life_event_log.attempt` and the `regenerated` guard outcome stay, written as 1 / never produced | Older rows hold real regeneration counts and outcomes; dropping them would erase that history from the inspector. |
 | 2026-10-22 | The eval runner's judge retry (`retrying(1, …)`) stays | It grades a run and isn't part of her pipeline. |
+| 2026-10-23 | Every structured call sends `thinking` (`models.structured_thinking`, default `disabled`) | Haiku 5.5 thinks when a request leaves thinking out; off keeps the 4.5 behaviour and cost, so the swap changes only the model. |
+| 2026-10-23 | `exit:core-day` (`evals/scripts/core-one-day.yaml`) runs one day of core loops and her real world | A cheap smoke run for a model swap; `exit:core` stays the two-week run. |

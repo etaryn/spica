@@ -16,13 +16,13 @@ const { values: args } = parseArgs({
       default: "voice-texting-styles,guard-provoke-banter,guard-provoke-absence",
     },
     a: { type: "string", default: "claude-sonnet-5" },
-    b: { type: "string", default: "claude-haiku-4-5" },
+    b: { type: "string", default: "claude-haiku-5-5" },
   },
 });
 
-/** Haiku rejects `effort`, so a model that isn't Sonnet or Opus runs without it. */
+/** Haiku 4.5 rejects `effort`, so it runs without one. */
 function overrides(model: string): string {
-  const effort = /sonnet|opus/.test(model) ? {} : { reply_effort: null };
+  const effort = /haiku-4/.test(model) ? { reply_effort: null } : {};
   return JSON.stringify({ models: { reply: model, ...effort } });
 }
 

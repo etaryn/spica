@@ -112,7 +112,7 @@ test("resolveFactContents: user-scoped and view-time; a forgotten fact's judge_l
       outcome: "passed",
       source: "model",
       latency_ms: 5,
-      model: "claude-haiku-4-5",
+      model: "claude-haiku-5-5",
       prompt_version: "guard@v1",
       created_at: new Date("2026-01-05T00:00:00Z"),
     },

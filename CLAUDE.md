@@ -128,8 +128,9 @@ B127): every time a prompt reads is rendered with its distance (`platform/relati
 notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
 guard v6 reads NOW in both zones. **No retries** (2026-10-22, side phase, closed): no prompt is
 retried or regenerated after a failure, so structural failures show (SDK transport retries kept).
-**Next:** settle with Ethan the findings of Phase 16's close runs (`review:world-outreach`,
-`eval:guard`, 2026-10-22, taken with retries still on); the next phase is not set yet.
+**Next: Phase 16b, time anchors** (settled with Ethan 2026-10-24): stored text keeps the date each
+time phrase meant and every reader renders it on its own day; design doc
+`docs/2026-10-24-phase-16b-time-anchors-design.md`, plan in `docs/superpowers/plans/`.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

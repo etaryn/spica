@@ -126,8 +126,10 @@ online). No night: her energy is a battery, she logs off when it runs low at any
 reach-outs skip their night. **Phase 16, the time model, is built** (2026-10-21; B125, B126,
 B127): every time a prompt reads is rendered with its distance (`platform/relative-date.ts`), her
 notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
-guard v6 reads NOW in both zones. **Next:** its close runs (`review:world-outreach`,
-`eval:guard`), read against the 2026-10-21 run; the next phase is not set yet.
+guard v6 reads NOW in both zones. **No retries** (2026-10-22, side phase, closed): no prompt is
+retried or regenerated after a failure, so structural failures show (SDK transport retries kept).
+**Next:** settle with Ethan the findings of Phase 16's close runs (`review:world-outreach`,
+`eval:guard`, 2026-10-22, taken with retries still on); the next phase is not set yet.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

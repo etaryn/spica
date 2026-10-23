@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { renderAbsolute } from "@/mind/platform/time-anchors";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
@@ -163,7 +164,7 @@ describe("encodeExtraction", () => {
     const o = await facts.getFact(db(), u, old.id);
     expect(o!.status).toBe("superseded");
     const replacement = await facts.getFact(db(), u, o!.superseded_by!);
-    expect(replacement!.content).toBe("Mia starts in November.");
+    expect(renderAbsolute(replacement!.content)).toBe("Mia starts in November 2026.");
     expect((await facts.getFact(db(), u, plan.id))!.status).toBe("resolved");
   });
 
@@ -200,7 +201,7 @@ describe("encodeExtraction", () => {
       superseded_by: null,
     });
     const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
-    const late = rows.find((r) => r.content === "Mia starts in November.")!;
+    const late = rows.find((r) => renderAbsolute(r.content) === "Mia starts in November 2026.")!;
     expect(late).toMatchObject({ status: "superseded", superseded_by: newer.id });
     const tea = rows.find((r) => r.content === "The user likes tea.")!;
     expect(late.created_at.toISOString()).toBe(exchangeAt.toISOString());

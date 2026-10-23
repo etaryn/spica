@@ -260,7 +260,7 @@ describe("threads", () => {
       thread_id: t.id,
       created_at: new Date("2026-01-05T09:00:00Z"),
     });
-    await fact(u, "Interview is on Friday at 10am", ax(2), {
+    await fact(u, "Interview is at the studio", ax(2), {
       thread_id: t.id,
       created_at: new Date("2026-01-06T09:00:00Z"),
       salience: 0.8,
@@ -271,7 +271,7 @@ describe("threads", () => {
     expect(due[0]).toMatchObject({
       id: t.id,
       title: "Job interview at Acme",
-      content: "Interview is on Friday at 10am",
+      content: "Interview is at the studio",
     });
     expect(due[0]!.salience).toBeCloseTo(0.8, 5);
     await threads.resolveThread(db(), u, t.id, new Date("2026-01-12T10:00:00Z"));

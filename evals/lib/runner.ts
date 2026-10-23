@@ -395,7 +395,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const pusher = new RecordingPusher();
   const deps: Deps = {
     db,
-    core: createCoreLayer(db),
+    core: createCoreLayer(db, config.life.timezone),
     clock,
     config,
     queue,

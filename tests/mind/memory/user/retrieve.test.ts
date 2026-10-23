@@ -77,7 +77,7 @@ test("ranks by the scoring formula, groups by subject, forces due threads, and r
   await facts.insertFact(getTestDb(), u, {
     ...base,
     subject: "user",
-    content: "The user's interview at Acme was on Friday.",
+    content: "The user's interview at Acme went badly.",
     embedding: ScriptedEmbedder.axis(D, 50),
     salience: 0.7,
     thread_id: t.id,
@@ -90,7 +90,7 @@ test("ranks by the scoring formula, groups by subject, forces due threads, and r
     {
       id: t.id,
       title: "job interview at Acme",
-      detail: "The user's interview at Acme was on Friday.",
+      detail: "The user's interview at Acme went badly.",
     },
   ]);
   expect(r.recalled.filter((x) => x.forced)).toHaveLength(1);

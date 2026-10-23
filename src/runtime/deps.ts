@@ -56,7 +56,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
   boss.on("error", (e) => consoleLogger.error("pg-boss error", { error: errorName(e) }));
   const deps: Deps = {
     db,
-    core: createCoreLayer(db),
+    core: createCoreLayer(db, config.life.timezone),
     clock: systemClock,
     llm: withTimeRendering(
       new AnthropicProvider(new Anthropic(), config.models),

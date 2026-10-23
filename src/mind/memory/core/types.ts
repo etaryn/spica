@@ -3,6 +3,7 @@
  * thoughts and narrative as the core loops arrive. No method takes a user, so nothing written or
  * read through this interface can belong to one.
  */
+import type { AnchorHints } from "@/mind/platform/time-anchors";
 import type { Neighbor } from "@/mind/memory/shared/types";
 
 export type CoreMemoryKind =
@@ -142,7 +143,8 @@ export interface CoreMemory {
     timezone: string,
     minSources: number,
   ): Promise<boolean>;
-  insert(item: NewCoreMemory): Promise<string>;
+  /** Content is anchored on her calendar; hints say what the writer knew. */
+  insert(item: NewCoreMemory, hints?: AnchorHints): Promise<string>;
   get(id: string): Promise<CoreMemoryItem | null>;
   /**
    * Active factual memories, including resolved intentions, closest first then ID; `kinds` limits

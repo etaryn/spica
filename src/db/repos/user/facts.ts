@@ -2,6 +2,9 @@
  * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
  * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
  */
+import { anchorFields, anchorTimes, type AnchorHints } from "@/mind/platform/time-anchors";
+import { zoneOrUtc } from "@/mind/platform/timezone";
+import { getTimezone } from "./users";
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
@@ -140,11 +143,28 @@ export async function nearFacts(
   });
 }
 
-export async function insertFact(db: Db, userId: string, row: NewFact): Promise<FactRow> {
+/**
+ * Stored text keeps the date each time phrase meant: content and a summary's or read's parts are
+ * anchored from the moment written, in the user's zone, so they read right on any later day.
+ */
+export async function insertFact(
+  db: Db,
+  userId: string,
+  row: NewFact,
+  hints: AnchorHints = {},
+): Promise<FactRow> {
+  // Every caller passes a Date: the moment it was written is the moment its words mean.
+  const at = row.created_at as Date;
+  const ctx = { at, zone: zoneOrUtc(await getTimezone(db, userId)), ...hints };
   return one(
     await db
       .insert(fact)
-      .values({ ...row, user_id: userId })
+      .values({
+        ...row,
+        content: anchorTimes(row.content, ctx),
+        payload: anchorFields(row.payload, ctx),
+        user_id: userId,
+      })
       .returning(),
   );
 }

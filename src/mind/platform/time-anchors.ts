@@ -411,16 +411,8 @@ function monthName(ym: string): string {
 
 function render(a: Anchor, now: Date, maxDays: number): string {
   const day = localDateString(now, a.zone);
-  if (a.precision === "month") {
-    const months =
-      (Number(a.local.slice(0, 4)) - Number(day.slice(0, 4))) * 12 +
-      (Number(a.local.slice(5, 7)) - Number(day.slice(5, 7)));
-    const label = monthName(a.local);
-    if (months === 0) return "this month";
-    if (months === -1) return `last month, ${label}`;
-    if (months === 1) return `next month, ${label}`;
-    return label;
-  }
+  // A month reads as its name: "starts in November 2026" works whichever words it came from.
+  if (a.precision === "month") return monthName(a.local);
   const [date, time] = a.local.split("T") as [string, string | undefined];
   const off = dayDiff(date, day);
   const name = dayName(date, date.slice(0, 4) !== day.slice(0, 4));

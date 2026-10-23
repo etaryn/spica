@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { fact } from "@/db/schema";
+import { fact, user } from "@/db/schema";
+import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import {
   candidateFacts,
   getFact,
@@ -315,4 +316,44 @@ test("a milestone run is recorded past the daily cap; others are capped", async 
   expect((await add("c", [{ kind: "milestone", name: "first_inside_joke" }]))?.status).toBe(
     "pending",
   );
+});
+
+const summaryRow = (content: string, at: Date) => ({
+  subject: "shared" as const,
+  kind: "summary" as const,
+  content,
+  payload: { whats_live: content, sensitive: true },
+  embedding: vec(),
+  created_at: at,
+  status: "open" as const,
+  salience: 0.5,
+  valence: 0,
+  confidence: 0.6,
+  source: "generated" as const,
+});
+
+test("insertFact anchors content and payload strings in the user's zone; no or a bad zone is UTC", async () => {
+  const u = await createTestUser();
+  const at = new Date("2026-01-12T23:30:00Z"); // Monday 23:30 UTC, Tuesday 07:30 in Singapore
+  const utc = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
+  expect(tokenDates(utc.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
+  expect((utc.payload as { whats_live: string }).whats_live).toBe(utc.content);
+  expect((utc.payload as { sensitive: boolean }).sensitive).toBe(true);
+  await setTimezone(getTestDb(), u, "Asia/Singapore");
+  const sg = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
+  expect(renderTimes(sg.content, at, 6)).toBe("Sister visits tomorrow, Wednesday 14 January.");
+  await getTestDb().update(user).set({ timezone: "Mars/Olympus" }).where(eq(user.id, u));
+  const bad = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
+  expect(tokenDates(bad.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
+});
+
+test("insertFact takes hints: a weekday matches a shown date", async () => {
+  const u = await createTestUser();
+  const row = await insertFact(
+    getTestDb(),
+    u,
+    summaryRow("Race Sunday.", new Date("2026-01-14T09:00:00Z")), // Wednesday
+    { known: [new Date("2026-01-11T08:00:00Z")] },
+  );
+  expect(tokenDates(row.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
 });

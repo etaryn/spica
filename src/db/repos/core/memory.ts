@@ -1,6 +1,7 @@
 /**
  * Her core memory in Postgres. No query here takes or returns a user id.
  */
+import { anchorFields, anchorTimes } from "@/mind/platform/time-anchors";
 import { and, desc, eq, gt, gte, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/db/client";
@@ -46,7 +47,7 @@ function payloadObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export function coreMemoryRepo(db: Db): CoreMemory {
+export function coreMemoryRepo(db: Db, zone = "UTC"): CoreMemory {
   const gistWeek = (timezone: string) =>
     sql<string>`date_trunc('week', ${core_memory.occurred_at} AT TIME ZONE ${timezone})::date::text`;
   const gistEligible = (beforeLocalDay: string, timezone: string) =>
@@ -263,11 +264,16 @@ export function coreMemoryRepo(db: Db): CoreMemory {
         return true;
       });
     },
-    async insert(item) {
+    async insert(item, hints = {}) {
+      const ctx = { at: item.created_at, zone, ...hints };
       const row = one(
         await db
           .insert(core_memory)
-          .values({ ...item, entity_refs: item.entity_refs ?? [] })
+          .values({
+            ...item,
+            content: anchorTimes(item.content, ctx),
+            entity_refs: item.entity_refs ?? [],
+          })
           .returning({ id: core_memory.id }),
       );
       return row.id;
@@ -559,9 +565,14 @@ export function coreMemoryRepo(db: Db): CoreMemory {
     },
 
     async insertSnapshot(snapshot) {
+      const ctx = { at: snapshot.rendered_at, zone };
       const rows = await db
         .insert(core_snapshot)
-        .values(snapshot)
+        .values({
+          ...snapshot,
+          content: anchorTimes(snapshot.content, ctx),
+          sections: anchorFields(snapshot.sections, ctx),
+        })
         .onConflictDoNothing()
         .returning({ version: core_snapshot.version });
       return rows.length > 0;

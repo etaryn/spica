@@ -6,6 +6,7 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { core_memory, core_snapshot } from "@/db/schema";
 import { createCoreLayer } from "@/db/repos/core";
+import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -904,4 +905,27 @@ test("nearActive finds the closest active goal over the line, never a dropped on
   expect(await goals.nearActive(away, 0.85)).toBeNull();
   await goals.setStatus(id, "dropped", now);
   expect(await goals.nearActive(vec(), 0.85)).toBeNull();
+});
+
+test("her memories and snapshots are anchored on her calendar", async () => {
+  const her = createCoreLayer(getTestDb(), "Asia/Singapore");
+  const written = new Date("2026-01-12T15:30:00Z"); // 23:30 Monday in Singapore
+  const id = await her.memory.insert(episode("Clear skies tonight.", 0.01, written));
+  const content = (await her.memory.get(id))!.content;
+  expect(renderTimes(content, new Date("2026-01-12T17:00:00Z"), 6)).toBe(
+    "Clear skies last night, Monday 12 January.",
+  );
+  await her.memory.insertSnapshot({
+    version: 0,
+    embedding: vec(),
+    content: "### Lately\n- Telescope booking tonight.",
+    sections: { Lately: "- Telescope booking tonight." },
+    source_ids: [],
+    rendered_at: written,
+    model: "m",
+    prompt_version: "v",
+  });
+  const snap = (await her.memory.latestSnapshot())!;
+  expect(tokenDates(snap.content)).toHaveLength(1);
+  expect(tokenDates(snap.sections.Lately!)).toHaveLength(1);
 });

@@ -9,7 +9,7 @@ import { insertFact } from "@/db/repos/user/facts";
 import { insertRun } from "@/db/repos/user/user-mind";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import { settleHurtFacts } from "@/mind/memory/user/hurt";
-import { resolveWhen } from "@/mind/memory/user/when";
+import { anchorTimes, renderAbsolute } from "@/mind/platform/time-anchors";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { genderFact } from "@/mind/process/onboarding/gender";
@@ -136,7 +136,8 @@ test("3: outside a crisis window her run reads nothing sensitive; inside, it doe
 });
 
 test("4: 'next monday' said on a Monday is the next week's Monday", () => {
-  expect(resolveWhen("next monday", new Date("2026-01-05T09:00:00Z"), "UTC")?.label).toBe(
+  const at = new Date("2026-01-05T09:00:00Z");
+  expect(renderAbsolute(anchorTimes("next monday", { at, zone: "UTC" }))).toBe(
     "Monday 12 January 2026",
   );
 });

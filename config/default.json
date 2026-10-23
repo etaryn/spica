@@ -212,7 +212,7 @@
     "crisis_classifier": "v2",
     "sim_user": "v2",
     "persona": "v7",
-    "extract": "v9",
+    "extract": "v10",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",

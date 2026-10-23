@@ -10,6 +10,8 @@ import type { Turn } from "@/db/repos/user/session-log";
 import { claimKind, entityType, factKind } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
+import type { Logger } from "@/mind/platform/log";
+import { anchorTimes, isSingleToken, tokenDates } from "@/mind/platform/time-anchors";
 import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 import {
   BidResponseSchema,
@@ -30,7 +32,6 @@ import {
   type IdiolectStarter,
   type IdiolectType,
 } from "./idiolect";
-import { applyWhen } from "./when";
 
 const subject = z.enum(["user", "self", "shared"]);
 // Summaries, reflections and ideas are hers to write after a big event, never read off one exchange.
@@ -46,9 +47,8 @@ const FactSchema = z.object({
   subject,
   kind: extractableKind,
   content: z.string(),
-  occurred_at: z.string().nullable(),
-  // The time words as said; code turns them into a date. Fixtures without it read as null.
-  when: z.string().nullable().default(null),
+  // Which way the fact's time words point; code dates them. Fixtures without it read as null.
+  when_direction: z.enum(["past", "upcoming"]).nullable().default(null),
   salience: z.number(),
   valence: z.number(),
   confidence: z.number(),
@@ -78,7 +78,6 @@ export const ExtractionSchema = z.object({
       title: z.string(),
       subject,
       stakes: z.enum(["low", "med", "high"]),
-      next_checkpoint: z.string().nullable(),
       checkpoint_when: z.string().nullable().default(null),
       thread_id: z.string().nullable(),
     }),
@@ -94,11 +93,11 @@ type RawExtraction = z.infer<typeof ExtractionSchema>;
 
 export type ExtractedFact = Omit<
   RawExtraction["facts"][number],
-  "occurred_at" | "claim_kind" | "idiolect_type" | "started_by" | "when"
+  "claim_kind" | "idiolect_type" | "started_by" | "when_direction"
 > & {
   occurred_at: Date | null;
-  /** The time words as said; facts code writes (her hurt) have none. */
-  when?: string | null;
+  /** Facts code writes (her hurt) have none. */
+  when_direction?: "past" | "upcoming" | null;
   /** Only her own facts carry one; facts code writes (her hurt) leave it out. */
   claim_kind?: RawExtraction["facts"][number]["claim_kind"];
   /** Only idiolect facts carry these. */
@@ -106,10 +105,7 @@ export type ExtractedFact = Omit<
   started_by?: IdiolectStarter | null;
 };
 export type ExtractedEntity = EntityMention;
-export type ExtractedThread = Omit<
-  RawExtraction["threads"][number],
-  "next_checkpoint" | "checkpoint_when"
-> & {
+export type ExtractedThread = Omit<RawExtraction["threads"][number], "checkpoint_when"> & {
   next_checkpoint: Date | null;
   checkpoint_when?: string | null;
 };
@@ -135,12 +131,6 @@ export type ExtractArgs = {
 /** Clamps into [low, high]; anything not finite becomes `low`. */
 function tidy(text: string): string {
   return text.trim().replace(/\s+/g, " ");
-}
-
-function parseDate(text: string | null): Date | null {
-  if (!text) return null;
-  const date = new Date(text);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function idiolectFields(fact: { kind: string; idiolect_type?: unknown; started_by?: unknown }): {
@@ -185,8 +175,8 @@ export function buildExtractionInput(args: ExtractArgs): string {
 }
 
 /**
- * Validates the model's output (or an already-typed value), then clamps numbers, parses dates
- * and drops empty entries.
+ * Validates the model's output (or an already-typed value), then clamps numbers and drops empty
+ * entries. Dates come later, from the messages' own times.
  */
 export function normalizeExtraction(input: unknown, maxCandidates: number): Extraction {
   // Lenient about the relationship, intimacy and bid blocks, unlike the schema sent to the model: a
@@ -211,8 +201,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
       // What is theirs alone is between them, whoever the model credits it to.
       subject: fact.kind === "idiolect" ? ("shared" as const) : fact.subject,
       content: tidy(fact.content),
-      occurred_at: parseDate(fact.occurred_at),
-      when: fact.when && tidy(fact.when) ? tidy(fact.when) : null,
+      occurred_at: null,
       salience: clamp(fact.salience, 0, 1),
       valence: clamp(fact.valence, -1, 1),
       confidence: clamp(fact.confidence, 0, 1),
@@ -238,7 +227,7 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
     .map((thread) => ({
       ...thread,
       title: tidy(thread.title),
-      next_checkpoint: parseDate(thread.next_checkpoint),
+      next_checkpoint: null,
       checkpoint_when:
         thread.checkpoint_when && tidy(thread.checkpoint_when)
           ? tidy(thread.checkpoint_when)
@@ -256,8 +245,51 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   };
 }
 
+const WEEKDAY_WORD = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
+const weekdaysIn = (text: string) =>
+  new Set([...text.matchAll(WEEKDAY_WORD)].map((m) => m[1]!.toLowerCase()));
+
+/**
+ * Dates each fact from the moment its message was sent, in their zone, pointing the way extract
+ * labelled it; the model never works out a date. When their message names exactly one weekday and
+ * a fact names a different one, the fact takes theirs: a copied weekday ("friday" for their
+ * "thursday"), corrected by name so a right past date is never moved.
+ */
+export function anchorExtraction(
+  extraction: Extraction,
+  turns: { role: string; text: string; created_at: Date }[],
+  zone: string,
+  log?: Logger,
+): Extraction {
+  const said = turns.filter((t) => t.role === "user");
+  // A reach-out exchange has no message of theirs; its own last turn dates it.
+  const at = said.at(-1)?.created_at ?? turns.at(-1)?.created_at ?? new Date(0);
+  const theirs = weekdaysIn(said.map((t) => t.text).join(" "));
+  const facts = extraction.facts.map((f) => {
+    let content = f.content;
+    const own = weekdaysIn(content);
+    if (theirs.size === 1 && own.size === 1 && !theirs.has([...own][0]!)) {
+      const [from, to] = [[...own][0]!, [...theirs][0]!];
+      log?.info("extract weekday taken from their message", { from, to });
+      content = content.replace(
+        new RegExp(`\\b${from}\\b`, "i"),
+        to[0]!.toUpperCase() + to.slice(1),
+      );
+    }
+    content = anchorTimes(content, { at, zone, direction: f.when_direction ?? null });
+    return { ...f, content, occurred_at: tokenDates(content)[0] ?? null };
+  });
+  const threads = extraction.threads.map((t) => {
+    const slot = t.checkpoint_when
+      ? anchorTimes(t.checkpoint_when, { at, zone, direction: "upcoming" })
+      : null;
+    return { ...t, next_checkpoint: slot && isSingleToken(slot) ? tokenDates(slot)[0]! : null };
+  });
+  return { ...extraction, facts, threads };
+}
+
 export async function extract(
-  deps: Pick<Deps, "llm" | "config">,
+  deps: Pick<Deps, "llm" | "config" | "log">,
   args: ExtractArgs,
 ): Promise<Extraction> {
   const { config } = deps;
@@ -274,10 +306,10 @@ export async function extract(
   });
 
   const zone = args.timezone && isValidTimeZone(args.timezone) ? args.timezone : "UTC";
-  // Their own last message dates "tomorrow"; a reach-out exchange falls back to its last turn.
-  const ref =
-    [...args.newTurns].reverse().find((t) => t.role === "user")?.created_at ??
-    args.newTurns.at(-1)?.created_at ??
-    null;
-  return applyWhen(normalizeExtraction(raw, config.extraction.max_candidates), ref, zone);
+  return anchorExtraction(
+    normalizeExtraction(raw, config.extraction.max_candidates),
+    args.newTurns,
+    zone,
+    deps.log,
+  );
 }

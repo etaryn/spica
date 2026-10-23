@@ -163,3 +163,25 @@ test("absolute rendering, token dates, single tokens, fields, leftover words", (
   expect(anchorFields(null, utc)).toBeNull();
   expect(relativeWords("Sister visits tomorrow, coming Today.")).toEqual(["tomorrow", "today"]);
 });
+
+test("phrases land where the old resolver put them", () => {
+  const mon = { at: at("2026-01-05T09:00:00Z"), zone: "UTC" }; // Monday 5 January
+  const wed = { at: at("2026-01-07T09:00:00Z"), zone: "UTC" };
+  const one = (phrase: string, ctx = mon) => days(anchorTimes(phrase, ctx))[0];
+  expect(one("next monday")).toBe("2026-01-12");
+  expect(one("on friday", wed)).toBe("2026-01-09");
+  expect(one("last friday")).toBe("2026-01-02");
+  expect(one("sunday")).toBe("2026-01-11");
+  expect(one("next week")).toBe("2026-01-12");
+  expect(one("this weekend")).toBe("2026-01-10");
+  expect(one("end of this week")).toBe("2026-01-09");
+  expect(one("this week", wed)).toBe("2026-01-05");
+  // "tomorrow" at 23:30 in Singapore is the next Singapore day.
+  expect(one("tomorrow", { at: at("2026-01-05T15:30:00Z"), zone: "Asia/Singapore" })).toBe(
+    "2026-01-06",
+  );
+  // "this morning" said late at night is that day's morning.
+  expect(one("this morning", { at: at("2026-01-05T23:30:00Z"), zone: "UTC" })).toBe("2026-01-05");
+  expect(one("in october", { at: at("2026-10-16T09:00:00Z"), zone: "UTC" })).toBe("2026-10-01");
+  expect(one("this friday", { at: at("2026-01-09T09:00:00Z"), zone: "UTC" })).toBe("2026-01-09");
+});

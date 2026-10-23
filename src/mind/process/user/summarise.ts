@@ -16,7 +16,14 @@ import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary"
 import { nowLine } from "@/mind/platform/time-anchors";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { memoryLines, stampedNote, threadLines, triggerText, type RunInputs } from "./inputs";
+import {
+  memoryLines,
+  shownDates,
+  stampedNote,
+  threadLines,
+  triggerText,
+  type RunInputs,
+} from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userSummarise(
@@ -67,20 +74,25 @@ export async function userSummarise(
       // re-read: a summary written meanwhile is the one to supersede.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user_mind:${userId}`}))`);
       const current = await liveSummary(tx, userId);
-      const row = await insertFact(tx, userId, {
-        subject: "shared",
-        kind: "summary",
-        content,
-        payload: sensitive ? { ...out, sensitive: true } : out,
-        embedding: embedding!,
-        created_at: now,
-        status: "open",
-        salience: settings.salience,
-        valence: 0,
-        confidence: settings.confidence,
-        source: "generated",
-        source_ref: `user_summarise:${ctx.traceId}`,
-      });
+      const row = await insertFact(
+        tx,
+        userId,
+        {
+          subject: "shared",
+          kind: "summary",
+          content,
+          payload: sensitive ? { ...out, sensitive: true } : out,
+          embedding: embedding!,
+          created_at: now,
+          status: "open",
+          salience: settings.salience,
+          valence: 0,
+          confidence: settings.confidence,
+          source: "generated",
+          source_ref: `user_summarise:${ctx.traceId}`,
+        },
+        { known: shownDates(facts, threads, [previous?.content]) },
+      );
       if (current) await setFactStatus(tx, userId, current.id, "superseded", row.id);
       return row.id;
     });

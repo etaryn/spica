@@ -260,3 +260,24 @@ test("a kept line keeps the depth it had, so an intimate line never widens", asy
   const kept = (await deps.core.memory.selfLines(2)).find((l) => l.text.startsWith("she trusts"));
   expect(kept?.depth).toBe(3);
 });
+
+test("a Lately line's time words are dated once, the same in her snapshot and her self lines", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  all.llm.handlers.core_render_snapshot = () => ({
+    Lately: [{ text: "Telescope booking tonight.", depth: null }],
+    Opinions: [],
+    Interests: [],
+    Goals: [],
+    People: [],
+    "Habits of speech": [],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const snapshot = (await deps.core.memory.latestSnapshot())!;
+  const line = (await deps.core.memory.selfLines(snapshot.version)).find((l) =>
+    l.text.startsWith("Telescope"),
+  )!;
+  expect(line.text).toMatch(/^Telescope booking ⟦2026-01-05/);
+  expect(snapshot.content).toContain(`- ${line.text}`);
+});

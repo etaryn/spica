@@ -142,7 +142,7 @@ test("a far-off event never stretches an idea past its chance", () => {
 
 test("ideate stores stale_after from the dated facts it was written from", async () => {
   const { deps, userId, run } = await setup();
-  const thursday = new Date(deps.clock.now().getTime() + 48 * 3_600_000);
+  const thursday = new Date(deps.clock.now().getTime() + 72 * 3_600_000);
   await insertFact(deps.db, userId, {
     subject: "user",
     kind: "event",
@@ -277,4 +277,15 @@ test("an idea she already brought up recently is in already_planned", async () =
   await userIdeate(deps, run, await loadRunInputs(deps, userId));
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_ideate")!;
   expect(JSON.parse(call.input).already_planned).toContain("Ask how the pottery class went.");
+});
+
+test("an idea about tonight, from no dated memory, retires at the end of today", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask how tonight's gig goes." });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
+  // Their zone is UTC: the end of today is the next midnight.
+  const midnight = new Date(deps.clock.now());
+  midnight.setUTCHours(24, 0, 0, 0);
+  expect(idea!.stale_after).toEqual(midnight);
 });

@@ -10,7 +10,7 @@ import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
-import { stamped } from "@/mind/platform/time-anchors";
+import { anchorTimes, stamped } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
 
 export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<LoopStatus> {
@@ -87,6 +87,10 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
               })),
         ]),
       );
+    // Dated once here, so her snapshot's text and its self lines stay the same strings.
+    const zone = lifeTimezone(config.life, now);
+    for (const items of Object.values(kept))
+      for (const item of items) item.text = anchorTimes(item.text, { at: now, zone });
     const sections = Object.fromEntries(
       Object.entries(kept).map(([name, items]) => [
         name,

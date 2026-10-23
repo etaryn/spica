@@ -327,3 +327,31 @@ test("a summary's relative words are stored as the day they meant", async () => 
     tomorrow.toISOString().slice(0, 10),
   );
 });
+
+test("a weekday in the summary takes the date of the memory it was shown", async () => {
+  const { deps, userId, run } = await setup();
+  // Last Sunday's race: read forward, "Sunday" would be the coming one.
+  const race = new Date(deps.clock.now().getTime() - 86_400_000);
+  await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "The user ran a half marathon.",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    occurred_at: race,
+    status: "open",
+    salience: 0.8,
+    valence: 0.3,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_summarise = () => ({
+    where_things_stand: "Fine.",
+    whats_live: "The race Sunday.",
+    how_i_feel: "Glad.",
+  });
+  await userSummarise(deps, await run("exchange:w"), await loadRunInputs(deps, userId));
+  const live = (await liveSummary(deps.db, userId))!;
+  const [date] = tokenDates((live.payload as { whats_live: string }).whats_live);
+  expect(date!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
+});

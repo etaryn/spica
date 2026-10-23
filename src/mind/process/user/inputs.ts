@@ -10,7 +10,7 @@ import { getTimezone } from "@/db/repos/user/users";
 import { latestNonSensitiveSummary, liveSummary, type Trigger } from "@/db/repos/user/user-mind";
 import { isSensitive } from "@/mind/memory/user/retrieve";
 import { DAY } from "@/mind/platform/time";
-import { dateToken, ownDate, written } from "@/mind/platform/time-anchors";
+import { dateToken, ownDate, tokenDates, written } from "@/mind/platform/time-anchors";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import { effectiveCrisisQuietUntil } from "@/mind/process/outreach/inputs";
 import type { UserLoopDeps } from "./runner";
@@ -139,4 +139,17 @@ export function threadLines(
   return threads.map((t) =>
     t.next_checkpoint ? `${t.title} (next: ${dateToken(t.next_checkpoint, zone)})` : t.title,
   );
+}
+
+/** The dates a loop was shown, so a weekday it writes takes the day it saw. */
+export function shownDates(
+  facts: { occurred_at: Date | null }[],
+  threads: { next_checkpoint: Date | null }[],
+  texts: (string | null | undefined)[],
+): Date[] {
+  return [
+    ...facts.flatMap((f) => (f.occurred_at ? [f.occurred_at] : [])),
+    ...threads.flatMap((t) => (t.next_checkpoint ? [t.next_checkpoint] : [])),
+    ...texts.flatMap((t) => (t ? tokenDates(t) : [])),
+  ];
 }

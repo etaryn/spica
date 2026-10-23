@@ -25,7 +25,14 @@ import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary"
 import { nowLine, written } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { zoneOrUtc } from "@/mind/platform/timezone";
-import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
+import {
+  memoryLines,
+  shownDates,
+  stampedNote,
+  triggerText,
+  visible,
+  type RunInputs,
+} from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export const modelPayload = z.object({
@@ -105,24 +112,34 @@ export async function userModel(
       "document",
     );
     const shown = new Set(beliefs.map((b) => b.id));
+    const known = shownDates(
+      inputs.facts,
+      [],
+      [summary?.content, previous?.content, noticed?.content],
+    );
     const outputs = await db.transaction(async (tx) => {
       // The lock serialises runs for one user, so two can't both leave a live read.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user_mind:${userId}`}))`);
       const current = await liveModel(tx, userId);
-      const model = await insertFact(tx, userId, {
-        subject: "user",
-        kind: "model",
-        content,
-        payload: { ...read, ...mark },
-        embedding: modelVec!,
-        created_at: now,
-        status: "open",
-        salience: settings.salience,
-        valence: 0,
-        confidence: settings.confidence,
-        source: "generated",
-        source_ref: `user_model:${ctx.traceId}`,
-      });
+      const model = await insertFact(
+        tx,
+        userId,
+        {
+          subject: "user",
+          kind: "model",
+          content,
+          payload: { ...read, ...mark },
+          embedding: modelVec!,
+          created_at: now,
+          status: "open",
+          salience: settings.salience,
+          valence: 0,
+          confidence: settings.confidence,
+          source: "generated",
+          source_ref: `user_model:${ctx.traceId}`,
+        },
+        { known },
+      );
       if (current) await setFactStatus(tx, userId, current.id, "superseded", model.id);
       const written = {
         model_id: model.id,
@@ -140,20 +157,25 @@ export async function userModel(
           written.dropped.push(belief.text);
           continue;
         }
-        const row = await insertFact(tx, userId, {
-          subject: "user",
-          kind: "belief",
-          content: belief.text,
-          payload: sensitive ? mark : null,
-          embedding,
-          created_at: now,
-          status: "open",
-          salience: settings.belief_salience,
-          valence: 0,
-          confidence: settings.confidence,
-          source: "generated",
-          source_ref: `user_model:${ctx.traceId}`,
-        });
+        const row = await insertFact(
+          tx,
+          userId,
+          {
+            subject: "user",
+            kind: "belief",
+            content: belief.text,
+            payload: sensitive ? mark : null,
+            embedding,
+            created_at: now,
+            status: "open",
+            salience: settings.belief_salience,
+            valence: 0,
+            confidence: settings.confidence,
+            source: "generated",
+            source_ref: `user_model:${ctx.traceId}`,
+          },
+          { known },
+        );
         written.belief_ids.push(row.id);
         if (replaces && (await supersedeBelief(tx, userId, replaces, row.id)))
           written.superseded_ids.push(replaces);

@@ -18,7 +18,14 @@ import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary"
 import { nowLine } from "@/mind/platform/time-anchors";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
+import {
+  memoryLines,
+  shownDates,
+  stampedNote,
+  triggerText,
+  visible,
+  type RunInputs,
+} from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userReflect(
@@ -64,20 +71,25 @@ export async function userReflect(
         inputs.facts.some((f) => f.sensitive) ||
         (!!summary && isSensitive(summary)) ||
         earlier.some(isSensitive);
-      const row = await insertFact(db, userId, {
-        subject: out.subject,
-        kind: "reflection",
-        content: out.reflection,
-        payload: sensitive ? { sensitive: true } : null,
-        embedding: embedding!,
-        created_at: now,
-        status: "open",
-        salience: settings.salience,
-        valence: 0,
-        confidence: settings.confidence,
-        source: "generated",
-        source_ref: `user_reflect:${ctx.traceId}`,
-      });
+      const row = await insertFact(
+        db,
+        userId,
+        {
+          subject: out.subject,
+          kind: "reflection",
+          content: out.reflection,
+          payload: sensitive ? { sensitive: true } : null,
+          embedding: embedding!,
+          created_at: now,
+          status: "open",
+          salience: settings.salience,
+          valence: 0,
+          confidence: settings.confidence,
+          source: "generated",
+          source_ref: `user_reflect:${ctx.traceId}`,
+        },
+        { known: shownDates(inputs.facts, [], [summary?.content]) },
+      );
       reflectionId = row.id;
     }
     return {

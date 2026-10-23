@@ -19,9 +19,9 @@ import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
 import { localDateString, localMidnight, nextLocalDate, zoneOrUtc } from "@/mind/platform/timezone";
-import { nowLine, written } from "@/mind/platform/time-anchors";
+import { anchorTimes, nowLine, tokenDates, written } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { memoryLines, threadLines, stampedNote, type RunInputs } from "./inputs";
+import { memoryLines, shownDates, threadLines, stampedNote, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -114,17 +114,27 @@ export async function userIdeate(
         settings.source_similarity,
         settings.dated_facts,
       );
+      // Dated here, not on insert, so its own days ("tonight") set when it stops being worth raising.
+      const zone = zoneOrUtc(inputs.timezone);
+      const content = anchorTimes(out.idea, {
+        at: now,
+        zone,
+        known: shownDates(facts, threads, [summary?.content, readRow?.content]),
+      });
       const row = await insertFact(db, userId, {
         subject: "shared",
         kind: "idea",
-        content: out.idea,
+        content,
         embedding: embedding!,
         created_at: now,
         stale_after: ideaStaleAfter(
           now,
-          facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!),
+          [
+            ...facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!),
+            ...tokenDates(content),
+          ],
           settings.ttl_days,
-          zoneOrUtc(inputs.timezone),
+          zone,
         ),
         status: "open",
         salience: settings.salience,

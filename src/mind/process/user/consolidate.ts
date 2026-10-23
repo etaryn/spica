@@ -57,22 +57,27 @@ export async function userConsolidate(
       // Sources merged, superseded or folded by another run while she wrote void this gist.
       if (!(await gistFacts(tx, userId, ids, gistId, settings.gist_source_factor, window)))
         return false;
-      await insertFact(tx, userId, {
-        id: gistId,
-        subject: "shared",
-        kind: "episode",
-        content: out.gist,
-        payload: { gist_of: ids },
-        embedding: embedding!,
-        occurred_at: group.sources[0]!.occurred_at,
-        created_at: now,
-        status: "recurring",
-        salience: Math.max(...group.sources.map((s) => s.salience)),
-        valence: 0,
-        confidence: settings.confidence,
-        source: "generated",
-        source_ref: `user_consolidate:${ctx.traceId}`,
-      });
+      await insertFact(
+        tx,
+        userId,
+        {
+          id: gistId,
+          subject: "shared",
+          kind: "episode",
+          content: out.gist,
+          payload: { gist_of: ids },
+          embedding: embedding!,
+          occurred_at: group.sources[0]!.occurred_at,
+          created_at: now,
+          status: "recurring",
+          salience: Math.max(...group.sources.map((s) => s.salience)),
+          valence: 0,
+          confidence: settings.confidence,
+          source: "generated",
+          source_ref: `user_consolidate:${ctx.traceId}`,
+        },
+        { known: group.sources.map((s) => s.occurred_at) },
+      );
       return true;
     });
     return {

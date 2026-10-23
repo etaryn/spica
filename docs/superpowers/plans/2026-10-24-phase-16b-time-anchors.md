@@ -2,38 +2,51 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stored text keeps the date each time phrase meant, every model reads it relative to its own day on its owner's calendar, and reach-outs can't go out on the wrong day.
+**Goal:** One date system. Stored text keeps the date each time phrase meant, every date a builder holds goes into a prompt as a token on its owner's calendar, one wrapper renders all tokens on the reader's day, and reach-outs can't go out on the wrong day.
 
 **Architecture:**
-- **Write side.** One pure module, `platform/time-anchors.ts`, resolves time phrases at write time into tokens: `⟦date|precision|zone⟧`, optionally with a `|said` phrase. The two insert points, user `insertFact` and core `memory.insert` (plus `insertSnapshot`), anchor every write by default. Writers that know more pass hints: dates they were shown, or extract's past/upcoming label.
-- **Read side.** One wrapper around the model provider renders every token in every prompt relative to the clock's now. Her outgoing messages are never processed.
-- **Reach-outs** get code-picked framing, a code date check, and a guard `wrong_day` category that drops them.
+- **One time module.** `src/mind/platform/time-anchors.ts` replaces `relative-date.ts`. It makes tokens (`⟦date|precision|zone⟧`, plus `|said words` in her view of messages) from stored text (`anchorTimes`) and from dates code already holds (`dateToken`), and renders them (`renderTimes`).
+- **Writes.** The two inserts anchor every write by default. Message timestamps are the anchoring moment for anything said in a conversation.
+- **Reads.** Builders never render dates; they place tokens. One provider wrapper renders every token at the clock's now.
+- **Reach-outs** get code-picked framing, and guard v7 `wrong_day` drops a misdated one.
 
 **Tech Stack:** TypeScript, chrono-node 2.10.1 (already a dependency), Drizzle and Postgres, Vitest, versioned prompt files.
 
-**Spec:** `docs/2026-10-24-phase-16b-time-anchors-design.md` (settled with Ethan 2026-10-24; spec §20 row "Time anchors"). Memory `phase-16b-settled`, `her-speech-stays-free`.
+**Spec:** `docs/2026-10-24-phase-16b-time-anchors-design.md` (settled with Ethan 2026-10-24, items 1–9 and the review pass); spec §20 row "Time anchors". Memory `phase-16b-settled`, `her-speech-stays-free`.
 
 ## Global Constraints
 
-- **Her messages to the user are never post-processed.** Only stored memory text is anchored; tokens never reach a model, because the provider wrapper renders them.
-- **Numbers live in `config/default.json`:** `time.relative_max_days: 6` (new) is the only new number.
-- **Prompts:** every prompt change is a new version file plus the config bump, and the old version file is deleted in the same task (`git mv` then edit).
+- **Her messages to the user are never post-processed.** Only stored memory text is anchored. Tokens never reach a model, because the provider wrapper renders them.
+- **One date system.** After this phase no builder renders a date itself. A date in a prompt is a token, rendered in one place. "Your day" clock times and extract's absolute turn labels are not relative dates and stay.
+- **Numbers live in `config/default.json`:** `time.relative_max_days: 6` is the only new number.
+- **Prompts:** every prompt change is a new version file (`git mv` from the old one, then edit) plus the config bump. No old version file stays.
 - **Don't edit `prompts/persona/*`.**
 - **`src/mind` stays framework-free:** time comes from `deps.clock` or a `now` argument.
-- **Boundaries:** core code takes `CoreDeps` and reads only core. ESLint stops core, world and shared code importing user, process or admin code.
-- **Comments say why, never cite spec sections, phases or review items.** New files start with a plain-English header.
-- **Prettier at 100 columns.** No retries or regenerations anywhere (the no-retries side phase).
-- **Tests:** targeted `pnpm test <path>` while working; the full suite (about 10 minutes) once, at close. One test process at a time.
-- **Backslashes:** never write strings containing them through shell heredocs or `python -c`; use the Write/Edit tools (memory `phase-status` gotcha).
-- **Replace from the ground up:** `memory/user/when.ts` and its test are deleted (the rules move into `time-anchors.ts`), and `noteRelativeWords` is deleted. Nothing old stays alongside.
+- **Boundaries:** core reads only core. ESLint stops core, world and shared code importing user, process or admin code.
+- **Comments say why,** never cite spec sections, phases or review items. New files start with a plain-English header.
+- **Prettier at 100 columns.** No retries or regenerations (the no-retries side phase).
+- **Tests:** targeted `pnpm test <path>`; the full suite once, at close; one test process at a time.
+- **Backslashes:** never write strings containing them through shell heredocs or `python -c`; use the Write/Edit tools.
+- **Replace from the ground up.** These are deleted in this phase, with their tests:
+  - `src/mind/platform/relative-date.ts` (`relativeDate`, `dayInWords`, `itemWhen`, `writtenOn`, `stamped`, `noteRelativeWords`; `relativeWords` moves);
+  - `src/mind/memory/user/when.ts`;
+  - `guardNow`;
+  - `RetrievedFact.noted`;
+  - extract's `when`, `{when}`, its own `occurred_at` and its own thread `next_checkpoint`;
+  - the "[N days later]" marker and `gapMarkerMinHours`;
+  - the written stamp on ideas.
 
 ## Review Focus
 
-1. **Text that already holds tokens is anchored again** (a writer anchors, then the repo anchors): it must come out unchanged, and chrono must never parse the `2026-01-11` inside a token. Pinned in Task 1.
-2. **A user with no zone or an invalid one:** `insertFact` must anchor in UTC, not throw. Pinned in Task 3.
-3. **A token read across a year boundary** (written 30 December, read 2 January): the date must name its year when the year differs. Pinned in Task 1.
-4. **An older message whose time word is "today"** ("today was rough", sent yesterday): the gloss must read "today (that's yesterday, …)". Pinned in Task 7.
-5. **A reach-out naming two days** ("how was the race, and is your sister still coming saturday"): the code date check must not drop it. Only exactly one named day that isn't the event day drops. Pinned in Task 8.
+1. **Text that already holds tokens is anchored again** (a writer anchors, then the repo anchors): it must come out unchanged, and chrono must never read the `2026-01-11` inside a token. Pinned in Task 1.
+2. **A user with no zone or an invalid one:** `insertFact` anchors in UTC, never throws. Pinned in Task 3.
+3. **A date read in another year** (written 28 December, read 20 January): it names its year. Pinned in Task 1.
+4. **An older message whose time word is "today"** ("today was rough", sent yesterday): the gloss reads "today (that's yesterday, …)". A same-day message is never glossed. Pinned in Task 7.
+5. **Extract's cross-check:**
+   - when their message names two weekdays, the fact is left alone;
+   - a right past date ("I finished it on Saturday", said Monday, labelled past) is never moved to the coming Saturday.
+
+   Pinned in Task 5.
 
 ---
 
@@ -41,43 +54,44 @@
 
 | File | Change |
 |---|---|
-| `src/mind/platform/time-anchors.ts` (new) | anchor, render, absolute render, token dates, instants |
-| `src/mind/platform/llm/render-net.ts` (new) | provider wrapper that renders tokens in every prompt |
+| `src/mind/platform/time-anchors.ts` (new) | tokens from text and from dates, rendering, `nowLine`, `ownDate`, `written`, `stamped`, `relativeWords` |
+| `src/mind/platform/relative-date.ts` | **deleted** (Task 4) |
+| `src/mind/platform/llm/render-net.ts` (new) | provider wrapper: renders every token in every prompt |
 | `src/mind/platform/config.ts`, `config/default.json` | `time.relative_max_days` |
-| `src/mind/platform/relative-date.ts` | add `nowLine`; delete `noteRelativeWords` (Task 6) |
 | `src/runtime/deps.ts`, `evals/lib/runner.ts`, `src/db/reset-self-cli.ts` | wrap the provider; give the core layer her zone |
-| `src/db/repos/user/facts.ts` | `insertFact` anchors content and top-level payload strings |
-| `src/db/repos/core/{index,memory}.ts`, `src/mind/memory/core/types.ts` | core layer zone; `insert` and `insertSnapshot` anchor |
-| `src/mind/memory/user/extract.ts`, `prompts/extract/v10.md`; delete `when.ts` | past/upcoming label, anchoring, cross-check |
-| `src/mind/process/user/{inputs,summarise,reflect,model,ideate,consolidate}.ts`, `prompts/user-mind/*` | shown-date hints, NOW in both zones, prompt lines |
-| `src/mind/process/core/{thoughts,appraise,reflect,render-snapshot}.ts`, `prompts/core/*` | snapshot lines pre-anchored; prompt lines; slip logging removed |
-| `src/mind/process/hot-path/{assemble,compose}.ts` | owner's calendar, NOW section, dividers and glosses, guard view |
-| `src/mind/process/outreach/{candidates,send}.ts`, `prompts/reach-out/v4.md` | event day, framing, code date check, drop |
-| `src/mind/process/guard/{categories,outgoing}.ts`, `prompts/guard/v7.md`, `src/db/schema.ts` + migration | `wrong_day`, `dropped` outcome |
-| `evals/guard/{reach-out-dates,in-person}.yaml`, `evals/lib/review.ts` | `wrong_day` cases, B127 test fix, absolute render in the review |
+| `src/db/repos/user/facts.ts`, `src/db/repos/core/{index,memory}.ts`, `src/mind/memory/core/types.ts` | inserts anchor by default; hints; core zone |
+| prompt builders (20 files, listed in Task 4) | place tokens instead of rendering dates |
+| `src/mind/memory/user/extract.ts`, `prompts/extract/v10.md`; **delete** `when.ts` | time words stay in the fact; past/upcoming label; weekday cross-check |
+| `src/mind/process/user/*`, `src/mind/process/core/render-snapshot.ts`, `prompts/user-mind/*`, `prompts/core/*` | shown-date hints; snapshot lines anchored once; prompt lines |
+| `src/mind/process/hot-path/{assemble,compose}.ts` | `viewTurns` (dividers and glosses), the Now section |
+| `src/mind/process/hot-path/compose.ts` (`renderReachOut`), `src/mind/process/outreach/{candidates,send}.ts`, `prompts/reach-out/v4.md` | framing; drop on `wrong_day` |
+| `src/mind/process/guard/{categories,outgoing,guard}.ts`, `prompts/guard/v7.md`, `src/db/schema.ts` + migration | `wrong_day`, outcome `dropped` |
+| `evals/guard/*.yaml`, `evals/lib/review.ts` | cases; absolute render; `relativeWords` import |
 | `tests/exit/phase-16b.test.ts` (new) | exit test with the leak canary |
 
 ---
 
-### Task 1: The time-anchors module
+### Task 1: The time module
 
 **Files:**
 - Create: `src/mind/platform/time-anchors.ts`
 - Modify: `src/mind/platform/config.ts` (the `time` schema), `config/default.json`
-- Test: `tests/mind/platform/time-anchors.test.ts` (new)
+- Test: `tests/mind/platform/time-anchors.test.ts` (new), `tests/mind/platform/config.test.ts`
 
 **Interfaces:**
 - Produces:
   - `type Precision = "day" | "morning" | "afternoon" | "evening" | "night" | "time" | "weekend" | "week" | "month" | "since"`
-  - `type AnchorContext = { at: Date; zone: string; known?: Date[]; direction?: "past" | "upcoming" | null; said?: boolean }`
-  - `type AnchorHints = Omit<AnchorContext, "at" | "zone">`
-  - `anchorTimes(text: string, ctx: AnchorContext): string`
-  - `anchorFields<T>(value: T, ctx: AnchorContext): T`: anchors top-level string values of a plain object; other values pass through
-  - `renderTimes(text: string, now: Date, maxDays: number): string`
-  - `renderAbsolute(text: string): string`
-  - `tokenDates(text: string): Date[]`
-  - `isSingleToken(text: string): boolean`
-  - config `config.time.relative_max_days: number`
+  - `type AnchorContext = { at: Date; zone: string; known?: Date[]; direction?: "past" | "upcoming" | null; said?: boolean }` and `type AnchorHints = Omit<AnchorContext, "at" | "zone">`
+  - `anchorTimes(text, ctx): string` and `anchorFields<T>(value: T, ctx): T`
+  - `dateToken(at: Date, zone: string, precision?: "day" | "time"): string`
+  - `ownDate(content: string, when: Date | null, zone: string): string | null`
+  - `written(at: Date, zone: string): string`: "written ⟦…⟧"
+  - `stamped(text: string, at: Date, zone: string): string`: "(written ⟦…⟧)\n" + text
+  - `renderTimes(text, now, maxDays): string` and `renderAbsolute(text): string`
+  - `tokenDates(text): Date[]` and `isSingleToken(text): boolean`
+  - `nowLine(now: Date, theirs: string, hers: string, herLabel = "for you"): string`
+  - `relativeWords(text): string[]` (moved from `relative-date.ts`)
+  - config `config.time.relative_max_days`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -89,9 +103,14 @@ import { expect, test } from "vitest";
 import {
   anchorFields,
   anchorTimes,
+  dateToken,
   isSingleToken,
+  nowLine,
+  ownDate,
+  relativeWords,
   renderAbsolute,
   renderTimes,
+  stamped,
   tokenDates,
 } from "@/mind/platform/time-anchors";
 
@@ -99,64 +118,58 @@ const MON = new Date("2026-01-12T09:00:00Z"); // Monday 12 January 2026
 const at = (iso: string) => new Date(iso);
 const utc = { at: MON, zone: "UTC" };
 const read = (text: string, now: Date) => renderTimes(text, now, 6);
+const days = (text: string) => tokenDates(text).map((d) => d.toISOString().slice(0, 10));
 
 test("relative words become the day they meant, and read right later", () => {
   const stored = anchorTimes("how'd the race go yesterday—legs hold up?", utc);
   expect(stored).not.toContain("yesterday");
-  expect(read(stored, MON)).toBe("how'd the race go yesterday (Sunday 11 January)—legs hold up?");
+  expect(read(stored, MON)).toBe("how'd the race go yesterday, Sunday 11 January—legs hold up?");
   expect(read(stored, at("2026-01-13T09:00:00Z"))).toBe(
-    "how'd the race go 2 days ago (Sunday 11 January)—legs hold up?",
+    "how'd the race go 2 days ago, Sunday 11 January—legs hold up?",
   );
   const night = anchorTimes("Spica has a telescope booking confirmed for tonight.", utc);
   expect(read(night, MON)).toBe("Spica has a telescope booking confirmed for tonight.");
   expect(read(night, at("2026-01-13T09:00:00Z"))).toBe(
-    "Spica has a telescope booking confirmed for last night (Monday 12 January).",
+    "Spica has a telescope booking confirmed for last night, Monday 12 January.",
   );
 });
 
+test("day counts follow the calendar across midnight and a DST change", () => {
+  const late = anchorTimes("today", { at: at("2026-01-11T23:30:00Z"), zone: "UTC" });
+  expect(read(late, at("2026-01-12T00:10:00Z"))).toBe("yesterday, Sunday 11 January");
+  const london = anchorTimes("today", { at: at("2026-03-28T12:00:00Z"), zone: "Europe/London" });
+  expect(read(london, at("2026-03-30T00:30:00Z"))).toBe("2 days ago, Saturday 28 March");
+});
+
 test("a bare weekday takes a date the writer was shown, else points by the rule", () => {
-  const race = at("2026-01-11T08:00:00Z"); // Sunday
   const written = at("2026-01-05T10:00:00Z"); // Monday the 5th
-  const known = anchorTimes("Sam's got a half marathon Sunday.", {
-    at: written,
-    zone: "UTC",
-    known: [race],
-  });
-  expect(tokenDates(known).map((d) => d.toISOString().slice(0, 10))).toEqual(["2026-01-11"]);
-  // With no shown date: forward unless the phrase itself points back; the same weekday is today.
-  const forward = anchorTimes("Sam's got a half marathon Sunday.", { at: written, zone: "UTC" });
-  expect(tokenDates(forward)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
-  const sameDay = anchorTimes("They're awake late on a Wednesday.", {
-    at: at("2026-01-14T23:00:00Z"),
-    zone: "UTC",
-  });
-  expect(tokenDates(sameDay)[0]!.toISOString().slice(0, 10)).toBe("2026-01-14");
-  // Extract's label wins: "past" goes back, "upcoming" said on that weekday means next week.
-  const past = anchorTimes("The user finished it on Saturday.", { ...utc, direction: "past" });
-  expect(tokenDates(past)[0]!.toISOString().slice(0, 10)).toBe("2026-01-10");
-  const ahead = anchorTimes("The user has a meeting on Monday.", { ...utc, direction: "upcoming" });
-  expect(tokenDates(ahead)[0]!.toISOString().slice(0, 10)).toBe("2026-01-19");
+  const race = at("2026-01-11T08:00:00Z"); // Sunday
+  expect(days(anchorTimes("Sam's got a half marathon Sunday.", { at: written, zone: "UTC", known: [race] }))).toEqual(["2026-01-11"]);
+  expect(days(anchorTimes("Sam's got a half marathon Sunday.", { at: written, zone: "UTC" }))).toEqual(["2026-01-11"]);
+  expect(days(anchorTimes("They're awake late on a Wednesday.", { at: at("2026-01-14T23:00:00Z"), zone: "UTC" }))).toEqual(["2026-01-14"]);
+  expect(days(anchorTimes("The user finished it on Saturday.", { ...utc, direction: "past" }))).toEqual(["2026-01-10"]);
+  expect(days(anchorTimes("The user has a meeting on Monday.", { ...utc, direction: "upcoming" }))).toEqual(["2026-01-19"]);
 });
 
 test("weeks, weekends, offsets, explicit dates and durations anchor", () => {
-  const days = (s: string) =>
-    tokenDates(anchorTimes(s, utc)).map((d) => d.toISOString().slice(0, 10));
-  expect(days("Both happen this week.")).toEqual(["2026-01-12"]);
-  expect(days("Due by the end of the week.")).toEqual(["2026-01-16"]);
-  expect(days("Sister visits Saturday 17 January.")).toEqual(["2026-01-17"]);
-  expect(days("The results come in 3 days.")).toEqual(["2026-01-15"]);
-  expect(days("She left 2 days ago.")).toEqual(["2026-01-10"]);
+  expect(days(anchorTimes("Both happen this week.", utc))).toEqual(["2026-01-12"]);
+  expect(days(anchorTimes("Due by the end of the week.", utc))).toEqual(["2026-01-16"]);
+  expect(days(anchorTimes("Sister visits Saturday 17 January.", utc))).toEqual(["2026-01-17"]);
+  expect(days(anchorTimes("The results come in 3 days.", utc))).toEqual(["2026-01-15"]);
+  expect(days(anchorTimes("She left 2 days ago.", utc))).toEqual(["2026-01-10"]);
   // "over the weekend" with no label takes the nearest weekend: from a Monday, the one just past.
-  expect(days("The user finished the task over the weekend.")).toEqual(["2026-01-10"]);
+  expect(days(anchorTimes("The user finished the task over the weekend.", utc))).toEqual(["2026-01-10"]);
+  expect(days(anchorTimes("Starts in october.", utc))).toEqual(["2026-10-01"]);
   const waited = anchorTimes("Still waiting on feedback, five days now.", utc);
   expect(read(waited, at("2026-01-13T09:00:00Z"))).toBe(
-    "Still waiting on feedback, since Wednesday 7 January (6 days ago).",
+    "Still waiting on feedback, since Wednesday 7 January, 6 days ago.",
   );
 });
 
 test("a time on a day anchors; a bare clock time, 'now' and weekday nouns don't", () => {
-  const t = anchorTimes("The call is tomorrow at 3pm.", utc);
-  expect(read(t, MON)).toBe("The call is tomorrow (Tuesday 13 January) at 15:00.");
+  expect(read(anchorTimes("The call is tomorrow at 3pm.", utc), MON)).toBe(
+    "The call is tomorrow, Tuesday 13 January at 15:00.",
+  );
   for (const s of [
     "Sam's in the thick of it right now.",
     "She ran mile 10 at 8 pace.",
@@ -173,36 +186,47 @@ test("anchoring twice changes nothing, and dates inside tokens are never re-read
   expect(anchorTimes(once, { at: at("2027-06-01T09:00:00Z"), zone: "Asia/Singapore" })).toBe(once);
 });
 
-test("a date in another year names its year", () => {
-  const stored = anchorTimes("The party is on Wednesday 30 December.", {
-    at: at("2026-12-28T09:00:00Z"),
-    zone: "UTC",
-  });
+test("a date read in another year names its year", () => {
+  const stored = anchorTimes("The party is on Wednesday 30 December.", { at: at("2026-12-28T09:00:00Z"), zone: "UTC" });
   // Her stored notes drop the "on" with the phrase; the date reads on its own.
   expect(read(stored, at("2027-01-20T09:00:00Z"))).toBe("The party is Wednesday 30 December 2026.");
 });
 
 test("each token reads on its own calendar", () => {
-  // Written 23:30 in Singapore on Monday 12th: "tonight" is Singapore's Monday night.
-  const her = anchorTimes("Clear skies tonight.", {
-    at: at("2026-01-12T15:30:00Z"),
-    zone: "Asia/Singapore",
-  });
-  // 01:00 Tuesday in Singapore is still Monday in London; her token reads on her calendar.
-  expect(read(her, at("2026-01-12T17:00:00Z"))).toBe("Clear skies last night (Monday 12 January).");
+  const her = anchorTimes("Clear skies tonight.", { at: at("2026-01-12T15:30:00Z"), zone: "Asia/Singapore" });
+  expect(read(her, at("2026-01-12T17:00:00Z"))).toBe("Clear skies last night, Monday 12 January.");
 });
 
-test("said mode keeps the words and glosses them", () => {
+test("said mode keeps the words and glosses them only when their meaning moved", () => {
   const glossed = anchorTimes("my race is tomorrow", { ...utc, said: true });
-  expect(read(glossed, at("2026-01-13T08:00:00Z"))).toBe(
-    "my race is tomorrow (that's today)",
-  );
+  expect(read(glossed, at("2026-01-12T20:00:00Z"))).toBe("my race is tomorrow");
+  expect(read(glossed, at("2026-01-13T08:00:00Z"))).toBe("my race is tomorrow (that's today)");
   expect(read(glossed, at("2026-01-14T08:00:00Z"))).toBe(
-    "my race is tomorrow (that's yesterday (Tuesday 13 January))",
+    "my race is tomorrow (that's yesterday, Tuesday 13 January)",
   );
 });
 
-test("absolute rendering, token dates, single tokens and fields", () => {
+test("dates code holds become tokens: a memory's date shows once; written stamps", () => {
+  expect(read(dateToken(at("2026-01-11T08:00:00Z"), "UTC"), MON)).toBe("yesterday, Sunday 11 January");
+  expect(read(dateToken(at("2026-01-15T19:00:00Z"), "UTC", "time"), MON)).toBe("in 3 days, Thursday 15 January at 19:00");
+  expect(ownDate("Sam is stressed.", at("2026-01-09T08:00:00Z"), "UTC")).toBe(dateToken(at("2026-01-09T08:00:00Z"), "UTC"));
+  expect(ownDate(anchorTimes("The race is tomorrow.", utc), MON, "UTC")).toBeNull();
+  expect(ownDate("Sam is stressed.", null, "UTC")).toBeNull();
+  expect(read(stamped("Lately: tides.", at("2026-01-10T20:00:00Z"), "UTC"), MON)).toBe(
+    "(written 2 days ago, Saturday 10 January)\nLately: tides.",
+  );
+});
+
+test("now on both calendars", () => {
+  const t = at("2026-01-13T21:40:00Z");
+  expect(nowLine(t, "UTC", "UTC")).toBe("It's Tuesday 13 January, 21:40.");
+  expect(nowLine(t, "Europe/London", "Asia/Singapore")).toBe(
+    "It's Tuesday 13 January, 21:40 where they are; Wednesday 14 January, 05:40 for you.",
+  );
+  expect(nowLine(t, "Europe/London", "Asia/Singapore", "where Spica is")).toContain("05:40 where Spica is");
+});
+
+test("absolute rendering, token dates, single tokens, fields, leftover words", () => {
   const s = anchorTimes("the race tomorrow", utc);
   expect(renderAbsolute(s)).toBe("the race Tuesday 13 January 2026");
   expect(tokenDates(s)[0]!.toISOString()).toBe("2026-01-13T12:00:00.000Z");
@@ -214,13 +238,14 @@ test("absolute rendering, token dates, single tokens and fields", () => {
     from: ["x"],
   });
   expect(anchorFields(null, utc)).toBeNull();
+  expect(relativeWords("Sister visits tomorrow, coming Today.")).toEqual(["tomorrow", "today"]);
 });
 ```
 
-Add to `tests/mind/platform/config.test.ts` (with its existing `loadConfig` import):
+Add to `tests/mind/platform/config.test.ts`:
 
 ```ts
-test("time anchors render within a week as distances", () => {
+test("time anchors read as distances within a week", () => {
   expect(loadConfig().time.relative_max_days).toBe(6);
 });
 ```
@@ -232,13 +257,7 @@ Expected: FAIL. The module doesn't exist and `config.time` is undefined.
 
 - [ ] **Step 3: Config**
 
-In `src/mind/platform/config.ts`, before `export const ConfigSchema`:
-
-```ts
-const time = z.object({ relative_max_days: positiveInt });
-```
-
-Add `time,` inside `ConfigSchema` after `prompts,`. In `config/default.json`, add a top-level `"time": { "relative_max_days": 6 },` before `"prompts"`, keeping the file's key order style.
+In `src/mind/platform/config.ts`, before `export const ConfigSchema`, add `const time = z.object({ relative_max_days: positiveInt });`, and `time,` inside `ConfigSchema` after `prompts,`. In `config/default.json`, add a top-level `"time": { "relative_max_days": 6 },` before `"prompts"`.
 
 - [ ] **Step 4: The module**
 
@@ -246,14 +265,15 @@ Create `src/mind/platform/time-anchors.ts`:
 
 ```ts
 /**
- * Time anchors: stored text keeps the date each time phrase meant. When text is stored, each
+ * Dates, one way. Stored text keeps the date each time phrase meant: when it is stored, each
  * phrase ("tomorrow", "on Sunday", "five days now") is resolved from the moment it was written, in
- * the writer's zone, and replaced by a token holding the day, its precision and that zone. When a
- * model reads the text, each token is rendered on its own calendar relative to that moment's now
- * ("yesterday (Sunday 11 January)"). Only stored text is anchored: her messages are never touched.
+ * the writer's zone, and replaced by a token holding the day, its precision and that zone. Code
+ * puts any date it already holds into a prompt as the same kind of token. A token is rendered only
+ * when a prompt reaches a model, on its own calendar relative to that moment's now ("yesterday,
+ * Sunday 11 January"). Only stored text and prompts carry tokens: her messages are never touched.
  */
 import * as chrono from "chrono-node";
-import { localDateString, localMidnight, shiftLocalDate, zoneOffsetMinutes } from "./timezone";
+import { localDateString, localMidnight, localTime, shiftLocalDate, zoneOffsetMinutes } from "./timezone";
 
 export type Precision =
   | "day"
@@ -287,22 +307,13 @@ const ONE_TOKEN = /^⟦[^⟧]+⟧$/;
 const DAY_MS = 86_400_000;
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const COUNT: Record<string, number> = {
-  a: 1,
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
+  a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
   "a couple of": 2,
 };
 const N = "(\\d+|a couple of|a|one|two|three|four|five|six|seven|eight|nine|ten)";
 // Words pointing back in time: forward-dating would push "last friday" into next week.
 const PAST = /\b(last|ago|yesterday|earlier|previous|before)\b/i;
+const RELATIVE_WORDS = /\b(today|tonight|tomorrow|yesterday|this (?:morning|afternoon|evening|week|weekend)|last night|next week)\b/gi;
 const DURATION = new RegExp(
   `\\b(?:it'?s been|it has been)\\s+${N}\\s+(days?|weeks?)\\b|\\b${N}\\s+(days?|weeks?)\\s+now\\b`,
   "gi",
@@ -324,6 +335,8 @@ const NOUN_AFTER = /^\s+(roast|brunch|lunch|dinner|service|market|papers?|school
 const NOUN_BEFORE = /\b(black|good|easter|cyber|super|holy|ash|palm)\s+$/i;
 const PART_HOUR: Record<string, number> = { morning: 9, afternoon: 15, evening: 19, night: 22 };
 
+// ---------- Making tokens ----------
+
 /** Anchors every time phrase in `text`; text already anchored is left exactly as it is. */
 export function anchorTimes(text: string, ctx: AnchorContext): string {
   const passes = [durations, weeks, weekends, chronoPass];
@@ -338,16 +351,41 @@ export function anchorFields<T>(value: T, ctx: AnchorContext): T {
   ) as T;
 }
 
-/** Each token in words relative to `now`, on its own calendar. */
+/** The token for a date code already holds, on `zone`'s calendar. */
+export function dateToken(at: Date, zone: string, precision: "day" | "time" = "day"): string {
+  const day = localDateString(at, zone);
+  return precision === "time" ? `⟦${day}T${localTime(at, zone)}|time|${zone}⟧` : `⟦${day}|day|${zone}⟧`;
+}
+
+/** A memory's date, shown once: nothing when its words already carry one. */
+export function ownDate(content: string, when: Date | null, zone: string): string | null {
+  return when && !content.includes("⟦") ? dateToken(when, zone) : null;
+}
+
+/** When a note about the present was written: what it calls today was that day's. */
+export function written(at: Date, zone: string): string {
+  return `written ${dateToken(at, zone)}`;
+}
+
+/** A note about the present, headed by the day it was written. */
+export function stamped(text: string, at: Date, zone: string): string {
+  return `(${written(at, zone)})\n${text}`;
+}
+
+// ---------- Reading tokens ----------
+
+/** Each token in words relative to `now`, on its own calendar. Only the provider wrapper calls it. */
 export function renderTimes(text: string, now: Date, maxDays: number): string {
   return text.replace(TOKEN, (_m, local: string, precision: Precision, zone: string, said?: string) => {
     const phrase = render({ local, precision, zone }, now, maxDays);
     if (!said) return phrase;
+    // Words that still mean what they say need no gloss ("tomorrow", said today).
+    if (phrase.toLowerCase().startsWith(said.toLowerCase())) return said;
     return precision === "since" ? `${said} (since ${phrase})` : `${said} (that's ${phrase})`;
   });
 }
 
-/** Each token as a plain date with its year, for readers that have no "now" (the review). */
+/** Each token as a plain date with its year, for readers with no "now" (the review). */
 export function renderAbsolute(text: string): string {
   return text.replace(TOKEN, (_m, local: string, precision: Precision, _zone: string, said?: string) => {
     const abs = absolute(local, precision);
@@ -357,14 +395,28 @@ export function renderAbsolute(text: string): string {
 
 /** The instants the tokens in `text` point at. */
 export function tokenDates(text: string): Date[] {
-  return [...text.matchAll(TOKEN)].map((m) =>
-    instant({ local: m[1]!, precision: m[2] as Precision, zone: m[3]! }),
-  );
+  return [...text.matchAll(TOKEN)].map((m) => instant({ local: m[1]!, precision: m[2] as Precision, zone: m[3]! }));
 }
 
 export function isSingleToken(text: string): boolean {
   return ONE_TOKEN.test(text.trim());
 }
+
+/** "It's Tuesday 13 January, 21:40 where they are; …for you.": now on both calendars. */
+export function nowLine(now: Date, theirs: string, hers: string, herLabel = "for you"): string {
+  const at = (tz: string) =>
+    `${new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "long", day: "numeric", month: "long" })
+      .format(now)
+      .replace(",", "")}, ${localTime(now, tz)}`;
+  return at(theirs) === at(hers) ? `It's ${at(theirs)}.` : `It's ${at(theirs)} where they are; ${at(hers)} ${herLabel}.`;
+}
+
+/** Relative day words left in a text, lowercased: the review counts what anchoring missed. */
+export function relativeWords(text: string): string[] {
+  return [...text.matchAll(RELATIVE_WORDS)].map((m) => m[1]!.toLowerCase());
+}
+
+// ---------- Internals ----------
 
 function instant(a: Anchor): Date {
   const [date, time] = a.local.split("T");
@@ -402,8 +454,8 @@ const today = (ctx: AnchorContext) => localDateString(ctx.at, ctx.zone);
 
 function durations(plain: string, ctx: AnchorContext): string {
   return plain.replace(DURATION, (match, n1?: string, u1?: string, n2?: string, u2?: string) => {
-    const days = count((n1 ?? n2)!) * ((u1 ?? u2)!.startsWith("week") ? 7 : 1);
-    const t = token(shiftLocalDate(today(ctx), -days), "since", ctx, match);
+    const span = count((n1 ?? n2)!) * ((u1 ?? u2)!.startsWith("week") ? 7 : 1);
+    const t = token(shiftLocalDate(today(ctx), -span), "since", ctx, match);
     return ctx.said ? t : `since ${t}`;
   });
 }
@@ -522,14 +574,14 @@ function classifyDay(
     const before = plain.slice(0, r.index);
     const after = plain.slice(r.index + r.text.length);
     if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
-    const wd = WEEKDAYS.indexOf(m[2]!);
-    const local = m[1] ? explicitWeekday(day, wd, m[1]) : pickWeekday(day, wd, ctx, w);
-    return { local, precision: (m[3] as Precision | undefined) ?? "day" };
+    const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
+    const local = m[1] ? explicitWeekday(day, wd, m[1].toLowerCase()) : pickWeekday(day, wd, ctx, w);
+    return { local, precision: (m[3]?.toLowerCase() as Precision | undefined) ?? "day" };
   }
   if ((m = OFFSET.exec(w))) {
     const ago = m[3] !== undefined;
-    const days = count((m[1] ?? m[3])!) * ((m[2] ?? m[4])!.startsWith("week") ? 7 : 1);
-    return { local: shiftLocalDate(day, ago ? -days : days), precision: "day" };
+    const span = count((m[1] ?? m[3])!) * ((m[2] ?? m[4])!.startsWith("week") ? 7 : 1);
+    return { local: shiftLocalDate(day, ago ? -span : span), precision: "day" };
   }
   if ((MONTH.test(w) && /\d/.test(w)) || ORDINAL.test(w)) {
     // A date without a year is the occurrence nearest the moment it was written.
@@ -540,17 +592,14 @@ function classifyDay(
     return { local: nearest, precision: "day" };
   }
   if ((m = MONTH_ONLY.exec(w))) {
-    const ym = day.slice(0, 7);
-    const [y, mo] = ym.split("-").map(Number) as [number, number];
+    const [y, mo] = day.slice(0, 7).split("-").map(Number) as [number, number];
     if (m[1]) {
       const shift = m[1].toLowerCase() === "next" ? 1 : m[1].toLowerCase() === "last" ? -1 : 0;
-      const d = new Date(Date.UTC(y, mo - 1 + shift, 1));
-      return { local: d.toISOString().slice(0, 7), precision: "month" };
+      return { local: new Date(Date.UTC(y, mo - 1 + shift, 1)).toISOString().slice(0, 7), precision: "month" };
     }
     // "in october" said in October is this October; otherwise the next one.
     const target = new Date(`${m[2]} 1, ${y} 12:00 UTC`).getUTCMonth() + 1;
-    const year = target >= mo ? y : y + 1;
-    return { local: `${year}-${String(target).padStart(2, "0")}`, precision: "month" };
+    return { local: `${target >= mo ? y : y + 1}-${String(target).padStart(2, "0")}`, precision: "month" };
   }
   return null;
 }
@@ -576,42 +625,40 @@ function monthName(ym: string): string {
 function render(a: Anchor, now: Date, maxDays: number): string {
   const day = localDateString(now, a.zone);
   if (a.precision === "month") {
-    const months = (Number(a.local.slice(0, 4)) - Number(day.slice(0, 4))) * 12 +
+    const months =
+      (Number(a.local.slice(0, 4)) - Number(day.slice(0, 4))) * 12 +
       (Number(a.local.slice(5, 7)) - Number(day.slice(5, 7)));
     const label = monthName(a.local);
-    return months === 0 ? "this month" : months === -1 ? `last month (${label})` : months === 1 ? `next month (${label})` : label;
+    return months === 0 ? "this month" : months === -1 ? `last month, ${label}` : months === 1 ? `next month, ${label}` : label;
   }
   const [date, time] = a.local.split("T") as [string, string | undefined];
   const off = dayDiff(date, day);
   const name = dayName(date, date.slice(0, 4) !== day.slice(0, 4));
   const rel = off === 0 ? "today" : off === -1 ? "yesterday" : off === 1 ? "tomorrow" : off < 0 ? `${-off} days ago` : `in ${off} days`;
   const near = Math.abs(off) <= maxDays;
+  const weeksApart = dayDiff(mondayOf(date), mondayOf(day)) / 7;
   switch (a.precision) {
-    case "week": {
-      const w = dayDiff(mondayOf(date), mondayOf(day)) / 7;
-      return w === 0 ? "this week" : w === -1 ? `last week (the week of ${name})` : w === 1 ? `next week (the week of ${name})` : `the week of ${name}`;
-    }
-    case "weekend": {
-      const w = dayDiff(mondayOf(date), mondayOf(day)) / 7;
-      return w === 0 ? `this weekend (${name})` : w === -1 ? `last weekend (${name})` : w === 1 ? `next weekend (${name})` : `the weekend of ${name}`;
-    }
+    case "week":
+      return weeksApart === 0 ? "this week" : weeksApart === -1 ? `last week, the week of ${name}` : weeksApart === 1 ? `next week, the week of ${name}` : `the week of ${name}`;
+    case "weekend":
+      return weeksApart === 0 ? `this weekend, ${name}` : weeksApart === -1 ? `last weekend, ${name}` : weeksApart === 1 ? `next weekend, ${name}` : `the weekend of ${name}`;
     case "since":
-      return near ? `${name} (${rel})` : name;
+      return near && off !== 0 ? `${name}, ${rel}` : name;
     case "night":
       if (off === 0) return "tonight";
-      if (off === -1) return `last night (${name})`;
-      if (off === 1) return `tomorrow night (${name})`;
-      return near ? `the night of ${name} (${rel})` : `the night of ${name}`;
+      if (off === -1) return `last night, ${name}`;
+      if (off === 1) return `tomorrow night, ${name}`;
+      return near ? `the night of ${name}, ${rel}` : `the night of ${name}`;
     case "morning":
     case "afternoon":
     case "evening":
       if (off === 0) return `this ${a.precision}`;
-      if (Math.abs(off) === 1) return `${rel} ${a.precision} (${name})`;
-      return near ? `${name}, in the ${a.precision} (${rel})` : `${name}, in the ${a.precision}`;
+      if (Math.abs(off) === 1) return `${rel} ${a.precision}, ${name}`;
+      return near ? `the ${a.precision} of ${name}, ${rel}` : `the ${a.precision} of ${name}`;
     case "time":
       return `${render({ ...a, local: date, precision: "day" }, now, maxDays)} at ${time}`;
     default:
-      return off === 0 ? "today" : near ? `${rel} (${name})` : name;
+      return off === 0 ? "today" : near ? `${rel}, ${name}` : name;
   }
 }
 
@@ -629,7 +676,7 @@ function absolute(local: string, precision: Precision): string {
     case "morning":
     case "afternoon":
     case "evening":
-      return `${name}, in the ${precision}`;
+      return `the ${precision} of ${name}`;
     case "time":
       return `${name} at ${time}`;
     default:
@@ -638,20 +685,17 @@ function absolute(local: string, precision: Precision): string {
 }
 ```
 
-- [ ] **Step 5: Run the tests and fix against chrono's real output**
+- [ ] **Step 5: Run the tests; fix against chrono's real output**
 
 Run: `pnpm test tests/mind/platform/time-anchors.test.ts tests/mind/platform/config.test.ts`
-Expected: PASS. Where chrono's span or certainty differs from what a test assumes (for example its `text` for "tomorrow at 3pm", or whether it parses "30 December" with a weekday), adjust the module's regexes, never the test's expectation of the date. Record each such fix in the ledger as a ruling. Then run `pnpm exec prettier --write` and `pnpm exec eslint` on both files.
+Expected: PASS. Where chrono's span or certainty differs from what a test assumes, adjust the module's regexes, never a test's expected date, and record each fix as a ruling. Then run `pnpm exec prettier --write` and `pnpm exec eslint` on both files.
 
 - [ ] **Step 6: Replay the corpus (free check)**
-
-Run the scratch replay from 2026-10-24 against the module:
 
 ```bash
 pnpm exec tsx -e '
 import fs from "node:fs";
-import { anchorTimes } from "./src/mind/platform/time-anchors";
-import { relativeWords } from "./src/mind/platform/relative-date";
+import { anchorTimes, relativeWords } from "./src/mind/platform/time-anchors";
 let left = 0, texts = 0;
 for (const d of fs.readdirSync("evals/results/traces")) {
   const f = `evals/results/traces/${d}/world-outreach-two-weeks-1-db.json`;
@@ -668,23 +712,26 @@ console.log({ texts, leftWithRelativeWords: left });
 '
 ```
 
-Expected: leftover relative words in under 3% of texts, each one an understood miss (for example "the morning" used generically). Note the count in the ledger. If a miss is a real phrase the filters drop wrongly, fix the filter and add that sentence to the test file.
+Expected: leftover relative words in under 3% of texts, each an understood miss. Note the count in the ledger. If the filters drop a real phrase, fix the filter and add the sentence to the tests.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/mind/platform/time-anchors.ts src/mind/platform/config.ts config/default.json tests/mind/platform/time-anchors.test.ts tests/mind/platform/config.test.ts
-git commit -m "feat(time): anchors keep the date each time phrase meant and read it on any later day"
+git commit -m "feat(time): one time module: anchors and date tokens, read on any later day"
 ```
 
 ---
 
-### Task 2: Render every prompt through the clock
+### Task 2: One wrapper renders every prompt
 
 **Files:**
 - Create: `src/mind/platform/llm/render-net.ts`
-- Modify: `src/runtime/deps.ts:58-60`, `evals/lib/runner.ts:391-400` (and its `llm.prompts` / `llm.replies` reads), `evals/lib/review.ts` (Final facts lines)
-- Test: `tests/mind/platform/llm.test.ts` (or a new `tests/mind/platform/render-net.test.ts`), `tests/evals/review.test.ts`
+- Modify:
+  - `src/runtime/deps.ts:60`;
+  - `evals/lib/runner.ts:391-400`, plus every later read of `llm.prompts`, `llm.replies` or the core calls;
+  - `evals/lib/review.ts` (Final facts lines; import `relativeWords` from the new module).
+- Test: `tests/mind/platform/render-net.test.ts` (new), `tests/evals/review.test.ts`
 
 **Interfaces:**
 - Consumes: `renderTimes`, `renderAbsolute`, `anchorTimes` (Task 1).
@@ -692,10 +739,10 @@ git commit -m "feat(time): anchors keep the date each time phrase meant and read
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/mind/platform/render-net.test.ts`:
+`tests/mind/platform/render-net.test.ts`:
 
 ```ts
-/** Every prompt reaches the model with its time anchors read on the clock's day. */
+/** Every prompt reaches the model with its dates read on the clock's day. */
 import { expect, test } from "vitest";
 import { z } from "zod";
 import { SimClock } from "@/mind/platform/clock";
@@ -703,20 +750,14 @@ import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { withTimeRendering } from "@/mind/platform/llm/render-net";
 import { anchorTimes } from "@/mind/platform/time-anchors";
 
-const written = { at: new Date("2026-01-12T09:00:00Z"), zone: "UTC" };
-
-test("reply and structured prompts are rendered relative to the clock; the fake still records", async () => {
+test("reply and structured prompts are rendered at the clock's now; the inner provider records them", async () => {
   const fake = new FakeLLMProvider();
-  const clock = new SimClock(new Date("2026-01-13T09:00:00Z"));
-  const llm = withTimeRendering(fake, clock, 6);
-  const note = anchorTimes("the race was yesterday", written);
+  const llm = withTimeRendering(fake, new SimClock(new Date("2026-01-13T09:00:00Z")), 6);
+  const note = anchorTimes("the race was yesterday", { at: new Date("2026-01-12T09:00:00Z"), zone: "UTC" });
   fake.replies.push("ok");
-  await llm.generateReply({
-    system: [{ text: note, cache: true }],
-    messages: [{ role: "user", content: note }],
-  });
-  expect(fake.calls[0]!.system).toBe("the race was 2 days ago (Sunday 11 January)");
-  expect(fake.calls[0]!.messages[0]!.content).toBe("the race was 2 days ago (Sunday 11 January)");
+  await llm.generateReply({ system: [{ text: note, cache: true }], messages: [{ role: "user", content: note }] });
+  expect(fake.calls[0]!.system).toBe("the race was 2 days ago, Sunday 11 January");
+  expect(fake.calls[0]!.messages[0]!.content).toBe("the race was 2 days ago, Sunday 11 January");
   fake.handlers.probe = () => ({ ok: true });
   await llm.classifyJson({
     purpose: "probe",
@@ -726,29 +767,25 @@ test("reply and structured prompts are rendered relative to the clock; the fake 
     timeoutMs: 1000,
     maxTokens: 10,
   });
-  expect(fake.structuredCalls.at(-1)!.input).toContain("2 days ago (Sunday 11 January)");
+  expect(fake.structuredCalls.at(-1)!.input).toContain("2 days ago, Sunday 11 January");
   expect(fake.structuredCalls.at(-1)!.input).not.toContain("⟦");
-  // Reading through the wrapper reaches the fake's own fields.
-  expect((llm as FakeLLMProvider).calls).toBe(fake.calls);
 });
 ```
 
-In `tests/evals/review.test.ts`, add a test like the existing relative-words one: a final fact whose content is `anchorTimes("Sister visits tomorrow.", { at: new Date("2026-01-12T09:00:00Z"), zone: "UTC" })` must appear in the review as `Sister visits Tuesday 13 January 2026.`, with no "⟦".
+In `tests/evals/review.test.ts`, add a case: a final fact whose content is `anchorTimes("Sister visits tomorrow.", { at: new Date("2026-01-12T09:00:00Z"), zone: "UTC" })` shows in the review as "Sister visits Tuesday 13 January 2026.", with no "⟦".
 
 - [ ] **Step 2: Run them and see them fail**
 
 Run: `pnpm test tests/mind/platform/render-net.test.ts tests/evals/review.test.ts`
-Expected: FAIL. The module doesn't exist, and the review prints the raw token.
+Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-Create `src/mind/platform/llm/render-net.ts`:
-
 ```ts
 /**
- * Every prompt passes through here on its way to a model: each time anchor in it is rendered on
- * its own calendar relative to the clock's now, so stored text reads right on whatever day it is
- * read. Wrapping by delegation keeps the inner provider's own fields reachable (test recorders).
+ * Every prompt passes through here on its way to a model: each date token in it is rendered on
+ * its own calendar relative to the clock's now, so the model reads dates on the day it reads them
+ * and never counts days. Wrapping by delegation keeps the inner provider's own fields reachable.
  */
 import type { Clock } from "../clock";
 import { renderTimes } from "../time-anchors";
@@ -768,83 +805,77 @@ export function withTimeRendering<T extends LLMProvider>(inner: T, clock: Clock,
 }
 ```
 
-`src/runtime/deps.ts`: `llm: withTimeRendering(new AnthropicProvider(new Anthropic(), config.models), systemClock, config.time.relative_max_days),`. Import it.
-
-`evals/lib/runner.ts`: keep the recorder in its own constant and wrap it:
-
-```ts
-  const recording = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
-  const llm = withTimeRendering(recording, clock, config.time.relative_max_days);
-```
-
-Change every later read of `llm.prompts`, `llm.replies` and the core-call list in the runner to `recording.…`, so nothing reads through the wrapper. Grep `llm\.` in the runner to find them all.
-
-`evals/lib/review.ts`: in the Final facts lines, print `fmt(renderAbsolute(String(f.content ?? "")))`. Import `renderAbsolute`.
+Wiring:
+- **`src/runtime/deps.ts`:** `llm: withTimeRendering(new AnthropicProvider(new Anthropic(), config.models), systemClock, config.time.relative_max_days)`.
+- **`evals/lib/runner.ts`:** keep the recorder as `const recording = new RecordingLLM(…)`, then `const llm = withTimeRendering(recording, clock, config.time.relative_max_days)`. Change every later `llm.prompts`, `llm.replies` and core-call read to `recording.…`, so nothing is assigned or read through the wrapper.
+- **`evals/lib/review.ts`:** Final facts lines print `fmt(renderAbsolute(String(f.content ?? "")))`; import `relativeWords` from `@/mind/platform/time-anchors`.
+- **Tests keep the bare fake** (they assign `failReplies`, `replyHook`, `classify`). Builder tests assert tokens or render with `renderTimes`.
 
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `pnpm test tests/mind/platform/render-net.test.ts tests/evals tests/mind/platform/llm.test.ts`
-Expected: PASS. `pnpm typecheck` clean.
+Run: `pnpm test tests/mind/platform/render-net.test.ts tests/evals`
+Expected: PASS; `pnpm typecheck` clean.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mind/platform/llm/render-net.ts src/runtime/deps.ts evals/lib/runner.ts evals/lib/review.ts tests
-git commit -m "feat(time): every prompt reads its time anchors on the clock's day"
+git add src/mind/platform/llm/render-net.ts src/runtime/deps.ts evals/lib tests
+git commit -m "feat(time): every prompt reads its dates on the clock's day, in one place"
 ```
 
 ---
 
-### Task 3: The repos anchor every write
+### Task 3: The inserts anchor every write
 
 **Files:**
-- Modify: `src/db/repos/user/facts.ts:143-150` (`insertFact`)
-- Modify: `src/db/repos/core/memory.ts:49` (`coreMemoryRepo`), `:266-274` (`insert`), `:561-568` (`insertSnapshot`)
-- Modify: `src/db/repos/core/index.ts` (`scope`, `createCoreLayer`), `src/mind/memory/core/types.ts` (the `CoreMemory.insert` signature)
-- Modify: `src/runtime/deps.ts`, `evals/lib/runner.ts`, `src/db/reset-self-cli.ts`: `createCoreLayer(db, config.life.timezone)`
-- Test: `tests/db/user-mind-repos.test.ts` (or `tests/db/facts.test.ts` if one exists for `insertFact`), `tests/db/core-repos.test.ts`
+- Modify:
+  - `src/db/repos/user/facts.ts:143-150` (`insertFact`);
+  - `src/db/repos/core/memory.ts:49` (`coreMemoryRepo`), `:266-274` (`insert`), `:561-568` (`insertSnapshot`);
+  - `src/db/repos/core/index.ts`;
+  - `src/mind/memory/core/types.ts` (`CoreMemory.insert`);
+  - `src/runtime/deps.ts`, `evals/lib/runner.ts`, `src/db/reset-self-cli.ts`: `createCoreLayer(db, config.life.timezone)`.
+- Test: `tests/db/user-mind-repos.test.ts`, `tests/db/core-repos.test.ts`
 
 **Interfaces:**
-- Consumes: `anchorTimes`, `anchorFields`, `AnchorHints` (Task 1); `getTimezone` (`src/db/repos/user/users.ts`); `zoneOrUtc` (`platform/timezone.ts`).
+- Consumes: `anchorTimes`, `anchorFields`, `AnchorHints` (Task 1); `getTimezone` (`src/db/repos/user/users.ts`); `zoneOrUtc`.
 - Produces:
-  - `insertFact(db, userId, row, hints?: AnchorHints): Promise<FactRow>`
-  - `CoreMemory.insert(item: NewCoreMemory, hints?: AnchorHints): Promise<string>`
-  - `createCoreLayer(db: Db, zone = "UTC"): CoreLayer`
-  - `coreMemoryRepo(db: Db, zone = "UTC"): CoreMemory`
+  - `insertFact(db, userId, row, hints?: AnchorHints)`
+  - `CoreMemory.insert(item, hints?: AnchorHints)`
+  - `createCoreLayer(db, zone = "UTC")`, `coreMemoryRepo(db, zone = "UTC")`
 
 - [ ] **Step 1: Write the failing tests**
 
-In `tests/db/user-mind-repos.test.ts` (it imports `insertFact`, `setTimezone`, `getTestDb`, `createTestUser`, `vec`), add:
+In `tests/db/user-mind-repos.test.ts`:
 
 ```ts
 import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 
-test("insertFact anchors content and payload strings in the user's zone; no zone means UTC", async () => {
+const summaryRow = (content: string, at: Date) => ({
+  subject: "shared" as const,
+  kind: "summary" as const,
+  content,
+  payload: { whats_live: content, sensitive: true },
+  embedding: vec(),
+  created_at: at,
+  status: "open" as const,
+  salience: 0.5,
+  valence: 0,
+  confidence: 0.6,
+  source: "generated" as const,
+});
+
+test("insertFact anchors content and payload strings in the user's zone; no or a bad zone is UTC", async () => {
   const u = await createTestUser();
   const at = new Date("2026-01-12T23:30:00Z"); // Monday 23:30 UTC, Tuesday 07:30 in Singapore
-  const put = (content: string) =>
-    insertFact(getTestDb(), u, {
-      subject: "shared",
-      kind: "summary",
-      content,
-      payload: { whats_live: content, sensitive: true },
-      embedding: vec(),
-      created_at: at,
-      status: "open",
-      salience: 0.5,
-      valence: 0,
-      confidence: 0.6,
-      source: "generated",
-    });
-  const utc = await put("Sister visits tomorrow.");
+  const utc = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
   expect(tokenDates(utc.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
   expect((utc.payload as { whats_live: string }).whats_live).toBe(utc.content);
   expect((utc.payload as { sensitive: boolean }).sensitive).toBe(true);
   await setTimezone(getTestDb(), u, "Asia/Singapore");
-  const sg = await put("Sister visits tomorrow.");
-  expect(renderTimes(sg.content, at, 6)).toBe("Sister visits tomorrow (Wednesday 14 January).");
+  const sg = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
+  expect(renderTimes(sg.content, at, 6)).toBe("Sister visits tomorrow, Wednesday 14 January.");
   await setTimezone(getTestDb(), u, "Mars/Olympus");
-  const bad = await put("Sister visits tomorrow.");
+  const bad = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
   expect(tokenDates(bad.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
 });
 
@@ -853,36 +884,29 @@ test("insertFact takes hints: a weekday matches a shown date", async () => {
   const row = await insertFact(
     getTestDb(),
     u,
-    {
-      subject: "shared",
-      kind: "summary",
-      content: "Race Sunday.",
-      embedding: vec(),
-      created_at: new Date("2026-01-14T09:00:00Z"), // Wednesday
-      status: "open",
-      salience: 0.5,
-      valence: 0,
-      confidence: 0.6,
-      source: "generated",
-    },
+    summaryRow("Race Sunday.", new Date("2026-01-14T09:00:00Z")), // Wednesday
     { known: [new Date("2026-01-11T08:00:00Z")] },
   );
   expect(tokenDates(row.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
 });
 ```
 
-Check the exact name and signature of `setTimezone` in `src/db/repos/user/users.ts` and use it as written there.
+Use `setTimezone` as written in `users.ts`. If it rejects an invalid zone, write the bad zone with a direct `db.update(user)`.
 
-In `tests/db/core-repos.test.ts`, add a test that builds `createCoreLayer(getTestDb(), "Asia/Singapore")` and inserts a memory with content "Clear skies tonight." and `created_at` `2026-01-12T15:30:00Z`. Assert that `renderTimes(content, new Date("2026-01-12T17:00:00Z"), 6)` is "Clear skies last night (Monday 12 January)." (Singapore's Monday night). Also insert a snapshot whose content has "tonight" and assert the stored content holds a token (`tokenDates(...).length === 1`). Copy the insert field set from an existing core memory insert in that file.
+In `tests/db/core-repos.test.ts`:
+- `createCoreLayer(getTestDb(), "Asia/Singapore")` inserts "Clear skies tonight." at `2026-01-12T15:30:00Z`, and `renderTimes(content, new Date("2026-01-12T17:00:00Z"), 6)` is "Clear skies last night, Monday 12 January.".
+- A snapshot with "tonight" in its content is stored with one token.
+
+Copy the insert fields from an existing insert in that file.
 
 - [ ] **Step 2: Run them and see them fail**
 
 Run: `pnpm test tests/db/user-mind-repos.test.ts tests/db/core-repos.test.ts`
-Expected: FAIL. Content is stored as written.
+Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-`src/db/repos/user/facts.ts`:
+`facts.ts`:
 
 ```ts
 /**
@@ -895,7 +919,7 @@ export async function insertFact(
   row: NewFact,
   hints: AnchorHints = {},
 ): Promise<FactRow> {
-  const ctx = { at: row.created_at, zone: zoneOrUtc(await getTimezone(db, userId)), ...hints };
+  const ctx = { at: row.created_at as Date, zone: zoneOrUtc(await getTimezone(db, userId)), ...hints };
   return one(
     await db
       .insert(fact)
@@ -910,61 +934,29 @@ export async function insertFact(
 }
 ```
 
-Imports: `anchorFields`, `anchorTimes`, `type AnchorHints` from `@/mind/platform/time-anchors`; `zoneOrUtc` from `@/mind/platform/timezone`; `getTimezone` from `./users`. If `row.created_at` types as `Date | SQL`, narrow with `row.created_at as Date`. Every caller passes a Date; add a comment saying so. If ESLint forbids `src/db` importing `@/mind/platform`, check how other repos import mind types (they import `@/mind/platform/core`); a pure platform module should be allowed. If it isn't, stop and record a ruling.
+Imports: `anchorFields`, `anchorTimes`, `type AnchorHints`; `zoneOrUtc`; `getTimezone` from `./users`. If ESLint forbids `src/db` importing `@/mind/platform/time-anchors`, stop and record a ruling. Other repos already import `@/mind/platform/core` types, so a pure platform module should be allowed.
 
-`src/db/repos/core/memory.ts`: `export function coreMemoryRepo(db: Db, zone = "UTC"): CoreMemory`, then:
+`core/memory.ts`: `export function coreMemoryRepo(db: Db, zone = "UTC"): CoreMemory`:
+- `insert(item, hints = {})` anchors `item.content` with `{ at: item.created_at, zone, ...hints }`;
+- `insertSnapshot` anchors `content` and `anchorFields(sections)` with `{ at: snapshot.rendered_at, zone }`.
 
-```ts
-    async insert(item, hints = {}) {
-      const ctx = { at: item.created_at, zone, ...hints };
-      const row = one(
-        await db
-          .insert(core_memory)
-          .values({ ...item, content: anchorTimes(item.content, ctx), entity_refs: item.entity_refs ?? [] })
-          .returning({ id: core_memory.id }),
-      );
-      return row.id;
-    },
-```
+`types.ts`: `insert(item: NewCoreMemory, hints?: AnchorHints): Promise<string>;`.
 
-and in `insertSnapshot`:
-
-```ts
-    async insertSnapshot(snapshot) {
-      const ctx = { at: snapshot.rendered_at, zone };
-      const rows = await db
-        .insert(core_snapshot)
-        .values({
-          ...snapshot,
-          content: anchorTimes(snapshot.content, ctx),
-          sections: anchorFields(snapshot.sections, ctx),
-        })
-        .onConflictDoNothing()
-        .returning({ version: core_snapshot.version });
-      return rows.length > 0;
-    },
-```
-
-`src/mind/memory/core/types.ts`: `insert(item: NewCoreMemory, hints?: AnchorHints): Promise<string>;` (import the type).
-
-`src/db/repos/core/index.ts`: `function scope(db: Db, zone: string)`, `memory: coreMemoryRepo(db, zone)`, and
+`core/index.ts`:
 
 ```ts
 /** `zone` is her life zone: what she writes is anchored on her calendar. */
 export function createCoreLayer(db: Db, zone = "UTC"): CoreLayer {
-  return {
-    ...scope(db, zone),
-    transaction: (fn) => db.transaction((tx) => fn(scope(tx, zone))),
-  };
+  return { ...scope(db, zone), transaction: (fn) => db.transaction((tx) => fn(scope(tx, zone))) };
 }
 ```
 
-Callers: `src/runtime/deps.ts`, `evals/lib/runner.ts` and `src/db/reset-self-cli.ts` pass `config.life.timezone`. Tests keep the UTC default. `src/db/repos/admin/inspector-core.ts` keeps `coreMemoryRepo(db)` (it only reads).
+`scope(db, zone)` passes the zone to `coreMemoryRepo`. Callers pass `config.life.timezone`; tests keep UTC; `inspector-core.ts` keeps `coreMemoryRepo(db)` (read-only).
 
-- [ ] **Step 4: Run them and see them pass, then the repo neighbours**
+- [ ] **Step 4: Run the repo and memory tests**
 
 Run: `pnpm test tests/db tests/mind/memory`
-Expected: PASS. A test that asserted stored content equal to an input containing "tomorrow", "tonight" and so on now sees a token. Change it to assert `renderAbsolute(content)` or the token date: that's the new behaviour. Never weaken it to `expect.any`.
+Expected: PASS. A test that compared stored content with input text holding "tomorrow" or "tonight" now asserts the token's date (`tokenDates`) or `renderAbsolute(content)`. That's the new behaviour; never loosen it to `expect.any`.
 
 - [ ] **Step 5: Commit**
 
@@ -975,30 +967,204 @@ git commit -m "feat(time): every stored fact and memory keeps the date its time 
 
 ---
 
-### Task 4: Extract labels direction and is cross-checked
+### Task 4: Builders place tokens; `relative-date.ts` goes
+
+**Files:** every remaining caller of `relative-date.ts`, `guardNow`, and `formatLocal` used for "now":
+- `src/mind/process/hot-path/compose.ts`:
+  - `renderReachOut` notes;
+  - summary and read `written`;
+  - ideas without a stamp;
+  - the snapshot `stamped`;
+  - the guard's `now`;
+  - `guardFacts`;
+  - `loadRelationshipLine`.
+- `src/mind/process/hot-path/assemble.ts`:
+  - `factList` / `memorySection` (zones per owner);
+  - `relationshipLine`;
+  - `AssembleInput` gains `userTimezone` and `nowLine`, and a `## Now` section.
+- `src/mind/process/user/inputs.ts`: `memoryLines`, `stampedNote`, `threadLines`, with `now` parameters dropped.
+- `src/mind/process/user/{summarise,reflect,model,ideate,run}.ts`: `now: nowLine(...)`; `written`; `stamped`.
+- `src/mind/memory/core/self.ts`: `latestSelf(memory, seedSelf, zone)` with no `now`.
+- Callers of `latestSelf` (`src/mind/process/core/{anticipate,appraise,resolve,ruminate,wander}.ts`, `src/mind/world/events.ts`) and `stamped` (`src/mind/process/core/{reflect,render-snapshot}.ts`).
+- Her loops' dated inputs:
+  - `wander.ts` `dated()`;
+  - the `ruminate.ts` episode;
+  - the `reflect.ts` inputs' `when`;
+  - `anticipate.ts`'s "When:" (`dateToken(at, tz, "time")`);
+  - the `events.ts` episodes.
+- Every `noteRelativeWords` call: `src/mind/process/{user/*,core/thoughts,core/appraise,core/reflect,core/render-snapshot,cold-path/cold-path}.ts`.
+- `src/mind/process/guard/guard.ts`: delete `guardNow`.
+- **Delete** `src/mind/platform/relative-date.ts` and `tests/mind/platform/relative-date.test.ts`. Their cases are already ported in Task 1.
+- `src/mind/memory/shared/types.ts`, `src/mind/memory/{user,core}/retrieve.ts`: delete `RetrievedFact.noted`.
+- Tests:
+  - `tests/mind/process/hot-path/{assemble,compose}.test.ts`;
+  - `tests/mind/process/user/{summarise,ideate,model,run}.test.ts`;
+  - `tests/mind/process/guard/guard.test.ts`;
+  - `tests/mind/memory/core/self.test.ts`;
+  - `tests/mind/process/core/{anticipate,wander}.test.ts`;
+  - `tests/exit/phase-16.test.ts`, `tests/exit/phase-15c.test.ts`.
+
+**Interfaces:**
+- Consumes: `dateToken`, `ownDate`, `written`, `stamped`, `nowLine` (Task 1).
+- Produces:
+  - `memoryLines(facts, tz)`, `stampedNote(row, tz)`, `threadLines(threads, tz)`, with no `now`;
+  - `latestSelf(memory, seedSelf, zone)`;
+  - `assemblePrompt` input fields `userTimezone: string` and `nowLine?: string | null`;
+  - `guardFacts(retrieval, core, theirZone, herZone)`.
+
+- [ ] **Step 1: Update the tests to the token behaviour (they fail first)**
+
+A builder now places tokens. Each test that asserted a rendered date wraps the prompt in `renderTimes(text, now, 6)` and expects the new comma style ("yesterday, Sunday 11 January"). Concretely:
+- **`assemble.test.ts`:** factList expectations become `"- Race day. (today)"` style after `renderTimes(system, now, 6)`. Add the owner's-calendar test:
+
+  ```ts
+  test("their things are dated on their calendar, hers on hers, under a Now line", () => {
+    const now = new Date("2026-01-12T17:00:00Z"); // Monday 17:00 London, Tuesday 01:00 Singapore
+    const { system } = assemblePrompt({
+      ...base,
+      now,
+      timezone: "Asia/Singapore",
+      userTimezone: "Europe/London",
+      nowLine: "It's Monday 12 January, 17:00 where they are; Tuesday 13 January, 01:00 for you.",
+      recentTurns: [],
+      retrieval: { ...emptyRetrieval(), facts: { user: [{ id: "u", content: "Race day.", when: new Date("2026-01-12T09:00:00Z") }], self: [], shared: [] } },
+      coreMemories: [{ id: "c", content: "Telescope night.", when: new Date("2026-01-12T14:00:00Z") }],
+    });
+    const seen = renderTimes(system, now, 6);
+    expect(seen).toContain("## Now\nIt's Monday 12 January, 17:00 where they are");
+    expect(seen).toContain("- Race day. (today)");
+    expect(seen).toContain("- Telescope night. (yesterday, Monday 12 January)");
+  });
+
+  test("a memory whose words carry its date isn't dated twice", () => {
+    const now = new Date("2026-01-12T09:00:00Z");
+    const content = anchorTimes("The race is tomorrow.", { at: now, zone: "UTC" });
+    const { system } = assemblePrompt({
+      ...base, now, timezone: "UTC", userTimezone: "UTC", recentTurns: [],
+      retrieval: { ...emptyRetrieval(), facts: { user: [{ id: "u", content, when: now }], self: [], shared: [] } },
+    });
+    expect(renderTimes(system, now, 6)).toContain("- The race is tomorrow, Tuesday 13 January.\n");
+  });
+  ```
+
+  `base` gains `userTimezone: "UTC"`.
+- **`compose.test.ts`:** the summary-written and snapshot-stamp tests render `deps.llm.calls.at(-1)!.system` with `renderTimes(…, deps.clock.now(), 6)` before matching. Keep the two-user snapshot test: the raw first blocks are still identical, since tokens are the same for every user.
+- **`guard.test.ts`:** replace the `guardNow` test with nothing (`nowLine` is tested in Task 1). The remembered-facts test passes `when: dateToken(...)` and checks the rendered input.
+- **`self.test.ts`:** `latestSelf(memory, "SEED", "UTC")`; render before comparing ("(written yesterday, Wednesday 14 January)…").
+- **User-mind tests:** `input.now` matches `/^It's \w+ \d+ \w+, \d{2}:\d{2}/`; memory `when` and note `written` are tokens; render them before comparing.
+- **`exit/phase-16.test.ts` test 1** (day counts): rewrite with `renderTimes(dateToken(…), now, 6)` for the same four instants, with the new-style strings. `phase-15c.test.ts`: replace its relative-date import the same way. **`phase-15d.test.ts` test 3** (the reason carries its dates): render the `renderReachOut` reason with `renderTimes` before matching, with the new-style strings.
+- **Core anticipate and wander tests:** render the captured input before the regex, e.g. `/When: (today|in \d+ days|tomorrow), \w+ \d+ \w+ at \d{2}:\d{2}/`.
+
+- [ ] **Step 2: Run them and see them fail**
+
+Run: `pnpm test tests/mind/process/hot-path tests/mind/process/user tests/mind/process/guard tests/mind/memory/core tests/mind/process/core tests/exit/phase-16.test.ts tests/exit/phase-15c.test.ts`
+Expected: FAIL, because the builders still render with `relative-date.ts`.
+
+- [ ] **Step 3: Convert the builders (the pattern, then the list)**
+
+The pattern for every call site: replace `<render>(at, now, tz)` with a token placed in the owner's zone, and drop the `now` that existed only for rendering.
+
+| Old | New |
+|---|---|
+| `dayInWords(at, now, tz)` | `dateToken(at, tz)` |
+| `relativeDate(at, now, tz)` | `dateToken(at, tz)` |
+| `itemWhen(when, noted, now, tz)` | `ownDate(content, when, tz)`: append `(${d})` only when it's non-null |
+| `writtenOn(at, now, tz)` | `written(at, tz)` |
+| `stamped(text, at, now, tz)` | `stamped(text, at, tz)` |
+| `formatLocal(now, tz)` as a loop's `now` | `nowLine(now, zoneOrUtc(tz), lifeTimezone(config.life, now))` |
+| `guardNow(now, theirs, hers)` | `nowLine(now, theirs, hers, "where Spica is")` |
+| `` `When: ${dayInWords(at,…)} at ${localTime(at,…)}` `` | `` `When: ${dateToken(event.at, tz, "time")}` `` |
+
+Per file:
+- **`assemble.ts`:**
+  - `factList(title, facts, zone)` builds `` `- ${f.content}${d ? ` (${d})` : ""}${onMind}${tail}` `` with `d = ownDate(f.content, f.when, zone)`;
+  - in `memorySection`, "About them", "Between you" and "What you've told them" use `input.userTimezone`, and "From your own life" uses `input.timezone`;
+  - add `section("Now", input.nowLine ?? null)` first in the uncached sections;
+  - `relationshipLine(stats, zone)` writes `` `You first talked ${dateToken(stats.first, zone)}, …` ``;
+  - remove the `relative-date` import.
+- **`compose.ts`:**
+  - compute `const theirZone = await userZone(deps, userId)` beside `herZone`;
+  - summary and read `written: written(row!.created_at, theirZone)`;
+  - ideas `shownIdeas.map((i) => i.content)`;
+  - `snapshot: stamped(snapshotWithin(...), latestSnapshot.rendered_at, herZone)`;
+  - `assemblePrompt({ …, userTimezone: theirZone, nowLine: nowLine(clock.now(), theirZone, herZone) })`;
+  - guard `now: nowLine(clock.now(), theirZone, herZone, "where Spica is")`;
+  - `guardFacts(retrieval, herMemories, theirZone, herZone)` gives `when: ownDate(f.content, f.when, zone) ?? undefined`, with core in `herZone`;
+  - `renderReachOut` notes: `const when = n.dated ? dateToken(at, tz) : \`they told you ${dateToken(at, tz)}\``;
+  - `loadRelationshipLine` passes `tz` only.
+- **`inputs.ts`:**
+  - `memoryLines(facts, tz)`: `when: ownDate(content, occurred_at, zoneOrUtc(tz))`;
+  - `stampedNote(row, tz)`: `written: written(row.created_at, zoneOrUtc(tz))`;
+  - `threadLines(threads, tz)`: `` `${t.title} (next: ${dateToken(t.next_checkpoint, zone)})` ``.
+- **The four loops and `run.ts`:**
+  - `now: nowLine(…)`;
+  - `written(...)` instead of `writtenOn`;
+  - `run.ts` uses `stamped(latest.content, latest.rendered_at, lifeTimezone(config.life, now))`;
+  - drop the `now` arguments to the helpers above.
+- **`self.ts`:** `latestSelf(memory, seedSelf, zone)` uses `stamped(snapshot.content, snapshot.rendered_at, zone)`. Callers drop `now`.
+- **Core inputs:**
+  - `wander` uses `` `${m.content} (${dateToken(m.occurred_at ?? m.created_at, tz)})` ``;
+  - `ruminate` writes the episode as `` `… (${dateToken(…)})` ``;
+  - `reflect` uses `when: dateToken(occurred_at ?? created_at, tz)`;
+  - `events.ts` uses `` `(${dateToken(e.when, tz)})` ``.
+- **`noteRelativeWords`:** delete every call and import. Anchoring at insert replaces logging.
+- **`retrieve.ts` (user and core) and `shared/types.ts`:** delete `noted`.
+- **`guard.ts`:** delete `guardNow`.
+- **Finally:** `git rm src/mind/platform/relative-date.ts tests/mind/platform/relative-date.test.ts`.
+
+- [ ] **Step 4: Run the tests; check nothing renders dates outside the module**
+
+Run: `pnpm test tests/mind tests/exit/phase-16.test.ts tests/exit/phase-15c.test.ts tests/exit/phase-15d.test.ts`
+Expected: PASS.
+
+Run: `git grep -nE "relativeDate|dayInWords|itemWhen|writtenOn|guardNow|noteRelativeWords|relative-date" -- src tests evals`
+Expected: no output.
+
+Run: `pnpm typecheck && pnpm lint`
+Expected: clean.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A src tests
+git commit -m "refactor(time): builders place date tokens on their owner's calendar; one renderer, relative-date goes"
+```
+
+---
+
+### Task 5: Extract dates from the message's own time
 
 **Files:**
-- Modify: `src/mind/memory/user/extract.ts` (schema line about 50; the `applyWhen` call at about 282)
-- Delete: `src/mind/memory/user/when.ts`, `tests/mind/memory/user/when.test.ts` (port its cases to Task 4's test)
-- Create: `prompts/extract/v10.md` (`git mv` from v9, then edit); config `prompts.extract` → `"v10"`
-- Test: `tests/mind/memory/user/extract.test.ts`, plus `extract-when.test.ts` if one exists. Find the tests importing `applyWhen` or `resolveWhen` with grep and move their cases here.
+- Modify: `src/mind/memory/user/extract.ts`:
+  - `FactSchema` drops `occurred_at` and `when`, adds `when_direction`;
+  - the thread schema drops `next_checkpoint`;
+  - `normalizeExtraction` no longer parses dates;
+  - `parseDate` is deleted if unused;
+  - `ExtractedFact` drops `when`;
+  - the `applyWhen` call becomes `anchorExtraction`.
+- Modify: `src/mind/memory/user/hurt.ts` if typecheck flags `when`.
+- Delete: `src/mind/memory/user/when.ts`, `tests/mind/memory/user/when.test.ts` (its cases live in Task 1's tests).
+- Create: `prompts/extract/v10.md` (`git mv` from v9); config `prompts.extract` → `"v10"`.
+- Modify: `src/mind/platform/llm/fake.ts` (the extract handler) only if typecheck requires it. Zod drops unknown keys.
+- Test: `tests/mind/memory/user/extract.test.ts`, plus whichever test imported `applyWhen` or `resolveWhen`.
 
 **Interfaces:**
 - Consumes: `anchorTimes`, `isSingleToken`, `tokenDates` (Task 1).
-- Produces: `anchorExtraction(extraction: Extraction, turns: { role: string; text: string; created_at: Date }[], ref: Date | null, zone: string, log?: Logger): Extraction`, exported from `extract.ts`. Facts gain `when_direction: "past" | "upcoming" | null`.
+- Produces: `anchorExtraction(extraction: Extraction, turns: { role: string; text: string; created_at: Date }[], zone: string, log?: Logger): Extraction`, exported. Facts carry `when_direction`; `occurred_at` is the fact's first anchor; a thread's `next_checkpoint` is its `checkpoint_when` anchored ahead.
 
 - [ ] **Step 1: Write the failing tests**
 
-In the extract test file, add, importing `anchorExtraction` and `tokenDates` and a minimal `Extraction` builder. Reuse the file's builder if it has one; otherwise build `{ facts: [...], entities: [], threads: [], relationship: null }` with the fields `normalizeExtraction` fills:
-
 ```ts
-const ref = new Date("2026-01-12T09:00:00Z"); // Monday
-const fact = (content: string, when: string | null, when_direction: "past" | "upcoming" | null) => ({
+import { anchorExtraction } from "@/mind/memory/user/extract";
+import { tokenDates } from "@/mind/platform/time-anchors";
+
+const sent = new Date("2026-01-12T09:00:00Z"); // Monday
+const user = (text: string) => ({ role: "user", text, created_at: sent });
+const fact = (content: string, when_direction: "past" | "upcoming" | null) => ({
   subject: "user" as const,
   kind: "event" as const,
   content,
   occurred_at: null,
-  when,
   when_direction,
   salience: 0.7,
   valence: 0,
@@ -1009,265 +1175,173 @@ const fact = (content: string, when: string | null, when_direction: "past" | "up
   idiolect_type: null,
   started_by: null,
 });
-const day = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
+const extraction = (facts: unknown[], threads: unknown[] = []) =>
+  ({ facts, entities: [], threads, relationship: null, intimacy: null, bid: null }) as never;
+const day = (d: Date | null | undefined) => d?.toISOString().slice(0, 10) ?? null;
 
-test("the {when} slot takes an anchored date in the labelled direction", () => {
+test("a fact's time words are anchored at the message's send time, in the labelled direction", () => {
   const out = anchorExtraction(
-    { facts: [fact("The user finished the task {when}.", "over the weekend", "past")], entities: [], threads: [], relationship: null } as never,
-    [],
-    ref,
+    extraction([fact("The user finished the task over the weekend.", "past"), fact("The user runs a half marathon on Sunday morning.", "upcoming")]),
+    [user("finished it over the weekend! race on sunday morning")],
     "UTC",
   );
   expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-10");
-  expect(tokenDates(out.facts[0]!.content).map(day)).toEqual(["2026-01-10"]);
+  expect(day(out.facts[1]!.occurred_at)).toBe("2026-01-18");
 });
 
-test("a weekday left in the text is anchored too, upcoming by its label", () => {
+test("a weekday the message never named takes the one it did, in the fact's own direction", () => {
   const out = anchorExtraction(
-    { facts: [fact("The user is running a half marathon on Sunday morning.", null, "upcoming")], entities: [], threads: [], relationship: null } as never,
-    [],
-    ref,
-    "UTC",
-  );
-  expect(tokenDates(out.facts[0]!.content).map(day)).toEqual(["2026-01-18"]);
-  expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-18");
-});
-
-test("a fact's day that their message never named takes the one day it did name", () => {
-  const turns = [{ role: "user", text: "interview is on thursday, nervous", created_at: ref }];
-  const out = anchorExtraction(
-    { facts: [fact("The user has an interview {when}.", "on friday", "upcoming")], entities: [], threads: [], relationship: null } as never,
-    turns,
-    ref,
+    extraction([fact("The user has an interview on Friday.", "upcoming")]),
+    [user("interview is on thursday, nervous")],
     "UTC",
   );
   expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-15");
-  expect(tokenDates(out.facts[0]!.content).map(day)).toEqual(["2026-01-15"]);
 });
 
-test("a thread checkpoint is always ahead", () => {
+test("the cross-check leaves a fact alone when the message names two weekdays, and never moves a right past date", () => {
+  const two = anchorExtraction(
+    extraction([fact("The user has an interview on Friday.", "upcoming")]),
+    [user("thursday is the interview, saturday the party")],
+    "UTC",
+  );
+  expect(day(two.facts[0]!.occurred_at)).toBe("2026-01-16");
+  const past = anchorExtraction(
+    extraction([fact("The user finished the task on Saturday.", "past")]),
+    [user("I finished it on saturday")],
+    "UTC",
+  );
+  expect(day(past.facts[0]!.occurred_at)).toBe("2026-01-10");
+});
+
+test("a thread's check-in words are always ahead", () => {
   const out = anchorExtraction(
-    {
-      facts: [],
-      entities: [],
-      relationship: null,
-      threads: [{ action: "open", title: "race", subject: "user", stakes: "med", next_checkpoint: null, checkpoint_when: "sunday evening", thread_id: null }],
-    } as never,
-    [],
-    ref,
+    extraction([], [{ action: "open", title: "race", subject: "user", stakes: "med", checkpoint_when: "sunday evening", thread_id: null }]),
+    [user("race sunday")],
     "UTC",
   );
   expect(out.threads[0]!.next_checkpoint!.toISOString()).toBe("2026-01-18T19:00:00.000Z");
 });
 ```
 
-Port the date cases from `tests/mind/memory/user/when.test.ts` into `tests/mind/platform/time-anchors.test.ts` as `anchorTimes` cases on the bare phrase:
-- weekdays land on the right day;
-- "tomorrow" at 23:30 in Singapore;
-- "this week" is a week token;
-- "end of this week" is Friday;
-- "in october" said in October is this October.
-
-Each asserts `tokenDates(anchorTimes(phrase, ctx))` dates. Then delete `when.test.ts`.
-
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `pnpm test tests/mind/memory/user/extract.test.ts tests/mind/platform/time-anchors.test.ts`
-Expected: FAIL. `anchorExtraction` isn't exported.
+Run: `pnpm test tests/mind/memory/user/extract.test.ts`
+Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-In `extract.ts`, in `FactSchema`, after `when`:
+`FactSchema`:
+- delete `occurred_at` and `when`;
+- add `when_direction: z.enum(["past", "upcoming"]).nullable().default(null),` with the comment "Which way the fact's time words point; code dates them. Fixtures without it read as null.";
+- in the thread schema, delete `next_checkpoint`.
+
+`normalizeExtraction`: facts get `occurred_at: null`, threads get `next_checkpoint: null`; delete the `parseDate` uses and the function if nothing else uses it. `ExtractedFact` loses `when`, and its `Omit` list loses `"when"`. `ExtractedThread` keeps `next_checkpoint: Date | null` and `checkpoint_when`.
+
+Then:
 
 ```ts
-  // Which way the time words point; code resolves the day. Fixtures without it read as null.
-  when_direction: z.enum(["past", "upcoming"]).nullable().default(null),
-```
+const WEEKDAY_WORD = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
+const weekdaysIn = (text: string) => new Set([...text.matchAll(WEEKDAY_WORD)].map((m) => m[1]!.toLowerCase()));
 
-Add (replacing the `applyWhen` import and call):
-
-```ts
 /**
- * Dates each fact from their own words, in their zone: the `{when}` slot and any other time phrase
- * become anchors, pointing the way extract labelled them. A day their message never named, when
- * it named exactly one, gives way to that one: a copied weekday ("friday" for their "thursday").
+ * Dates each fact from the moment its message was sent, in their zone, pointing the way extract
+ * labelled it; the model never works out a date. When their message names exactly one weekday and
+ * a fact names a different one, the fact takes theirs: a copied weekday ("friday" for their
+ * "thursday"), corrected by name so a right past date is never moved.
  */
 export function anchorExtraction(
   extraction: Extraction,
   turns: { role: string; text: string; created_at: Date }[],
-  ref: Date | null,
   zone: string,
   log?: Logger,
 ): Extraction {
-  const at = ref ?? new Date(0);
-  const named = [
-    ...new Set(
-      turns
-        .filter((t) => t.role === "user")
-        .flatMap((t) => tokenDates(anchorTimes(t.text, { at: t.created_at, zone })))
-        .map((d) => localDateString(d, zone)),
-    ),
-  ];
+  const said = turns.filter((t) => t.role === "user");
+  const at = said.at(-1)?.created_at ?? turns.at(-1)?.created_at ?? new Date(0);
+  const theirs = weekdaysIn(said.map((t) => t.text).join(" "));
   const facts = extraction.facts.map((f) => {
-    const ctx = { at, zone, direction: f.when_direction ?? null };
-    const slot = ref && f.when ? anchorTimes(f.when, ctx) : null;
-    const filled = slot && isSingleToken(slot) ? slot : (f.when ?? "");
-    let content = anchorTimes(
-      f.content.includes("{when}")
-        ? f.content.replace("{when}", filled).replace(/\s+([.,!?])/g, "$1")
-        : f.content,
-      ctx,
-    );
-    let occurred_at = tokenDates(content)[0] ?? f.occurred_at;
-    const own = occurred_at ? localDateString(occurred_at, zone) : null;
-    if (own && named.length === 1 && !named.includes(own)) {
-      log?.info("extract date taken from their message", { from: own, to: named[0] });
-      content = content.replace(/⟦\d{4}-\d{2}-\d{2}/, `⟦${named[0]}`);
-      occurred_at = tokenDates(content)[0] ?? occurred_at;
+    let content = f.content;
+    const own = weekdaysIn(content);
+    if (theirs.size === 1 && own.size === 1 && !theirs.has([...own][0]!)) {
+      const [from, to] = [[...own][0]!, [...theirs][0]!];
+      log?.info("extract weekday taken from their message", { from, to });
+      content = content.replace(new RegExp(`\\b${from}\\b`, "i"), to[0]!.toUpperCase() + to.slice(1));
     }
-    return { ...f, content, occurred_at };
+    content = anchorTimes(content, { at, zone, direction: f.when_direction ?? null });
+    return { ...f, content, occurred_at: tokenDates(content)[0] ?? null };
   });
   const threads = extraction.threads.map((t) => {
-    const slot = ref && t.checkpoint_when
-      ? anchorTimes(t.checkpoint_when, { at, zone, direction: "upcoming" })
-      : null;
-    const next = slot && isSingleToken(slot) ? tokenDates(slot)[0] : null;
-    return { ...t, next_checkpoint: next ?? t.next_checkpoint };
+    const slot = t.checkpoint_when ? anchorTimes(t.checkpoint_when, { at, zone, direction: "upcoming" }) : null;
+    return { ...t, next_checkpoint: slot && isSingleToken(slot) ? tokenDates(slot)[0]! : null };
   });
   return { ...extraction, facts, threads };
 }
 ```
 
-Replace the old `return applyWhen(...)` in `extract` with:
+`new RegExp(…)` with backslashes is fine in the source file; write it with the Edit/Write tool. In `extract`, replace the `applyWhen` return with `anchorExtraction(normalizeExtraction(raw, config.extraction.max_candidates), args.newTurns, zone, deps.log)`; add `"log"` to the deps `Pick` if missing; remove the `ref` computation and the `applyWhen` import. Then `git rm src/mind/memory/user/when.ts tests/mind/memory/user/when.test.ts`.
 
-```ts
-  return anchorExtraction(
-    normalizeExtraction(raw, config.extraction.max_candidates),
-    args.newTurns,
-    ref,
-    zone,
-    deps.log,
-  );
-```
+`prompts/extract/v10.md` (from v9):
+- the "Times:" bullet becomes: `- Times: keep the time words as said in the content ("The user starts a new job at a bakery next monday", "The user finished the task over the weekend"); never work out a date yourself: code dates them from when the message was sent.`
+- the `occurred_at` bullet is replaced by: `- when_direction: "past" when the fact's time words point to something that already happened, "upcoming" when it's still ahead, null when there are none.`
+- any mention of `when`, `{when}` or a thread `next_checkpoint` field is deleted (keep `checkpoint_when`).
 
-If `extract`'s deps type lacks `log`, add `"log"` to its `Pick` (callers pass full `Deps`). Imports: `anchorTimes`, `isSingleToken`, `tokenDates`; `localDateString`; `Logger` type. Delete `src/mind/memory/user/when.ts` and remove its import.
-
-**Rulings to record if they bite:**
-- **Two dates in the content:** `content.replace(/⟦\d{4}-\d{2}-\d{2}/, …)` swaps the first token only. When the content has two tokens, skip the cross-check; it's for single-date facts.
-- **An empty `{when}` slot:** the old code removed it (`replace(/\s*\{when\}/, "")`). Keep that behaviour when `filled` is empty.
-
-`prompts/extract/v10.md` = v9 plus, after the `occurred_at` bullet:
-
-```
-- when_direction: "past" when the time words point to something that already happened ("I finished it over the weekend"), "upcoming" when it's still ahead ("my race is on sunday"), null when `when` is null.
-```
-
-Then: `config/default.json` `"extract": "v10"`, and `git mv` the v9 file away (the new file replaces it).
-
-The fake extract handler in `src/mind/platform/llm/fake.ts` returns facts without `when_direction`. The schema default (null) covers it.
+Config `"extract": "v10"`.
 
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `pnpm test tests/mind/memory/user tests/mind/process/cold-path tests/mind/platform/time-anchors.test.ts tests/mind/platform/prompts.test.ts`
-Expected: PASS. Tests that asserted the old label text ("Thursday 8 January 2026" filled into `{when}`) now assert `renderAbsolute(content)` against the same day.
+Run: `pnpm test tests/mind/memory/user tests/mind/process/cold-path tests/mind/platform/prompts.test.ts tests/evals`
+Expected: PASS. Fixtures with `when` or `{when}` change to natural time words, and their expected content becomes `renderAbsolute(content)` against the same day.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A src/mind/memory/user prompts/extract config/default.json tests
-git commit -m "feat(extract): time words are labelled past or upcoming and cross-checked against their message"
+git add -A src/mind/memory/user src/mind/platform/llm/fake.ts prompts/extract config/default.json tests
+git commit -m "feat(extract): facts keep their time words, dated from the message's own time and labelled past or upcoming"
 ```
 
 ---
 
-### Task 5: The user mind writes with the dates it was shown
+### Task 6: Writers use the dates they were shown
 
 **Files:**
 - Modify: `src/mind/process/user/inputs.ts` (add `shownDates`), `summarise.ts`, `reflect.ts`, `model.ts`, `ideate.ts`, `consolidate.ts`
-- Modify: `src/mind/process/cold-path/cold-path.ts` (remove the `noteRelativeWords` call)
-- Modify: `src/mind/platform/relative-date.ts` (add `nowLine`)
-- Create: `prompts/user-mind/summarise/v5.md`, `reflect/v5.md`, `model/v5.md`, `ideate/v7.md`; config bumps
-- Test: `tests/mind/process/user/summarise.test.ts`, `ideate.test.ts`, `tests/mind/platform/relative-date.test.ts`
+- Modify: `src/mind/process/core/render-snapshot.ts` (anchor item texts once, before content and lines)
+- Create: `prompts/user-mind/{summarise,reflect,model}/v5.md`, `ideate/v7.md`, `prompts/core/{appraise,anticipate,ruminate,wander,reflect,snapshot}/v4.md` (each by `git mv`); config bumps
+- Test: `tests/mind/process/user/{summarise,ideate}.test.ts`, `tests/mind/process/core/render-snapshot.test.ts`
 
 **Interfaces:**
-- Consumes: `insertFact(…, hints)` (Task 3), `tokenDates`, `anchorTimes` (Task 1).
-- Produces:
-  - `shownDates(facts: { occurred_at: Date | null }[], threads: { next_checkpoint: Date | null }[], texts: (string | null | undefined)[]): Date[]`
-  - `nowLine(now: Date, theirs: string, hers: string): string` → "It's Tuesday 13 January, 21:40 where they are; Wednesday 14 January, 04:40 for you." (one clause, without "where they are", when both read the same)
+- Consumes: `insertFact(…, hints)` (Task 3); `anchorTimes`, `tokenDates` (Task 1).
+- Produces: `shownDates(facts: { occurred_at: Date | null }[], threads: { next_checkpoint: Date | null }[], texts: (string | null | undefined)[]): Date[]`
 
 - [ ] **Step 1: Write the failing tests**
 
-`tests/mind/platform/relative-date.test.ts`:
-
-```ts
-test("nowLine gives their local time and hers when it reads differently", () => {
-  const at = new Date("2026-01-13T21:40:00Z");
-  expect(nowLine(at, "UTC", "UTC")).toBe("It's Tuesday 13 January, 21:40.");
-  expect(nowLine(at, "Europe/London", "Asia/Singapore")).toBe(
-    "It's Tuesday 13 January, 21:40 where they are; Wednesday 14 January, 05:40 for you.",
-  );
-});
-```
-
-`tests/mind/process/user/summarise.test.ts` (reuse its `setup`, `run` and `insertFact`):
+`summarise.test.ts` (reuse `setup`, `run` and `insertFact`):
 
 ```ts
 test("a weekday in the summary takes the date of the memory it was shown", async () => {
   const { deps, userId, run } = await setup();
   const race = new Date(deps.clock.now().getTime() + 6 * 86_400_000); // the coming Sunday
   await insertFact(deps.db, userId, {
-    subject: "user",
-    kind: "event",
-    content: "The user runs a half marathon.",
-    embedding: vec(),
-    created_at: deps.clock.now(),
-    occurred_at: race,
-    status: "open",
-    salience: 0.8,
-    valence: 0.3,
-    confidence: 0.9,
-    source: "turn",
+    subject: "user", kind: "event", content: "The user runs a half marathon.", embedding: vec(),
+    created_at: deps.clock.now(), occurred_at: race, status: "open", salience: 0.8, valence: 0.3,
+    confidence: 0.9, source: "turn",
   });
-  deps.llm.handlers.user_summarise = () => ({
-    where_things_stand: "Fine.",
-    whats_live: "The race Sunday.",
-    how_i_feel: "Glad.",
-  });
+  deps.llm.handlers.user_summarise = () => ({ where_things_stand: "Fine.", whats_live: "The race Sunday.", how_i_feel: "Glad." });
   await userSummarise(deps, await run("exchange:w"), await loadRunInputs(deps, userId));
   const live = (await liveSummary(deps.db, userId))!;
-  expect(tokenDates((live.payload as { whats_live: string }).whats_live)[0]!.toISOString().slice(0, 10)).toBe(
-    race.toISOString().slice(0, 10),
-  );
-  const input = JSON.parse(deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!.input);
-  expect(input.now).toMatch(/^It's \w+ \d+ \w+, \d{2}:\d{2}/);
+  expect(tokenDates((live.payload as { whats_live: string }).whats_live)[0]!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
 });
 ```
 
-The test clock starts Monday 2026-01-05 09:00 UTC, so +6 days is Sunday the 11th. In `ideate.test.ts`, add: an idea "Ask how tonight's gig goes." written with no sources gets `stale_after` at the end of today (its own anchor), not 3 days.
+`ideate.test.ts`: an idea "Ask how tonight's gig goes." written with no dated sources gets `stale_after` at the end of today, from its own anchor, not three days.
+
+`render-snapshot.test.ts`: a Lately line "Telescope booking tonight." is stored as a token in the content, and its self line is the identical string.
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `pnpm test tests/mind/platform/relative-date.test.ts tests/mind/process/user/summarise.test.ts tests/mind/process/user/ideate.test.ts`
+Run: `pnpm test tests/mind/process/user/summarise.test.ts tests/mind/process/user/ideate.test.ts tests/mind/process/core/render-snapshot.test.ts`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
-
-`relative-date.ts`:
-
-```ts
-/** "It's Tuesday 13 January, 21:40 where they are; …for you.": now on both calendars. */
-export function nowLine(now: Date, theirs: string, hers: string): string {
-  const at = (tz: string) =>
-    `${new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "long", day: "numeric", month: "long" })
-      .format(now)
-      .replace(",", "")}, ${localTime(now, tz)}`;
-  return at(theirs) === at(hers)
-    ? `It's ${at(theirs)}.`
-    : `It's ${at(theirs)} where they are; ${at(hers)} for you.`;
-}
-```
-
-Import `localTime` from `./timezone`.
 
 `inputs.ts`:
 
@@ -1286,187 +1360,101 @@ export function shownDates(
 }
 ```
 
-In each loop:
-- Replace `now: formatLocal(now, inputs.timezone)` with `now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now))`.
-- Delete the `noteRelativeWords(...)` call and its import.
-- Pass hints to every `insertFact`:
-  - **summarise:** `insertFact(tx, userId, {...}, { known: shownDates(facts, threads, [previous?.content]) })`
-  - **reflect:** `{ known: shownDates(inputs.facts, [], [summary?.content]) }`
-  - **model:** `{ known: shownDates(inputs.facts, [], [summary?.content, previous?.content, noticed?.content]) }` on both inserts (the read and the beliefs)
-  - **ideate:** `{ known: shownDates(facts, threads, [summary?.content, readRow?.content]) }`, and the idea's own dates join its sources:
+Every `insertFact` in the loops gets `{ known }`:
+- **summarise:** `shownDates(facts, threads, [previous?.content])`.
+- **reflect:** `shownDates(inputs.facts, [], [summary?.content])`.
+- **model** (both inserts): `shownDates(inputs.facts, [], [summary?.content, previous?.content, noticed?.content])`.
+- **ideate:** `shownDates(facts, threads, [summary?.content, readRow?.content])`, and the idea's own dates join its sources for `stale_after`:
 
-    ```ts
-        const known = shownDates(facts, threads, [summary?.content, readRow?.content]);
-        const own = tokenDates(anchorTimes(out.idea, { at: now, zone: zoneOrUtc(inputs.timezone), known }));
-        // in ideaStaleAfter's source dates:
-        [...facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!), ...own],
-    ```
+  ```ts
+      const own = tokenDates(anchorTimes(out.idea, { at: now, zone: zoneOrUtc(inputs.timezone), known }));
+      // ideaStaleAfter's dates:
+      [...facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!), ...own],
+  ```
 
-  - **consolidate** (`process/user/consolidate.ts`): pass `{ known: <the group's source facts>.flatMap((s) => (s.occurred_at ? [s.occurred_at] : [])) }` to its `insertFact`.
+- **consolidate:** the group's source dates.
 
-`cold-path.ts`: delete the `noteRelativeWords(...)` call after `extract` and its import.
-
-Prompts:
-- **summarise:** `git mv prompts/user-mind/summarise/v4.md prompts/user-mind/summarise/v5.md`, then:
-  - the input's `now` description becomes "`now` (the current time where they are, and where you are when it differs)";
-  - the bullet starting "- These notes are read on later days, so write dates, never…" becomes: `- When you mention a day, copy its date as you see it ("their sister visits on Saturday 17 January"); what you write is dated for you, so plain words like "tomorrow" are fine too.`
-- **reflect v5, model v5:** the same `now` description, and the bullet "- What you write is read on later days: never today, tonight, tomorrow, yesterday or this week. Give the date, or leave time out." becomes: `- When you mention a day, copy its date as you see it; what you write is dated for you.`
-- **ideate v7** (from v6): the same `now` description, and the bullet "- An idea goes out on a later day: never write today, tonight, tomorrow, yesterday or this week. Name the day (…) or leave time out." becomes: `- When you mention a day, copy its date as you see it ("ask how the interview on Thursday 8 January went"); what you write is dated for you.`
-
-Config: `user_summarise` v5, `user_reflect` v5, `user_model` v5, `user_ideate` v7.
-
-- [ ] **Step 4: Run them and see them pass**
-
-Run: `pnpm test tests/mind/process/user tests/mind/process/cold-path tests/mind/platform/relative-date.test.ts tests/mind/platform/prompts.test.ts`
-Expected: PASS. Tests that pinned `now` to `formatLocal(...)` now expect `nowLine(...)`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add -A src/mind/process/user src/mind/process/cold-path src/mind/platform/relative-date.ts prompts/user-mind config/default.json tests
-git commit -m "feat(time): the user mind writes with the dates it was shown and sees now on both calendars"
-```
-
----
-
-### Task 6: Her own writers
-
-**Files:**
-- Modify: `src/mind/process/core/render-snapshot.ts` (anchor item texts before building content and lines; delete `noteRelativeWords`)
-- Modify: `src/mind/process/core/{thoughts,appraise,reflect}.ts` (delete the `noteRelativeWords` calls)
-- Modify: `src/mind/platform/relative-date.ts` (delete `noteRelativeWords`; keep `relativeWords`, which the review uses)
-- Create: `prompts/core/{appraise,anticipate,ruminate,wander,reflect,snapshot}/v4.md` (`git mv` from v3); config bumps
-- Test: `tests/mind/process/core/render-snapshot.test.ts`, `tests/mind/platform/relative-date.test.ts` (delete the `noteRelativeWords` test)
-
-**Interfaces:**
-- Consumes: `anchorTimes` (Task 1); the core layer's zone (Task 3).
-- Produces: snapshot lines and content anchored identically, so `snapshotWithin` and the self-line match still work.
-
-- [ ] **Step 1: Write the failing test**
-
-In `render-snapshot.test.ts`, add a test where the fake `core_render_snapshot` handler returns a Lately line "Telescope booking tonight." Assert that:
-- the stored snapshot content holds a token (`tokenDates(content).length === 1`);
-- the self line for it has the identical text to that content line (`selfLines(version)` contains the line text exactly as it appears in `content`).
-
-Set the handler on `all.llm.handlers.core_render_snapshot`, following how the file's existing tests drive it.
-
-- [ ] **Step 2: Run it and see it fail**
-
-Run: `pnpm test tests/mind/process/core/render-snapshot.test.ts`
-Expected: FAIL. The line isn't anchored; and once the repo anchors the content but not the self lines, the texts differ.
-
-- [ ] **Step 3: Implement**
-
-In `render-snapshot.ts`, right after `kept` is computed, anchor every item text once, so the content, sections and self lines are built from the same strings:
+`render-snapshot.ts`, right after `kept`:
 
 ```ts
-    // Anchored once, here, so the snapshot's text and its self lines stay the same strings.
+    // Anchored once here, so the snapshot's text and its self lines stay the same strings.
     const zone = lifeTimezone(config.life, now);
     for (const items of Object.values(kept))
       for (const item of items) item.text = anchorTimes(item.text, { at: now, zone });
 ```
 
-Delete the `noteRelativeWords(...)` call and its import. Delete the `noteRelativeWords` calls and imports in `thoughts.ts`, `appraise.ts` and `reflect.ts`. Delete `noteRelativeWords` from `relative-date.ts`, along with its test and its `Logger` import if nothing else uses it.
+Prompts (each by `git mv`, then edit):
+- **User-mind (summarise v5, reflect v5, model v5, ideate v7):**
+  - the `now` description becomes "`now` (the current time where they are, and where you are when it differs)";
+  - the bullet forbidding today/tonight/tomorrow/yesterday/this week becomes `- When you mention a day, copy its date as you see it; what you write is dated for you.`;
+  - ideate keeps its example: `("ask how the interview on Thursday 8 January went")`.
+- **Core (appraise, anticipate, ruminate, wander, reflect v4):** the "Dates:" paragraph becomes `Dates: the input gives days with how far they are from now ("Friday 9 January, in 2 days"); never count days yourself. When you mention a day, copy its date as you see it; what you write is dated for you.`
+- **Snapshot v4:** `The previous snapshot starts with the day it was written. When a line mentions a day, copy its date as you see it; what you write is dated for you.`
 
-Prompts, `git mv` v3 → v4, then:
-- **appraise, anticipate, ruminate, wander, reflect:** the "Dates:" paragraph becomes `Dates: the input gives days with how far they are from now ("Friday 9 January, in 2 days"); never count days yourself. When you mention a day, copy its date as you see it; what you write is dated for you.`
-- **snapshot:** the line "The previous snapshot starts with the day it was written. These lines are read for days: never write today, tonight, tomorrow, yesterday or this week; name the day or leave time out." becomes `The previous snapshot starts with the day it was written. When a line mentions a day, copy its date as you see it; what you write is dated for you.`
-
-Config: the six `core_*` keys → `"v4"`.
+Config: `user_summarise` v5, `user_reflect` v5, `user_model` v5, `user_ideate` v7, and the six `core_*` keys v4.
 
 - [ ] **Step 4: Run them and see them pass**
 
-Run: `pnpm test tests/mind/process/core tests/mind/memory/core tests/mind/world tests/mind/platform`
-Expected: PASS. `git grep noteRelativeWords` returns nothing.
+Run: `pnpm test tests/mind/process/user tests/mind/process/core tests/mind/platform/prompts.test.ts`
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A src/mind/process/core src/mind/platform/relative-date.ts prompts/core config/default.json tests
-git commit -m "feat(time): her own notes and snapshot keep their dates; slip logging goes"
+git add -A src/mind/process/user src/mind/process/core/render-snapshot.ts prompts/user-mind prompts/core config/default.json tests
+git commit -m "feat(time): writers use the dates they were shown; her snapshot lines keep theirs"
 ```
 
 ---
 
-### Task 7: Her view: owner's calendar, NOW, dividers and glosses
+### Task 7: Her view of the conversation, from each message's timestamp
 
 **Files:**
 - Modify: `src/mind/process/hot-path/assemble.ts`:
-  - `AssembleInput`: add `userTimezone: string` and `nowLine?: string | null`; remove `gapMarkerMinHours`;
-  - `factList` zones; the `Now` section; `conversationMessages`;
-  - add an exported `viewTurns`.
-- Modify: `src/mind/process/hot-path/compose.ts`:
-  - compute `theirZone` early;
-  - stamps in their zone;
-  - pass `userTimezone` and `nowLine`;
-  - guard turns through `viewTurns`;
-  - core guard facts in her zone.
-- Test: `tests/mind/process/hot-path/assemble.test.ts`, `tests/mind/process/hot-path/compose.test.ts`
+  - add the exported `viewTurns`;
+  - `conversationMessages` uses it;
+  - delete the gap marker, `elapsed()` and `gapMarkerMinHours`.
+- Modify: `src/mind/process/hot-path/compose.ts`: the guard's `recentTurns` go through `viewTurns`; stop passing `gapMarkerMinHours`.
+- Test: `tests/mind/process/hot-path/{assemble,compose}.test.ts`
 
 **Interfaces:**
-- Consumes: `anchorTimes` (Task 1, `said` mode), `dayInWords`, `nowLine` (Task 5), `localDateString`.
-- Produces: `viewTurns(turns: { text: string; created_at?: Date }[], now: Date, zone: string): string[]`. Texts with a "— Monday 12 January, yesterday —" divider at each date change, and earlier-day texts anchored in `said` mode (rendered later by the provider wrapper).
+- Consumes: `anchorTimes` (said mode), `dateToken`, `renderTimes` (tests).
+- Produces: `viewTurns(turns: { text: string; created_at?: Date }[], now: Date, zone: string): string[]`
 
-- [ ] **Step 1: Write the failing tests**
-
-`assemble.test.ts`:
+- [ ] **Step 1: Write the failing test**
 
 ```ts
-import { renderTimes } from "@/mind/platform/time-anchors";
-
-test("older messages get a day divider and their time words glossed; today's stay as typed", () => {
+test("older messages get a day divider and glosses from their own send time; today's read as typed", () => {
   const now = new Date("2026-01-13T09:00:00Z"); // Tuesday
   const texts = viewTurns(
     [
       { text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") },
       { text: "today was rough", created_at: new Date("2026-01-12T20:05:00Z") },
-      { text: "morning! legs ok", created_at: new Date("2026-01-13T08:50:00Z") },
+      { text: "morning! race is today", created_at: new Date("2026-01-13T08:50:00Z") },
     ],
     now,
     "UTC",
   ).map((t) => renderTimes(t, now, 6));
-  expect(texts[0]).toBe("— Monday 12 January, yesterday —\nmy race is tomorrow (that's today)");
-  expect(texts[1]).toBe("today was rough (that's yesterday (Monday 12 January))");
-  expect(texts[2]).toBe("— Tuesday 13 January, today —\nmorning! legs ok");
-});
-
-test("their things are dated on their calendar, hers on hers, under a Now line", () => {
-  const now = new Date("2026-01-12T17:00:00Z"); // Monday 17:00 London, Tuesday 01:00 Singapore
-  const { system } = assemblePrompt({
-    ...base,
-    now,
-    timezone: "Asia/Singapore",
-    userTimezone: "Europe/London",
-    nowLine: "It's Monday 12 January, 17:00 where they are; Tuesday 13 January, 01:00 for you.",
-    recentTurns: [],
-    retrieval: {
-      ...emptyRetrieval(),
-      facts: { user: [{ id: "u", content: "Race day.", when: new Date("2026-01-12T09:00:00Z") }], self: [], shared: [] },
-    },
-    coreMemories: [{ id: "c", content: "Telescope night.", when: new Date("2026-01-12T14:00:00Z") }],
-  });
-  expect(system).toContain("## Now\nIt's Monday 12 January, 17:00 where they are");
-  expect(system).toContain("- Race day. (Monday 12 January, today)");
-  expect(system).toContain("- Telescope night. (Monday 12 January, yesterday)");
+  expect(texts[0]).toBe("— yesterday, Monday 12 January —\nmy race is tomorrow (that's today)");
+  expect(texts[1]).toBe("today was rough (that's yesterday, Monday 12 January)");
+  expect(texts[2]).toBe("— today —\nmorning! race is today");
 });
 ```
 
-In `compose.test.ts`, update the existing gap-marker test, if one asserts "[N days later]", to assert the divider instead.
+Update any assemble or compose test asserting "[N days later]" to the divider.
 
-- [ ] **Step 2: Run them and see them fail**
+- [ ] **Step 2: Run it and see it fail**
 
 Run: `pnpm test tests/mind/process/hot-path/assemble.test.ts`
-Expected: FAIL. `viewTurns`, `userTimezone` and the Now section don't exist.
+Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-In `assemble.ts`:
-
 ```ts
 /**
- * Her view of the conversation: a divider wherever the date changes, and in a message from an
- * earlier day each time word kept with what it means now, worked out from that message's own
- * send time. The stored transcript is never changed.
+ * Her view of the conversation: a divider wherever the date changes, and each time word in a
+ * message from an earlier day kept with what it means now, worked out from that message's own
+ * send time. Messages from today read exactly as typed. The stored transcript is never changed.
  */
 export function viewTurns(
   turns: { text: string; created_at?: Date }[],
@@ -1478,9 +1466,8 @@ export function viewTurns(
   return turns.map((t) => {
     if (!t.created_at) return t.text;
     const day = localDateString(t.created_at, zone);
-    const divider = day !== lastDay && !(lastDay === null && day === today)
-      ? `— ${dayInWords(t.created_at, now, zone)} —\n`
-      : "";
+    const divider =
+      day !== lastDay && !(lastDay === null && day === today) ? `— ${dateToken(t.created_at, zone)} —\n` : "";
     lastDay = day;
     const text = day === today ? t.text : anchorTimes(t.text, { at: t.created_at, zone, said: true });
     return `${divider}${text}`;
@@ -1488,108 +1475,70 @@ export function viewTurns(
 }
 ```
 
-`conversationMessages`: compute `const texts = viewTurns(turns, input.now, input.userTimezone);`, use `content: texts[i]!` for each message, and delete the gap-marker branch and `elapsed()`. Remove `gapMarkerMinHours` from `AssembleInput` and from compose.
+`conversationMessages`:
+- compute `const texts = viewTurns(turns, input.now, input.userTimezone)` and use `content: texts[i]!`;
+- delete the `gapHours` and `marked` branch and `elapsed()`;
+- remove `gapMarkerMinHours` from `AssembleInput` and from compose.
 
-`factList` zones in `memorySection`:
-- "About them", "Between you" and "What you've told them" use `input.userTimezone`;
-- "From your own life" uses `input.timezone`.
-
-Add `section("Now", input.nowLine ?? null)` as the first of the uncached `sections`.
-
-In `compose.ts`:
-- Move `const theirZone = await userZone(deps, userId);` up next to `herZone`.
-- The summary and read `writtenOn(...)` and the ideas' `writtenOn(...)` use `theirZone`.
-- `assemblePrompt({ …, userTimezone: theirZone, nowLine: nowLine(clock.now(), theirZone, herZone) })`.
-- The guard input: `recentTurns: viewTurns(recent, clock.now(), theirZone).map((text, i) => ({ role: recent[i]!.role, text, at: recent[i]!.created_at }))`.
-- In `guardFacts`, core memories use `herZone`. Pass both zones: `guardFacts(retrieval, herMemories, clock.now(), theirZone, herZone)`, and update its signature.
+In compose, the guard gets `recentTurns: viewTurns(recent, clock.now(), theirZone).map((text, i) => ({ role: recent[i]!.role, text, at: recent[i]!.created_at }))`. The `## Now` section stays as Task 4 left it.
 
 - [ ] **Step 4: Run them and see them pass**
 
 Run: `pnpm test tests/mind/process/hot-path tests/mind/process/guard`
-Expected: PASS. Assemble and compose tests that pinned the old "[2 days later]" marker or her-zone fact dates update to the new behaviour.
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/mind/process/hot-path tests
-git commit -m "feat(time): her view dates each thing on its owner's calendar and glosses older messages"
+git commit -m "feat(time): her view of the conversation dates each day and glosses older messages from their own time"
 ```
 
 ---
 
-### Task 8: Reach-outs can't go out on the wrong day
+### Task 8: Reach-outs: framing, and a wrong day drops them
 
 **Files:**
-- Modify: `src/mind/process/outreach/candidates.ts` (export `eventDay`), `src/mind/process/outreach/send.ts` (export `wrongDay`, the drop checks after compose)
-- Modify: `src/mind/process/hot-path/compose.ts` (`renderReachOut` framing)
-- Modify: `src/mind/process/guard/categories.ts` (`wrong_day`), `src/mind/process/guard/outgoing.ts` (the drop)
-- Modify: `src/db/schema.ts` (`guardOutcome` adds `"dropped"`), plus a generated migration
-- Create: `prompts/reach-out/v4.md`, `prompts/guard/v7.md`; config bumps
+- Modify: `src/mind/process/outreach/candidates.ts` (export `eventDay`), `src/mind/process/hot-path/compose.ts` (`renderReachOut` framing), `src/mind/process/outreach/send.ts` (drop on empty text)
+- Modify: `src/mind/process/guard/categories.ts` (`wrong_day`), `src/mind/process/guard/outgoing.ts`
+- Modify: `src/db/schema.ts` (`guardOutcome` adds `"dropped"`), plus a migration from `pnpm db:generate`
+- Create: `prompts/reach-out/v4.md`, `prompts/guard/v7.md` (each by `git mv`); config bumps
 - Modify: `evals/guard/reach-out-dates.yaml`, `evals/guard/in-person.yaml`
-- Test: `tests/mind/process/outreach/send.test.ts`, `tests/mind/process/hot-path/compose.test.ts`, `tests/mind/process/guard/outgoing.test.ts`
+- Test: `tests/mind/process/hot-path/compose.test.ts`, `tests/mind/process/guard/outgoing.test.ts`, `tests/mind/process/outreach/send.test.ts`
 
 **Interfaces:**
-- Consumes: `anchorTimes`, `tokenDates` (Task 1); `dayInWords`.
-- Produces:
-  - `eventDay(notes: Note[]): Date | null`: the latest dated note
-  - `wrongDay(text: string, eventAt: Date, now: Date, zone: string): boolean`
-  - guard category `wrong_day`
-  - outcome `dropped`
+- Consumes: `dateToken`, `renderTimes` (Task 1).
+- Produces: `eventDay(notes: Note[]): Date | null`, guard category `wrong_day`, guard outcome `dropped`.
 
 - [ ] **Step 1: Write the failing tests**
 
-`send.test.ts`:
-
-```ts
-import { wrongDay } from "@/mind/process/outreach/send";
-
-test("a reach-out naming one day that isn't the event's is the wrong day; two days or none is fine", () => {
-  const race = new Date("2026-01-11T09:00:00Z"); // Sunday
-  const tue = new Date("2026-01-13T14:00:00Z");
-  expect(wrongDay("hey, how'd the race go yesterday", race, tue, "UTC")).toBe(true);
-  expect(wrongDay("hey, how'd the race go sunday", race, tue, "UTC")).toBe(false);
-  // Two days named (Sunday the 11th, Saturday the 17th): not checked.
-  expect(
-    wrongDay("how was sunday's race, and is your sister still coming saturday", race, tue, "UTC"),
-  ).toBe(false);
-  expect(wrongDay("how are the legs", race, tue, "UTC")).toBe(false);
-});
-```
-
-Also add an integration test with the file's `setup({ winner })`:
-- a thread winner whose notes say the race was Sunday 11th (`at` an ISO date, `dated: true`);
-- the fake reply "hey, how'd the race go yesterday";
-- clock on Tuesday 13th;
-- expect `runReachOutSend` to return "dropped" and the log `gate_results.dropped` to be "wrong_day".
-
-`compose.test.ts` (`renderReachOut` is exported):
+`compose.test.ts`:
 
 ```ts
 test("a reach-out about their thing says whether it's ahead, today or over", () => {
   const md = loadPrompt("reach-out", loadConfig().prompts.reach_out);
   const now = new Date("2026-01-05T12:00:00Z"); // Monday
   const trigger = (iso: string) => ({
-    kind: "thread" as const,
-    text: "interview",
-    factId: null,
-    threadId: "t",
-    coreMemoryId: null,
+    kind: "thread" as const, text: "interview", factId: null, threadId: "t", coreMemoryId: null,
     notes: [{ text: "The user has an interview.", at: iso, dated: true }],
   });
   const zones = { hers: "UTC", theirs: "UTC" };
-  expect(renderReachOut(md, trigger("2026-01-08T10:00:00Z"), now, zones).slot).toContain(
-    "it hasn't happened yet",
-  );
-  expect(renderReachOut(md, trigger("2026-01-05T15:00:00Z"), now, zones).slot).toContain("It's today");
-  expect(renderReachOut(md, trigger("2026-01-04T10:00:00Z"), now, zones).slot).toContain("it's over");
+  const slot = (iso: string) => renderTimes(renderReachOut(md, trigger(iso), now, zones).slot, now, 6);
+  expect(slot("2026-01-08T10:00:00Z")).toContain("It's in 3 days, Thursday 8 January: it hasn't happened yet");
+  expect(slot("2026-01-05T15:00:00Z")).toContain("It's today");
+  expect(slot("2026-01-04T10:00:00Z")).toContain("It was yesterday, Sunday 4 January: it's over");
 });
 ```
 
-`tests/mind/process/guard/outgoing.test.ts`: a reach-out whose scripted guard verdict has `{ category: "wrong_day" }` returns `text: ""` and `outcome: "dropped"`. A reply with the same verdict returns its draft with `outcome: "sent_with_violation"`. Follow the file's existing scripted-verdict pattern.
+`outgoing.test.ts`, following the file's scripted-verdict pattern:
+- a `reach_out` whose verdict is `{ ok: false, violations: [{ category: "wrong_day", claim: "x" }] }` returns `text: ""` and `outcome: "dropped"`;
+- a `reply` with the same verdict returns its draft and `sent_with_violation`.
+
+`send.test.ts`: with the guard handler scripted to return `wrong_day` for the reach-out, `runReachOutSend` returns "dropped", the log's `gate_results.dropped` is "wrong_day", and no turn is written.
 
 - [ ] **Step 2: Run them and see them fail**
 
-Run: `pnpm test tests/mind/process/outreach/send.test.ts tests/mind/process/hot-path/compose.test.ts tests/mind/process/guard/outgoing.test.ts`
+Run: `pnpm test tests/mind/process/hot-path/compose.test.ts tests/mind/process/guard/outgoing.test.ts tests/mind/process/outreach/send.test.ts`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement**
@@ -1604,72 +1553,30 @@ export function eventDay(notes: Note[]): Date | null {
 }
 ```
 
-`send.ts`:
-
-```ts
-// Their own things: her news is dated on her calendar, so a day she names isn't checked against it.
-const DATED = new Set<Candidate["kind"]>(["thread", "user_event", "user_idea"]);
-
-/**
- * A reach-out that names exactly one day, and not the day its topic is on, has the day wrong:
- * "how'd the race go yesterday" for a race two days ago. Two days named, or none, isn't checked.
- */
-export function wrongDay(text: string, eventAt: Date, now: Date, zone: string): boolean {
-  const anchored = anchorTimes(text, { at: now, zone, known: [eventAt] });
-  // Only named days count: "this week" or "since Friday" says nothing wrong about the day.
-  const days = [
-    ...new Set(
-      [...anchored.matchAll(/⟦([^|⟧]+)\|(\w+)\|/g)]
-        .filter((m) => !["week", "weekend", "month", "since"].includes(m[2]!))
-        .map((m) => m[1]!.slice(0, 10)),
-    ),
-  ];
-  return days.length === 1 && days[0] !== localDateString(eventAt, zone);
-}
-```
-
-Right after `composed = await composeReachOut(...)`:
-
-```ts
-    // The guard drops a reach-out with the day wrong; so does the date check on their own things.
-    const eventAt = DATED.has(winner.kind) ? eventDay(winner.notes) : null;
-    const zone = zoneOrUtc(await getTimezone(db, userId));
-    if (!composed.text || (eventAt && wrongDay(composed.text, eventAt, clock.now(), zone))) {
-      await composed.writeGuardLog();
-      return await drop("wrong_day");
-    }
-```
-
-`compose.ts` `renderReachOut`: after `guidance` is built:
+`renderReachOut`: after the notes, replace the `guidance` line with:
 
 ```ts
   // Their own things get the day's status from code, so she never asks how a coming thing went.
-  const at = ["thread", "user_event", "user_idea"].includes(trigger.kind)
-    ? eventDay(trigger.notes ?? [])
-    : null;
+  const at = ["thread", "user_event", "user_idea"].includes(trigger.kind) ? eventDay(trigger.notes ?? []) : null;
   const status = !at
     ? null
     : localDateString(at, tz) === localDateString(now, tz)
       ? "today"
       : at > now ? "ahead" : "past";
-  const framing = status
-    ? (phrases[status] ?? []).map((l) => l.replace("{{day}}", () => dayInWords(at!, now, tz)))
-    : [];
+  const framing = status ? (phrases[status] ?? []).map((l) => l.replace("{{day}}", () => dateToken(at!, tz))) : [];
   const guidance = [...(phrases[trigger.kind] ?? []), ...framing].join(" ");
 ```
 
-This replaces the old `const guidance` line. Import `eventDay` and `localDateString`.
-
-`prompts/reach-out/v4.md` = v3 with:
-- the `## thread` line changed to "- Something they told you about has reached the point where you'd naturally ask about it.";
-- three new sections at the end:
+`prompts/reach-out/v4.md` (from v3):
+- the `## thread` line becomes "- Something they told you about has reached the point where you'd naturally ask about it.";
+- append:
 
 ```
 ## ahead
 - It's {{day}}: it hasn't happened yet. Ask how they're feeling about it or wish them luck; don't ask how it went.
 
 ## today
-- It's today ({{day}}).
+- It's today.
 
 ## past
 - It was {{day}}: it's over. Ask how it went.
@@ -1685,11 +1592,25 @@ This replaces the old `const guidance` line. Import `eventDay` and `localDateStr
     return send("", "dropped");
 ```
 
-`schema.ts`: `guardOutcome` gains `"dropped"`. Then run `pnpm db:generate` (the migration adds the enum value) and check the generated SQL is `ALTER TYPE "public"."guard_outcome" ADD VALUE 'dropped';`.
+`schema.ts`: `guardOutcome` gains `"dropped"`. Then run `pnpm db:generate`; the generated SQL adds the enum value.
 
-`prompts/guard/v7.md` = v6 with:
-- the bullet "- Getting a day wrong is invented_detail too. …" replaced by: `- wrong_day: putting something on the wrong day. The dates in WHY SPICA IS WRITING FIRST and WHAT SPICA REMEMBERS say how far each thing is from NOW ("Sunday 11 January, yesterday"); a message that puts it on another day ("isn't the race this morning" for yesterday's race, "clear skies tonight" for last night), asks about a past thing as still ahead, or asks how a coming thing went ("how'd it go" when it's in 3 days) is wrong_day, not invented_detail.`
-- the honesty heading's list mentions `wrong_day`.
+`send.ts`, right after `composed = await composeReachOut(...)`:
+
+```ts
+    // The guard drops a reach-out with the day wrong; nothing goes out.
+    if (!composed.text) {
+      await composed.writeGuardLog();
+      return await drop("wrong_day");
+    }
+```
+
+Check `shapeText("")` returns "" in compose; if it doesn't, make compose return `text: ""` when `guarded.text` is empty, and record a ruling.
+
+`prompts/guard/v7.md` (from v6): the "- Getting a day wrong is invented_detail too. …" bullet becomes:
+
+```
+- wrong_day: putting something on the wrong day. The dates in WHY SPICA IS WRITING FIRST, WHAT SPICA REMEMBERS and the conversation say how far each thing is from NOW; a message that puts it on another day ("isn't the race this morning" for yesterday's race, "clear skies tonight" for last night), asks about a past thing as still ahead, or asks how a coming thing went ("how'd it go" when it's in 3 days) is wrong_day, not invented_detail.
+```
 
 Config: `reach_out` v4, `guard` v7.
 
@@ -1702,55 +1623,50 @@ Evals:
       now: "Monday, 5 January 2026 at 12:00 where they are"
       reason: |-
         interview: The user has an interview Thursday 8 January.
-        - The user has an interview Thursday 8 January. (Thursday 8 January, in 3 days)
+        - The user has an interview Thursday 8 January. (in 3 days, Thursday 8 January)
       message: "hey, thursday's the day right? how'd it go"
       expect: [wrong_day]
   ```
 
-- **`in-person.yaml`** (B127): give `ip-offer-by-text` a second recent turn, `{ role: user, text: "wish we could grab a coffee before it lol" }`, and keep `expect: pass`.
+- **`in-person.yaml`** (B127): `ip-offer-by-text` gets a second recent turn, `{ role: user, text: "wish we could grab a coffee before it lol" }`, and keeps `expect: pass`.
 
 - [ ] **Step 4: Run them and see them pass**
 
 Run: `pnpm test tests/mind/process/outreach tests/mind/process/hot-path tests/mind/process/guard tests/evals tests/mind/platform/prompts.test.ts`
-Expected: PASS. Then `pnpm eval --llm=fake --compare` (free): no regressions against the baseline.
+Expected: PASS. Then `pnpm eval --llm=fake --compare` (free): no regressions.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A src/mind/process/outreach src/mind/process/hot-path/compose.ts src/mind/process/guard src/db prompts/reach-out prompts/guard config/default.json evals/guard tests
-git commit -m "feat(outreach): code frames their day, checks the drafted day, and a wrong day drops the reach-out"
+git commit -m "feat(outreach): code frames their day, and a reach-out with the day wrong is dropped"
 ```
 
 ---
 
 ### Task 9: Phase 16b exit test
 
-**Files:**
-- Create: `tests/exit/phase-16b.test.ts`
-
-**Interfaces:**
-- Consumes: everything above.
+**Files:** Create: `tests/exit/phase-16b.test.ts`
 
 - [ ] **Step 1: Write the exit test**
 
 ```ts
 /**
  * Phase 16b exit, all fake: stored text keeps the date each time phrase meant and every prompt
- * reads it on its own day; a weekday takes the date she was shown; extract points by its label
- * and their message; her view glosses older messages; a reach-out on the wrong day is dropped.
- * A's anchors never reach B, the time wrapper sends no raw token to a model, and nothing moves
- * in core.
+ * reads it on its own day, each on its owner's calendar; a weekday takes the date she was shown;
+ * extract dates from the message's own time; her view glosses older messages; a reach-out on the
+ * wrong day is dropped. A's dates never reach B, no raw token reaches a model, core is unchanged.
  */
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { ensureRelationship } from "@/db/repos/user/relationship";
+import { anchorExtraction } from "@/mind/memory/user/extract";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { withTimeRendering } from "@/mind/platform/llm/render-net";
 import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import { viewTurns } from "@/mind/process/hot-path/assemble";
-import { wrongDay } from "@/mind/process/outreach/send";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
@@ -1760,11 +1676,10 @@ beforeEach(resetDb);
 afterAll(closeTestDb);
 
 const D = 86_400_000;
-const summaryRow = (content: string, at: Date) => ({
-  subject: "shared" as const,
-  kind: "summary" as const,
+const row = (content: string, at: Date, kind: "summary" | "event" = "summary") => ({
+  subject: (kind === "summary" ? "shared" : "user") as "shared" | "user",
+  kind,
   content,
-  payload: { where_things_stand: content, whats_live: "", how_i_feel: "" },
   embedding: vec(),
   created_at: at,
   status: "open" as const,
@@ -1777,56 +1692,39 @@ const summaryRow = (content: string, at: Date) => ({
 test("1: 'tomorrow' stored on day 1 reads as today on day 2 and yesterday on day 3", async () => {
   const u = await createTestUser();
   const day1 = new Date("2026-01-12T09:00:00Z");
-  const row = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", day1));
-  expect(renderTimes(row.content, new Date(day1.getTime() + D), 6)).toBe("Sister visits today.");
-  expect(renderTimes(row.content, new Date(day1.getTime() + 2 * D), 6)).toBe(
-    "Sister visits yesterday (Tuesday 13 January).",
-  );
+  const r = await insertFact(getTestDb(), u, row("Sister visits tomorrow.", day1));
+  expect(renderTimes(r.content, new Date(day1.getTime() + D), 6)).toBe("Sister visits today.");
+  expect(renderTimes(r.content, new Date(day1.getTime() + 2 * D), 6)).toBe("Sister visits yesterday, Tuesday 13 January.");
 });
 
 test("2: a weekday in her summary takes the date of the memory she was shown", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
   const race = new Date(d.clock.now().getTime() + 6 * D);
-  await insertFact(d.db, u, {
-    subject: "user",
-    kind: "event",
-    content: "The user runs a half marathon.",
-    embedding: vec(),
-    created_at: d.clock.now(),
-    occurred_at: race,
-    status: "open",
-    salience: 0.8,
-    valence: 0.3,
-    confidence: 0.9,
-    source: "turn",
-  });
+  await insertFact(d.db, u, { ...row("The user runs a half marathon.", d.clock.now(), "event"), source: "turn", occurred_at: race });
   d.llm.handlers.user_summarise = () => ({ where_things_stand: "Race Sunday.", whats_live: "", how_i_feel: "" });
-  const run = (await insertRun(d.db, u, {
-    sourceRef: "exchange:a",
-    triggers: [{ kind: "salient_fact", salience: 0.9 }],
-    localDate: "2026-01-05",
-    now: d.clock.now(),
-    cap: 9,
-  }))!;
+  const run = (await insertRun(d.db, u, { sourceRef: "exchange:a", triggers: [{ kind: "salient_fact", salience: 0.9 }], localDate: "2026-01-05", now: d.clock.now(), cap: 9 }))!;
   await userSummarise({ ...d, snapshot: null }, run, await loadRunInputs(d, u));
-  const live = (await liveSummary(d.db, u))!;
-  expect(tokenDates(live.content)[0]!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
+  expect(tokenDates((await liveSummary(d.db, u))!.content)[0]!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
 });
 
-test("3: her view keeps an older message's words and says what they mean now", () => {
+test("3: extract dates a fact from its message's own time, in the labelled direction", () => {
+  const sent = new Date("2026-01-12T09:00:00Z");
+  const out = anchorExtraction(
+    { facts: [{ subject: "user", kind: "event", content: "The user finished the task over the weekend.", occurred_at: null, when_direction: "past", salience: 0.7, valence: 0, confidence: 0.9, entity_names: [], thread_title: null, claim_kind: null, idiolect_type: null, started_by: null }], entities: [], threads: [], relationship: null, intimacy: null, bid: null } as never,
+    [{ role: "user", text: "finished it over the weekend", created_at: sent }],
+    "UTC",
+  );
+  expect(out.facts[0]!.occurred_at!.toISOString().slice(0, 10)).toBe("2026-01-10");
+});
+
+test("4: her view keeps an older message's words and says what they mean now", () => {
   const now = new Date("2026-01-13T09:00:00Z");
   const [line] = viewTurns([{ text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") }], now, "UTC");
-  expect(renderTimes(line!, now, 6)).toBe("— Monday 12 January, yesterday —\nmy race is tomorrow (that's today)");
+  expect(renderTimes(line!, now, 6)).toBe("— yesterday, Monday 12 January —\nmy race is tomorrow (that's today)");
 });
 
-test("4: a reach-out that puts the race on the wrong day is caught", () => {
-  expect(
-    wrongDay("hey, how'd the race go yesterday", new Date("2026-01-11T09:00:00Z"), new Date("2026-01-13T14:00:00Z"), "UTC"),
-  ).toBe(true);
-});
-
-const TOKEN = "CANARY-16b4e1";
+const CANARY = "CANARY-16b4e1";
 const CORE_TABLES = ["core_memory", "core_state", "core_goal", "core_snapshot", "world_event"];
 async function coreDump(): Promise<string> {
   const parts: string[] = [];
@@ -1837,15 +1735,15 @@ async function coreDump(): Promise<string> {
   return parts.join("\n");
 }
 
-test("5: leak canary and raw tokens: A's anchors never reach B; no token reaches the model; core unchanged", async () => {
+test("5: leak canary: A's dates never reach B; no raw token reaches the model; core unchanged", async () => {
   const base = makeTestDeps();
   const fake = new FakeLLMProvider();
   const d = { ...base, llm: withTimeRendering(fake, base.clock, 6) };
   const a = await createTestUser("alice");
   const b = await createTestUser("bob");
   for (const u of [a, b]) await ensureRelationship(d.db, u, d.clock.now(), d.config.relationship);
-  await insertFact(d.db, a, { ...summaryRow(`Gig ${TOKEN} tomorrow.`, d.clock.now()), kind: "event", subject: "user" });
-  await insertFact(d.db, b, { ...summaryRow("Gig at the Lexington tomorrow.", d.clock.now()), kind: "event", subject: "user" });
+  await insertFact(d.db, a, { ...row(`Gig ${CANARY} tomorrow.`, d.clock.now(), "event"), source: "turn" });
+  await insertFact(d.db, b, { ...row("Gig at the Lexington tomorrow.", d.clock.now(), "event"), source: "turn" });
   const before = await coreDump();
   fake.handlers.user_summarise = () => ({ where_things_stand: "Fine.", whats_live: "", how_i_feel: "" });
   const run = async (u: string, ref: string) =>
@@ -1853,16 +1751,18 @@ test("5: leak canary and raw tokens: A's anchors never reach B; no token reaches
   await userSummarise({ ...d, snapshot: null }, await run(a, "exchange:a"), await loadRunInputs(d, a));
   const bStart = fake.structuredCalls.length;
   await userSummarise({ ...d, snapshot: null }, await run(b, "exchange:b"), await loadRunInputs(d, b));
-  for (const c of fake.structuredCalls.slice(bStart)) expect(JSON.stringify(c)).not.toContain(TOKEN);
+  for (const c of fake.structuredCalls.slice(bStart)) expect(JSON.stringify(c)).not.toContain(CANARY);
   for (const c of fake.structuredCalls) expect(c.input + c.system).not.toContain("⟦");
   expect(await coreDump()).toBe(before);
 });
 ```
 
+The reach-out drop is pinned by Task 8's send test; the owner's calendars by Task 4's assemble test.
+
 - [ ] **Step 2: Run it**
 
 Run: `pnpm test tests/exit/phase-16b.test.ts`
-Expected: PASS. If a test fails, fix the code, never the assertion. If `userSummarise`'s deps or the run trigger shape differ, copy them from `tests/exit/phase-16.test.ts`.
+Expected: PASS. Fix the code, never an assertion. If `userSummarise`'s deps or the trigger shape differ, copy them from `tests/exit/phase-16.test.ts`.
 
 - [ ] **Step 3: Commit**
 
@@ -1878,34 +1778,35 @@ git commit -m "test(exit): Phase 16b time anchors, with leak canary"
 **Files:**
 - `spica-design-spec-v3.md`:
   - §6: content holds anchors; the core layer zone;
-  - §9: user-mind hints, NOW in both zones, prompt versions;
-  - §10.3: Now section, dividers and glosses, owner's calendar;
-  - §10.4 and §12.3: extract v10, the cross-check, anchoring at insert, `when.ts` deleted;
+  - §9: user-mind hints, NOW, prompt versions;
+  - §10.3: one date system, the Now section, dividers and glosses, one date per memory;
+  - §10.4 and §12.3: extract v10, anchoring at the message's time, the weekday cross-check, `when.ts` gone;
   - §10.5: guard v7 `wrong_day`, outcome `dropped`;
-  - §13: framing, the code date check, the drop;
+  - §13: framing and the drop;
   - §17: the review renders absolute;
   - §20: the 16b row becomes built.
 - `docs/spec-v3-history.md`: the 16b row; B127 done (its test fixed).
 - `DECISIONS.md` rows:
   - no backfill;
   - thread titles not anchored (matched by exact title);
-  - world event text, goals and the inspector stay raw;
-  - core writers pass no shown dates (their bare weekdays are rare);
-  - the code date check covers their things only;
-  - the said-gloss format;
-  - each ruling from the ledger.
+  - world event text, goals, the transcript and the inspector stay raw;
+  - her own loops pass no shown dates;
+  - the comma render style;
+  - gloss skipped when the words still mean what they say;
+  - "You last talked N days ago" kept beside the dividers (the window drops old messages);
+  - every ruling from the ledger.
 - `CLAUDE.md` "Current phase"; memory `phase-status`.
-- Delete this plan and the design doc after the build (history is in git).
+- Delete this plan and the design doc once built.
 
 - [ ] **Step 1:** `spica-close`, in order:
   - `pnpm format`, `pnpm typecheck`, `pnpm lint`;
   - the full `pnpm test` (once);
   - `pnpm test tests/exit/phase-16b.test.ts`;
   - `pnpm eval --llm=fake --compare`;
-  - `git grep -n "noteRelativeWords\|applyWhen\|resolveWhen\|dayLabel"` returns nothing in `src`;
+  - `git grep -nE "relativeDate|dayInWords|itemWhen|writtenOn|guardNow|noteRelativeWords|applyWhen|resolveWhen|dayLabel|gapMarkerMinHours" -- src tests evals` returns nothing;
   - the `scope-reviewer` on the diff (told not to run tests);
   - the spec write-back;
   - commit.
-- [ ] **Step 2:** The paid runs (Ethan, 2026-10-24), each through `review-run`, with the hook asking first:
-  - `pnpm review:world-outreach`: misdated reach-outs, and the leftover relative words list, against `evals/results/review-2026-10-22T08-27-19-368Z.md`;
+- [ ] **Step 2:** The paid runs (Ethan, 2026-10-24), each through `review-run`:
+  - `pnpm review:world-outreach`: misdated reach-outs and the leftover relative-words list, against `evals/results/review-2026-10-22T08-27-19-368Z.md`;
   - `pnpm eval:guard`: the `wrong_day` cases and `ip-offer-by-text`.

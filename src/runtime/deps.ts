@@ -11,6 +11,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { assertEmbedderMatchesSchema } from "@/mind/platform/embedder/types";
 import { VoyageEmbedder } from "@/mind/platform/embedder/voyage";
 import { errorName } from "@/mind/platform/errors";
+import { withTimeRendering } from "@/mind/platform/llm/render-net";
 import { AnthropicProvider } from "@/mind/platform/llm/anthropic";
 import { consoleLogger } from "@/mind/platform/log";
 import { createModuleBus } from "@/mind/platform/modules";
@@ -57,7 +58,11 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     db,
     core: createCoreLayer(db),
     clock: systemClock,
-    llm: new AnthropicProvider(new Anthropic(), config.models),
+    llm: withTimeRendering(
+      new AnthropicProvider(new Anthropic(), config.models),
+      systemClock,
+      config.time.relative_max_days,
+    ),
     embedder,
     queue: new PgBossQueue(boss, {
       retryLimit: config.cold_path.retry_limit,

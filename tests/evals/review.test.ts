@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { decisionLine, renderReview, signalsLine } from "../../evals/lib/review";
+import { anchorTimes } from "@/mind/platform/time-anchors";
 import { matchesOnly } from "../../evals/lib/script";
 
 test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
@@ -213,4 +214,39 @@ test("the review lists stored text with relative words", () => {
   );
   expect(md).not.toMatch(/\): Interview on Thursday/);
   expect(md).toContain("### Relative words in her loops\n\n- core_wander: tonight");
+});
+
+test("the review prints anchored text as plain dates", () => {
+  const content = anchorTimes("Sister visits tomorrow.", {
+    at: new Date("2026-01-12T09:00:00Z"),
+    zone: "UTC",
+  });
+  const md = renderReview(
+    [
+      {
+        script: "s",
+        attempt: 1,
+        result: {
+          name: "s",
+          status: "pass",
+          meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
+          assertions: [],
+          annotations: [],
+          trace: {
+            transcripts: {},
+            memory: {
+              sam: {
+                facts: [{ status: "open", subject: "user", kind: "event", content }],
+                threads: [],
+                entities: [],
+              },
+            },
+          },
+        },
+      },
+    ],
+    { stamp: "t", real: [], annotate: false },
+  );
+  expect(md).toContain("Sister visits Tuesday 13 January 2026.");
+  expect(md).not.toContain("⟦");
 });

@@ -1,5 +1,5 @@
 import type { Phrases } from "@/mind/platform/phrases";
-import { relativeWords } from "@/mind/platform/relative-date";
+import { relativeWords, renderAbsolute } from "@/mind/platform/time-anchors";
 import type { GroundedClaim } from "@/mind/process/guard/self-claims";
 import type { Candidate, GateResult } from "@/mind/process/outreach/types";
 import type { OutreachSnapshot } from "./outreach-check";
@@ -203,7 +203,8 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
       out.push(
         ...(facts.length
           ? facts.map(
-              (f) => `- [${fmt(f.status)}] ${fmt(f.subject)}/${fmt(f.kind)}: ${fmt(f.content)}`,
+              (f) =>
+                `- [${fmt(f.status)}] ${fmt(f.subject)}/${fmt(f.kind)}: ${fmt(renderAbsolute(String(f.content ?? "")))}`,
             )
           : ["- (none)"]),
         "",

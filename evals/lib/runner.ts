@@ -46,6 +46,7 @@ import {
 import { checkCore, checkLife, coreHistory, lifeSnapshot, type LifeSnapshot } from "./core-check";
 import { makeLifeLoop } from "./life-loop";
 import { checkReachOut, outreachSnapshot, type OutreachSnapshot } from "./outreach-check";
+import { withTimeRendering } from "@/mind/platform/llm/render-net";
 import { RecordingLLM, type CoreCall } from "./recording-llm";
 import type { VoiceCall } from "./voice-report";
 import { checkRelationship, relationshipSnapshot, type RelSnapshot } from "./relationship-check";
@@ -388,7 +389,9 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     }
   // Scripted signals stand in for the extractor unless this run's extract is real and the script asks for the model's.
   const useScripted = byText.size > 0 && !(opts.extractReal && script.signal_source === "model");
-  const llm = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
+  const recorder = new RecordingLLM(useScripted ? new SignalLLM(baseLlm, byText) : baseLlm);
+  // The recorder sits inside, so it keeps the prompts as the model read them.
+  const llm = withTimeRendering(recorder, clock, config.time.relative_max_days);
   const pusher = new RecordingPusher();
   const deps: Deps = {
     db,
@@ -434,7 +437,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       id,
       {
         pushTags: pusher.pushes.filter((p) => p.userId === id).map((p) => p.msg.tag),
-        composedPrompts: llm.prompts.filter((p) => p.includes("## Why you're writing")).length,
+        composedPrompts: recorder.prompts.filter((p) => p.includes("## Why you're writing")).length,
       },
       config,
     );
@@ -456,11 +459,11 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
   const sessionOf = (d: Date) => sessionOfAt(sessionStarts, d);
   /** Runs `fn` and attributes the reply prompts it produced to `user`. */
   const recording = async (user: string, fn: () => Promise<unknown>) => {
-    const before = llm.prompts.length;
-    const repliesBefore = llm.replies.length;
+    const before = recorder.prompts.length;
+    const repliesBefore = recorder.replies.length;
     await fn();
-    (prompts[user] ??= []).push(...llm.prompts.slice(before));
-    (voice[user] ??= []).push(...llm.replies.slice(repliesBefore));
+    (prompts[user] ??= []).push(...recorder.prompts.slice(before));
+    (voice[user] ??= []).push(...recorder.replies.slice(repliesBefore));
   };
   let known: string[] = [];
   try {
@@ -685,7 +688,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       life: await lifeSnaps().catch(() => undefined),
       outreach: await outreachSnaps().catch(() => undefined),
       coreTraces: await coreTraces().catch(() => undefined),
-      coreCalls: llm.coreCalls,
+      coreCalls: recorder.coreCalls,
       voice,
     };
     return {
@@ -957,7 +960,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
       life: await lifeSnaps(),
       outreach: await outreachSnaps(),
       coreTraces: await coreTraces(),
-      coreCalls: llm.coreCalls,
+      coreCalls: recorder.coreCalls,
       voice,
     },
   };

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { composeReachOut, composeReply, renderReachOut } from "@/mind/process/hot-path/compose";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
+import { renderTimes } from "@/mind/platform/time-anchors";
 import { messageToCheck } from "@/mind/process/guard/guard";
 import { insertFact } from "@/db/repos/user/facts";
 import { fact as factTable } from "@/db/schema";
@@ -287,8 +288,8 @@ describe("composeReply", () => {
       }),
     ];
     await composeReply(deps, u, { turns: second, openQuestions: [], flag: null });
-    expect(deps.llm.calls[1]!.system).toMatch(
-      /You first talked 3 days ago, and have talked on 2 different days\. You last talked 3 days ago\./,
+    expect(renderTimes(deps.llm.calls[1]!.system, deps.clock.now(), 6)).toMatch(
+      /You first talked 3 days ago, \w+ \d+ \w+, and have talked on 2 different days\. You last talked 3 days ago\./,
     );
   });
 
@@ -368,7 +369,7 @@ describe("composeReply", () => {
       return system.slice(start, system.indexOf("\n## ", start + 1));
     };
     const a = await selfSection("a");
-    expect(a).toMatch(/^## Who you are lately\n\(written \w+ \d+ \w+, today\)\n/);
+    expect(a).toMatch(/^## Who you are lately\n\(written ⟦\d{4}-\d{2}-\d{2}\|day\|/);
     expect(await selfSection("b")).toBe(a);
   });
 
@@ -464,7 +465,7 @@ describe("composeReply", () => {
     };
 
     expect(await ask(null)).toMatch(
-      /## Where things stand with them\n\(written \w+ \d+ \w+, today\)\n- Stand\.\n- Live\.\n- Feel\./,
+      /## Where things stand with them\n\(written ⟦[^⟧]+⟧\)\n- Stand\.\n- Live\.\n- Feel\./,
     );
 
     await getTestDb().delete(factTable).where(eq(factTable.id, summary.id));
@@ -703,10 +704,10 @@ describe("composeReachOut", () => {
     const now = new Date("2026-01-12T10:00:00Z");
     const md = loadPrompt("reach-out", "v3");
     expect(renderReachOut(md, { ...base, kind: "thread" }, now, zones).reason).toContain(
-      "Friday 9 January",
+      "⟦2026-01-09|day|America/New_York⟧",
     );
     expect(renderReachOut(md, { ...base, kind: "her_day" }, now, zones).reason).toContain(
-      "Saturday 10 January",
+      "⟦2026-01-10|day|Asia/Singapore⟧",
     );
   });
 
@@ -742,10 +743,11 @@ describe("composeReachOut", () => {
       new Date("2026-01-12T10:00:00Z"),
       { hers: "UTC", theirs: "UTC" },
     );
-    expect(r.reason).toContain(
-      "The user is running a half marathon on Sunday. (Sunday 11 January, yesterday)",
+    const reason = renderTimes(r.reason, new Date("2026-01-12T10:00:00Z"), 6);
+    expect(reason).toContain(
+      "The user is running a half marathon on Sunday. (yesterday, Sunday 11 January)",
     );
-    expect(r.reason).toContain("The user is training. (they told you 7 days ago)");
+    expect(reason).toContain("The user is training. (they told you Monday 5 January)");
     expect(r.slot).toContain(r.reason);
     expect(r.slot).toContain("not about your last conversation");
     expect(r.cue).toContain("about: half marathon");

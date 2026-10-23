@@ -16,7 +16,7 @@ import {
 import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { USER_MIND_RUN_QUEUE, type UserMindRunJob } from "@/mind/platform/jobs";
-import { stamped } from "@/mind/platform/relative-date";
+import { stamped } from "@/mind/platform/time-anchors";
 import { MINUTE } from "@/mind/platform/time";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { loadRunInputs } from "./inputs";
@@ -78,7 +78,7 @@ export async function runUserMind(
     const now = clock.now();
     const latest = await deps.core.memory.latestSnapshot();
     const snapshot = latest
-      ? stamped(latest.content, latest.rendered_at, now, lifeTimezone(config.life, now))
+      ? stamped(latest.content, latest.rendered_at, lifeTimezone(config.life, now))
       : null;
     const loopDeps = { db, embedder, config, clock, log, llm, modules, snapshot };
     const inputs = await loadRunInputs(loopDeps, run.user_id);

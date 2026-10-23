@@ -5,8 +5,8 @@ import { insertThread } from "@/db/repos/user/threads";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
-import { formatLocal } from "@/mind/platform/timezone";
-import { dayInWords, itemWhen, writtenOn } from "@/mind/platform/relative-date";
+import { nowLine } from "@/mind/platform/time-anchors";
+import { dateToken, tokenDates, written } from "@/mind/platform/time-anchors";
 import {
   closeTestDb,
   createTestUser,
@@ -218,7 +218,7 @@ test("the loop sees now and each memory's date, in their zone", async () => {
   await insertFact(deps.db, userId, {
     subject: "user",
     kind: "event",
-    content: "They have an interview on Thursday.",
+    content: "They have an interview.",
     embedding: vec(),
     created_at: deps.clock.now(),
     occurred_at: at,
@@ -231,11 +231,11 @@ test("the loop sees now and each memory's date, in their zone", async () => {
   await userSummarise(deps, await run("exchange:d"), await loadRunInputs(deps, userId));
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
   const input = JSON.parse(call.input);
-  expect(input.now).toBe(formatLocal(deps.clock.now(), null));
+  expect(input.now).toBe(nowLine(deps.clock.now(), "UTC", "Asia/Singapore"));
   expect(input.new_memories).toContainEqual(
     expect.objectContaining({
-      content: "They have an interview on Thursday.",
-      when: itemWhen(at, deps.clock.now(), deps.clock.now(), "UTC"),
+      content: "They have an interview.",
+      when: dateToken(at, "UTC"),
     }),
   );
 });
@@ -247,7 +247,7 @@ test("summarise reads a stamped previous note and dated threads; no zone means U
   await insertFact(deps.db, userId, {
     subject: "user",
     kind: "event",
-    content: "Their sister visits on Saturday.",
+    content: "Their sister is visiting.",
     embedding: vec(),
     created_at: now,
     occurred_at: new Date(now.getTime() + 2 * D),
@@ -285,25 +285,21 @@ test("summarise reads a stamped previous note and dated threads; no zone means U
   const input = JSON.parse(
     deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise").at(-1)!.input,
   );
-  const sat = dayInWords(new Date(now.getTime() + 2 * D), now, "UTC");
+  const sat = dateToken(new Date(now.getTime() + 2 * D), "UTC");
   expect(input.new_memories).toContainEqual(
     expect.objectContaining({
-      content: "Their sister visits on Saturday.",
-      when: itemWhen(new Date(now.getTime() + 2 * D), now, now, "UTC"),
+      content: "Their sister is visiting.",
+      when: sat,
     }),
   );
-  expect(input.previous.written).toBe(writtenOn(new Date(now.getTime() - 2 * D), now, "UTC"));
-  expect(input.previous.whats_live).toBe("sister visits tomorrow");
+  expect(input.previous.written).toBe(written(new Date(now.getTime() - 2 * D), "UTC"));
+  // Her old note's "tomorrow" was stored as the day it meant.
+  expect(tokenDates(input.previous.whats_live)).toHaveLength(1);
   expect(input.open_threads).toContain(`sister's visit (next: ${sat})`);
 });
 
-test("a summary that slips a relative word is stored and the slip logged", async () => {
+test("a summary's relative words are stored as the day they meant", async () => {
   const { deps, userId, run } = await setup();
-  const logs: { msg: string; meta?: Record<string, unknown> }[] = [];
-  const log = {
-    info: (msg: string, meta?: Record<string, unknown>) => logs.push({ msg, meta }),
-    error: () => {},
-  };
   deps.llm.handlers.user_summarise = () => ({
     where_things_stand: "Fine.",
     whats_live: "Their sister visits tomorrow.",
@@ -322,15 +318,12 @@ test("a summary that slips a relative word is stored and the slip logged", async
     source: "turn",
   });
   expect(
-    await userSummarise(
-      { ...deps, log },
-      await run("exchange:u"),
-      await loadRunInputs(deps, userId),
-    ),
+    await userSummarise(deps, await run("exchange:u"), await loadRunInputs(deps, userId)),
   ).toBe("done");
-  expect((await liveSummary(deps.db, userId))!.content).toContain("visits tomorrow");
-  expect(logs).toContainEqual({
-    msg: "relative words in stored text",
-    meta: { writer: "user_summarise", words: ["tomorrow"] },
-  });
+  const live = (await liveSummary(deps.db, userId))!;
+  expect(live.content).not.toContain("tomorrow");
+  const tomorrow = new Date(deps.clock.now().getTime() + 86_400_000);
+  expect(tokenDates(live.content)[0]!.toISOString().slice(0, 10)).toBe(
+    tomorrow.toISOString().slice(0, 10),
+  );
 });

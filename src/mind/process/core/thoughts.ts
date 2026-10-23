@@ -8,7 +8,6 @@ import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreStateRow } from "@/mind/state/core/types";
 import { z } from "zod";
 import { DepthLabel, depthOf, type DepthLabelT } from "@/mind/memory/core/depth";
-import { noteRelativeWords } from "@/mind/platform/relative-date";
 
 /** Thinking takes the world tick's lock, so a thought never lands beside a half-applied event. */
 export const WORLD_LOCK = "core_world_tick";
@@ -109,11 +108,6 @@ export async function storeThoughts(
     item: validItem(item, deps.config.core.loops.max_chars),
     embedding: validEmbedding(embedding, deps.config.embedding.dimensions),
   }));
-  noteRelativeWords(
-    deps.log,
-    meta.loop,
-    validated.map((v) => v.item.content),
-  );
   const ids: string[] = [];
   const dropped: string[] = [];
   for (const { item, embedding } of validated) {

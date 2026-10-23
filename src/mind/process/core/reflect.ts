@@ -11,7 +11,7 @@ import { cosine } from "@/mind/platform/math";
 import { DAY } from "@/mind/platform/time";
 import { isCraftGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
-import { dayInWords, noteRelativeWords, stamped } from "@/mind/platform/relative-date";
+import { dateToken, stamped } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
 
 const active = (item: CoreMemoryItem | null, kind: CoreMemoryItem["kind"]) =>
@@ -95,7 +95,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       model: "core",
       system: [
         persona.coreValues,
-        snapshot ? stamped(snapshot.content, snapshot.rendered_at, now, tz) : persona.seedSelf,
+        snapshot ? stamped(snapshot.content, snapshot.rendered_at, tz) : persona.seedSelf,
         loadPrompt("core/reflect", config.prompts.core_reflect),
       ].join("\n\n"),
       input: JSON.stringify({
@@ -103,7 +103,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           id,
           kind,
           content,
-          when: dayInWords(occurred_at ?? created_at, now, tz),
+          when: dateToken(occurred_at ?? created_at, tz),
         })),
         context: context.map(({ id, kind, content }) => ({ id, kind, content })),
         narrative: narrative ? { id: narrative.id, content: narrative.content } : null,
@@ -113,12 +113,6 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
-    noteRelativeWords(deps.log, "core_reflect", [
-      ...result.insights.map((i) => i.content),
-      ...result.opinions.map((o) => o.stance),
-      ...result.interests.flatMap((i) => (i.status === "new" ? [i.content] : [])),
-      result.narrative,
-    ]);
     const byKind = config.core.depth.by_kind;
     const proposals = [
       ...result.insights.map((item) => ({

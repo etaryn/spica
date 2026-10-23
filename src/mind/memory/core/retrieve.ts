@@ -84,7 +84,6 @@ export async function retrieveCore(
           id: m.id,
           content: m.content,
           when: m.occurred_at ?? m.created_at,
-          noted: m.created_at,
           depth: m.depth,
         });
       }
@@ -103,7 +102,6 @@ export async function retrieveCore(
         id,
         content: m.content,
         when: m.occurred_at ?? m.created_at,
-        noted: m.created_at,
         depth: m.depth,
       });
     }
@@ -117,7 +115,6 @@ export async function retrieveCore(
           id: pre.id,
           content: pre.content,
           when: pre.occurred_at ?? pre.created_at,
-          noted: pre.created_at,
           onMind: true,
           depth: pre.depth,
         });

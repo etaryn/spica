@@ -134,7 +134,7 @@ test("one accepted wander stores seed context and leaves core state and source u
   expect(await deps.core.memory.get(id)).toEqual(source);
   // The seed reaches the model with its day and how far that is from now.
   const input = all.llm.structuredCalls.find((c) => c.purpose === "core_wander")!.input;
-  expect(input).toMatch(/Seed memory: Spica found an old film\. \(\w+day \d+ \w+, /);
+  expect(input).toMatch(/Seed memory: Spica found an old film\. \(⟦\d{4}-\d{2}-\d{2}\|day\|/);
 });
 
 test("seed pool omits unreal, stale, superseded and resolved intentions", async () => {

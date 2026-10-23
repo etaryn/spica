@@ -16,7 +16,7 @@ import { seededUnit } from "@/mind/platform/seeded-random";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { latestSelf } from "@/mind/memory/core/self";
-import { dayInWords } from "@/mind/platform/relative-date";
+import { dateToken } from "@/mind/platform/time-anchors";
 import { budgetDayStart, runCoreLoop } from "./runner";
 import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
 import type { ApplyOutput, ThinkingResult } from "./thoughts";
@@ -192,9 +192,9 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
     const chain = await chainFor(ctx.deps, seed, query);
     const persona = loadPersona(config);
     const tz = lifeTimezone(config.life, now);
-    const self = await latestSelf(core.memory, persona.seedSelf, now, tz);
+    const self = await latestSelf(core.memory, persona.seedSelf, tz);
     const dated = (m: CoreMemoryItem) =>
-      `${m.content} (${dayInWords(m.occurred_at ?? m.created_at, now, tz)})`;
+      `${m.content} (${dateToken(m.occurred_at ?? m.created_at, tz)})`;
     const goals = await core.goals.active();
     const input = [
       `Seed memory: ${dated(seed)}`,

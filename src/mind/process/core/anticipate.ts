@@ -20,8 +20,7 @@ import { HOUR } from "@/mind/platform/time";
 import { clamp } from "@/mind/platform/math";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { dayInWords } from "@/mind/platform/relative-date";
-import { localTime } from "@/mind/platform/timezone";
+import { dateToken } from "@/mind/platform/time-anchors";
 
 const Output = z.object({
   thought: z.object({
@@ -69,12 +68,12 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
   const run = await runCoreLoop<ApplyOutput>(deps, "core_anticipate", now, async (ctx) => {
     const persona = loadPersona(config);
     const tz = lifeTimezone(config.life, now);
-    const self = await latestSelf(core.memory, persona.seedSelf, now, tz);
+    const self = await latestSelf(core.memory, persona.seedSelf, tz);
     const state = await core.state.get();
     const goal = event.goal_ref ? await core.goals.get(event.goal_ref) : null;
     const input = [
       `Upcoming plan: ${event.content}`,
-      `When: ${dayInWords(event.at, now, tz)} at ${localTime(event.at, tz)}`,
+      `When: ${dateToken(event.at, tz, "time")}`,
       `Her intention: ${intention.content}`,
       `People: ${event.agent_names.length ? event.agent_names.join(", ") : "none named"}`,
       goal ? `Related goal: ${goal.title} (${goal.why})` : "Related goal: none",

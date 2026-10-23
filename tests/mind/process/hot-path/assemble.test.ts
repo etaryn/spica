@@ -5,7 +5,7 @@ import {
   relationshipLine,
 } from "@/mind/process/hot-path/assemble";
 import { systemText } from "@/mind/platform/llm/types";
-import { relativeDate } from "@/mind/platform/relative-date";
+import { anchorTimes, renderTimes } from "@/mind/platform/time-anchors";
 import { emptyRetrieval } from "@/mind/memory/shared/types";
 import { splitParts } from "@/mind/process/hot-path/split-parts";
 import { resolveSessionId } from "@/mind/process/receive/session";
@@ -20,6 +20,7 @@ const base = {
   retrieval: emptyRetrieval(),
   now,
   timezone: "UTC",
+  userTimezone: "UTC",
 };
 
 describe("resolveSessionId", () => {
@@ -115,7 +116,7 @@ describe("assemblePrompt", () => {
     );
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(p.system).toContain("(Sunday 11 January, yesterday)");
+    expect(p.system).toContain("(⟦2026-01-11|day|UTC⟧)");
     expect(p.system).not.toContain("### About you");
   });
 });
@@ -161,17 +162,6 @@ describe("the summary section", () => {
     expect(assemblePrompt({ ...base, summary: null, recentTurns: [] }).system).not.toContain(
       "Where things stand",
     );
-  });
-});
-
-describe("relativeDate", () => {
-  test("buckets", () => {
-    expect(relativeDate(new Date("2026-01-12T08:00:00Z"), now, "UTC")).toBe("today");
-    expect(relativeDate(new Date("2026-01-11T08:00:00Z"), now, "UTC")).toBe("yesterday");
-    expect(relativeDate(new Date("2026-01-08T08:00:00Z"), now, "UTC")).toBe("4 days ago");
-    expect(relativeDate(new Date("2025-12-20T08:00:00Z"), now, "UTC")).toBe("3 weeks ago");
-    expect(relativeDate(new Date("2025-10-01T08:00:00Z"), now, "UTC")).toBe("3 months ago");
-    expect(relativeDate(new Date("2026-01-20T08:00:00Z"), now, "UTC")).toBe("in 8 days");
   });
 });
 
@@ -358,6 +348,7 @@ test("open questions fill their own slot after due threads, only when present", 
     recentTurns: [{ role: "user" as const, text: "hi" }],
     now: new Date(),
     timezone: "UTC",
+    userTimezone: "UTC",
   };
   expect(assemblePrompt(base).system).not.toMatch(/haven't answered/);
   const s = assemblePrompt({ ...base, openQuestions: ["what should I cook tonight?"] }).system;
@@ -366,18 +357,22 @@ test("open questions fill their own slot after due threads, only when present", 
 
 test("relationshipLine: first conversation, same day, then days and first-contact date", () => {
   const now = new Date("2026-01-20T09:00:00Z");
-  expect(relationshipLine({ sessions: 1, days: 1, first: now }, now, "UTC")).toBe(
+  expect(relationshipLine({ sessions: 1, days: 1, first: now }, "UTC")).toBe(
     "This is your first conversation with them.",
   );
-  expect(relationshipLine({ sessions: 0, days: 0, first: null }, now, "UTC")).toBe(
+  expect(relationshipLine({ sessions: 0, days: 0, first: null }, "UTC")).toBe(
     "This is your first conversation with them.",
   );
-  expect(relationshipLine({ sessions: 2, days: 1, first: now }, now, "UTC")).toBe(
+  expect(relationshipLine({ sessions: 2, days: 1, first: now }, "UTC")).toBe(
     "You've already talked earlier today.",
   );
   expect(
-    relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, now, "UTC"),
-  ).toBe("You first talked 2 weeks ago, and have talked on 3 different days.");
+    renderTimes(
+      relationshipLine({ sessions: 4, days: 3, first: new Date("2026-01-06T09:00:00Z") }, "UTC"),
+      now,
+      6,
+    ),
+  ).toBe("You first talked Tuesday 6 January, and have talked on 3 different days.");
 });
 
 test("'Your day' sits before 'You and them'; the preoccupation is labelled", () => {
@@ -399,13 +394,14 @@ test("'Your day' sits before 'You and them'; the preoccupation is labelled", () 
     recentTurns: [],
     now: new Date("2026-01-05T10:00:00Z"),
     timezone: "UTC",
+    userTimezone: "UTC",
   });
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## You and them"));
   expect(system.indexOf("## How you're feeling")).toBeLessThan(system.indexOf("## Your day"));
   expect(system.indexOf("## Your day")).toBeLessThan(system.indexOf("## You and them"));
   expect(system.indexOf("## You and them")).toBeLessThan(system.indexOf("## What you remember"));
   expect(system).toContain(
-    "Spica got the telescope images. (Monday 5 January, today) (on your mind lately)",
+    "Spica got the telescope images. (⟦2026-01-05|day|UTC⟧) (on your mind lately)",
   );
 });
 
@@ -457,6 +453,7 @@ test("sections come in the two-mind order", () => {
     recentTurns: [],
     now,
     timezone: "UTC",
+    userTimezone: "UTC",
   });
   const order = [
     "VALUES",
@@ -472,7 +469,7 @@ test("sections come in the two-mind order", () => {
   expect(system).toContain("## Who you are lately\nSNAPSHOT");
   expect(system).toContain("### What you've told them");
   expect(system).toContain("### From your own life");
-  expect(system).toContain("HERLIFE (Monday 12 January, today) (on your mind lately)");
+  expect(system).toContain("HERLIFE (⟦2026-01-12|day|UTC⟧) (on your mind lately)");
 });
 
 describe("ideas slot", () => {
@@ -535,20 +532,20 @@ test("her items carry share tags, theirs carry origin marks; held back has its o
     heldBack: "There's something here you're not ready to share with them yet.",
   });
   expect(system).toContain(
-    "- They hate mornings. (Monday 12 January, today) (from their profile card, a first impression)",
+    "- They hate mornings. (⟦2026-01-12|day|UTC⟧) (from their profile card, a first impression)",
   );
   expect(system).toContain(
-    "- They seem lonely. (Monday 12 January, today) (your own guess, they never said this)",
+    "- They seem lonely. (⟦2026-01-12|day|UTC⟧) (your own guess, they never said this)",
   );
-  expect(system).toContain("- They have a dog. (Monday 12 January, today)\n");
+  expect(system).toContain("- They have a dog. (⟦2026-01-12|day|UTC⟧)\n");
   expect(system).toContain(
-    "- She fears being forgotten. (Monday 12 January, today) (only hint at this)",
-  );
-  expect(system).toContain(
-    "- She loves Paper Moon. (Monday 12 January, today) (they already know this)",
+    "- She fears being forgotten. (⟦2026-01-12|day|UTC⟧) (only hint at this)",
   );
   expect(system).toContain(
-    "- She misses Alcor. (Monday 12 January, today) (you've hinted at this before)",
+    "- She loves Paper Moon. (⟦2026-01-12|day|UTC⟧) (they already know this)",
+  );
+  expect(system).toContain(
+    "- She misses Alcor. (⟦2026-01-12|day|UTC⟧) (you've hinted at this before)",
   );
   expect(system).toContain(
     "## Not ready to share\nThere's something here you're not ready to share with them yet.",
@@ -616,7 +613,6 @@ test("summary and read are headed by the day she wrote them; facts carry day and
             id: "f1",
             content: "Their sister visits on Saturday 17 January.",
             when: new Date(at.getTime() + 2 * D),
-            noted: new Date(at.getTime() - 2 * D),
           },
         ],
         self: [],
@@ -630,7 +626,45 @@ test("summary and read are headed by the day she wrote them; facts carry day and
   expect(system).toContain(
     "## Your read on them\n(written Wednesday 14 January, yesterday)\n- How they are: x",
   );
-  expect(system).toContain(
-    "- Their sister visits on Saturday 17 January. (Saturday 17 January, in 2 days; noted Tuesday 13 January, 2 days ago)",
-  );
+  expect(system).toContain("- Their sister visits on Saturday 17 January. (⟦2026-01-17|day|UTC⟧)");
+});
+
+test("their things are dated on their calendar, hers on hers, under a Now line", () => {
+  const at = new Date("2026-01-12T17:00:00Z"); // Monday 17:00 London, Tuesday 01:00 Singapore
+  const { system } = assemblePrompt({
+    ...base,
+    now: at,
+    timezone: "Asia/Singapore",
+    userTimezone: "Europe/London",
+    nowLine: "It's Monday 12 January, 17:00 where they are; Tuesday 13 January, 01:00 for you.",
+    recentTurns: [],
+    retrieval: {
+      ...emptyRetrieval(),
+      facts: {
+        user: [{ id: "u", content: "Race day.", when: new Date("2026-01-12T09:00:00Z") }],
+        self: [],
+        shared: [],
+      },
+    },
+    coreMemories: [
+      { id: "c", content: "Telescope night.", when: new Date("2026-01-12T14:00:00Z") },
+    ],
+  });
+  const seen = renderTimes(system, at, 6);
+  expect(seen).toContain("## Now\nIt's Monday 12 January, 17:00 where they are");
+  expect(seen).toContain("- Race day. (today)");
+  expect(seen).toContain("- Telescope night. (yesterday, Monday 12 January)");
+});
+
+test("a memory whose words carry its date isn't dated twice", () => {
+  const content = anchorTimes("The race is tomorrow.", { at: now, zone: "UTC" });
+  const { system } = assemblePrompt({
+    ...base,
+    recentTurns: [],
+    retrieval: {
+      ...emptyRetrieval(),
+      facts: { user: [{ id: "u", content, when: now }], self: [], shared: [] },
+    },
+  });
+  expect(renderTimes(system, now, 6)).toMatch(/- The race is tomorrow, Tuesday 13 January\.$/m);
 });

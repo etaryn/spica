@@ -14,7 +14,7 @@ import type { CoreDeps } from "@/mind/platform/deps";
 import type { CoreGoal, CoreNeeds } from "@/mind/state/core/types";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { relativeDate } from "@/mind/platform/relative-date";
+import { dateToken } from "@/mind/platform/time-anchors";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant, lifeTimezone } from "@/mind/world/her-clock";
 import { DAY } from "@/mind/platform/time";
@@ -177,7 +177,7 @@ export function buildEventInput(
   );
   parts.push(
     ctx.episodes.length
-      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${relativeDate(e.when, now, tz)})`).join("\n")}`
+      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${dateToken(e.when, tz)})`).join("\n")}`
       : "What has happened in her life lately: nothing yet.",
   );
   parts.push(`People she knows: ${ctx.people.join(", ") || "none"}.`);
@@ -285,12 +285,7 @@ export async function generateCoreEvents(
   let lastHighStakesAt = await deps.core.world.lastHighStakesAt();
   // Events are written for who she is lately; before any snapshot exists that's the seed self.
   const persona = loadPersona(config);
-  const self = await latestSelf(
-    deps.core.memory,
-    persona.seedSelf,
-    now,
-    lifeTimezone(config.life, now),
-  );
+  const self = await latestSelf(deps.core.memory, persona.seedSelf, lifeTimezone(config.life, now));
   const system = [
     persona.coreValues,
     self,

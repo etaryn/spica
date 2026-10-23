@@ -15,8 +15,9 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import { formatLocal } from "@/mind/platform/timezone";
-import { noteRelativeWords } from "@/mind/platform/relative-date";
+import { nowLine } from "@/mind/platform/time-anchors";
+import { zoneOrUtc } from "@/mind/platform/timezone";
+import { lifeTimezone } from "@/mind/world/her-clock";
 import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -43,19 +44,18 @@ export async function userReflect(
       model: "user_mind",
       system: loadPrompt("user-mind/reflect", config.prompts.user_reflect),
       input: JSON.stringify({
-        now: formatLocal(now, inputs.timezone),
+        now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now)),
         who_you_are: deps.snapshot,
-        summary: stampedNote(summary, now, inputs.timezone),
+        summary: stampedNote(summary, inputs.timezone),
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts, inputs.timezone, now),
+        new_memories: memoryLines(inputs.facts, inputs.timezone),
         already_noticed: earlier.map((r) => r.content),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
-    noteRelativeWords(deps.log, "user_reflect", [out.reflection]);
     let reflectionId: string | null = null;
     if (out.reflection) {
       const [embedding] = await deps.embedder.embed([out.reflection], "document");

@@ -20,7 +20,7 @@ import { HOUR } from "@/mind/platform/time";
 import { clamp } from "@/mind/platform/math";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { dayInWords } from "@/mind/platform/relative-date";
+import { dateToken } from "@/mind/platform/time-anchors";
 
 const Output = z.object({
   thought: z.object({
@@ -76,7 +76,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
   const run = await runCoreLoop<ApplyOutput>(deps, "core_ruminate", now, async (ctx) => {
     const persona = loadPersona(config);
     const tz = lifeTimezone(config.life, now);
-    const self = await latestSelf(core.memory, persona.seedSelf, now, tz);
+    const self = await latestSelf(core.memory, persona.seedSelf, tz);
     const historical = HistoricalEmotion.safeParse(payloadOf(episode)?.appraisal_emotion);
     const people = (await core.memory.entities()).filter((person) =>
       episode.entity_refs.includes(person.id),
@@ -86,7 +86,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
     const goal = event?.goal_ref ? await core.goals.get(event.goal_ref) : null;
     const state = await core.state.get();
     const input = [
-      `Landed episode: ${episode.content} (${dayInWords(episode.occurred_at ?? episode.created_at, now, tz)})`,
+      `Landed episode: ${episode.content} (${dateToken(episode.occurred_at ?? episode.created_at, tz)})`,
       `Its valence: ${episode.valence.toFixed(2)}`,
       `Historical emotion: ${historical.success ? `${historical.data.label} (valence ${historical.data.valence.toFixed(2)}, arousal ${historical.data.arousal.toFixed(2)}${historical.data.phrase ? `, about ${historical.data.phrase}` : ""})` : "absent"}`,
       `People: ${people.length ? people.map((person) => person.name).join(", ") : "none named"}`,

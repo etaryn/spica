@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { renderTimes } from "@/mind/platform/time-anchors";
 import { insertFact } from "@/db/repos/user/facts";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertTurn } from "@/db/repos/user/session-log";
@@ -105,7 +106,7 @@ test("3: the reason carries its dates; the guard sees now and why she's writing"
     now,
     { hers: "UTC", theirs: "UTC" },
   );
-  expect(r.reason).toContain("(Sunday 11 January, yesterday)");
+  expect(renderTimes(r.reason, now, 6)).toContain("(yesterday, Sunday 11 January)");
   const g = renderGuardInput({
     kind: "reach_out",
     text: "how did it go?",

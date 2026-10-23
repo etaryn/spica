@@ -111,7 +111,6 @@ function addRanked(
       id: memory.id,
       content: memory.content,
       when: memory.occurred_at ?? memory.created_at,
-      noted: memory.created_at,
       origin: originOf(memory.source, memory.kind),
     });
     result.recalled.push({
@@ -148,7 +147,6 @@ async function addForcedFacts(
       id: fact.id,
       content: fact.content,
       when: fact.occurred_at ?? fact.created_at,
-      noted: fact.created_at,
       origin: originOf(fact.source, fact.kind),
     });
     result.recalled.push(forcedRecall(fact.id, fact.salience));

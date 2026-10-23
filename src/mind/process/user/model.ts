@@ -22,8 +22,8 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { loadRelationshipSummary } from "@/mind/state/user/relationship/summary";
-import { formatLocal } from "@/mind/platform/timezone";
-import { noteRelativeWords, writtenOn } from "@/mind/platform/relative-date";
+import { nowLine, written } from "@/mind/platform/time-anchors";
+import { lifeTimezone } from "@/mind/world/her-clock";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import { memoryLines, stampedNote, triggerText, visible, type RunInputs } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
@@ -70,16 +70,16 @@ export async function userModel(
       model: "user_mind",
       system: loadPrompt("user-mind/model", config.prompts.user_model),
       input: JSON.stringify({
-        now: formatLocal(now, inputs.timezone),
+        now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now)),
         who_you_are: deps.snapshot,
-        summary: stampedNote(summary, now, inputs.timezone),
+        summary: stampedNote(summary, inputs.timezone),
         noticed: noticed?.content ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts, inputs.timezone, now),
+        new_memories: memoryLines(inputs.facts, inputs.timezone),
         previous_read: previousRead
           ? {
-              written: writtenOn(previous!.created_at, now, zoneOrUtc(inputs.timezone)),
+              written: written(previous!.created_at, zoneOrUtc(inputs.timezone)),
               ...previousRead,
             }
           : null,
@@ -89,12 +89,6 @@ export async function userModel(
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
-    noteRelativeWords(deps.log, "user_model", [
-      out.how_they_are,
-      out.what_they_want,
-      out.what_lands,
-      ...out.beliefs.map((b) => b.text),
-    ]);
     const read: ModelPayload = {
       how_they_are: out.how_they_are,
       what_they_want: out.what_they_want,

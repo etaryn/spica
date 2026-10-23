@@ -18,14 +18,9 @@ import { isSensitive } from "@/mind/memory/user/retrieve";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
-import {
-  formatLocal,
-  localDateString,
-  localMidnight,
-  nextLocalDate,
-  zoneOrUtc,
-} from "@/mind/platform/timezone";
-import { noteRelativeWords, writtenOn } from "@/mind/platform/relative-date";
+import { localDateString, localMidnight, nextLocalDate, zoneOrUtc } from "@/mind/platform/timezone";
+import { nowLine, written } from "@/mind/platform/time-anchors";
+import { lifeTimezone } from "@/mind/world/her-clock";
 import { memoryLines, threadLines, stampedNote, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
@@ -93,22 +88,21 @@ export async function userIdeate(
       model: "user_mind",
       system: loadPrompt("user-mind/ideate", config.prompts.user_ideate),
       input: JSON.stringify({
-        now: formatLocal(now, inputs.timezone),
+        now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now)),
         who_you_are: deps.snapshot,
-        summary: stampedNote(summary, now, inputs.timezone),
+        summary: stampedNote(summary, inputs.timezone),
         noticed: noticed?.content ?? null,
         your_read_on_them: read
-          ? { written: writtenOn(readRow!.created_at, now, zoneOrUtc(inputs.timezone)), ...read }
+          ? { written: written(readRow!.created_at, zoneOrUtc(inputs.timezone)), ...read }
           : null,
-        new_memories: memoryLines(facts, inputs.timezone, now),
-        open_threads: threadLines(threads, now, inputs.timezone),
+        new_memories: memoryLines(facts, inputs.timezone),
+        open_threads: threadLines(threads, inputs.timezone),
         already_planned: planned.map((i) => i.content),
       }),
       schema: Output,
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: settings.max_tokens,
     });
-    noteRelativeWords(deps.log, "user_ideate", [out.idea]);
     let ideaId: string | null = null;
     if (out.idea) {
       const [embedding] = await deps.embedder.embed([out.idea], "document");

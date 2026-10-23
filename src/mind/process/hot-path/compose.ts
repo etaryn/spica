@@ -31,17 +31,10 @@ import { isValidTimeZone } from "@/mind/platform/timezone";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
-import { guardNow } from "@/mind/process/guard/guard";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
-import {
-  dayInWords,
-  itemWhen,
-  relativeDate,
-  stamped,
-  writtenOn,
-} from "@/mind/platform/relative-date";
+import { dateToken, nowLine, ownDate, stamped, written } from "@/mind/platform/time-anchors";
 import { modelPayload } from "@/mind/process/user/model";
 import { loadCoreStateLine } from "@/mind/state/core/line";
 import {
@@ -115,13 +108,18 @@ type ComposeInput = {
 function guardFacts(
   retrieval: RetrievalResult,
   coreMemories: RetrievedFact[],
-  now: Date,
-  tz: string,
+  theirZone: string,
+  herZone: string,
 ): { id: string; subject: string; content: string; when?: string }[] {
-  // Dated like NOW, so the guard compares days instead of counting them.
-  const when = (f: RetrievedFact) => itemWhen(f.when, f.noted ?? null, now, tz);
+  // Dated so the guard compares days instead of counting them, each on its owner's calendar.
+  const when = (f: RetrievedFact, zone: string) => ownDate(f.content, f.when, zone) ?? undefined;
   const facts = (["user", "self", "shared"] as const).flatMap((subject) =>
-    retrieval.facts[subject].map((f) => ({ id: f.id, subject, content: f.content, when: when(f) })),
+    retrieval.facts[subject].map((f) => ({
+      id: f.id,
+      subject,
+      content: f.content,
+      when: when(f, theirZone),
+    })),
   );
   const threads = retrieval.dueThreads.map((t) => ({
     id: t.id,
@@ -132,7 +130,7 @@ function guardFacts(
     id: m.id,
     subject: "core",
     content: m.content,
-    when: when(m),
+    when: when(m, herZone),
   }));
   return [...facts, ...threads, ...core];
 }
@@ -211,7 +209,7 @@ export function renderReachOut(
   const tz = trigger.kind === "her_day" ? zones.hers : zones.theirs;
   const notes = (trigger.notes ?? []).map((n) => {
     const at = new Date(n.at);
-    const when = n.dated ? dayInWords(at, now, tz) : `they told you ${relativeDate(at, now, tz)}`;
+    const when = n.dated ? dateToken(at, tz) : `they told you ${dateToken(at, tz)}`;
     return `- ${n.text} (${when})`;
   });
   const reason = notes.length ? `${topic}\n${notes.join("\n")}` : topic;
@@ -341,6 +339,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
   // Her notes are dated on her calendar, like her memories, so one prompt counts days one way.
   const herZone = lifeTimezone(config.life, clock.now());
+  const theirZoneLookup = userZone(deps, userId);
   // A malformed payload renders nothing rather than failing the reply.
   const summary = inCrisis
     ? Promise.resolve(null)
@@ -355,7 +354,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             : await liveSummary(db, userId);
           const parsed = summaryPayload.safeParse(row?.payload);
           return parsed.success
-            ? { ...parsed.data, written: writtenOn(row!.created_at, clock.now(), herZone) }
+            ? { ...parsed.data, written: written(row!.created_at, await theirZoneLookup) }
             : null;
         },
         null,
@@ -373,7 +372,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
             : await liveModel(db, userId);
           const parsed = modelPayload.safeParse(row?.payload);
           return parsed.success
-            ? { ...parsed.data, written: writtenOn(row!.created_at, clock.now(), herZone) }
+            ? { ...parsed.data, written: written(row!.created_at, await theirZoneLookup) }
             : null;
         },
         null,
@@ -483,12 +482,13 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const mustAnswer =
     input.openQuestions.length > 0 || input.answering.some((t) => t.text.trim().endsWith("?"));
 
+  const theirZone = await theirZoneLookup;
   const reachOutText = input.reachOut
     ? renderReachOut(
         loadPrompt("reach-out", config.prompts.reach_out),
         input.reachOut,
         clock.now(),
-        { hers: lifeTimezone(config.life, clock.now()), theirs: await userZone(deps, userId) },
+        { hers: herZone, theirs: theirZone },
       )
     : null;
   const prompt = assemblePrompt({
@@ -499,7 +499,6 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       ? stamped(
           snapshotWithin(latestSnapshot.content, selfLines, allowed.open),
           latestSnapshot.rendered_at,
-          clock.now(),
           herZone,
         )
       : null,
@@ -514,13 +513,15 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     yourDay: await yourDay,
     retrieval,
     openQuestions: inCrisis ? [] : input.openQuestions,
-    ideas: shownIdeas.map((i) => `${i.content} (${writtenOn(i.created_at, clock.now(), herZone)})`),
+    ideas: shownIdeas.map((i) => i.content),
     idiolect: shownIdiolect.map((i) => ({ content: i.content, started_by: i.payload.started_by })),
     recentTurns: recent,
     gapMarkerMinHours: config.chat.gap_line_min_hours,
     windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
-    timezone: lifeTimezone(config.life, clock.now()),
+    timezone: herZone,
+    userTimezone: theirZone,
+    nowLine: nowLine(clock.now(), theirZone, herZone),
     howToText: inCrisis
       ? null
       : howToText({ shape, move, mustAnswer }, loadHowToTextPhrases(config)),
@@ -537,7 +538,6 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     });
   }
 
-  const theirZone = await userZone(deps, userId);
   const guarded = await guardOutgoing(deps, {
     userId,
     turnId: input.anchor.id,
@@ -546,14 +546,14 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
       recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
       recalledFacts: [
-        ...guardFacts(retrieval, herMemories, clock.now(), theirZone),
+        ...guardFacts(retrieval, herMemories, theirZone, herZone),
         // Their things together are shared memory too: a callback to one isn't invented.
         ...shownIdiolect.map((i) => ({ id: i.id, subject: "shared", content: i.content })),
       ],
       onboardingFacts: await onboarding,
       ownContext: [await yourDay, await feeling].filter((line): line is string => !!line),
       usedOnOccasion: await occasion,
-      now: guardNow(clock.now(), theirZone, herZone),
+      now: nowLine(clock.now(), theirZone, herZone, "where Spica is"),
       ...(reachOutText ? { reachOutReason: reachOutText.reason } : {}),
     },
   });
@@ -625,7 +625,7 @@ async function loadRelationshipLine(
   try {
     const tz = await userZone(deps, userId);
     const stats = await sessionLog.userTurnStats(deps.db, userId, anchor.created_at, tz);
-    return relationshipLine(stats, deps.clock.now(), tz);
+    return relationshipLine(stats, tz);
   } catch (e) {
     deps.log.error("relationship line unavailable", { userId, error: errorName(e) });
     return null;

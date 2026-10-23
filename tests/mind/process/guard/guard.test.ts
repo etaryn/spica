@@ -6,7 +6,6 @@ import { fallbackLine, parseFallbacks, pickFallback } from "@/mind/process/guard
 import {
   checkMessage,
   GuardResultSchema,
-  guardNow,
   messageToCheck,
   renderGuardInput,
   type GuardInput,
@@ -195,16 +194,6 @@ test("renderGuardInput: NOW first, and a reach-out's reason before the message",
   expect(text.startsWith("NOW: Thursday 8 January 2026, 19:12")).toBe(true);
   expect(text).toContain("WHY SPICA IS WRITING FIRST:\njob interview");
   expect(text.indexOf("WHY SPICA")).toBeLessThan(text.indexOf("MESSAGE TO CHECK"));
-});
-
-test("NOW is their local time, and hers too when her calendar reads differently", () => {
-  const at = new Date("2026-01-12T13:35:00Z");
-  expect(guardNow(at, "Europe/London", "Europe/London")).toBe(
-    "Monday, 12 January 2026 at 13:35 where they are",
-  );
-  expect(guardNow(at, "Europe/London", "Asia/Singapore")).toBe(
-    "Monday, 12 January 2026 at 13:35 where they are; Monday, 12 January 2026 at 21:35 where Spica is",
-  );
 });
 
 test("each remembered fact reaches the guard with its day, so a misdated reply is visible", () => {

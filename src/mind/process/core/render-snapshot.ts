@@ -10,7 +10,7 @@ import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
-import { noteRelativeWords, stamped } from "@/mind/platform/relative-date";
+import { stamped } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
 
 export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<LoopStatus> {
@@ -53,7 +53,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       ),
       input: JSON.stringify({
         previous: previous
-          ? stamped(previous.content, previous.rendered_at, now, lifeTimezone(config.life, now))
+          ? stamped(previous.content, previous.rendered_at, lifeTimezone(config.life, now))
           : persona.seedSelf,
         narrative,
         opinions,
@@ -67,13 +67,6 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       timeoutMs: config.models.structured_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
-    noteRelativeWords(
-      deps.log,
-      "core_render_snapshot",
-      Object.values(result)
-        .flat()
-        .map((l) => l.text),
-    );
     // A night's render can come back with a section emptied; her self doesn't vanish overnight,
     // so an empty section keeps last night's lines, each at the depth it had, so nothing kept
     // reaches someone it was held back from.

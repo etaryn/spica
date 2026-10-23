@@ -9,7 +9,7 @@
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import type { ChatMessage, ReplyRequest } from "@/mind/platform/llm/types";
-import { itemWhen, relativeDate } from "@/mind/platform/relative-date";
+import { dateToken, ownDate } from "@/mind/platform/time-anchors";
 import { HOUR } from "@/mind/platform/time";
 
 export interface AssembleInput {
@@ -52,8 +52,12 @@ export interface AssembleInput {
     trigger?: string | null;
   }[];
   now: Date;
-  /** Her zone: dates in her memories are counted in her days. */
+  /** Her zone: her memories are dated on her calendar. */
   timezone: string;
+  /** Their zone: their things are dated on their calendar. */
+  userTimezone: string;
+  /** Now on both calendars, so day words in the conversation read right. */
+  nowLine?: string | null;
   /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
   gapMarkerMinHours?: number;
   /**
@@ -77,6 +81,7 @@ export function assemblePrompt(input: AssembleInput): ReplyRequest {
   // The same for every user until the nightly snapshot, so it's the cached prefix.
   const shared = [input.valuesDoc, section("Who you are lately", input.snapshot)];
   const sections = [
+    section("Now", input.nowLine ?? null),
     section("How you're feeling", input.feelingLine),
     section("Your day", input.yourDay ?? null),
     section("You and them", input.relationshipSummary),
@@ -110,7 +115,7 @@ export function assemblePrompt(input: AssembleInput): ReplyRequest {
     ),
     section(
       "What you remember",
-      memorySection(input.retrieval, input.coreMemories, input.now, input.timezone),
+      memorySection(input.retrieval, input.coreMemories, input.userTimezone, input.timezone),
     ),
     section(
       "Your things together",
@@ -153,14 +158,15 @@ function section(heading: string, body: string | null): string | null {
 function memorySection(
   retrieval: RetrievalResult,
   coreMemories: RetrievedFact[],
-  now: Date,
-  tz: string,
+  theirZone: string,
+  herZone: string,
 ): string | null {
+  // Each memory is dated on its owner's calendar.
   const lists = [
-    factList("About them", retrieval.facts.user, now, tz),
-    factList("Between you", retrieval.facts.shared, now, tz),
-    factList("What you've told them", retrieval.facts.self, now, tz),
-    factList("From your own life", coreMemories, now, tz),
+    factList("About them", retrieval.facts.user, theirZone),
+    factList("Between you", retrieval.facts.shared, theirZone),
+    factList("What you've told them", retrieval.facts.self, theirZone),
+    factList("From your own life", coreMemories, herZone),
   ].filter((s): s is string => s !== null);
 
   return lists.length ? lists.join("\n\n") : null;
@@ -178,7 +184,7 @@ const ORIGIN = {
   guess: "your own guess, they never said this",
 };
 
-function factList(title: string, facts: RetrievedFact[], now: Date, tz: string): string | null {
+function factList(title: string, facts: RetrievedFact[], zone: string): string | null {
   if (facts.length === 0) return null;
 
   const lines = facts.map((fact) => {
@@ -187,7 +193,9 @@ function factList(title: string, facts: RetrievedFact[], now: Date, tz: string):
       Boolean,
     );
     const tail = notes.length ? ` (${notes.join("; ")})` : "";
-    return `- ${fact.content} (${itemWhen(fact.when, fact.noted ?? null, now, tz)})${onMind}${tail}`;
+    // A memory shows its date once: in its words when they carry one, otherwise after it.
+    const date = ownDate(fact.content, fact.when, zone);
+    return `- ${fact.content}${date ? ` (${date})` : ""}${onMind}${tail}`;
   });
   return `### ${title}\n${lines.join("\n")}`;
 }
@@ -281,12 +289,11 @@ function elapsed(hours: number): string {
 /** A factual line about how well she knows them, so she doesn't guess. */
 export function relationshipLine(
   stats: { sessions: number; days: number; first: Date | null },
-  now: Date,
-  tz: string,
+  zone: string,
 ): string {
   if (!stats.first || stats.sessions <= 1) return "This is your first conversation with them.";
   if (stats.days <= 1) return "You've already talked earlier today.";
-  return `You first talked ${relativeDate(stats.first, now, tz)}, and have talked on ${stats.days} different days.`;
+  return `You first talked ${dateToken(stats.first, zone)}, and have talked on ${stats.days} different days.`;
 }
 
 /** Time since the previous turn; null under `minHours`. */

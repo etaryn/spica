@@ -50,9 +50,7 @@ test("a bare weekday takes a date the writer was shown, else points by the rule"
   ]);
   expect(days(anchorTimes(sunday, { at: written, zone: "UTC" }))).toEqual(["2026-01-11"]);
   const wednesday = { at: at("2026-01-14T23:00:00Z"), zone: "UTC" };
-  expect(days(anchorTimes("They're awake late on a Wednesday.", wednesday))).toEqual([
-    "2026-01-14",
-  ]);
+  expect(days(anchorTimes("They're awake late on Wednesday.", wednesday))).toEqual(["2026-01-14"]);
   const past = { ...utc, direction: "past" as const };
   expect(days(anchorTimes("The user finished it on Saturday.", past))).toEqual(["2026-01-10"]);
   const ahead = { ...utc, direction: "upcoming" as const };
@@ -84,6 +82,8 @@ test("a time on a day anchors; a bare clock time, 'now' and weekday nouns don't"
     "Sam's in the thick of it right now.",
     "She ran mile 10 at 8 pace.",
     "She loves Sunday roast and Black Friday sales.",
+    "On your profile card you picked staying in on a free Friday night.",
+    "She runs on Sundays and every Saturday.",
     "the trap was waiting for the night that would be different",
     "she's catching the pattern everywhere this year",
   ])

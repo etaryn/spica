@@ -22,7 +22,6 @@ import { clamp } from "@/mind/platform/math";
 import { isCraftGoal } from "./post-library";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { noteRelativeWords } from "@/mind/platform/relative-date";
 
 /** Sent to the model. No numeric bounds (unsupported); `boundAppraisal` clamps. */
 export const AppraisalSchema = z.object({
@@ -134,7 +133,7 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
   if (!ctx.canCall()) return codeAppraisal(event, config.core);
   const persona = loadPersona(config);
   const now = deps.clock.now();
-  const self = await latestSelf(core.memory, persona.seedSelf, now, lifeTimezone(config.life, now));
+  const self = await latestSelf(core.memory, persona.seedSelf, lifeTimezone(config.life, now));
   const expected = await core.memory.bySourceRef(
     "intention",
     eventRef(event.intentionEventId ?? event.worldEventId),
@@ -168,10 +167,7 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
       maxTokens: config.core.appraise.max_tokens,
     });
     const bounded = boundAppraisal(raw, new Set(goals.map((g) => g.id)), config.core);
-    if (bounded) {
-      noteRelativeWords(log, "core_appraise", [bounded.episode]);
-      return bounded;
-    }
+    if (bounded) return bounded;
     log.error("core appraisal unusable", { worldEventId: event.worldEventId });
   } catch (error) {
     log.error("core appraisal failed", {

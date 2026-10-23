@@ -1,9 +1,8 @@
 /**
  * Phase 16 exit, all fake: dates count by the calendar in the reader's zone, across midnight and a
  * DST change; an idea about an event retires once it has passed and never reaches a reach-out; an
- * undated idea keeps its few days; an anticipation past its plan is no reach-out topic; a slipped
- * relative word is stored and logged. A's idea never reaches B, and an idea run and the sweep
- * leave core unchanged.
+ * undated idea keeps its few days; an anticipation past its plan is no reach-out topic. A's idea
+ * never reaches B, and an idea run and the sweep leave core unchanged.
  */
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
@@ -11,7 +10,7 @@ import { insertFact } from "@/db/repos/user/facts";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { insertRun, liveIdeas } from "@/db/repos/user/user-mind";
 import { decayPass } from "@/mind/memory/user/decay";
-import { dayInWords, relativeDate } from "@/mind/platform/relative-date";
+import { dateToken, renderTimes } from "@/mind/platform/time-anchors";
 import { loadCandidateInputs } from "@/mind/process/outreach/inputs";
 import { ideaStaleAfter, userIdeate } from "@/mind/process/user/ideate";
 import { loadRunInputs } from "@/mind/process/user/inputs";
@@ -27,26 +26,20 @@ type TestDeps = ReturnType<typeof makeTestDeps>;
 const loopDeps = (d: TestDeps) => ({ ...d, snapshot: null });
 
 test("1: day counts follow the reader's calendar across midnight and DST", () => {
-  expect(
-    relativeDate(new Date("2026-01-11T23:30:00Z"), new Date("2026-01-12T00:10:00Z"), "UTC"),
-  ).toBe("yesterday");
-  expect(
-    relativeDate(
-      new Date("2026-01-10T23:30:00Z"),
-      new Date("2026-01-12T01:00:00Z"),
-      "Asia/Singapore",
-    ),
-  ).toBe("yesterday");
-  expect(
-    relativeDate(
-      new Date("2026-03-28T12:00:00Z"),
-      new Date("2026-03-30T00:30:00Z"),
-      "Europe/London",
-    ),
-  ).toBe("2 days ago");
-  expect(
-    dayInWords(new Date("2026-01-14T09:00:00Z"), new Date("2026-01-12T10:00:00Z"), "UTC"),
-  ).toBe("Wednesday 14 January, in 2 days");
+  const read = (at: string, now: string, zone: string) =>
+    renderTimes(dateToken(new Date(at), zone), new Date(now), 6);
+  expect(read("2026-01-11T23:30:00Z", "2026-01-12T00:10:00Z", "UTC")).toBe(
+    "yesterday, Sunday 11 January",
+  );
+  expect(read("2026-01-10T23:30:00Z", "2026-01-12T01:00:00Z", "Asia/Singapore")).toBe(
+    "yesterday, Sunday 11 January",
+  );
+  expect(read("2026-03-28T12:00:00Z", "2026-03-30T00:30:00Z", "Europe/London")).toBe(
+    "2 days ago, Saturday 28 March",
+  );
+  expect(read("2026-01-14T09:00:00Z", "2026-01-12T10:00:00Z", "UTC")).toBe(
+    "in 2 days, Wednesday 14 January",
+  );
 });
 
 async function ideaRun(d: TestDeps, u: string, ref: string) {
@@ -120,41 +113,6 @@ test("4: an anticipation past its plan is no reach-out topic", async () => {
   const thought = await memory("thought", "Nervous about the gallery.", { anticipates: plan });
   const ids = (await loadCandidateInputs(d, u, now)).coreThoughts.map((t) => t.id);
   expect(ids).not.toContain(thought);
-});
-
-test("5: a slipped relative word is stored as written and logged", async () => {
-  const d = makeTestDeps();
-  const logs: { msg: string; meta?: Record<string, unknown> }[] = [];
-  const log = {
-    info: (msg: string, meta?: Record<string, unknown>) => logs.push({ msg, meta }),
-    error: () => {},
-  };
-  const u = await createTestUser();
-  await insertFact(d.db, u, {
-    subject: "user",
-    kind: "event",
-    content: "They have a gig.",
-    embedding: vec(),
-    created_at: d.clock.now(),
-    status: "open",
-    salience: 0.7,
-    valence: 0.3,
-    confidence: 0.9,
-    source: "turn",
-  });
-  d.llm.handlers.user_ideate = () => ({ idea: "Ask how tonight's gig goes." });
-  await userIdeate(
-    { ...loopDeps(d), log },
-    await ideaRun(d, u, "exchange:b"),
-    await loadRunInputs(d, u),
-  );
-  expect((await liveIdeas(d.db, u, d.clock.now(), 5))[0]!.content).toBe(
-    "Ask how tonight's gig goes.",
-  );
-  expect(logs).toContainEqual({
-    msg: "relative words in stored text",
-    meta: { writer: "user_ideate", words: ["tonight"] },
-  });
 });
 
 const TOKEN = "CANARY-16a3f9";

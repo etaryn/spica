@@ -436,7 +436,7 @@ test("an idea's notes are the live, non-sensitive dated facts it came from", asy
   const dated = await insertFact(
     deps.db,
     u,
-    fact({ content: "The user has an interview on Thursday.", occurred_at: when }),
+    fact({ content: "The user has an interview at Canva.", occurred_at: when }),
   );
   const hidden = await insertFact(
     deps.db,
@@ -460,7 +460,7 @@ test("an idea's notes are the live, non-sensitive dated facts it came from", asy
   );
   const [idea] = (await loadCandidateInputs(deps, u, now)).userIdeas;
   expect(idea!.notes).toEqual([
-    { text: "The user has an interview on Thursday.", at: when.toISOString(), dated: true },
+    { text: "The user has an interview at Canva.", at: when.toISOString(), dated: true },
   ]);
 });
 

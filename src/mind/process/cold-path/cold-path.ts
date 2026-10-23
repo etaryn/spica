@@ -6,7 +6,6 @@
  * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
  * reconcile at once. It never delays a reply, and a failure is never retried (`runColdPathJob`).
  */
-import { noteRelativeWords } from "@/mind/platform/relative-date";
 import type { GroundRef } from "@/mind/memory/core/types";
 import { recordDisclosures } from "@/mind/memory/user/disclosure";
 import { sql } from "drizzle-orm";
@@ -223,11 +222,6 @@ async function extractExchange(
       "Interests",
     ),
   });
-  noteRelativeWords(
-    deps.log,
-    "extract",
-    extraction.facts.map((f) => f.content),
-  );
   return { extraction, context };
 }
 

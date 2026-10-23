@@ -75,7 +75,7 @@ const WEEKEND = /\b(?:(this|next|last) weekend|(?:on |over |at )?the weekend)\b/
 const RELATIVE =
   /^(today|tonight|tomorrow|yesterday)(?: (morning|afternoon|evening|night))?$|^last night$|^this (morning|afternoon|evening)$/i;
 const WEEKDAY = new RegExp(
-  `^(?:(this|next|last) )?(${WEEKDAYS.join("|")})s?(?: (morning|afternoon|evening|night))?$`,
+  `^(?:(this|next|last) )?(${WEEKDAYS.join("|")})(?: (morning|afternoon|evening|night))?$`,
   "i",
 );
 const OFFSET = new RegExp(`^in ${N} (days?|weeks?)$|^${N} (days?|weeks?) ago$`, "i");
@@ -89,6 +89,8 @@ const LEAD = /^(?:on|at)\s+/i;
 const NOUN_AFTER =
   /^\s+(roast|brunch|lunch|dinner|service|market|papers?|school|league|mood|best|blues|vibes|feeling)\b/i;
 const NOUN_BEFORE = /\b(black|good|easter|cyber|super|holy|ash|palm)\s+$/i;
+// "a free Friday night", "every Sunday": a habit, not a day.
+const HABIT_BEFORE = /\b(a|an|every|any|most|some)\s+(?:[a-z]+\s+)?$/i;
 const PART_HOUR: Record<string, number> = { morning: 9, afternoon: 15, evening: 19, night: 22 };
 
 // ---------- Making tokens ----------
@@ -347,9 +349,11 @@ function classifyDay(
     return { local: shiftLocalDate(day, shift), precision: part ?? "day" };
   }
   if ((m = WEEKDAY.exec(w))) {
-    const before = plain.slice(0, r.index);
+    // What comes right before the weekday word itself, not before chrono's "on".
+    const before = plain.slice(0, r.index + Math.max(0, r.text.indexOf(words)));
     const after = plain.slice(r.index + r.text.length);
     if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
+    if (!m[1] && HABIT_BEFORE.test(before)) return null;
     const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
     const local = m[1]
       ? explicitWeekday(day, wd, m[1].toLowerCase())

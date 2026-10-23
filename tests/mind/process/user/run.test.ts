@@ -200,5 +200,5 @@ test("the loops read her self headed by the night it was written", async () => {
   const runId = (await recordBigEvents(deps, deps.db, u, "exchange:s", trig))!;
   expect(await runUserMind(deps, { runId })).toBe("done");
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
-  expect(JSON.parse(call.input).who_you_are).toMatch(/^\(written \w+ \d+ \w+, today\)\n### Lately/);
+  expect(JSON.parse(call.input).who_you_are).toMatch(/^\(written ⟦[^⟧]+⟧\)\n### Lately/);
 });

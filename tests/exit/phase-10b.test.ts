@@ -25,7 +25,7 @@ beforeEach(resetDb);
 afterAll(closeTestDb);
 
 const MEM = {
-  1: "Spica rewatched Paper Moon last night.",
+  1: "Spica rewatched Paper Moon.",
   2: "Spica is worried her film notes are going nowhere.",
   3: "Spica is scared Alcor will outgrow her.",
 } as const;

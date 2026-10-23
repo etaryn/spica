@@ -31,7 +31,7 @@ export async function proposeResolution(
 
   const persona = loadPersona(config);
   const now = ctx.deps.clock.now();
-  const self = await latestSelf(core.memory, persona.seedSelf, now, lifeTimezone(config.life, now));
+  const self = await latestSelf(core.memory, persona.seedSelf, lifeTimezone(config.life, now));
   const intention = await core.memory.bySourceRef("intention", eventRef(event.id));
   const prompt = loadPrompt("core/resolve", config.prompts.core_resolve);
   const input = [

@@ -206,6 +206,7 @@
       }
     }
   },
+  "time": { "relative_max_days": 6 },
   "prompts": {
     "reply": "v18",
     "crisis_classifier": "v2",

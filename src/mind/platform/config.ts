@@ -906,6 +906,8 @@ const posts = z.object({
 
 // ---------- The whole config ----------
 
+const time = z.object({ relative_max_days: positiveInt });
+
 export const ConfigSchema = z.object({
   models,
   embedding,
@@ -936,6 +938,7 @@ export const ConfigSchema = z.object({
   posts,
   voice,
   prompts,
+  time,
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

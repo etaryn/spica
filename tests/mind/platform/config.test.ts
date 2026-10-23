@@ -152,3 +152,7 @@ test("the contradiction band sits below the near-match line", () => {
     /contradiction_similarity/,
   );
 });
+
+test("time anchors read as distances within a week", () => {
+  expect(loadConfig().time.relative_max_days).toBe(6);
+});

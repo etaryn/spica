@@ -258,7 +258,7 @@ If `MONTH` is then unused, delete it. The `MONTH_ONLY` branch below stays.
 Run: `pnpm test tests/mind/platform/time-anchors.test.ts tests/mind/platform/render-net.test.ts`
 Expected: PASS, earlier tests included.
 
-If an earlier test's expectation changes only because a clause split now merges a pair, the new single-token form is the intended behaviour; record a ruling. Then run the corpus replay: copy `.superpowers/sdd/2026-10-24-phase-16b-time-anchors/replay.ts` into this plan's workspace and run `pnpm exec tsx <workspace>/replay.ts`. Expected: 0 left with relative words. It printed 269 anchored last time; a lower count must be explained in a ruling.
+If an earlier test's expectation changes only because a clause split now merges a pair, the new single-token form is the intended behaviour; record a ruling. Then run the corpus replay, already in this plan's workspace: `pnpm exec tsx .superpowers/sdd/2026-10-24-phase-16c-anchor-fixes/replay.ts`. Expected: 0 left with relative words. It printed 269 anchored last time; a lower count must be explained in a ruling.
 
 - [ ] **Step 5: Commit**
 

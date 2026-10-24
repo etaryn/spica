@@ -211,3 +211,50 @@ test("a bare weekday in an older message, with nothing to date it by, keeps its 
   const said = { at: MON, zone: "UTC", said: true };
   expect(anchorTimes("I went running on Sunday", said)).toBe("I went running on Sunday");
 });
+
+test("a long phrase around a date keeps every word (the 16b run's summary)", () => {
+  const mon = { at: at("2026-01-05T10:21:40Z"), zone: "UTC" };
+  const text =
+    "Sam has a design job interview at a small studio on the afternoon of Thursday 8 January, in 3 days, and they're feeling nervous about it.";
+  const stored = anchorTimes(text, mon);
+  expect(read(stored, mon.at)).toBe(text);
+  expect(days(stored)).toEqual(["2026-01-08"]);
+});
+
+test("a relative day beside its written-out date is one token", () => {
+  const fri = { at: at("2026-01-09T20:00:00Z"), zone: "UTC" };
+  const stored = anchorTimes(
+    "They had a design job interview yesterday, Thursday 8 January, and I don't yet know how it went.",
+    fri,
+  );
+  expect(days(stored)).toEqual(["2026-01-08"]);
+  expect(read(stored, fri.at)).toBe(
+    "They had a design job interview yesterday, Thursday 8 January, and I don't yet know how it went.",
+  );
+  // When the two disagree, the written-out date wins.
+  expect(days(anchorTimes("The race was yesterday, Sunday 4 January.", fri))).toEqual([
+    "2026-01-04",
+  ]);
+  // In brackets, no stray bracket is left.
+  expect(anchorTimes("Due Thursday 8 January (yesterday).", fri)).toMatch(/^Due ⟦[^⟧]+⟧\.$/);
+  // Two written-out dates stay two.
+  expect(days(anchorTimes("Thursday 8 January, Friday 9 January.", fri))).toEqual([
+    "2026-01-08",
+    "2026-01-09",
+  ]);
+  // A comma inside a date is still one date.
+  expect(days(anchorTimes("Back on Monday, 12 January.", fri))).toEqual(["2026-01-12"]);
+});
+
+test("ISO dates anchor, and merge with the day words beside them", () => {
+  const fri = { at: at("2026-01-09T20:00:00Z"), zone: "UTC" };
+  expect(anchorTimes("The user had a job interview on Friday 2026-01-09.", fri)).toBe(
+    "The user had a job interview on ⟦2026-01-09|day|UTC⟧.",
+  );
+  expect(
+    days(anchorTimes("The user had an interview on Thursday afternoon, 2026-01-08.", fri)),
+  ).toEqual(["2026-01-08"]);
+  expect(days(anchorTimes("The user can't sleep on the night of 2026-01-14.", fri))).toEqual([
+    "2026-01-14",
+  ]);
+});

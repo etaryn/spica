@@ -77,8 +77,21 @@ const WEEKDAY = new RegExp(
   "i",
 );
 const OFFSET = new RegExp(`^in ${N} (days?|weeks?)$|^${N} (days?|weeks?) ago$`, "i");
-const MONTH =
-  /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+const MONTH_NAMES = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+const MONTHS =
+  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+// A written-out date, read whole: "the afternoon of Thursday 8 January", "Jan 8th 2026".
+const DATE_PHRASE = new RegExp(
+  `^(?:the )?(?:(morning|afternoon|evening|night) of )?(?:(?:${WEEKDAYS.join("|")}),? )?(?:the )?(?:(\\d{1,2})(?:st|nd|rd|th)? (?:of )?(${MONTHS})|(${MONTHS}) (?:the )?(\\d{1,2})(?:st|nd|rd|th)?)(?:,? (\\d{4}))?$`,
+  "i",
+);
+const ISO_DATE = new RegExp(
+  `\\b(?:(?:${WEEKDAYS.join("|")}),? )?(\\d{4})-(\\d{2})-(\\d{2})\\b`,
+  "gi",
+);
+// chrono reads across clause breaks ("…8 January, in 3 days, and they"), so it reads one clause
+// at a time.
+const CLAUSE = /,\s*|;\s*|\s+(?:and|but)\s+/g;
 const ORDINAL = /^(?:the )?\d{1,2}(?:st|nd|rd|th)$/i;
 const MONTH_ONLY =
   /^(?:(this|next|last) month|in (january|february|march|april|may|june|july|august|september|october|november|december))$/i;
@@ -312,18 +325,79 @@ function explicitWeekday(day: string, wd: number, which: string): string {
   return shiftLocalDate(day, ahead);
 }
 
+type Found = { from: number; end: number; anchor: Omit<Anchor, "zone">; written: boolean };
+
 function chronoPass(plain: string, ctx: AnchorContext): string {
   const ref = { instant: ctx.at, timezone: zoneOffsetMinutes(ctx.at, ctx.zone) };
+  const found: Found[] = [];
+  for (const m of plain.matchAll(ISO_DATE))
+    found.push({
+      from: m.index,
+      end: m.index + m[0].length,
+      anchor: { local: `${m[1]}-${m[2]}-${m[3]}`, precision: "day" },
+      written: true,
+    });
+  let start = 0;
+  for (const sep of [...plain.matchAll(CLAUSE), null]) {
+    const end = sep ? sep.index : plain.length;
+    const clause = plain.slice(start, end);
+    for (const r of chrono.casual.parse(clause, ref)) {
+      const at = start + r.index;
+      if (found.some((f) => at < f.end && at + r.text.length > f.from)) continue;
+      const lead = LEAD.exec(r.text)?.[0] ?? "";
+      const words = r.text.slice(lead.length).replace(/[\s,.;:!?]+$/, "");
+      const anchor = classify(words, clause, r, ctx);
+      if (!anchor) continue;
+      // "the afternoon of …" renders with its own "the".
+      const the = /\bthe\s+$/i.test(clause.slice(0, r.index)) && / of /i.test(words) ? 4 : 0;
+      found.push({
+        // Her own notes drop "on"/"at"; her view of older messages keeps every word.
+        from: ctx.said ? at + lead.length : at - the,
+        end: at + lead.length + words.length,
+        anchor,
+        written: DATE_PHRASE.test(words),
+      });
+    }
+    if (sep) start = sep.index + sep[0].length;
+  }
   let out = plain;
   // From the end backwards, so earlier indices stay valid while the text changes.
-  for (const r of chrono.casual.parse(plain, ref).reverse()) {
-    const lead = LEAD.exec(r.text)?.[0] ?? "";
-    const words = r.text.slice(lead.length).replace(/[\s,.;:!?]+$/, "");
-    const anchor = classify(words, plain, r, ctx);
-    if (!anchor) continue;
-    const from = ctx.said ? r.index + lead.length : r.index; // her own notes drop "on"/"at"
-    const end = r.index + lead.length + words.length;
-    out = out.slice(0, from) + token(anchor.local, anchor.precision, ctx, words) + out.slice(end);
+  for (const f of merged(found, plain).sort((a, b) => b.from - a.from))
+    out =
+      out.slice(0, f.from) +
+      token(f.anchor.local, f.anchor.precision, ctx, plain.slice(f.from, f.end)) +
+      out.slice(f.end);
+  return out;
+}
+
+const FINER: Precision[] = ["time", "morning", "afternoon", "evening", "night", "day"];
+
+/**
+ * Two anchors with only a comma, space or bracket between them are one date said twice
+ * ("yesterday, Thursday 8 January"): one token, at the finer precision. When they disagree,
+ * the written-out date wins; two different written-out dates stay two.
+ */
+function merged(found: Found[], plain: string): Found[] {
+  const out: Found[] = [];
+  for (const f of [...found].sort((a, b) => a.from - b.from)) {
+    const prev = out.at(-1);
+    const gap = prev ? plain.slice(prev.end, f.from) : "";
+    if (prev && /^[\s,;(]*$/.test(gap)) {
+      const same = prev.anchor.local.slice(0, 10) === f.anchor.local.slice(0, 10);
+      if (same || prev.written !== f.written) {
+        const keep = same
+          ? FINER.indexOf(f.anchor.precision) < FINER.indexOf(prev.anchor.precision)
+            ? f
+            : prev
+          : prev.written
+            ? prev
+            : f;
+        const close = gap.includes("(") && plain[f.end] === ")" ? 1 : 0;
+        out[out.length - 1] = { ...keep, from: prev.from, end: f.end + close };
+        continue;
+      }
+    }
+    out.push(f);
   }
   return out;
 }
@@ -377,19 +451,26 @@ function classifyDay(
     const span = count((m[1] ?? m[3])!) * ((m[2] ?? m[4])!.startsWith("week") ? 7 : 1);
     return { local: shiftLocalDate(day, ago ? -span : span), precision: "day" };
   }
-  if ((MONTH.test(w) && /\d/.test(w)) || ORDINAL.test(w)) {
+  if ((m = DATE_PHRASE.exec(w))) {
+    const mo = String(MONTH_NAMES.indexOf((m[3] ?? m[4])!.slice(0, 3)) + 1).padStart(2, "0");
+    const dd = String(Number(m[2] ?? m[5])).padStart(2, "0");
+    const part = (m[1] as Precision | undefined) ?? "day";
+    if (m[6]) return { local: `${m[6]}-${mo}-${dd}`, precision: part };
     // A date without a year is on the side of now its label points to, else the nearest one.
-    const parsed = localDateString(r.start.date(), ctx.zone);
-    if (r.start.isCertain("year")) return { local: parsed, precision: "day" };
-    const options = [-1, 0, 1]
-      .map((y) => `${Number(parsed.slice(0, 4)) + y}${parsed.slice(4)}`)
+    const y = Number(day.slice(0, 4));
+    const options = [y - 1, y, y + 1]
+      .map((year) => `${year}-${mo}-${dd}`)
       .filter((o) =>
         ctx.direction === "past" ? o <= day : ctx.direction === "upcoming" ? o >= day : true,
       );
     const nearest = options.sort(
       (a, b) => Math.abs(dayDiff(a, day)) - Math.abs(dayDiff(b, day)),
     )[0]!;
-    return { local: nearest, precision: "day" };
+    return { local: nearest, precision: part };
+  }
+  if (ORDINAL.test(w)) {
+    // "the 13th" is the occurrence nearest the moment it was written.
+    return { local: localDateString(r.start.date(), ctx.zone), precision: "day" };
   }
   // chrono reads "in october" as "october"; only with the "in" before it is it a month to come
   // (a lone "may" stays a verb).

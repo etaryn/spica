@@ -10,7 +10,6 @@ import type { Turn } from "@/db/repos/user/session-log";
 import { claimKind, entityType, factKind } from "@/db/schema";
 import type { Deps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
-import type { Logger } from "@/mind/platform/log";
 import { anchorTimes, isSingleToken, tokenDates } from "@/mind/platform/time-anchors";
 import { formatLocal, isValidTimeZone } from "@/mind/platform/timezone";
 import {
@@ -245,40 +244,20 @@ export function normalizeExtraction(input: unknown, maxCandidates: number): Extr
   };
 }
 
-const WEEKDAY_WORD = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi;
-const weekdaysIn = (text: string) =>
-  new Set([...text.matchAll(WEEKDAY_WORD)].map((m) => m[1]!.toLowerCase()));
-
 /**
  * Dates each fact from the moment its message was sent, in their zone, pointing the way extract
- * labelled it; the model never works out a date. When their message names exactly one weekday and
- * a fact about them names a weekday nobody in the exchange said, the fact takes theirs: a copied
- * weekday ("friday" for their "thursday"), corrected by name so a right past date is never moved.
- * Her own facts, and a weekday she said, stay as written.
+ * labelled it; the model never works out a date.
  */
 export function anchorExtraction(
   extraction: Extraction,
   turns: { role: string; text: string; created_at: Date }[],
   zone: string,
-  log?: Logger,
 ): Extraction {
   const said = turns.filter((t) => t.role === "user");
   // A reach-out exchange has no message of theirs; its own last turn dates it.
   const at = said.at(-1)?.created_at ?? turns.at(-1)?.created_at ?? new Date(0);
-  const theirs = weekdaysIn(said.map((t) => t.text).join(" "));
-  const anyone = weekdaysIn(turns.map((t) => t.text).join(" "));
   const facts = extraction.facts.map((f) => {
-    let content = f.content;
-    const own = weekdaysIn(content);
-    if (f.subject === "user" && theirs.size === 1 && own.size === 1 && !anyone.has([...own][0]!)) {
-      const [from, to] = [[...own][0]!, [...theirs][0]!];
-      log?.info("extract weekday taken from their message", { from, to });
-      content = content.replace(
-        new RegExp(`\\b${from}\\b`, "i"),
-        to[0]!.toUpperCase() + to.slice(1),
-      );
-    }
-    content = anchorTimes(content, { at, zone, direction: f.when_direction ?? null });
+    const content = anchorTimes(f.content, { at, zone, direction: f.when_direction ?? null });
     return { ...f, content, occurred_at: tokenDates(content)[0] ?? null };
   });
   const threads = extraction.threads.map((t) => {
@@ -291,7 +270,7 @@ export function anchorExtraction(
 }
 
 export async function extract(
-  deps: Pick<Deps, "llm" | "config" | "log">,
+  deps: Pick<Deps, "llm" | "config">,
   args: ExtractArgs,
 ): Promise<Extraction> {
   const { config } = deps;
@@ -312,6 +291,5 @@ export async function extract(
     normalizeExtraction(raw, config.extraction.max_candidates),
     args.newTurns,
     zone,
-    deps.log,
   );
 }

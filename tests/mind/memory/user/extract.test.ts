@@ -13,7 +13,6 @@ import {
 import type { Turn } from "@/db/repos/user/session-log";
 import { renderAbsolute, tokenDates } from "@/mind/platform/time-anchors";
 import { localDateString } from "@/mind/platform/timezone";
-import { silentLogger } from "@/mind/platform/log";
 
 const turn = (role: "user" | "companion", text: string, at: string): Turn => ({
   id: randomUUID(),
@@ -182,7 +181,7 @@ test("extract calls the extract model with the extraction prompt and returns nor
     relationship: null,
   });
   const out = await extract(
-    { llm, config: loadConfig(), log: silentLogger },
+    { llm, config: loadConfig() },
     {
       contextTurns: [],
       newTurns: [turn("user", "interview friday", "2026-01-05T09:00:00Z")],
@@ -277,7 +276,7 @@ test("extract dates a fact's time words from their last message, in their zone",
     relationship: null,
   });
   const out = await extract(
-    { llm, config: loadConfig(), log: silentLogger },
+    { llm, config: loadConfig() },
     {
       contextTurns: [],
       newTurns: [
@@ -327,28 +326,16 @@ test("a fact's time words are anchored at the message's send time, in the labell
   expect(tokenDates(out.facts[1]!.content)).toHaveLength(1);
 });
 
-test("a weekday the message never named takes the one it did, in the fact's own direction", () => {
+test("a fact keeps its own weekday whatever weekday their message names (the 16b run)", () => {
+  const sent = new Date("2026-01-05T15:43:00Z"); // Monday
   const out = anchorExtraction(
-    extraction([plainFact("The user has an interview on Friday.", "upcoming")]),
-    [user("interview is on thursday, nervous")],
+    extraction([
+      plainFact("The user has a design job interview on Thursday afternoon.", "upcoming"),
+    ]),
+    [{ role: "user", text: "no half marathon yet lol, that's sunday", created_at: sent }],
     "UTC",
   );
-  expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-15");
-});
-
-test("the cross-check leaves a fact alone when the message names two weekdays, and never moves a right past date", () => {
-  const two = anchorExtraction(
-    extraction([plainFact("The user has an interview on Friday.", "upcoming")]),
-    [user("thursday is the interview, saturday the party")],
-    "UTC",
-  );
-  expect(day(two.facts[0]!.occurred_at)).toBe("2026-01-16");
-  const past = anchorExtraction(
-    extraction([plainFact("The user finished the task on Saturday.", "past")]),
-    [user("I finished it on saturday")],
-    "UTC",
-  );
-  expect(day(past.facts[0]!.occurred_at)).toBe("2026-01-10");
+  expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-08");
 });
 
 test("a thread's check-in words are always ahead", () => {
@@ -370,17 +357,4 @@ test("a thread's check-in words are always ahead", () => {
     "UTC",
   );
   expect(out.threads[0]!.next_checkpoint!.toISOString()).toBe("2026-01-18T19:00:00.000Z");
-});
-
-test("the weekday cross-check leaves her own facts, and a weekday from her turn, alone", () => {
-  const her = { role: "companion", text: "np, I'm streaming saturday anyway", created_at: sent };
-  const out = anchorExtraction(
-    extraction([
-      { ...plainFact("Spica is streaming on Saturday.", "upcoming"), subject: "self" },
-      plainFact("The user will watch Spica's stream on Saturday.", "upcoming"),
-    ]),
-    [user("can't do thursday, work"), her],
-    "UTC",
-  );
-  expect(out.facts.map((f) => day(f.occurred_at))).toEqual(["2026-01-17", "2026-01-17"]);
 });

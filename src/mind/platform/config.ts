@@ -61,6 +61,8 @@ const models = z.object({
   reply_cache: cacheTtl,
   // Extraction's fixed prefix (prompt + output schema) is ~4.6k tokens, past the cache minimum.
   extract_cache: cacheTtl,
+  // The guard's prompt is the same on every call and it runs on every reply, so a burst reads it.
+  guard_cache: cacheTtl,
 });
 
 const embedding = z.object({

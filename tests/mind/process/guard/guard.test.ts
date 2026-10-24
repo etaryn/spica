@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { SimClock } from "@/mind/platform/clock";
 import { loadConfig } from "@/mind/platform/config";
 import { hasSafety } from "@/mind/process/guard/categories";
@@ -136,6 +136,14 @@ describe("checkMessage", () => {
     const d = deps();
     await checkMessage(d, input("I'm here", { kind: "crisis_reply" }));
     expect(d.llm.structuredCalls.map((c) => c.purpose)).toEqual(["guard_crisis"]);
+  });
+
+  test("the guard prompt is sent with the configured cache", async () => {
+    const d = deps();
+    d.config = { ...config, models: { ...config.models, guard_cache: "1h" } };
+    const spy = vi.spyOn(d.llm, "classifyJson");
+    await checkMessage(d, input("congrats!!"));
+    expect(spy.mock.calls[0]![0].cache).toBe("1h");
   });
 
   test("a failed call is never retried: it falls back to the keyword check", async () => {

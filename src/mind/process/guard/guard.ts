@@ -119,6 +119,8 @@ export async function checkMessage(
         schema: GuardResultSchema,
         timeoutMs: config.guard.timeout_ms,
         maxTokens: config.models.guard_max_tokens,
+        // The crisis rubric may be under the cache minimum; then nothing is cached.
+        cache: config.models.guard_cache,
       }),
       config.guard.timeout_ms,
     );

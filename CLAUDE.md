@@ -128,6 +128,8 @@ B127): every time a prompt reads is rendered with its distance, her
 notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
 guard v6 reads NOW in both zones. **No retries** (2026-10-22, side phase, closed): no prompt is
 retried or regenerated after a failure, so structural failures show (SDK transport retries kept).
+**Haiku 5.5** (2026-10-23, side phase, closed): every Haiku role on `claude-haiku-5-5` with thinking
+off; the guard caches its prompt (`models.guard_cache`).
 **Phase 16b, time anchors, is built** (2026-10-24): stored text keeps the date each time phrase
 meant as a token (`platform/time-anchors.ts`), builders place tokens on their owner's calendar and
 one wrapper renders them where prompts reach the model; extract dates from the message's send

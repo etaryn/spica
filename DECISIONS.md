@@ -217,3 +217,13 @@ code itself.
 | 2026-10-22 | The eval runner's judge retry (`retrying(1, …)`) stays | It grades a run and isn't part of her pipeline. |
 | 2026-10-23 | Every structured call sends `thinking` (`models.structured_thinking`, default `disabled`) | Haiku 5.5 thinks when a request leaves thinking out; off keeps the 4.5 behaviour and cost, so the swap changes only the model. |
 | 2026-10-23 | `exit:core-day` (`evals/scripts/core-one-day.yaml`) runs one day of core loops and her real world | A cheap smoke run for a model swap; `exit:core` stays the two-week run. |
+| 2026-10-24 | No backfill of stored text into date tokens | Test phase: the dev DB resets often; old rows keep reading as before, new writes anchor. |
+| 2026-10-24 | Thread titles are not anchored | Extract matches a thread by its exact title; a token in it would break the match. |
+| 2026-10-24 | World event text, goals, the transcript and the inspector stay raw | Events and goals carry their own timestamps; the transcript is what was said, and her view adds dividers and glosses at read time. |
+| 2026-10-24 | Her own loops pass no shown dates | Her loops anchor against her now in her zone; her inputs' dates are tokens already, so a copied date stays exact. |
+| 2026-10-24 | Render style "yesterday, Sunday 11 January" (distance, comma, date); beyond `time.relative_max_days` a plain date; a month always by name and year | Distance first reads naturally in a sentence; "in" before a month token made "in next month" read badly. |
+| 2026-10-24 | A gloss is skipped when the phrase starts with the words it renders to, and sits right after its phrase | "today" written today needs no "(that's today)"; beside its phrase it stays clear when a message has two time words. |
+| 2026-10-24 | "You last talked N days ago" stays beside the day dividers | The window drops messages before a long gap, so the dividers can't show that gap. |
+| 2026-10-24 | A bare month counts as "in <month>" only after "in "; a weekday after a/an/every/any/most/some (one adjective allowed) or in the plural stays as written | chrono reads a bare month and habits ("on a free Friday night") as dates. |
+| 2026-10-24 | `chat.gap_line_min_hours` stays | `gapLine` still reads it; only the "[N days later]" marker went. |
+| 2026-10-24 | A reach-out flagged `wrong_day` is dropped even with a safety category too | Writing first is optional; sending nothing beats a fallback line nobody asked for. |

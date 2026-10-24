@@ -124,13 +124,15 @@ The 2026-10-19 review runs' fixes are built ("this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
 online). No night: her energy is a battery, she logs off when it runs low at any hour, and
 reach-outs skip their night. **Phase 16, the time model, is built** (2026-10-21; B125, B126,
-B127): every time a prompt reads is rendered with its distance (`platform/relative-date.ts`), her
+B127): every time a prompt reads is rendered with its distance, her
 notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
 guard v6 reads NOW in both zones. **No retries** (2026-10-22, side phase, closed): no prompt is
 retried or regenerated after a failure, so structural failures show (SDK transport retries kept).
-**Next: Phase 16b, time anchors** (settled with Ethan 2026-10-24): stored text keeps the date each
-time phrase meant and every reader renders it on its own day; design doc
-`docs/2026-10-24-phase-16b-time-anchors-design.md`, plan in `docs/superpowers/plans/`.
+**Phase 16b, time anchors, is built** (2026-10-24): stored text keeps the date each time phrase
+meant as a token (`platform/time-anchors.ts`), builders place tokens on their owner's calendar and
+one wrapper renders them where prompts reach the model; extract dates from the message's send
+time; her view of the conversation has day dividers and glosses; guard v7 `wrong_day` drops a
+misdated reach-out. Its paid close runs (`review:world-outreach`, `eval:guard`) are next.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

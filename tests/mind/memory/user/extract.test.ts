@@ -371,3 +371,16 @@ test("a thread's check-in words are always ahead", () => {
   );
   expect(out.threads[0]!.next_checkpoint!.toISOString()).toBe("2026-01-18T19:00:00.000Z");
 });
+
+test("the weekday cross-check leaves her own facts, and a weekday from her turn, alone", () => {
+  const her = { role: "companion", text: "np, I'm streaming saturday anyway", created_at: sent };
+  const out = anchorExtraction(
+    extraction([
+      { ...plainFact("Spica is streaming on Saturday.", "upcoming"), subject: "self" },
+      plainFact("The user will watch Spica's stream on Saturday.", "upcoming"),
+    ]),
+    [user("can't do thursday, work"), her],
+    "UTC",
+  );
+  expect(out.facts.map((f) => day(f.occurred_at))).toEqual(["2026-01-17", "2026-01-17"]);
+});

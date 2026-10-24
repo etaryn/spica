@@ -252,8 +252,9 @@ const weekdaysIn = (text: string) =>
 /**
  * Dates each fact from the moment its message was sent, in their zone, pointing the way extract
  * labelled it; the model never works out a date. When their message names exactly one weekday and
- * a fact names a different one, the fact takes theirs: a copied weekday ("friday" for their
- * "thursday"), corrected by name so a right past date is never moved.
+ * a fact about them names a weekday nobody in the exchange said, the fact takes theirs: a copied
+ * weekday ("friday" for their "thursday"), corrected by name so a right past date is never moved.
+ * Her own facts, and a weekday she said, stay as written.
  */
 export function anchorExtraction(
   extraction: Extraction,
@@ -265,10 +266,11 @@ export function anchorExtraction(
   // A reach-out exchange has no message of theirs; its own last turn dates it.
   const at = said.at(-1)?.created_at ?? turns.at(-1)?.created_at ?? new Date(0);
   const theirs = weekdaysIn(said.map((t) => t.text).join(" "));
+  const anyone = weekdaysIn(turns.map((t) => t.text).join(" "));
   const facts = extraction.facts.map((f) => {
     let content = f.content;
     const own = weekdaysIn(content);
-    if (theirs.size === 1 && own.size === 1 && !theirs.has([...own][0]!)) {
+    if (f.subject === "user" && theirs.size === 1 && own.size === 1 && !anyone.has([...own][0]!)) {
       const [from, to] = [[...own][0]!, [...theirs][0]!];
       log?.info("extract weekday taken from their message", { from, to });
       content = content.replace(

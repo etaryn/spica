@@ -330,7 +330,10 @@ Commands: `pnpm typecheck`, `pnpm lint` (ESLint and Prettier), `pnpm format`, `p
 Every table here references `user(id) ON DELETE CASCADE`.
 
 - **`fact`**: the memory atom. `subject` (`user | self | shared`), `kind`,
-  `content` (understandable on its own), `payload`, `embedding`,
+  `content` (understandable on its own; Built 16b: each time phrase is stored as a date token,
+  `⟦local|precision|zone⟧`, anchored by `insertFact` in the user's zone, and rendered with its
+  distance only where a prompt reaches a model), `payload` (its top-level strings anchored too),
+  `embedding`,
   `entity_refs`, `thread_id`, `occurred_at`, `stale_after` (Built 16, migration `0041`: past it
   the item is no longer worth raising and the day sweep retires it; null is no expiry; set on
   ideas only), `created_at`,
@@ -572,7 +575,7 @@ lately".
 
 Nightly rendering uses `core.snapshot.max_items` (8 per active kind) and
 `core.snapshot.max_tokens` (1024), with `prompts.core_snapshot: v3` at
-`prompts/core/snapshot/v3.md`. Its six sections are Lately, Opinions,
+`prompts/core/snapshot/v4.md`. Its six sections are Lately, Opinions,
 Interests, Goals, People, and Habits of speech; transient mood and energy
 are excluded and speech habits carry forward unless core evidence changes
 them. Insights are selected newest-first since the previous render. The
@@ -745,7 +748,7 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   run), appraises each event whose `at` has passed and whose `appraised_at`
   is null, in one transaction under the tick's lock (a surprise's people are
   added to `core_entity` and its `agents` set here). **`core_appraise`**
-  (Built; Haiku, `prompts/core/appraise/v3.md`, one budgeted run per tick
+  (Built; Haiku, `prompts/core/appraise/v4.md`, one budgeted run per tick
   that has due events, before the transaction) reads each event with what
   she expected (its intention), her state, the snapshot and her goals, and
   returns the episode in its own words (E1), an emotion, a salience word,
@@ -880,20 +883,20 @@ and `dedupe_similarity` (0.92). A nearest eligible neighbour with similarity
 **greater than** 0.92 drops an item; dropped items appear in trace outputs.
 Invalid model output or embedding leaves thought and source unchanged.
 
-- `core_anticipate` (`prompts/core/anticipate/v3.md`) chooses the soonest open,
+- `core_anticipate` (`prompts/core/anticipate/v4.md`) chooses the soonest open,
   unanticipated intention in the next `core.anticipate.lead_hours` (12),
   ties by ID. Accepted thought gets `payload.anticipates`; the intention gets
   `anticipated_at`. Emotion is bounded and mood arousal moves by
   `core.anticipate.arousal_gain` (0.3) toward proposed arousal; mood valence
   stays. Landing before apply makes the proposal ineligible.
-- `core_ruminate` (`prompts/core/ruminate/v3.md`) chooses the oldest eligible
+- `core_ruminate` (`prompts/core/ruminate/v4.md`) chooses the oldest eligible
   episode, ties by ID: age 2 through 24 hours from landing, absolute valence
   at least 0.5 and `payload.ruminated` below 1. Keys are
   `core.ruminate.delay_hours`, `window_hours`, `min_valence`,
   `max_per_episode`, `gain` (0.1). Acceptance writes `payload.ruminates`,
   increments the episode marker, reinforces recall and nudges mood valence
   toward the episode's sign. An absent historical emotion stays absent.
-- `core_wander` (`prompts/core/wander/v3.md`) needs today's plan and no busy
+- `core_wander` (`prompts/core/wander/v4.md`) needs today's plan and no busy
   or offline block. Keys `core.wander.max_per_day` (2), `min_gap_hours` (3),
   `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
   `min_similarity` (0.3), `max_items` (2) bound the selection and output.
@@ -918,7 +921,7 @@ and does not stop later steps. The date claim prevents a second run that
 night, including after a crash. Each loop uses the shared 24-call daily
 budget and a versioned prompt:
 
-- `core_reflect` (`prompts/core/reflect/v3.md`, `prompts.core_reflect: v3`)
+- `core_reflect` (`prompts/core/reflect/v4.md`, `prompts.core_reflect: v4`)
   reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
   with `reflected_at IS NULL` and `created_at <= now`, ordered by
   `(created_at, id)`, plus `context_items` (6) active neighbours. A capped run
@@ -950,7 +953,7 @@ budget and a versioned prompt:
   Monday-start local week. It handles at most `max_groups` (1) per night;
   sources remain and receive `gist_source_factor` (0.5) once. `max_tokens`
   is 512. Decay still runs on budget exhaustion or gist failure.
-- `core_render_snapshot` (`prompts/core/snapshot/v3.md`,
+- `core_render_snapshot` (`prompts/core/snapshot/v4.md`,
   `prompts.core_snapshot: v3`) reads at most `core.snapshot.max_items` (8)
   per active kind, with `max_tokens` 1024. It writes six sections and their
   embedded bullet lines in one transaction with version N+1 and its trace;
@@ -970,6 +973,14 @@ budget and a versioned prompt:
   anticipate, ruminate, wander, reflect and snapshot v3 say to name the day or leave time out,
   never today, tonight, tomorrow, yesterday or this week; a slip is logged
   (`relative words in stored text`), never retried.
+- **Built 16b: time anchors.** Her loops' inputs carry date tokens on her calendar
+  (`platform/time-anchors.ts`: `dateToken`, `stamped`); `withTimeRendering`
+  (`platform/llm/render-net.ts`) renders every token where a prompt reaches the model, so
+  `relative-date.ts` is gone. Core `memory.insert` and `insertSnapshot` anchor what she writes in
+  her zone (`createCoreLayer(db, zone)`), so "tonight" keeps the night it meant. The snapshot render
+  anchors its item texts once, so her snapshot and self lines stay the same strings. Prompts
+  appraise, anticipate, ruminate, wander, reflect and snapshot v4: "When you mention a day, copy
+  its date as you see it; what you write is dated for you."
 - **Built 10b: depth.** Every loop that writes memory judges each item's
   `depth` in the same call (`surface | personal | intimate`, 1–3): appraise,
   wander, ruminate, anticipate, reflect and consolidate (all prompts v2), and
@@ -1218,6 +1229,13 @@ model output, is traced `failed`; the next still runs).
   `who_you_are` is her snapshot headed by its night. Prompts summarise v4, reflect v4, model v4,
   ideate v6 say what they write is read on later days: dates, never relative words. Slips
   (here and in extract) are logged, never retried.
+- **Built 16b: time anchors.** Each loop's `now` is `nowLine` (their time, and hers when it reads
+  differently); memories, notes and threads carry date tokens in their zone. What a loop writes is
+  anchored on insert, and a bare weekday takes the nearest date it was shown (`shownDates`: its
+  facts' `occurred_at`, threads' `next_checkpoint`, the dates in the notes it read; consolidate
+  passes its sources' dates). An idea's own dates ("tonight") join its sources for `stale_after`.
+  Prompts summarise, reflect and model v5, ideate v7: "When you mention a day, copy its date as you
+  see it; what you write is dated for you."
 - **Built 2026-10-21: now, dates, and her reads stay hers.** Every user-mind loop's input has
   `now` (`formatLocal` in their zone, `RunInputs.timezone`) and each memory's `when` (its
   `occurred_at`, or null), so a plan that passed never reads as ahead. Prompts: summarise v3,
@@ -1376,8 +1394,12 @@ when the guard is on.
       `chat.recent_turns` (20) window drops every turn before the latest gap of
       at least `chat.window_gap_hours` (72); for a reach-out the gap from the
       last turn up to now counts too.
-      Gaps from `chat.gap_line_min_hours` (24) up to 72 hours keep the "[N
-      later]" marker. A window that opens on her reach-outs keeps them behind a
+      Built 16b: each day in the window opens with a divider ("— Monday 12
+      January (yesterday) —", from the turns' send times, in their zone; today's
+      turns have none when the window opens on today), and a time word in an
+      earlier day's message keeps its words with a gloss from that message's own
+      send time ("tomorrow (that's today)"); today's messages read as typed; the
+      stored transcript never changes (`viewTurns`, reply v19). A window that opens on her reach-outs keeps them behind a
       "[You wrote to them first]" user line; a reach-out after days of silence
       keeps only her unanswered reach-outs. A reach-out's "Where things stand with them" reads the
       newest non-sensitive summary (§9.5)
@@ -1453,6 +1475,12 @@ and "Your read on them" open with "(written …)", her ideas end with it, and ea
 fact shows its day and distance ("Saturday 17 January, in 2 days"), plus when she learned it if
 that was another day (`RetrievedFact.noted`).
 
+**Built 16b: one date system.** Builders place date tokens, each on its owner's calendar (their
+things in their zone, hers in hers), and `withTimeRendering` renders them all where the prompt
+reaches the model (`time.relative_max_days` (6): beyond it, a plain date). Facts carry one date
+each (`ownDate`: none added when the content already holds one; `RetrievedFact.noted` is gone).
+A `## Now` section gives now on both calendars. Her messages are never post-processed.
+
 ### 10.4 Cold path (Built; Changes in v3)
 
 Asynchronous, after sending; never blocks a reply.
@@ -1504,13 +1532,17 @@ relationship or affect update.
 `guard.enabled: true` (false is a kill switch: the first candidate is sent
 unchecked and one `judge_log` row, `guard_disabled`, is written). Every
 outgoing message (reply, reach-out, backchannel, availability note) is
-checked. Replies and reach-outs get one cheap call (prompt `guard` v6; Built 16: NOW is their
-local time, plus hers when her calendar reads differently (`guardNow`); a day put wrong ("this
-morning" for yesterday's race) is `invented_detail`; saying she can't meet while offering to be
-there by text isn't `in_person` (B127); each remembered fact carries its day and distance from
-NOW (`itemWhen`, their zone), so a misdated reply is visible too. Built 15d: its input
+checked. Replies and reach-outs get one cheap call (prompt `guard` v7; Built 16: NOW is their
+local time, plus hers when her calendar reads differently (`nowLine` since 16b); saying she
+can't meet while offering to be there by text isn't `in_person` (B127); each remembered fact
+carries its day and distance from NOW (a date token in their zone since 16b), so a misdated reply
+is visible too. Built 15d: its input
 opens with NOW, her local date and time, and a reach-out adds WHY SPICA IS WRITING FIRST, the
-dated reason, so asking how a past event went isn't read as presuming) against
+dated reason, so asking how a past event went isn't read as presuming; Built 16b, guard v7: a
+day put wrong, a past thing asked about as ahead or a coming thing asked how it went is
+`wrong_day`, an honesty category; on a reach-out it drops the message (outcome `dropped`,
+migration `0042`, the reach-out log `dropped: wrong_day`), on a reply it is sent with the
+violation; its recent turns are her view, dividers and glosses included) against
 the line in §2 (threats, contempt, guilt, punishment, manipulation) and for
 honesty (false familiarity, invented detail, a profile card fact presented as
 chat, and, Built 2026-10-21, `in_person`: offering or agreeing to meet in person, since she is
@@ -1884,12 +1916,14 @@ sees it among what she already brought up.
 
 **Built 15c:** reconcile's contradiction band: neighbours from `reconcile.contradiction_similarity`
 (0.75) up to `near_match_similarity` (0.82) are shown `[distant]` and can only be contradicted
-(reconcile v2), in both minds. Extraction v9 copies time words into `when` and writes `{when}`
-in content; code resolves the phrase (chrono-node) in the user's zone from their last message,
-at the precision the phrase gives, falling back to the model's date, then its words. "this
-week" and "later this week" are the week they were said in ("the week of Monday …", dated
-its Friday since Phase 16, so an idea about the span isn't stale the same night), and "end
-of the week" its Friday (chrono alone reads "this week" as last Sunday). Extraction input also
+(reconcile v2), in both minds. **Built 16b:** extraction v10 keeps a fact's time words as said
+and labels them (`when_direction`: past, upcoming or null); code anchors them
+(`anchorExtraction`, chrono-node) from the send time of their last message, in their zone, in
+the labelled direction, and `occurred_at` is the fact's first anchor. When their message names
+exactly one weekday and a fact names a different one, the fact takes theirs. A thread's
+`checkpoint_when` is anchored ahead into `next_checkpoint`. The model never guesses a date
+(its `when`, `{when}`, `occurred_at` and `next_checkpoint` fields went with `when.ts`). "this
+week" is a week token. Extraction input also
 carries her snapshot's Interests, so her own titles ("Mirror", "Stalker") read as films. Upcoming
 plans are always stored; extraction never infers a gender.
 
@@ -1952,7 +1986,7 @@ Code: `src/mind/process/outreach/`.
   passed is skipped, at the tick and again at send), read through `deps.core.memory` (core
   to user, V2); topic `core:<id>` (the `her_day` namespace, so one memory of
   hers reaches a user once whichever kind carries it), strength = salience,
-  weight 0.5. The reach-out prompt is `prompts/reach-out/v3.md`,
+  weight 0.5. The reach-out prompt is `prompts/reach-out/v4.md`,
   with a `core_thought` and a `user_idea` guidance line. **Built 15d:**
   - `her_day` weight 1.0, and candidates sort their things first (`thread`,
     `make_up`, `user_event`), then by score: her news beats an idea or an
@@ -1980,6 +2014,11 @@ Code: `src/mind/process/outreach/`.
     January, yesterday", or "they told you 3 days ago" when undated), is the
     last system section, says the message is about this, and the cue repeats
     the topic. The guard gets the same reason (§10.5).
+  - **Built 16b:** for their own things (`thread`, `user_event`, `user_idea`) code picks the
+    framing from the day of the latest dated note (`eventDay`): `ahead` ("It's in 3 days,
+    Thursday 8 January: it hasn't happened yet … don't ask how it went"), `today`, or `past`
+    ("It was yesterday …: it's over. Ask how it went"), reach-out v4. A reach-out the guard
+    finds `wrong_day` is dropped, never sent (`dropped: wrong_day`).
   - Her own rate: once she has an estimate of theirs (`rate_estimated`), her
     chattiness moves `outreach.her_rate.toward_them` (0.5) of the way from
     `her_rate.default` (4/day) toward it, and the threshold is divided by
@@ -2313,6 +2352,8 @@ baseline).
 
 **Built 16:** a review lists stored text with relative words ("Relative words in stored text"
 per user, from the final facts; "Relative words in her loops" from the core calls' outputs).
+Built 16b: final facts print with their dates rendered absolute (`renderAbsolute`), so the list
+shows only words anchoring left as written.
 
 ### 17.3 Leak tests (New, DECIDED: leakage is the top risk)
 
@@ -2473,7 +2514,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
-| **Time anchors** (Phase 16b, next; settled with Ethan 2026-10-24, design doc `docs/2026-10-24-phase-16b-time-anchors-design.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | B127 (test fix) |
+| **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.

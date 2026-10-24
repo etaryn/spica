@@ -195,7 +195,13 @@ export function relativeWords(text: string): string[] {
 
 function instant(a: Anchor): Date {
   const [date, time] = a.local.split("T");
-  const day = a.precision === "month" ? `${a.local}-01` : date!;
+  // A week points at its Friday: an idea about "this week" shouldn't expire the night it's said.
+  const day =
+    a.precision === "month"
+      ? `${a.local}-01`
+      : a.precision === "week"
+        ? shiftLocalDate(date!, 4)
+        : date!;
   const midnight = localMidnight(day, a.zone).getTime();
   if (time) {
     const [h, m] = time.split(":").map(Number);

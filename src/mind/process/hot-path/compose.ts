@@ -198,14 +198,14 @@ export async function composeReachOut(
   });
 }
 
+const THEIR_KINDS = new Set(["thread", "user_event", "user_idea"]);
+
 /**
  * Fills the reach-out prompt file's `slot` and `cue`: the topic with what she knows behind it,
  * each dated in her words, so a past event never reads as upcoming. Their things are dated on
  * their calendar, her own news on hers. The cue repeats the topic, since it is the last thing she
  * reads.
  */
-const THEIR_KINDS = new Set(["thread", "user_event", "user_idea"]);
-
 export function renderReachOut(
   markdown: string,
   trigger: ReachOutTrigger,
@@ -358,9 +358,10 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   });
 
   const snapshot = bounded(deps, "snapshot", userId, () => deps.core.memory.latestSnapshot(), null);
-  // Her notes are dated on her calendar, like her memories, so one prompt counts days one way.
+  // Her memories are dated on her calendar, their things and her notes on them on theirs.
   const herZone = lifeTimezone(config.life, clock.now());
-  const theirZoneLookup = userZone(deps, userId);
+  // Bounded, so a failed lookup dates in UTC rather than rejecting while nothing awaits it.
+  const theirZoneLookup = bounded(deps, "their zone", userId, () => userZone(deps, userId), "UTC");
   // A malformed payload renders nothing rather than failing the reply.
   const summary = inCrisis
     ? Promise.resolve(null)

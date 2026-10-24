@@ -58,7 +58,7 @@ test("a bare weekday takes a date the writer was shown, else points by the rule"
 });
 
 test("weeks, weekends, offsets, explicit dates and durations anchor", () => {
-  expect(days(anchorTimes("Both happen this week.", utc))).toEqual(["2026-01-12"]);
+  expect(days(anchorTimes("Both happen this week.", utc))).toEqual(["2026-01-16"]);
   expect(days(anchorTimes("Due by the end of the week.", utc))).toEqual(["2026-01-16"]);
   expect(days(anchorTimes("Sister visits Saturday 17 January.", utc))).toEqual(["2026-01-17"]);
   expect(days(anchorTimes("The results come in 3 days.", utc))).toEqual(["2026-01-15"]);
@@ -172,10 +172,11 @@ test("phrases land where the old resolver put them", () => {
   expect(one("on friday", wed)).toBe("2026-01-09");
   expect(one("last friday")).toBe("2026-01-02");
   expect(one("sunday")).toBe("2026-01-11");
-  expect(one("next week")).toBe("2026-01-12");
+  // A week is dated by its Friday, so an idea about the span lives until the week is out.
+  expect(one("next week")).toBe("2026-01-16");
   expect(one("this weekend")).toBe("2026-01-10");
   expect(one("end of this week")).toBe("2026-01-09");
-  expect(one("this week", wed)).toBe("2026-01-05");
+  expect(one("this week", wed)).toBe("2026-01-09");
   // "tomorrow" at 23:30 in Singapore is the next Singapore day.
   expect(one("tomorrow", { at: at("2026-01-05T15:30:00Z"), zone: "Asia/Singapore" })).toBe(
     "2026-01-06",

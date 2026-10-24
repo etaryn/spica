@@ -103,12 +103,14 @@ test("each exchange is read by the reading model, then understood by the meaning
   expect(reader.requests[1]!.input).toContain('- p1 user event "job interview" planned · moves m1');
   expect(reader.requests[1]!.input).toContain("Label the new messages (3 to 4).");
   expect(
-    result.get(conversationKey(c))!.map((x) => [
-      x.messages,
-      x.labels?.moves.map((m) => m.id),
-      x.labels?.propositions.map((p) => p.id),
-      x.error,
-    ]),
+    result
+      .get(conversationKey(c))!
+      .map((x) => [
+        x.messages,
+        x.labels?.moves.map((m) => m.id),
+        x.labels?.propositions.map((p) => p.id),
+        x.error,
+      ]),
   ).toEqual([
     ["1 to 2", ["m1"], ["p1"], null],
     ["3 to 4", ["m3"], [], null],

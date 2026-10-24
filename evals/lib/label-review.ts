@@ -191,8 +191,6 @@ function describe(l: CheckedLabels, known: CheckedLabels, pieces: Map<string, Pi
     ...(l.bid_response
       ? [`- bid response ${l.bid_response.response} (${l.bid_response.move})`]
       : []),
-    ...l.drops.map(
-      (d) => `- dropped ${d.layer} ${d.id}: ${d.reason}${d.ref ? ` (${d.ref})` : ""}`,
-    ),
+    ...l.drops.map((d) => `- dropped ${d.layer} ${d.id}: ${d.reason}${d.ref ? ` (${d.ref})` : ""}`),
   ];
 }

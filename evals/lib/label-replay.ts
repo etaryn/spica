@@ -4,11 +4,13 @@
  * it; conversation mode labels a whole conversation in one call. A call that fails is recorded and
  * the loop moves on: nothing is asked again.
  */
+import type { z } from "zod";
 import {
   checkLabels,
   emptyLabels,
-  LabelsSchema,
+  MeaningSchema,
   mergeLabels,
+  ReadingSchema,
   type CheckedLabels,
 } from "@/mind/memory/user/annotations";
 import { buildLabelInput } from "@/mind/memory/user/label-input";
@@ -90,31 +92,44 @@ async function label(
   const pieces = numberPieces(messages, firstNew);
   const threads = shown?.threads ?? [];
   const range = `${firstNew + 1} to ${messages.length}`;
+  const ctx = { pieces, zone: c.zone, threadIds: threads.map((t) => t.id), earlier };
+  const ask = <T>(stage: "read" | "meaning", schema: z.ZodType<T>, known: CheckedLabels) =>
+    llm
+      .classifyJson({
+        purpose: `extract_labels_${unit}${opts.thinking ? "_thinking" : ""}_${stage}`,
+        model: "extract",
+        system: opts.system,
+        input: buildLabelInput({
+          pieces,
+          zone: c.zone,
+          threads,
+          interests: shown?.interests ?? [],
+          earlier: known,
+        }),
+        schema,
+        timeoutMs: opts.timeoutMs,
+        maxTokens: opts.maxTokens,
+        cache: "5m",
+      })
+      .catch((e: unknown) => {
+        throw new Error(`${stage}: ${(e as Error).message}`);
+      });
   try {
-    const raw = await llm.classifyJson({
-      purpose: `extract_labels_${unit}${opts.thinking ? "_thinking" : ""}`,
-      model: "extract",
-      system: opts.system,
-      input: buildLabelInput({
-        pieces,
-        zone: c.zone,
-        threads,
-        interests: shown?.interests ?? [],
-        earlier,
-      }),
-      schema: LabelsSchema,
-      timeoutMs: opts.timeoutMs,
-      maxTokens: opts.maxTokens,
-      cache: "5m",
-    });
-    const labels = checkLabels(raw, {
-      pieces,
-      zone: c.zone,
-      threadIds: threads.map((t) => t.id),
-      earlier,
-    });
-    return { messages: range, labels, error: null };
+    const read = await ask("read", ReadingSchema, earlier);
+    // What was just read counts as already labelled for the meaning call, which points at it.
+    const readLabels = checkLabels({ ...read, ...NO_MEANING }, ctx);
+    const meant = await ask("meaning", MeaningSchema, mergeLabels(earlier, readLabels));
+    return { messages: range, labels: checkLabels({ ...read, ...meant }, ctx), error: null };
   } catch (e) {
     return { messages: range, labels: null, error: (e as Error).message };
   }
 }
+
+const NO_MEANING = {
+  propositions: [],
+  threads: [],
+  idiolect: [],
+  relationship: null,
+  intimacy: null,
+  bid_response: null,
+} satisfies z.infer<typeof MeaningSchema>;

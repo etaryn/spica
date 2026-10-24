@@ -133,6 +133,12 @@ export const LabelsSchema = z.object({
 });
 export type Labels = z.infer<typeof LabelsSchema>;
 
+// The output grammar for every layer at once is over the API's size limit, so a stretch is labelled
+// in two calls: first what the text holds (moves, mentions, times), then what it means, which
+// points at them.
+export const ReadingSchema = LabelsSchema.pick({ moves: true, mentions: true, times: true });
+export const MeaningSchema = LabelsSchema.omit({ moves: true, mentions: true, times: true });
+
 export type CheckedMove = {
   id: string;
   pieces: string[];

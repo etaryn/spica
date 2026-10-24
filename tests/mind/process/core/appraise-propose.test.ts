@@ -199,3 +199,24 @@ test("the judged depth is kept; a missing one, or the code fallback, takes the e
   };
   expect(codeAppraisal(event, cfg).depth).toBe(cfg.depth.by_kind.episode);
 });
+
+test("a model appraisal carries the dates its input showed", async () => {
+  const deps = makeTestDeps();
+  await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
+  await deps.core.memory.insert({
+    kind: "intention",
+    content: "Spica booked the telescope ⟦2025-12-30|day|UTC⟧ for these images.",
+    embedding: vec(),
+    occurred_at: now,
+    created_at: now,
+    status: "open",
+    salience: 0.4,
+    valence: 0.6,
+    confidence: 1,
+    source: "world",
+    source_ref: `world_event:${event.worldEventId}`,
+  });
+  deps.llm.handlers.core_appraise = sequence(raw());
+  const a = await propose(deps);
+  expect(a.shown?.map((d) => d.toISOString().slice(0, 10))).toContain("2025-12-30");
+});

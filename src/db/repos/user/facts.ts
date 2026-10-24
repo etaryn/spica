@@ -155,7 +155,13 @@ export async function insertFact(
 ): Promise<FactRow> {
   // Every caller passes a Date: the moment it was written is the moment its words mean.
   const at = row.created_at as Date;
-  const ctx = { at, zone: zoneOrUtc(await getTimezone(db, userId)), ...hints };
+  const ctx = {
+    at,
+    zone: zoneOrUtc(await getTimezone(db, userId)),
+    ...hints,
+    // The date the row carries is the one its words mean.
+    known: [...(hints.known ?? []), ...(row.occurred_at ? [row.occurred_at as Date] : [])],
+  };
   // An inside joke or ritual is the words themselves: "see you tomorrow" there is no date.
   const asSaid = row.kind === "idiolect";
   return one(

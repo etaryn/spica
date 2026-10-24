@@ -929,3 +929,13 @@ test("her memories and snapshots are anchored on her calendar", async () => {
   expect(tokenDates(snap.content)).toHaveLength(1);
   expect(tokenDates(snap.sections.Lately!)).toHaveLength(1);
 });
+
+test("a core row's own date is a date its words were shown", async () => {
+  // Written Monday 5 January about a Tuesday it already carries: that Tuesday, not the coming one.
+  const id = await core().memory.insert({
+    ...episode("She booked the telescope for tuesday night.", 0.01, now),
+    occurred_at: new Date("2025-12-30T22:00:00Z"),
+  });
+  const row = await core().memory.get(id);
+  expect(tokenDates(row!.content)[0]!.toISOString().slice(0, 10)).toBe("2025-12-30");
+});

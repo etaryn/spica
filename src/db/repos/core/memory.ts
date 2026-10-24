@@ -265,7 +265,13 @@ export function coreMemoryRepo(db: Db, zone = "UTC"): CoreMemory {
       });
     },
     async insert(item, hints = {}) {
-      const ctx = { at: item.created_at, zone, ...hints };
+      const ctx = {
+        at: item.created_at,
+        zone,
+        ...hints,
+        // The date the row carries is the one its words mean.
+        known: [...(hints.known ?? []), ...(item.occurred_at ? [item.occurred_at] : [])],
+      };
       const row = one(
         await db
           .insert(core_memory)

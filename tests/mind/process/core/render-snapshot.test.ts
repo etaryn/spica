@@ -5,7 +5,7 @@ import { coreDepsOf } from "@/mind/platform/deps";
 import { seedSnapshot } from "@/mind/memory/core/seed";
 import { coreRenderSnapshot } from "@/mind/process/core/render-snapshot";
 import { snapshotSection } from "@/mind/memory/core/depth";
-import { closeTestDb, resetDb } from "../../../helpers/db";
+import { closeTestDb, resetDb, vec } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -280,4 +280,36 @@ test("a Lately line's time words are dated once, the same in her snapshot and he
   )!;
   expect(line.text).toMatch(/^Telescope booking ⟦2026-01-05/);
   expect(snapshot.content).toContain(`- ${line.text}`);
+});
+
+test("a Lately line's bare weekday takes the day her snapshot input showed", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  await deps.core.memory.insert({
+    kind: "interest",
+    content: "Spica booked the telescope ⟦2025-12-30|day|UTC⟧.",
+    embedding: vec(0.01),
+    occurred_at: new Date("2025-12-30T12:00:00Z"),
+    created_at: new Date("2025-12-30T12:00:00Z"),
+    status: "recurring",
+    salience: 0.8,
+    valence: 0.5,
+    confidence: 1,
+    source: "loop",
+    source_ref: null,
+  });
+  all.llm.handlers.core_render_snapshot = () => ({
+    Lately: [{ text: "Booked the telescope on tuesday.", depth: null }],
+    Opinions: [],
+    Interests: [],
+    Goals: [],
+    People: [],
+    "Habits of speech": [],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const call = all.llm.structuredCalls.find((c) => c.purpose === "core_render_snapshot")!;
+  expect(`${call.system}\n${call.input}`).toContain("⟦2025-12-30|day|UTC⟧");
+  const snapshot = (await deps.core.memory.latestSnapshot())!;
+  expect(snapshot.content).toMatch(/Booked the telescope ⟦2025-12-30\|day\|[^⟧]+⟧\./);
 });

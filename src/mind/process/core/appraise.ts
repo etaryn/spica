@@ -15,6 +15,7 @@ import { errorName } from "@/mind/platform/errors";
 import { fitChars } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { tokenDates } from "@/mind/platform/time-anchors";
 import { applyEvent, moodOf } from "@/mind/state/core/core-state";
 import type { CoreNeeds, CoreStatePatch } from "@/mind/state/core/types";
 import type { LoopContext } from "./runner";
@@ -53,6 +54,8 @@ export type Appraisal = {
   goalEffects: { goalId: string; delta: number }[];
   needEffects: CoreNeeds;
   depth: number;
+  /** Dates in the input it was written from. */
+  shown?: Date[];
 };
 export type LandingEvent = {
   worldEventId: string;
@@ -167,7 +170,7 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
       maxTokens: config.core.appraise.max_tokens,
     });
     const bounded = boundAppraisal(raw, new Set(goals.map((g) => g.id)), config.core);
-    if (bounded) return bounded;
+    if (bounded) return { ...bounded, shown: tokenDates(`${system}\n${input}`) };
     log.error("core appraisal unusable", { worldEventId: event.worldEventId });
   } catch (error) {
     log.error("core appraisal failed", {
@@ -190,23 +193,26 @@ export async function applyAppraisal(
   const { world, state } = deps.config.core;
   const ref = eventRef(event.worldEventId);
   const intentionRef = eventRef(event.intentionEventId ?? event.worldEventId);
-  const episodeId = await core.memory.insert({
-    kind: "episode",
-    content: a.episode,
-    payload: { appraisal_emotion: a.emotion },
-    embedding,
-    entity_refs: event.agents,
-    occurred_at: event.at,
-    created_at: now,
-    // A big event stays open until its story resolves; a small one is over when it happens.
-    status: event.stakes === "high" ? "open" : "resolved",
-    salience: a.salience,
-    valence: a.emotion.valence,
-    confidence: world.event_confidence,
-    depth: a.depth,
-    source: "world",
-    source_ref: ref,
-  });
+  const episodeId = await core.memory.insert(
+    {
+      kind: "episode",
+      content: a.episode,
+      payload: { appraisal_emotion: a.emotion },
+      embedding,
+      entity_refs: event.agents,
+      occurred_at: event.at,
+      created_at: now,
+      // A big event stays open until its story resolves; a small one is over when it happens.
+      status: event.stakes === "high" ? "open" : "resolved",
+      salience: a.salience,
+      valence: a.emotion.valence,
+      confidence: world.event_confidence,
+      depth: a.depth,
+      source: "world",
+      source_ref: ref,
+    },
+    { known: a.shown ?? [] },
+  );
   // Once it has happened the episode speaks for it; the plan stays only as history.
   const intention = await core.memory.bySourceRef("intention", intentionRef);
   if (intention) await core.memory.setStatus(intention.id, "resolved");

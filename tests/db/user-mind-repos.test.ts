@@ -368,3 +368,20 @@ test("an inside joke or ritual is stored as said, never dated", async () => {
   });
   expect(row.content).toBe(content);
 });
+
+test("a row's own date is a date its words were shown (the 16b seed)", async () => {
+  const u = await createTestUser();
+  const sunday = new Date("2026-01-04T10:00:00Z");
+  const race = await insertFact(getTestDb(), u, {
+    ...summaryRow("The user is running a half marathon on Sunday morning.", sunday),
+    kind: "event",
+    occurred_at: new Date("2026-01-11T09:00:00Z"),
+  });
+  expect(tokenDates(race.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
+  const sister = await insertFact(getTestDb(), u, {
+    ...summaryRow("The user's sister is visiting on the weekend.", sunday),
+    kind: "event",
+    occurred_at: new Date("2026-01-17T12:00:00Z"),
+  });
+  expect(tokenDates(sister.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-17");
+});

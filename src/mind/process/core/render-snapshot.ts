@@ -90,7 +90,8 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
     // Dated once here, so her snapshot's text and its self lines stay the same strings.
     const zone = lifeTimezone(config.life, now);
     for (const items of Object.values(kept))
-      for (const item of items) item.text = anchorTimes(item.text, { at: now, zone });
+      for (const item of items)
+        item.text = anchorTimes(item.text, { at: now, zone, known: ctx.shown() });
     const sections = Object.fromEntries(
       Object.entries(kept).map(([name, items]) => [
         name,

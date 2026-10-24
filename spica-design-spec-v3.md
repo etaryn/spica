@@ -332,7 +332,11 @@ Every table here references `user(id) ON DELETE CASCADE`.
 - **`fact`**: the memory atom. `subject` (`user | self | shared`), `kind`,
   `content` (understandable on its own; Built 16b: each time phrase is stored as a date token,
   `⟦local|precision|zone⟧`, anchored by `insertFact` in the user's zone, and rendered with its
-  distance only where a prompt reaches a model), `payload` (its top-level strings anchored too),
+  distance only where a prompt reaches a model; Built 16c: anchoring reads one clause at a time
+  and anchors a span only when one rule reads all of it, so no word is lost; ISO dates anchor; a
+  relative day beside its written-out date is one token, the written-out date winning when they
+  disagree; the row's own `occurred_at` counts as a date its words were shown), `payload` (its
+  top-level strings anchored too),
   `embedding`,
   `entity_refs`, `thread_id`, `occurred_at`, `stale_after` (Built 16, migration `0041`: past it
   the item is no longer worth raising and the day sweep retires it; null is no expiry; set on
@@ -981,6 +985,12 @@ budget and a versioned prompt:
   anchors its item texts once, so her snapshot and self lines stay the same strings. Prompts
   appraise, anticipate, ruminate, wander, reflect and snapshot v4: "When you mention a day, copy
   its date as you see it; what you write is dated for you."
+- **Built 16c: shown dates.** `runCoreLoop` records the dates in every input a loop sends
+  (`LoopContext.shown()`), and every `memory.insert` in its commit takes them, as does the
+  snapshot's item anchoring, so a bare weekday she writes back ("tuesday night") takes the day
+  she saw. Appraise carries its input's dates to its episode (`Appraisal.shown`). Core
+  `memory.insert` also counts the row's own `occurred_at`. A part of the day with a clock time
+  ("tonight at 20:45", "tonight at noon") anchors as a `time` token.
 - **Built 10b: depth.** Every loop that writes memory judges each item's
   `depth` in the same call (`surface | personal | intimate`, 1–3): appraise,
   wander, ruminate, anticipate, reflect and consolidate (all prompts v2), and
@@ -1919,8 +1929,9 @@ sees it among what she already brought up.
 (reconcile v2), in both minds. **Built 16b:** extraction v10 keeps a fact's time words as said
 and labels them (`when_direction`: past, upcoming or null); code anchors them
 (`anchorExtraction`, chrono-node) from the send time of their last message, in their zone, in
-the labelled direction, and `occurred_at` is the fact's first anchor. When their message names
-exactly one weekday and a fact names a different one, the fact takes theirs. A thread's
+the labelled direction, and `occurred_at` is the fact's first anchor. **Built 16c:** the weekday
+cross-check is gone (it moved a right date to their message's weekday), and extraction v11 adds
+no date or weekday they didn't say. A thread's
 `checkpoint_when` is anchored ahead into `next_checkpoint`. The model never guesses a date
 (its `when`, `{when}`, `occurred_at` and `next_checkpoint` fields went with `when.ts`). "this
 week" is a week token. Extraction input also
@@ -2515,7 +2526,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
-| **Time anchor fixes** (Phase 16c, next; settled with Ethan 2026-10-24, design doc `docs/2026-10-24-phase-16c-anchor-fixes-design.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
+| **Time anchor fixes** (Phase 16c, built 2026-10-24; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.

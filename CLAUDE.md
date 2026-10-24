@@ -133,10 +133,12 @@ meant as a token (`platform/time-anchors.ts`), builders place tokens on their ow
 one wrapper renders them where prompts reach the model; extract dates from the message's send
 time; her view of the conversation has day dividers and glosses; guard v7 `wrong_day` drops a
 misdated reach-out; merged 2026-10-24, close runs done (`evals/results/analysis-2026-10-24-phase-16b.md`).
-**Phase 16c, time anchor fixes, is built** (2026-10-24, branch `phase-16c`): anchoring reads one
+**Phase 16c, time anchor fixes, is built** (2026-10-24): anchoring reads one
 clause at a time and whole date phrases, a day said twice is one token, ISO dates anchor, extract's
 weekday cross-check is gone (extract v11), a row's own date and the dates her loops were shown
-date the words they write. The paid `review:world-outreach` close run waits for Ethan's go-ahead.
+date the words they write; merged, close run done (`evals/results/analysis-2026-10-24-phase-16c.md`).
+**Next: Phase 16d, date fixes from the 16c close run** (§20 row; §25 B129–B132 and B1), to settle
+with Ethan item by item before a design doc.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

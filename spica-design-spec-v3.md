@@ -2526,7 +2526,8 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
-| **Time anchor fixes** (Phase 16c, built 2026-10-24; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
+| **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
+| **Date fixes from the 16c close run** (Phase 16d, next; to settle with Ethan item by item; evidence in `evals/results/analysis-2026-10-24-phase-16c.md`) | B129 "since <weekday>" points back; B130 extract adding a day; B131 a thread's next check-in read as its event date; B1 a user fact taken from her words; B132 the 16c anchoring minors | — |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2631,7 +2632,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B128).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B132).
 
 ### 25.1 Memory and recall
 - **B1.** Extraction sometimes turns her words into user facts (after a bare
@@ -2640,6 +2641,29 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   extract stored "The user ran a half marathon recently." from an exchange holding only her
   reach-out, and her telescope booking became Sam's (ideate: "Ask Sam how the telescope booking
   … is shaping up"; extract: "The user has not heard back yet about the telescope booking."). *Tuning.*
+  2026-10-24 (Phase 16c close run, `evals/results/analysis-2026-10-24-phase-16c.md`): extract stored
+  "The user has a studio deadline on friday" from her line "friday's close enough now" (they said
+  only "ok i should really try to sleep"), and it became a "deadline day" reach-out. *Phase 16d.*
+- **B129.** "since Friday" reads forward. Extract stored "…has been waiting since Friday" (no
+  `when_direction`, her own "has it been dark since friday" meaning the interview) as the coming
+  Friday 16 January; summaries then expected the studio's decision that day, she spoke of a
+  "friday deadline", and a reach-out said "deadline day". "since" before a bare weekday or weekend
+  always points back, whatever the label. *Phase 16d.*
+- **B130.** Extract v11 still adds a day: "okay the interview happened" became "…which happened on
+  Friday." (stored Friday 9 January; the interview was Thursday 8). v11's "never add a date or
+  weekday they didn't say" wasn't obeyed. A stronger line or an example, or code that drops a
+  weekday their message never named (not a swap: the 16b cross-check moved right dates). *Phase 16d.*
+- **B131.** A thread's next check-in reads as its event's date: `open_threads` showed "half marathon
+  (next: in 3 days, Friday 9 January)" and summarise wrote "The half marathon is now Friday 9
+  January, not Sunday 11 January", kept through two summaries and two models. Label the line so
+  "next" reads as when to check in. *Phase 16d.*
+- **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
+  date: "yesterday (Friday 9 January)" isn't merged; "the 8th and 9th of January" leaves "the 8th"
+  raw; a weekend, week or since token beside a written-out date isn't merged (the merge runs in the
+  chrono pass only); on disagreement the merge drops the other phrase's part of the day; a comma or
+  ISO date between a date and its clock loses the time; an ISO match keeps "on" before its token
+  ("on yesterday, …"); "in three days from Saturday" stores two dates; world-tick's planned-event
+  intentions take no shown dates. *Phase 16d.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

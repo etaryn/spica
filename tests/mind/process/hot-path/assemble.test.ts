@@ -3,6 +3,7 @@ import {
   assemblePrompt as assembleBlocks,
   gapLine,
   relationshipLine,
+  viewTurns,
 } from "@/mind/process/hot-path/assemble";
 import { systemText } from "@/mind/platform/llm/types";
 import { anchorTimes, renderTimes } from "@/mind/platform/time-anchors";
@@ -201,46 +202,36 @@ describe("splitParts", () => {
   });
 });
 
-describe("time-gap markers in the message window", () => {
+describe("days in the message window", () => {
   const at = (iso: string) => new Date(iso);
-  test("the first user message after a gap of at least gapMarkerMinHours carries an elapsed-time marker", () => {
+  const view = (p: { messages: { content: string }[] }) =>
+    p.messages.map((m) => renderTimes(m.content, now, 6));
+  test("a day divider opens each earlier day, and today's, where the date changes", () => {
     const p = assemblePrompt({
       ...base,
-      gapMarkerMinHours: 24,
       recentTurns: [
         { role: "user", text: "long day", created_at: at("2026-01-05T09:00:00Z") },
         { role: "companion", text: "oof", created_at: at("2026-01-05T09:00:05Z") },
-        { role: "user", text: "and another thing", created_at: at("2026-01-05T09:02:00Z") },
-        { role: "companion", text: "go on", created_at: at("2026-01-05T09:02:05Z") },
         { role: "user", text: "back again", created_at: at("2026-01-12T09:00:00Z") },
       ],
     });
-    expect(p.messages.map((m) => m.content)).toEqual([
-      "long day",
-      "oof",
-      "and another thing",
-      "go on",
-      "[7 days later] back again",
-    ]);
+    expect(view(p)).toEqual(["— Monday 5 January —\nlong day", "oof", "— today —\nback again"]);
   });
-  test("no markers without created_at or below the threshold", () => {
+  test("a conversation all from today, or without send times, reads as typed", () => {
     const p = assemblePrompt({
       ...base,
-      gapMarkerMinHours: 24,
       recentTurns: [
-        { role: "user", text: "a", created_at: at("2026-01-05T09:00:00Z") },
-        { role: "companion", text: "b", created_at: at("2026-01-05T20:00:00Z") },
-        { role: "user", text: "c", created_at: at("2026-01-06T08:00:00Z") },
+        { role: "user", text: "see you tomorrow", created_at: at("2026-01-12T09:00:00Z") },
+        { role: "companion", text: "b", created_at: at("2026-01-12T10:00:00Z") },
         { role: "user", text: "d" },
       ],
     });
-    expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "c", "d"]);
+    expect(view(p)).toEqual(["see you tomorrow", "b", "d"]);
   });
   test("turns before the latest gap of at least windowGapHours are left out", () => {
     const p = assemblePrompt({
       ...base,
       now: at("2026-01-10T09:00:30Z"),
-      gapMarkerMinHours: 24,
       windowGapHours: 72,
       recentTurns: [
         { role: "user", text: "old news", created_at: at("2026-01-01T09:00:00Z") },
@@ -252,11 +243,10 @@ describe("time-gap markers in the message window", () => {
     });
     expect(p.messages.map((m) => m.content)).toEqual(["back after a week"]);
   });
-  test("a gap under windowGapHours keeps the old turns and the marker", () => {
+  test("a gap under windowGapHours keeps the old turns behind their day", () => {
     const p = assemblePrompt({
       ...base,
       now: at("2026-01-03T09:00:30Z"),
-      gapMarkerMinHours: 24,
       windowGapHours: 72,
       recentTurns: [
         { role: "user", text: "a", created_at: at("2026-01-01T09:00:00Z") },
@@ -264,13 +254,13 @@ describe("time-gap markers in the message window", () => {
         { role: "user", text: "c", created_at: at("2026-01-03T09:00:00Z") },
       ],
     });
-    expect(p.messages.map((m) => m.content)).toEqual(["a", "b", "[2 days later] c"]);
+    const seen = p.messages.map((m) => renderTimes(m.content, at("2026-01-03T09:00:30Z"), 6));
+    expect(seen).toEqual(["— 2 days ago, Thursday 1 January —\na", "b", "— today —\nc"]);
   });
   test("a reply to her reach-out after a silence keeps the reach-out it answers", () => {
     const p = assemblePrompt({
       ...base,
       now: at("2026-01-06T10:00:30Z"),
-      gapMarkerMinHours: 24,
       windowGapHours: 72,
       recentTurns: [
         { role: "user", text: "old", created_at: at("2026-01-01T09:00:00Z") },
@@ -297,7 +287,7 @@ describe("time-gap markers in the message window", () => {
       windowGapHours: 72,
       recentTurns: [{ role: "user", text: "late", created_at: at("2026-01-07T08:00:00Z") }],
     });
-    expect(p.messages).toEqual([{ role: "user", content: "late" }]);
+    expect(p.messages).toEqual([{ role: "user", content: "— ⟦2026-01-07|day|UTC⟧ —\nlate" }]);
   });
   test("a reach-out after an unanswered one keeps the first, even days later", () => {
     const p = assemblePrompt({
@@ -318,7 +308,7 @@ describe("time-gap markers in the message window", () => {
     });
     expect(p.messages).toEqual([
       { role: "user", content: "[You wrote to them first]" },
-      { role: "assistant", content: "thinking of you" },
+      { role: "assistant", content: "— ⟦2026-01-06|day|UTC⟧ —\nthinking of you" },
       { role: "user", content: "CUE" },
     ]);
   });
@@ -667,4 +657,20 @@ test("a memory whose words carry its date isn't dated twice", () => {
     },
   });
   expect(renderTimes(system, now, 6)).toMatch(/- The race is tomorrow, Tuesday 13 January\.$/m);
+});
+
+test("older messages get a day divider and glosses from their own send time; today's read as typed", () => {
+  const now = new Date("2026-01-13T09:00:00Z"); // Tuesday
+  const texts = viewTurns(
+    [
+      { text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") },
+      { text: "today was rough", created_at: new Date("2026-01-12T20:05:00Z") },
+      { text: "morning! race is today", created_at: new Date("2026-01-13T08:50:00Z") },
+    ],
+    now,
+    "UTC",
+  ).map((t) => renderTimes(t, now, 6));
+  expect(texts[0]).toBe("— yesterday, Monday 12 January —\nmy race is tomorrow (that's today)");
+  expect(texts[1]).toBe("today (that's yesterday, Monday 12 January) was rough");
+  expect(texts[2]).toBe("— today —\nmorning! race is today");
 });

@@ -208,7 +208,7 @@
   },
   "time": { "relative_max_days": 6 },
   "prompts": {
-    "reply": "v18",
+    "reply": "v19",
     "crisis_classifier": "v2",
     "sim_user": "v2",
     "persona": "v7",

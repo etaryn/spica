@@ -53,7 +53,13 @@ import type { DepthLimits, DepthRecord, Openness } from "@/mind/state/user/relat
 import { disclosureLevels, heldBackInSession } from "@/db/repos/user/disclosure";
 import { sectionDepths, snapshotWithin } from "@/mind/memory/core/depth";
 import { z } from "zod";
-import { assemblePrompt, type AssembleInput, gapLine, relationshipLine } from "./assemble";
+import {
+  assemblePrompt,
+  type AssembleInput,
+  gapLine,
+  relationshipLine,
+  viewTurns,
+} from "./assemble";
 import { howToText, loadHowToTextPhrases } from "./how-to-text";
 import { bandShiftOf, biasesFor, loadMoodKeys, pickMove } from "./move";
 import { shapeText } from "./shape-text";
@@ -516,7 +522,6 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     ideas: shownIdeas.map((i) => i.content),
     idiolect: shownIdiolect.map((i) => ({ content: i.content, started_by: i.payload.started_by })),
     recentTurns: recent,
-    gapMarkerMinHours: config.chat.gap_line_min_hours,
     windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
     timezone: herZone,
@@ -544,7 +549,11 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     first: firstDraft,
     input: {
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
-      recentTurns: recent.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
+      recentTurns: viewTurns(recent, clock.now(), theirZone).map((text, i) => ({
+        role: recent[i]!.role,
+        text,
+        at: recent[i]!.created_at,
+      })),
       recalledFacts: [
         ...guardFacts(retrieval, herMemories, theirZone, herZone),
         // Their things together are shared memory too: a callback to one isn't invented.

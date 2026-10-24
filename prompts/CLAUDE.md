@@ -1,6 +1,6 @@
 # prompts (spec §7 for the persona)
 
-- One folder per process (hyphenated), one file per version: `reply/v18.md`. The live version of
+- One folder per process (hyphenated), one file per version: `reply/v19.md`. The live version of
   each is set in `config/default.json` under `prompts`; load through `loadPrompt`
   (`src/mind/platform/prompts.ts`).
 - Changing a prompt means a new version file plus the config bump; delete versions nothing

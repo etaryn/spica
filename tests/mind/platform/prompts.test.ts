@@ -57,7 +57,7 @@ test("persona v7 is the configured persona", () => {
 
 test("the configured reply prompt tells her the feeling and day lines are her own state", () => {
   const c = loadConfig();
-  expect(c.prompts.reply).toBe("v18");
+  expect(c.prompts.reply).toBe("v19");
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/"Your day" are your own state/);
 });
 

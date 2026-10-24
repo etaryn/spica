@@ -9,7 +9,8 @@
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import type { ChatMessage, ReplyRequest } from "@/mind/platform/llm/types";
-import { dateToken, ownDate } from "@/mind/platform/time-anchors";
+import { anchorTimes, dateToken, ownDate } from "@/mind/platform/time-anchors";
+import { localDateString } from "@/mind/platform/timezone";
 import { HOUR } from "@/mind/platform/time";
 
 export interface AssembleInput {
@@ -58,8 +59,6 @@ export interface AssembleInput {
   userTimezone: string;
   /** Now on both calendars, so day words in the conversation read right. */
   nowLine?: string | null;
-  /** Marks the first user message after a gap of at least this many hours ("[7 days later] …"). */
-  gapMarkerMinHours?: number;
   /**
    * Leaves out turns from before the latest gap of at least this many hours (the gap up to now
    * counts too). After days apart the old transcript is stale; deep memory carries what matters.
@@ -217,8 +216,7 @@ function questionList(questions: string[] | undefined): string | null {
 /**
  * The recent turns, starting at the first user turn, or at her reach-outs when she wrote first
  * (behind a user-role line, since the model needs a user turn first). The window can span days,
- * so a user turn after a long gap is marked; without the marker the model carries on from the
- * old moment.
+ * so each day opens with its date; without it the model carries on from the old moment.
  */
 function conversationMessages(input: AssembleInput): ChatMessage[] {
   const window = sinceLongGap(input);
@@ -227,23 +225,38 @@ function conversationMessages(input: AssembleInput): ChatMessage[] {
   const firstUser = window.findIndex((t) => t.role === "user");
   const turns = wroteFirst ? window : firstUser === -1 ? [] : window.slice(firstUser);
 
-  const messages: ChatMessage[] = turns.map((turn, i) => {
-    const previous = turns[i - 1];
-    const gapHours =
-      previous?.created_at && turn.created_at
-        ? (turn.created_at.getTime() - previous.created_at.getTime()) / HOUR
-        : 0;
-    const marked =
-      turn.role === "user" &&
-      input.gapMarkerMinHours !== undefined &&
-      gapHours >= input.gapMarkerMinHours;
-
-    return {
-      role: turn.role === "user" ? "user" : "assistant",
-      content: marked ? `[${elapsed(gapHours)} later] ${turn.text}` : turn.text,
-    };
-  });
+  const texts = viewTurns(turns, input.now, input.userTimezone);
+  const messages: ChatMessage[] = turns.map((turn, i) => ({
+    role: turn.role === "user" ? "user" : "assistant",
+    content: texts[i]!,
+  }));
   return wroteFirst ? [{ role: "user", content: WROTE_FIRST }, ...messages] : messages;
+}
+
+/**
+ * Her view of the conversation: a divider wherever the date changes, and each time word in a
+ * message from an earlier day kept with what it means now, worked out from that message's own
+ * send time. Messages from today read exactly as typed. The stored transcript is never changed.
+ */
+export function viewTurns(
+  turns: { text: string; created_at?: Date }[],
+  now: Date,
+  zone: string,
+): string[] {
+  const today = localDateString(now, zone);
+  let lastDay: string | null = null;
+  return turns.map((t) => {
+    if (!t.created_at) return t.text;
+    const day = localDateString(t.created_at, zone);
+    const divider =
+      day !== lastDay && !(lastDay === null && day === today)
+        ? `— ${dateToken(t.created_at, zone)} —\n`
+        : "";
+    lastDay = day;
+    const text =
+      day === today ? t.text : anchorTimes(t.text, { at: t.created_at, zone, said: true });
+    return `${divider}${text}`;
+  });
 }
 
 const WROTE_FIRST = "[You wrote to them first]";
@@ -277,13 +290,6 @@ function appendReachOutCue(messages: ChatMessage[], cue: string): void {
   } else {
     messages.push({ role: "user", content: cue });
   }
-}
-
-function elapsed(hours: number): string {
-  const days = Math.round(hours / 24);
-  if (days <= 1) return "1 day";
-  if (days < 14) return `${days} days`;
-  return `about ${Math.round(days / 7)} weeks`;
 }
 
 /** A factual line about how well she knows them, so she doesn't guess. */

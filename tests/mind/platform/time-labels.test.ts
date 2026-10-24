@@ -1,6 +1,11 @@
 /** Time labels: a model's reading of time words resolves to the day they meant. */
 import { expect, test } from "vitest";
-import { renderResolved, resolveTime, type TimeMeaning } from "@/mind/platform/time-labels";
+import {
+  countFrom,
+  renderResolved,
+  resolveTime,
+  type TimeMeaning,
+} from "@/mind/platform/time-labels";
 
 const MON = "2026-01-05"; // Monday 5 January 2026
 const meaning = (m: Partial<TimeMeaning>): TimeMeaning => ({
@@ -84,4 +89,33 @@ test("a resolved time keeps its part of the day, clock, span and roughness, and 
   expect(read({ unit: "month", shift: 0, part: "end" })).toBe("the end of January 2026");
   expect(read({ unit: "weekend", shift: 2 })).toBe("the weekend of Saturday 24 January 2026");
   expect(read({ unit: "week", shift: 1 })).toBe("the week of Monday 12 January 2026");
+});
+
+test("counting from a week, weekend or month starts inside it, or at its end when the end was said", () => {
+  const span = (m: Partial<TimeMeaning>, base: string) => resolveTime(meaning(m), base)!;
+  const nextWeek = span({ unit: "week", shift: 1 }, "2026-10-21"); // the week of Monday 26 October
+  expect(
+    resolveTime(
+      meaning({ unit: "weekday", weekday: "monday", shift: 1 }),
+      countFrom(nextWeek, "weekday"),
+    )?.date,
+  ).toBe("2026-10-26");
+  const nextMonth = span({ unit: "month", shift: 1 }, "2026-10-21");
+  expect(
+    resolveTime(meaning({ unit: "date", day_of_month: 1, shift: 1 }), countFrom(nextMonth, "date"))
+      ?.date,
+  ).toBe("2026-11-01");
+  const weekend = span({ unit: "weekend", shift: 0 }, "2026-10-21"); // Saturday 24 October
+  expect(
+    resolveTime(
+      meaning({ unit: "weekday", weekday: "saturday", shift: 1 }),
+      countFrom(weekend, "weekday"),
+    )?.date,
+  ).toBe("2026-10-24");
+  const monthEnd = span({ unit: "month", shift: 0, part: "end" }, "2026-01-05");
+  expect(resolveTime(meaning({ unit: "day", shift: 1 }), countFrom(monthEnd, "day"))?.date).toBe(
+    "2026-02-01",
+  );
+  const day = span({ unit: "day", shift: 1 }, "2026-01-05");
+  expect(countFrom(day, "weekday")).toBe("2026-01-06");
 });

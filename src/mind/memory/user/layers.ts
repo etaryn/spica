@@ -16,7 +16,9 @@ export type Conversation = { id: string; turns: LayerTurn[]; exchanges: Exchange
 
 export function conversations(turns: LayerTurn[]): Conversation[] {
   const byId = new Map<string, Conversation>();
-  let burst: string[] = [];
+  // Each session keeps its own run of unanswered messages: one left at the end of a session
+  // never joins the next one's exchange.
+  const bursts = new Map<string, string[]>();
   for (const turn of [...turns].sort((a, b) => a.created_at.getTime() - b.created_at.getTime())) {
     const conversation = byId.get(turn.session_id) ?? {
       id: turn.session_id,
@@ -25,15 +27,16 @@ export function conversations(turns: LayerTurn[]): Conversation[] {
     };
     byId.set(turn.session_id, conversation);
     conversation.turns.push(turn);
+    const burst = bursts.get(turn.session_id) ?? [];
     if (turn.role === "user") {
-      burst.push(turn.id);
+      bursts.set(turn.session_id, [...burst, turn.id]);
       continue;
     }
     // Only a reply or a reach-out ends an exchange; a backchannel or a busy note sits inside one.
     if (turn.reply_to) {
       const answered = burst.indexOf(turn.reply_to) + 1;
       conversation.exchanges.push({ burst: burst.slice(0, answered), replyId: turn.id });
-      burst = burst.slice(answered);
+      bursts.set(turn.session_id, burst.slice(answered));
     } else if (turn.trigger === "reach_out") {
       conversation.exchanges.push({ burst: [], replyId: turn.id });
     }

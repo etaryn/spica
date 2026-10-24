@@ -48,3 +48,17 @@ test("turns become messages with a speaker", () => {
     { id: "c1", speaker: "spica", text: "c1", at: new Date(Date.UTC(2026, 0, 7, 20, 1)) },
   ]);
 });
+
+test("an unanswered message at the end of one session never joins the next session's exchange", () => {
+  const result = conversations([
+    turn("a1", "user", 0, { session_id: "A" }),
+    turn("a2", "companion", 1, { session_id: "A", reply_to: "a1" }),
+    turn("a3", "user", 2, { session_id: "A" }),
+    turn("b1", "user", 50, { session_id: "B" }),
+    turn("b2", "companion", 51, { session_id: "B", reply_to: "b1" }),
+  ]);
+  expect(result.map((c) => [c.id, c.exchanges])).toEqual([
+    ["A", [{ burst: ["a1"], replyId: "a2" }]],
+    ["B", [{ burst: ["b1"], replyId: "b2" }]],
+  ]);
+});

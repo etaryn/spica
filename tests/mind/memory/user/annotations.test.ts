@@ -324,3 +324,33 @@ test("the output schema stays within the API's limit of 16 nullable or union-typ
   };
   expect(unions(zodOutputFormat(LabelsSchema).schema)).toBeLessThanOrEqual(16);
 });
+
+test("a weekday counted from next week lands inside that week", () => {
+  const said: Message[] = [
+    {
+      id: "x",
+      speaker: "user",
+      text: "next week, monday probably",
+      at: new Date("2026-10-21T12:00:00Z"),
+    },
+  ];
+  const own = numberPieces(said, 0);
+  const raw: Labels = {
+    ...base(),
+    moves: [{ id: "m9", pieces: ["1.1"], act: "states", replies_to: "" }],
+    mentions: [],
+    times: [
+      time({ id: "t8", piece: "1.1", words: "next week", unit: "week", shift: 1, weekday: null }),
+      time({ id: "t9", piece: "1.1", words: "monday", from: "t8", weekday: "monday" }),
+    ],
+    propositions: [],
+    threads: [],
+    intimacy: null,
+    bid_response: null,
+  };
+  const out = checkLabels(raw, { pieces: own, zone: "UTC", threadIds: [], earlier: emptyLabels() });
+  expect(out.times.map((t) => [t.id, t.resolved?.date])).toEqual([
+    ["t8", "2026-10-26"],
+    ["t9", "2026-10-26"],
+  ]);
+});

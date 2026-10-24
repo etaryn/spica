@@ -8,6 +8,7 @@ import { z } from "zod";
 import { claimKind, entityType, factKind } from "@/db/schema";
 import { clamp } from "@/mind/platform/math";
 import {
+  countFrom,
   resolveTime,
   TimeMeaningSchema,
   type ResolvedTime,
@@ -408,7 +409,7 @@ class Checker {
         this.drop("time", id, "words_missing");
         continue;
       }
-      const base = this.base(from, piece);
+      const base = this.base(from, piece, meaning.unit);
       if (!base) {
         this.drop("time", id, "bad_ref");
         continue;
@@ -571,12 +572,16 @@ class Checker {
   private base(
     from: string,
     piece: Piece,
+    unit: TimeMeaning["unit"],
   ): { date: string | null; relativeTo: string | null } | null {
     if (from === "said") {
       return { date: localDateString(piece.message.at, this.ctx.zone), relativeTo: null };
     }
     const other = this.allTimes.get(from);
-    if (other) return { date: other.resolved?.date ?? null, relativeTo: other.relativeTo };
+    if (other) {
+      const date = other.resolved ? countFrom(other.resolved, unit) : null;
+      return { date, relativeTo: other.relativeTo };
+    }
     if (this.openThreads.has(from)) return { date: null, relativeTo: from };
     return null;
   }

@@ -83,6 +83,21 @@ export function resolveTime(meaning: TimeMeaning, base: string): ResolvedTime | 
   };
 }
 
+/**
+ * The day words counting from another time count from. A day counts from itself. From a week,
+ * weekend or month, a weekday or a date is the first one inside it ("monday" of next week), a
+ * number of days runs from its start, and either runs from its last day when its end was said.
+ */
+export function countFrom(base: ResolvedTime, unit: TimeMeaning["unit"]): string {
+  if (base.precision === "day") return base.date;
+  if (base.part === "end") {
+    if (base.precision === "month") return shiftLocalDate(firstOfMonth(base.date, 1), -1);
+    return shiftLocalDate(base.date, base.precision === "week" ? 6 : 1);
+  }
+  // Weekdays and dates count strictly after their base, so start the day before the span.
+  return unit === "weekday" || unit === "date" ? shiftLocalDate(base.date, -1) : base.date;
+}
+
 /** A resolved time written out for a reader: "Friday 9 January 2026", "since around …". */
 export function renderResolved(t: ResolvedTime): string {
   const [year, month, day] = t.date.split("-").map(Number) as [number, number, number];

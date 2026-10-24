@@ -45,9 +45,9 @@ const prop = (p: Partial<Proposition>): Proposition => ({
   status: "planned",
   times: [],
   mentions: [],
-  thread_id: null,
-  new_thread: null,
-  updates: null,
+  thread_id: "",
+  new_thread: "",
+  updates: "",
   salience: 0.7,
   valence: 0,
   confidence: 0.9,
@@ -65,7 +65,7 @@ const time = (t: Partial<Labels["times"][number]>): Labels["times"][number] => (
   month: null,
   day_of_month: null,
   part: null,
-  clock: null,
+  clock: "",
   span: "at",
   rough: false,
   ...t,
@@ -83,10 +83,10 @@ function base(): Labels {
         piece: "3.2",
         words: "it",
         refers_to: "th1",
-        name: null,
+        name: "",
         type: null,
         subject: null,
-        relation: null,
+        relation: "",
       },
     ],
     times: [time({ id: "t1", words: "Friday" })],
@@ -137,11 +137,15 @@ test("a reply spread over three bubbles and a late answer to an earlier question
   expect(ids(out.propositions)).toEqual(["p1", "p2"]);
   expect(out.threads[0]!.checkpointAt?.date).toBe("2026-01-09");
   expect(out.bid_response).toEqual({ response: "toward", move: "m4" });
+  // The model writes "" for none; what comes out says null.
+  expect(out.mentions[0]).toMatchObject({ refers_to: "th1", name: null, relation: null });
+  expect(out.propositions[1]).toMatchObject({ thread_id: null, new_thread: null, updates: null });
+  expect(out.times[0]!.meaning.clock).toBeNull();
 });
 
 test("her guess never becomes their fact, and neither does an old fact on a new reaction", () => {
   const guess = base();
-  guess.moves.push({ id: "m5", pieces: ["5.1"], act: "guesses", replies_to: null });
+  guess.moves.push({ id: "m5", pieces: ["5.1"], act: "guesses", replies_to: "" });
   guess.propositions.push(prop({ id: "p3", moves: ["m5"], label: "studio deadline" }));
   expect(checkLabels(guess, ctx).drops).toEqual([
     { layer: "proposition", id: "p3", reason: "wrong_speaker" },
@@ -201,7 +205,7 @@ test("time words must be in their piece, and every reference must exist", () => 
 
   const broken = base();
   broken.mentions[0] = { ...broken.mentions[0]!, piece: "3-2" };
-  broken.moves.push({ id: "m6", pieces: ["m3.1"], act: "states", replies_to: null });
+  broken.moves.push({ id: "m6", pieces: ["m3.1"], act: "states", replies_to: "" });
   broken.propositions[1] = { ...broken.propositions[1]!, thread_id: "th9" };
   const drops = checkLabels(broken, ctx).drops;
   expect(drops).toContainEqual({ layer: "move", id: "m6", reason: "bad_ref" });
@@ -211,7 +215,7 @@ test("time words must be in their piece, and every reference must exist", () => 
 
 test("an id already used in this conversation is rejected, and the earlier label stays", () => {
   const raw = base();
-  raw.moves.push({ id: "m1", pieces: ["4.1"], act: "states", replies_to: null });
+  raw.moves.push({ id: "m1", pieces: ["4.1"], act: "states", replies_to: "" });
   const out = checkLabels(raw, ctx);
   expect(out.drops).toEqual([{ layer: "move", id: "m1", reason: "bad_ref" }]);
   expect(ids(out.moves)).toEqual(["m3", "m4"]);
@@ -255,7 +259,7 @@ test("numbers are clamped and only her own statements carry a claim kind", () =>
 
 test("idiolect is started by whoever said it first, and a bid response is the user's move", () => {
   const raw = base();
-  raw.moves.push({ id: "m5", pieces: ["5.1"], act: "jokes", replies_to: null });
+  raw.moves.push({ id: "m5", pieces: ["5.1"], act: "jokes", replies_to: "" });
   raw.idiolect = [
     { id: "i1", pieces: ["5.1", "4.1"], type: "joke" },
     { id: "i2", pieces: ["5.1"], type: "reference" },
@@ -272,4 +276,13 @@ test("idiolect is started by whoever said it first, and a bid response is the us
 
 test("the output schema converts for structured output", () => {
   expect(() => zodOutputFormat(LabelsSchema)).not.toThrow();
+});
+
+test("the output schema stays within the API's limit of 16 nullable or union-typed fields", () => {
+  const unions = (node: unknown): number => {
+    if (!node || typeof node !== "object") return 0;
+    const own = "anyOf" in node || Array.isArray((node as { type?: unknown }).type) ? 1 : 0;
+    return own + Object.values(node).reduce((n: number, child) => n + unions(child), 0);
+  };
+  expect(unions(zodOutputFormat(LabelsSchema).schema)).toBeLessThanOrEqual(16);
 });

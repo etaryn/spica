@@ -48,23 +48,26 @@ const propositionKind = z
   .enum(factKind.enumValues)
   .exclude(["summary", "reflection", "idea", "episode", "model", "belief", "idiolect"]);
 const subject = z.enum(["user", "self", "shared"]);
+// Optional ids and names are an empty string when there is none, not null: the API refuses a
+// schema with more than 16 nullable fields. Code turns "" back into null on the way in.
+const optional = z.string();
 
 const MoveSchema = z.object({
   id: z.string(),
   pieces: z.array(z.string()),
   act: z.enum(ACTS),
-  replies_to: z.string().nullable(),
+  replies_to: optional,
 });
 
 const MentionSchema = z.object({
   id: z.string(),
   piece: z.string(),
   words: z.string(),
-  refers_to: z.string().nullable(),
-  name: z.string().nullable(),
+  refers_to: optional,
+  name: optional,
   type: z.enum(entityType.enumValues).nullable(),
   subject: z.enum(["user", "self"]).nullable(),
-  relation: z.string().nullable(),
+  relation: optional,
 });
 
 // Where the words are comes before what they mean, so the model quotes them first.
@@ -74,6 +77,7 @@ const TimeSchema = z.object({
   words: z.string(),
   from: z.string(),
   ...TimeMeaningSchema.shape,
+  clock: optional,
 });
 
 const PropositionSchema = z.object({
@@ -85,9 +89,9 @@ const PropositionSchema = z.object({
   status: z.enum(["planned", "happened", "ongoing", "cancelled"]).nullable(),
   times: z.array(z.string()),
   mentions: z.array(z.string()),
-  thread_id: z.string().nullable(),
-  new_thread: z.string().nullable(),
-  updates: z.string().nullable(),
+  thread_id: optional,
+  new_thread: optional,
+  updates: optional,
   salience: z.number(),
   valence: z.number(),
   confidence: z.number(),
@@ -96,11 +100,11 @@ const PropositionSchema = z.object({
 
 const ThreadActionSchema = z.object({
   action: z.enum(["open", "touch", "resolve"]),
-  thread_id: z.string().nullable(),
+  thread_id: optional,
   title: z.string(),
   subject,
   stakes: z.enum(["low", "med", "high"]),
-  checkpoint: z.string().nullable(),
+  checkpoint: optional,
   propositions: z.array(z.string()),
 });
 
@@ -137,7 +141,13 @@ export type CheckedMove = {
   act: Act;
   repliesTo: string | null;
 };
-export type CheckedMention = Labels["mentions"][number] & { coord: Coordinate };
+type Nulled<T, K extends keyof T> = Omit<T, K> & { [P in K]: string | null };
+export type CheckedMention = Nulled<
+  Labels["mentions"][number],
+  "refers_to" | "name" | "relation"
+> & {
+  coord: Coordinate;
+};
 export type CheckedTime = {
   id: string;
   piece: string;
@@ -149,8 +159,13 @@ export type CheckedTime = {
   resolved: ResolvedTime | null;
   relativeTo: string | null;
 };
-export type CheckedProposition = Labels["propositions"][number];
-export type CheckedThread = Labels["threads"][number] & { checkpointAt: ResolvedTime | null };
+export type CheckedProposition = Nulled<
+  Labels["propositions"][number],
+  "thread_id" | "new_thread" | "updates"
+>;
+export type CheckedThread = Nulled<Labels["threads"][number], "thread_id" | "checkpoint"> & {
+  checkpointAt: ResolvedTime | null;
+};
 export type CheckedIdiolect = Labels["idiolect"][number] & { startedBy: Speaker };
 
 export type DropReason =
@@ -293,11 +308,12 @@ class Checker {
         this.drop("move", m.id, "bad_move");
         continue;
       }
-      if (m.replies_to !== null) {
-        const target = this.allMoves.get(m.replies_to);
+      const repliesTo = none(m.replies_to);
+      if (repliesTo !== null) {
+        const target = this.allMoves.get(repliesTo);
         // A target that exists but hasn't been reached yet starts after this move.
         if (!target) {
-          this.drop("move", m.id, this.rawMoves.has(m.replies_to) ? "bad_move" : "bad_ref");
+          this.drop("move", m.id, this.rawMoves.has(repliesTo) ? "bad_move" : "bad_ref");
           continue;
         }
         if (this.first(target.pieces) >= this.first(m.pieces)) {
@@ -311,7 +327,7 @@ class Checker {
         coords: cited.map(coordinate),
         speaker,
         act: m.act,
-        repliesTo: m.replies_to,
+        repliesTo,
       };
       this.allMoves.set(m.id, move);
       kept.push(move);
@@ -324,7 +340,8 @@ class Checker {
     for (const m of raw) {
       if (!this.claim("mention", m.id)) continue;
       const piece = this.pieces.get(m.piece);
-      if (!piece || (m.refers_to !== null && !this.openThreads.has(m.refers_to))) {
+      const refersTo = none(m.refers_to);
+      if (!piece || (refersTo !== null && !this.openThreads.has(refersTo))) {
         this.drop("mention", m.id, "bad_ref");
         continue;
       }
@@ -338,7 +355,13 @@ class Checker {
         continue;
       }
       this.allMentions.add(m.id);
-      kept.push({ ...m, coord });
+      kept.push({
+        ...m,
+        refers_to: refersTo,
+        name: none(m.name),
+        relation: none(m.relation),
+        coord,
+      });
     }
     return kept;
   }
@@ -346,7 +369,8 @@ class Checker {
   times(raw: Labels["times"]): CheckedTime[] {
     const kept: CheckedTime[] = [];
     for (const t of raw) {
-      const { id, piece: pieceId, words, from, ...meaning } = t;
+      const { id, piece: pieceId, words, from, clock, ...rest } = t;
+      const meaning: TimeMeaning = { ...rest, clock: none(clock) };
       if (!this.claim("time", id)) continue;
       const piece = this.pieces.get(pieceId);
       if (!piece) {
@@ -395,13 +419,15 @@ class Checker {
     for (const p of raw) {
       if (!this.claim("proposition", p.id)) continue;
       const moves = p.moves.map((id) => this.allMoves.get(id));
+      const threadId = none(p.thread_id);
+      const updates = none(p.updates);
       const broken =
         moves.length === 0 ||
         moves.some((m) => !m) ||
         p.times.some((id) => !this.allTimes.has(id)) ||
         p.mentions.some((id) => !this.allMentions.has(id)) ||
-        (p.thread_id !== null && !this.openThreads.has(p.thread_id)) ||
-        (p.updates !== null && !this.allPropositions.has(p.updates));
+        (threadId !== null && !this.openThreads.has(threadId)) ||
+        (updates !== null && !this.allPropositions.has(updates));
       if (broken) {
         this.drop("proposition", p.id, "bad_ref");
         continue;
@@ -420,6 +446,9 @@ class Checker {
       this.allPropositions.add(p.id);
       kept.push({
         ...p,
+        thread_id: threadId,
+        new_thread: none(p.new_thread),
+        updates,
         salience: clamp(p.salience, 0, 1),
         valence: clamp(p.valence, -1, 1),
         confidence: clamp(p.confidence, 0, 1),
@@ -433,16 +462,23 @@ class Checker {
   threads(raw: Labels["threads"]): CheckedThread[] {
     const kept: CheckedThread[] = [];
     for (const t of raw) {
-      const checkpoint = t.checkpoint === null ? null : this.allTimes.get(t.checkpoint);
+      const threadId = none(t.thread_id);
+      const checkpointId = none(t.checkpoint);
+      const checkpoint = checkpointId === null ? null : this.allTimes.get(checkpointId);
       const broken =
-        (t.thread_id !== null && !this.openThreads.has(t.thread_id)) ||
+        (threadId !== null && !this.openThreads.has(threadId)) ||
         checkpoint === undefined ||
         t.propositions.some((id) => !this.allPropositions.has(id));
       if (broken) {
-        this.drop("thread", t.thread_id ?? t.title, "bad_ref");
+        this.drop("thread", threadId ?? t.title, "bad_ref");
         continue;
       }
-      kept.push({ ...t, checkpointAt: checkpoint?.resolved ?? null });
+      kept.push({
+        ...t,
+        thread_id: threadId,
+        checkpoint: checkpointId,
+        checkpointAt: checkpoint?.resolved ?? null,
+      });
     }
     return kept;
   }
@@ -538,6 +574,11 @@ class Checker {
   private isNew(ids: string[]): boolean {
     return ids.some((id) => this.pieces.get(id)?.isNew === true);
   }
+}
+
+/** An empty string is how the model says there is none. */
+function none(value: string): string | null {
+  return value.trim() === "" ? null : value;
 }
 
 function speaks(speaker: Speaker, about: Labels["propositions"][number]["subject"]): boolean {

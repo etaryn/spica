@@ -64,8 +64,8 @@ const opts = { system: "SYSTEM", thinking: false, maxTokens: 100, timeoutMs: 100
 
 test("exchange mode labels each exchange as it ends, with what came before already labelled", async () => {
   const llm = new ScriptedLLM([
-    labels([{ id: "m1", pieces: ["1.1"], act: "states", replies_to: null }]),
-    labels([{ id: "m3", pieces: ["3.1"], act: "states", replies_to: null }]),
+    labels([{ id: "m1", pieces: ["1.1"], act: "states", replies_to: "" }]),
+    labels([{ id: "m3", pieces: ["3.1"], act: "states", replies_to: "" }]),
   ]);
   const result = await runUnit(llm, "exchange", [c], opts);
   expect(llm.requests.map((r) => r.purpose)).toEqual([

@@ -21,6 +21,7 @@
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
     "review:reconcile": "tsx --env-file-if-exists=.env evals/run.ts --only \"reconcile-*\" --runs 3 --review --real extract,reconcile,embed",
     "review:extract": "tsx --env-file-if-exists=.env evals/run.ts --only \"extract-*\" --runs 3 --review --real extract",
+    "review:extract-labels": "tsx --env-file-if-exists=.env evals/extract-replay.ts",
     "review:user-mind": "tsx --env-file-if-exists=.env evals/user-mind-compare.ts",
     "review:signals": "tsx --env-file-if-exists=.env evals/run.ts --only \"signal-*\" --runs 3 --review --real extract",
     "review:world-outreach": "tsx --env-file-if-exists=.env evals/run.ts --only world-outreach-two-weeks --runs 1 --review --trace --llm=real",

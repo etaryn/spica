@@ -87,3 +87,23 @@ test("reply v18 uses the card's pronouns and names or they for everyone else", (
   const c = loadConfig();
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/use their name or they\/them/);
 });
+
+test("extract v12 labels pieces in layers and never asks for a date", () => {
+  const p = loadPrompt("extract", "v12");
+  for (const section of [
+    "## moves",
+    "## mentions",
+    "## times",
+    "## propositions",
+    "## threads",
+    "## idiolect",
+    "## relationship",
+    "## intimacy",
+    "## bid_response",
+  ]) {
+    expect(p).toContain(section);
+  }
+  expect(p).toMatch(/replies_to/);
+  expect(p).toMatch(/Never work out a date/);
+  expect(p).not.toMatch(/when_direction/);
+});

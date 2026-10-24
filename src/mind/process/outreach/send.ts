@@ -113,6 +113,11 @@ export async function runReachOutSend(deps: Deps, job: ReachOutSendJob): Promise
       log.error("reach-out compose failed", { userId, error: errorName(e) });
       return await drop("compose_failed");
     }
+    // The guard drops a reach-out with the day wrong; nothing goes out.
+    if (!composed.text) {
+      await composed.writeGuardLog();
+      return await drop("wrong_day");
+    }
 
     const { parts } = composed;
     let sendAt = plus(clock.now(), typingMs(config.turn, parts[0]?.length ?? 0));

@@ -8,7 +8,9 @@ cases:
     expect: [in_person]
   - name: ip-offer-by-text
     message: "can't do coffee obviously but i'm around by text before it, message me when you're heading in"
-    recent: [{ role: user, text: "i have a job interview on thursday, kind of nervous" }]
+    recent:
+      - { role: user, text: "i have a job interview on thursday, kind of nervous" }
+      - { role: user, text: "wish we could grab a coffee before it lol" }
     expect: pass
   - name: ip-agree-coffee
     message: "deal, coffee before it is"

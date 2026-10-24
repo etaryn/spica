@@ -20,6 +20,7 @@ function scripted(deps: ReturnType<typeof makeTestDeps>) {
     const m = messageToCheck(String(i));
     const violations: { category: string; claim: string }[] = [];
     if (m.includes("THREAT")) violations.push({ category: "threat", claim: "threat" });
+    if (m.includes("WRONGDAY")) violations.push({ category: "wrong_day", claim: "wrong day" });
     const presumes = (m.match(/PRESUME/g) ?? []).length;
     for (let i = 0; i < presumes; i++)
       violations.push({ category: "false_familiarity", claim: "presumes" });
@@ -30,7 +31,7 @@ function scripted(deps: ReturnType<typeof makeTestDeps>) {
 const args = (
   userId: string,
   first: string,
-  kind: "reply" | "crisis_reply" = "reply",
+  kind: "reply" | "crisis_reply" | "reach_out" = "reply",
 ): OutgoingArgs => ({
   userId,
   turnId: null,
@@ -68,6 +69,16 @@ describe("guardOutgoing", () => {
       self_claims: [],
       pointed: null,
     });
+  });
+
+  test("a reach-out with the day wrong is dropped; a reply with it is sent", async () => {
+    const deps = makeTestDeps({ guard: { enabled: true } });
+    scripted(deps);
+    const u = await createTestUser();
+    const reachOut = await guardOutgoing(deps, args(u, "WRONGDAY how'd it go", "reach_out"));
+    expect(reachOut).toMatchObject({ text: "", outcome: "dropped" });
+    const reply = await guardOutgoing(deps, args(u, "WRONGDAY how'd it go"));
+    expect(reply).toMatchObject({ text: "WRONGDAY how'd it go", outcome: "sent_with_violation" });
   });
 
   test("a safety problem → fallback line, never a regeneration", async () => {

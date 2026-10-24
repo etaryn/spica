@@ -1,0 +1,1 @@
+ALTER TYPE "public"."guard_outcome" ADD VALUE 'dropped';

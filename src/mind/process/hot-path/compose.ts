@@ -27,12 +27,13 @@ import { loadPersona } from "@/mind/platform/persona";
 import { parseSummaryPhrases } from "@/mind/platform/phrases";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { withTimeout } from "@/mind/platform/timeout";
-import { isValidTimeZone } from "@/mind/platform/timezone";
+import { isValidTimeZone, localDateString } from "@/mind/platform/timezone";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { crisisCardFor } from "@/mind/process/crisis/classifier";
 import type { Pointed } from "@/mind/process/guard/categories";
 import { usedOnOccasion } from "@/mind/process/guard/occasion";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
+import { eventDay } from "@/mind/process/outreach/candidates";
 import type { Candidate, Note } from "@/mind/process/outreach/types";
 import { dateToken, nowLine, ownDate, stamped, written } from "@/mind/platform/time-anchors";
 import { modelPayload } from "@/mind/process/user/model";
@@ -203,6 +204,8 @@ export async function composeReachOut(
  * their calendar, her own news on hers. The cue repeats the topic, since it is the last thing she
  * reads.
  */
+const THEIR_KINDS = new Set(["thread", "user_event", "user_idea"]);
+
 export function renderReachOut(
   markdown: string,
   trigger: ReachOutTrigger,
@@ -219,7 +222,19 @@ export function renderReachOut(
     return `- ${n.text} (${when})`;
   });
   const reason = notes.length ? `${topic}\n${notes.join("\n")}` : topic;
-  const guidance = (phrases[trigger.kind] ?? []).join(" ");
+  // Their own things get the day's status from code, so she never asks how a coming thing went.
+  const at = THEIR_KINDS.has(trigger.kind) ? eventDay(trigger.notes ?? []) : null;
+  const status = !at
+    ? null
+    : localDateString(at, tz) === localDateString(now, tz)
+      ? "today"
+      : at > now
+        ? "ahead"
+        : "past";
+  const framing = status
+    ? (phrases[status] ?? []).map((l) => l.replace("{{day}}", () => dateToken(at!, tz)))
+    : [];
+  const guidance = [...(phrases[trigger.kind] ?? []), ...framing].join(" ");
   const fill = (line: string) =>
     line
       .replace("{{reason}}", () => reason)

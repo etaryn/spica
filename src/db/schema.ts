@@ -150,6 +150,7 @@ export const guardOutcome = pgEnum("guard_outcome", [
   "fallback",
   "guard_unavailable",
   "guard_disabled",
+  "dropped",
 ]);
 export const relationshipStatus = pgEnum("relationship_status", [
   "active",

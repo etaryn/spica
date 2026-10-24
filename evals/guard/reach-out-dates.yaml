@@ -1,4 +1,5 @@
-# A reach-out must read the dates in its reason: a past event is asked about as past.
+# A reach-out must read the dates in its reason: a past event is asked about as past, a coming one as
+# still ahead. Getting the day wrong is wrong_day, and code drops that reach-out.
 gate: majority
 cases:
   - name: misdated-this-morning
@@ -8,7 +9,7 @@ cases:
       half marathon: The user has a half marathon Sunday 11 January 2026.
       - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
     message: "hey, isn't the half marathon this morning\n\nhow'd it go"
-    expect: [invented_detail, false_familiarity]
+    expect: [wrong_day]
   - name: upcoming-after-it-happened
     kind: reach_out
     now: "Monday 12 January 2026, 13:35"
@@ -16,7 +17,7 @@ cases:
       half marathon: The user has a half marathon Sunday 11 January 2026.
       - The user has a half marathon Sunday 11 January 2026. (Sunday 11 January, yesterday)
     message: "how are you feeling about the race on sunday, nervous?"
-    expect: [invented_detail, false_familiarity]
+    expect: [wrong_day]
   - name: dated-right
     kind: reach_out
     now: "Monday 12 January 2026, 13:35"
@@ -32,4 +33,12 @@ cases:
       Orion: clear skies for Orion.
       - Spica said the sky would be clear for Orion. (Tuesday 6 January, yesterday)
     message: "clear skies tonight for orion, you going out to look?"
-    expect: [invented_detail, false_familiarity]
+    expect: [wrong_day]
+  - name: asked-how-it-went-before-it-happened
+    kind: reach_out
+    now: "Monday, 5 January 2026 at 12:00 where they are"
+    reason: |-
+      interview: The user has an interview Thursday 8 January.
+      - The user has an interview Thursday 8 January. (in 3 days, Thursday 8 January)
+    message: "hey, thursday's the day right? how'd it go"
+    expect: [wrong_day]

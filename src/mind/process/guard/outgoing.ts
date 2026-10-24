@@ -97,6 +97,9 @@ export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promis
   }
   if (verdict.source === "keyword_fallback") return send(fallback(), "fallback");
 
+  // Writing first is optional: a reach-out with the day wrong isn't sent at all.
+  if (args.input.kind === "reach_out" && verdict.violations.some((v) => v.category === "wrong_day"))
+    return send("", "dropped");
   // A safety problem falls back; an honesty-only one is sent as is.
   return hasSafety(verdict.violations)
     ? send(fallback(), "fallback")

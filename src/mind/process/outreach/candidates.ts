@@ -245,3 +245,9 @@ export function holdLastSlot(
     HERS.has(c.kind) && c.filtered === null ? { ...c, filtered: "last_slot" as const } : c,
   );
 }
+
+/** The day a topic is about: its latest dated note; null when nothing behind it is dated. */
+export function eventDay(notes: Note[]): Date | null {
+  const dated = notes.filter((n) => n.dated).map((n) => new Date(n.at).getTime());
+  return dated.length ? new Date(Math.max(...dated)) : null;
+}

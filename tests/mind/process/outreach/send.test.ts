@@ -369,6 +369,21 @@ test("compose failure → dropped compose_failed, nothing sent", async () => {
   });
 });
 
+test("the guard finds the day wrong → dropped wrong_day, guard logged, nothing sent", async () => {
+  const { deps, u, logId } = await setup();
+  deps.llm.handlers.guard = () => ({
+    reasoning: "asks how it went before it happened",
+    violations: [{ category: "wrong_day", claim: "how'd it go" }],
+  });
+  expect(await runReachOutSend(deps, { userId: u, logId })).toBe("dropped");
+  expect((await getReachOutLog(deps.db, u, logId))?.gate_results).toMatchObject({
+    dropped: "wrong_day",
+  });
+  expect(await reachOuts(deps, u)).toHaveLength(0);
+  const logged = await deps.db.execute(sql`SELECT outcome FROM judge_log`);
+  expect(logged.rows).toEqual([{ outcome: "dropped" }]);
+});
+
 test("a winning idea is resolved with the send, and its topic is used", async () => {
   const { deps, u, logId, ideaId, topic } = await setup({ ideaAt: now });
   expect(await runReachOutSend(deps, { userId: u, logId })).toBe("sent");

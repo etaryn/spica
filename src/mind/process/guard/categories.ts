@@ -3,7 +3,8 @@
  * guilt, punishment, manipulation) and `harm` for crisis replies; a second failure there sends a
  * fallback line. Honesty categories cover memory and her own life (claiming to know what she
  * doesn't, claiming a life she didn't live, or meeting in person when she's there only by text);
- * a second failure there sends the least-bad candidate.
+ * a second failure there sends the least-bad candidate. A reach-out that puts their thing on the
+ * wrong day (`wrong_day`) is dropped: writing first is optional.
  */
 
 const SAFETY_CATEGORIES = [
@@ -21,6 +22,7 @@ const HONESTY_CATEGORIES = [
   "onboarding_as_chat",
   "invented_self",
   "in_person",
+  "wrong_day",
 ] as const;
 
 /** Allowed negatives the guard names on a passing message, so code can hold each to once per occasion. */

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { composeReachOut, composeReply, renderReachOut } from "@/mind/process/hot-path/compose";
+import { loadConfig } from "@/mind/platform/config";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { ReplyFailedError } from "@/mind/platform/errors";
 import { renderTimes } from "@/mind/platform/time-anchors";
@@ -653,7 +654,7 @@ describe("composeReachOut", () => {
     const prompt = deps.llm.calls.at(-1)!;
     expect(prompt.system).toContain("## Why you're writing");
     expect(prompt.system).toContain("On your mind: interview at Canva");
-    expect(prompt.system).toContain("how it went");
+    expect(prompt.system).toContain("you'd naturally ask about it");
     expect(prompt.messages.at(-1)!.content).toContain(
       "[You're texting them first, about: interview at Canva. Write only your message.]",
     );
@@ -702,7 +703,7 @@ describe("composeReachOut", () => {
     const note = { text: "x", at: "2026-01-09T17:00:00.000Z", dated: true };
     const base = { text: "t", factId: null, threadId: null, coreMemoryId: null, notes: [note] };
     const now = new Date("2026-01-12T10:00:00Z");
-    const md = loadPrompt("reach-out", "v3");
+    const md = loadPrompt("reach-out", loadConfig().prompts.reach_out);
     expect(renderReachOut(md, { ...base, kind: "thread" }, now, zones).reason).toContain(
       "⟦2026-01-09|day|America/New_York⟧",
     );
@@ -711,9 +712,30 @@ describe("composeReachOut", () => {
     );
   });
 
+  test("a reach-out about their thing says whether it's ahead, today or over", () => {
+    const md = loadPrompt("reach-out", loadConfig().prompts.reach_out);
+    const now = new Date("2026-01-05T12:00:00Z"); // Monday
+    const trigger = (iso: string) => ({
+      kind: "thread" as const,
+      text: "interview",
+      factId: null,
+      threadId: "t",
+      coreMemoryId: null,
+      notes: [{ text: "The user has an interview.", at: iso, dated: true }],
+    });
+    const zones = { hers: "UTC", theirs: "UTC" };
+    const slot = (iso: string) =>
+      renderTimes(renderReachOut(md, trigger(iso), now, zones).slot, now, 6);
+    expect(slot("2026-01-08T10:00:00Z")).toContain(
+      "It's in 3 days, Thursday 8 January: it hasn't happened yet",
+    );
+    expect(slot("2026-01-05T15:00:00Z")).toContain("It's today");
+    expect(slot("2026-01-04T10:00:00Z")).toContain("It was yesterday, Sunday 4 January: it's over");
+  });
+
   test("renderReachOut: check-in has no topic text", () => {
     const r = renderReachOut(
-      loadPrompt("reach-out", "v3"),
+      loadPrompt("reach-out", loadConfig().prompts.reach_out),
       { kind: "check_in", text: "", factId: null, threadId: null, coreMemoryId: null },
       new Date("2026-01-12T10:00:00Z"),
       { hers: "UTC", theirs: "UTC" },
@@ -724,7 +746,7 @@ describe("composeReachOut", () => {
 
   test("renderReachOut: the reason carries dated notes, and the cue repeats the topic", () => {
     const r = renderReachOut(
-      loadPrompt("reach-out", "v3"),
+      loadPrompt("reach-out", loadConfig().prompts.reach_out),
       {
         kind: "thread",
         text: "half marathon",

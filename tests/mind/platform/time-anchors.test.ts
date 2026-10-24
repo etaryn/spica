@@ -186,3 +186,28 @@ test("phrases land where the old resolver put them", () => {
   expect(one("in october", { at: at("2026-10-16T09:00:00Z"), zone: "UTC" })).toBe("2026-10-01");
   expect(one("this friday", { at: at("2026-01-09T09:00:00Z"), zone: "UTC" })).toBe("2026-01-09");
 });
+
+test("a yearless date or month takes the side of now its label points to", () => {
+  const oct = { at: at("2026-10-19T09:00:00Z"), zone: "UTC" }; // Monday 19 October 2026
+  const past = { ...oct, direction: "past" as const };
+  const ahead = { ...oct, direction: "upcoming" as const };
+  expect(days(anchorTimes("Started uni in September.", past))).toEqual(["2026-09-01"]);
+  expect(days(anchorTimes("Moved to Leeds in March.", past))).toEqual(["2026-03-01"]);
+  expect(days(anchorTimes("Ran a marathon on 15 March.", past))).toEqual(["2026-03-15"]);
+  expect(days(anchorTimes("Our wedding is on 20 May.", ahead))).toEqual(["2027-05-20"]);
+});
+
+test("quoted words stay as said", () => {
+  for (const text of [
+    'Their goodnight ritual: "see you tomorrow, same time".',
+    "They joke that ‘tomorrow’ means never.",
+    "Running joke: 'Taco Tuesday'.",
+  ])
+    expect(anchorTimes(text, utc)).toBe(text);
+  expect(days(anchorTimes('They said "soon" and meant tomorrow.', utc))).toEqual(["2026-01-13"]);
+});
+
+test("a bare weekday in an older message, with nothing to date it by, keeps its words unglossed", () => {
+  const said = { at: MON, zone: "UTC", said: true };
+  expect(anchorTimes("I went running on Sunday", said)).toBe("I went running on Sunday");
+});

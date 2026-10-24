@@ -61,8 +61,6 @@ const COUNT: Record<string, number> = {
   "a couple of": 2,
 };
 const N = "(\\d+|a couple of|a|one|two|three|four|five|six|seven|eight|nine|ten)";
-// Words pointing back in time: forward-dating would push "last friday" into next week.
-const PAST = /\b(last|ago|yesterday|earlier|previous|before)\b/i;
 const RELATIVE_WORDS =
   /\b(today|tonight|tomorrow|yesterday|this (?:morning|afternoon|evening|week|weekend)|last night|next week)\b/gi;
 const DURATION = new RegExp(
@@ -210,11 +208,18 @@ function instant(a: Anchor): Date {
   return new Date(midnight + (PART_HOUR[a.precision] ?? 12) * 3_600_000);
 }
 
-/** Runs `fn` on the text between tokens only, so nothing inside a token is read again. */
+// Quoted words are what someone said ("see you tomorrow" as a ritual, 'Taco Tuesday'), never a
+// date to fix. A straight single quote counts only at word edges, so "don't" stays plain.
+const KEPT = new RegExp(
+  `${TOKEN.source}|"[^"\\n]*"|\u201c[^\u201d\\n]*\u201d|\u2018[^\u2019\\n]*\u2019|(?<=^|[\\s(])'[^'\\n]+'(?=[\\s.,;:!?)]|$)`,
+  "g",
+);
+
+/** Runs `fn` on the text between tokens and quotes only, so neither is read again. */
 function mapPlain(text: string, fn: (plain: string) => string): string {
   let out = "";
   let last = 0;
-  for (const m of text.matchAll(TOKEN)) {
+  for (const m of text.matchAll(KEPT)) {
     out += fn(text.slice(last, m.index)) + m[0];
     last = m.index + m[0].length;
   }
@@ -286,7 +291,7 @@ function nearestKnown(ctx: AnchorContext, weekdays: number[], day: string): stri
   );
 }
 
-function pickWeekday(day: string, wd: number, ctx: AnchorContext, words: string): string {
+function pickWeekday(day: string, wd: number, ctx: AnchorContext): string | null {
   const back = (weekdayOf(day) - wd + 7) % 7; // days since it last came round (0: today)
   const ahead = (wd - weekdayOf(day) + 7) % 7; // days until it comes round (0: today)
   if (ctx.direction === "past") return shiftLocalDate(day, -back);
@@ -294,7 +299,9 @@ function pickWeekday(day: string, wd: number, ctx: AnchorContext, words: string)
   if (ctx.direction === "upcoming") return shiftLocalDate(day, ahead || 7);
   const known = nearestKnown(ctx, [wd], day);
   if (known) return known;
-  return PAST.test(words) ? shiftLocalDate(day, -back) : shiftLocalDate(day, ahead);
+  // Read as typed, a bare weekday could point either way; the day line above it dates it.
+  if (ctx.said) return null;
+  return shiftLocalDate(day, ahead);
 }
 
 function explicitWeekday(day: string, wd: number, which: string): string {
@@ -361,9 +368,8 @@ function classifyDay(
     if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
     if (!m[1] && HABIT_BEFORE.test(before)) return null;
     const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
-    const local = m[1]
-      ? explicitWeekday(day, wd, m[1].toLowerCase())
-      : pickWeekday(day, wd, ctx, w);
+    const local = m[1] ? explicitWeekday(day, wd, m[1].toLowerCase()) : pickWeekday(day, wd, ctx);
+    if (!local) return null;
     return { local, precision: (m[3]?.toLowerCase() as Precision | undefined) ?? "day" };
   }
   if ((m = OFFSET.exec(w))) {
@@ -372,10 +378,14 @@ function classifyDay(
     return { local: shiftLocalDate(day, ago ? -span : span), precision: "day" };
   }
   if ((MONTH.test(w) && /\d/.test(w)) || ORDINAL.test(w)) {
-    // A date without a year is the occurrence nearest the moment it was written.
+    // A date without a year is on the side of now its label points to, else the nearest one.
     const parsed = localDateString(r.start.date(), ctx.zone);
     if (r.start.isCertain("year")) return { local: parsed, precision: "day" };
-    const options = [-1, 0, 1].map((y) => `${Number(parsed.slice(0, 4)) + y}${parsed.slice(4)}`);
+    const options = [-1, 0, 1]
+      .map((y) => `${Number(parsed.slice(0, 4)) + y}${parsed.slice(4)}`)
+      .filter((o) =>
+        ctx.direction === "past" ? o <= day : ctx.direction === "upcoming" ? o >= day : true,
+      );
     const nearest = options.sort(
       (a, b) => Math.abs(dayDiff(a, day)) - Math.abs(dayDiff(b, day)),
     )[0]!;
@@ -391,9 +401,10 @@ function classifyDay(
       const local = new Date(Date.UTC(y, mo - 1 + shift, 1)).toISOString().slice(0, 7);
       return { local, precision: "month" };
     }
-    // "in october" said in October is this October; otherwise the next one.
+    // "in october" said in October is this October; otherwise the next one, or the last one when
+    // it already happened.
     const target = new Date(`${m[2]} 1, ${y} 12:00 UTC`).getUTCMonth() + 1;
-    const year = target >= mo ? y : y + 1;
+    const year = ctx.direction === "past" ? (target <= mo ? y : y - 1) : target >= mo ? y : y + 1;
     return { local: `${year}-${String(target).padStart(2, "0")}`, precision: "month" };
   }
   return null;

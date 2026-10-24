@@ -227,3 +227,8 @@ code itself.
 | 2026-10-24 | A bare month counts as "in <month>" only after "in "; a weekday after a/an/every/any/most/some (one adjective allowed) or in the plural stays as written | chrono reads a bare month and habits ("on a free Friday night") as dates. |
 | 2026-10-24 | `chat.gap_line_min_hours` stays | `gapLine` still reads it; only the "[N days later]" marker went. |
 | 2026-10-24 | A reach-out flagged `wrong_day` is dropped even with a safety category too | Writing first is optional; sending nothing beats a fallback line nobody asked for. |
+| 2026-10-24 | A week token's instant (`occurred_at`, idea expiry) is its Friday; it still renders as the week | The settled "this week" rule: an idea about the span lives until the week is out. |
+| 2026-10-24 | The extract weekday cross-check applies only to facts about the user whose weekday nobody in the exchange said | A weekday she said, or her own fact, is no copying slip. |
+| 2026-10-24 | A yearless date or month follows the past/upcoming label; without one, the nearest (a date) or the next (a month) | "Started uni in September" said in October is last September. |
+| 2026-10-24 | Quoted words and idiolect facts are never anchored | They're what someone said: a ritual's "see you tomorrow" has no date. |
+| 2026-10-24 | In her view of an older message, a bare weekday with no shown date stays unglossed; elsewhere an unlabelled bare weekday reads forward | Read as typed, it could point either way and the day line dates the message; forward matches the old resolver. |

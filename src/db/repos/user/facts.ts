@@ -156,13 +156,15 @@ export async function insertFact(
   // Every caller passes a Date: the moment it was written is the moment its words mean.
   const at = row.created_at as Date;
   const ctx = { at, zone: zoneOrUtc(await getTimezone(db, userId)), ...hints };
+  // An inside joke or ritual is the words themselves: "see you tomorrow" there is no date.
+  const asSaid = row.kind === "idiolect";
   return one(
     await db
       .insert(fact)
       .values({
         ...row,
-        content: anchorTimes(row.content, ctx),
-        payload: anchorFields(row.payload, ctx),
+        content: asSaid ? row.content : anchorTimes(row.content, ctx),
+        payload: asSaid ? row.payload : anchorFields(row.payload, ctx),
         user_id: userId,
       })
       .returning(),

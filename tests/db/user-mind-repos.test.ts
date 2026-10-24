@@ -357,3 +357,14 @@ test("insertFact takes hints: a weekday matches a shown date", async () => {
   );
   expect(tokenDates(row.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
 });
+
+test("an inside joke or ritual is stored as said, never dated", async () => {
+  const u = await createTestUser();
+  const content = "Their goodnight ritual is saying see you tomorrow, same time.";
+  const row = await insertFact(getTestDb(), u, {
+    ...summaryRow(content, new Date("2026-01-12T09:00:00Z")),
+    kind: "idiolect",
+    payload: null,
+  });
+  expect(row.content).toBe(content);
+});

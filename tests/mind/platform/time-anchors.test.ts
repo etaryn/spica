@@ -273,3 +273,34 @@ test("a part of the day with a clock time anchors as that time", () => {
     "stalker ⟦2026-01-09T12:00|time|UTC⟧, the online club",
   );
 });
+
+test("a written-out date with a clock time anchors as that time, also when it echoes a render", () => {
+  const sat = { at: at("2026-01-10T10:00:00Z"), zone: "UTC" };
+  expect(anchorTimes("Call on 8 January at 3pm went well.", sat)).toBe(
+    "Call ⟦2026-01-08T15:00|time|UTC⟧ went well.",
+  );
+  expect(anchorTimes("Dinner yesterday, Friday 9 January at 20:45 with Sam.", sat)).toBe(
+    "Dinner ⟦2026-01-09T20:45|time|UTC⟧ with Sam.",
+  );
+});
+
+test("a year after a comma stays with its date", () => {
+  const sat = { at: at("2026-01-10T10:00:00Z"), zone: "UTC" };
+  expect(anchorTimes("March 3, 2025 was the date.", sat)).toBe(
+    "⟦2025-03-03|day|UTC⟧ was the date.",
+  );
+  expect(days(anchorTimes("Back on Monday, 12 January, 2026.", sat))).toEqual(["2026-01-12"]);
+});
+
+test("an ISO-shaped string that is no real date stays as written", () => {
+  const sat = { at: at("2026-01-10T10:00:00Z"), zone: "UTC" };
+  expect(anchorTimes("Order ref 2026-13-45 shipped.", sat)).toBe("Order ref 2026-13-45 shipped.");
+  expect(anchorTimes("Due 2026-02-30.", sat)).toBe("Due 2026-02-30.");
+});
+
+test("a written-out date with a clock time still wins over a relative day that disagrees", () => {
+  const fri = { at: at("2026-01-09T20:00:00Z"), zone: "UTC" };
+  expect(anchorTimes("The call was yesterday, Sunday 4 January at 15:00.", fri)).toBe(
+    "The call was ⟦2026-01-04T15:00|time|UTC⟧.",
+  );
+});

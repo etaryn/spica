@@ -91,11 +91,14 @@ const ISO_DATE = new RegExp(
 );
 // chrono reads across clause breaks ("…8 January, in 3 days, and they"), so it reads one clause
 // at a time.
-const CLAUSE = /,\s*|;\s*|\s+(?:and|but)\s+/g;
+// A comma before a year belongs to its date ("March 3, 2025").
+const CLAUSE = /,(?!\s*\d{4}\b)\s*|;\s*|\s+(?:and|but)\s+/g;
 const ORDINAL = /^(?:the )?\d{1,2}(?:st|nd|rd|th)$/i;
 const MONTH_ONLY =
   /^(?:(this|next|last) month|in (january|february|march|april|may|june|july|august|september|october|november|december))$/i;
-const CLOCK = /\s*\b(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)\b\s*/i;
+// Only what is plainly a clock: a bare number may be the day of the month ("8 January at 3pm").
+const CLOCK =
+  /\s*\b(?:at\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)|\d{1,2}(?::\d{2}(?:\s*(?:am|pm))?|\s*(?:am|pm))|noon)\b\s*/i;
 const LEAD = /^(?:on|at)\s+/i;
 const NOUN_AFTER =
   /^\s+(roast|brunch|lunch|dinner|service|market|papers?|school|league|mood|best|blues|vibes|feeling)\b/i;
@@ -330,13 +333,17 @@ type Found = { from: number; end: number; anchor: Omit<Anchor, "zone">; written:
 function chronoPass(plain: string, ctx: AnchorContext): string {
   const ref = { instant: ctx.at, timezone: zoneOffsetMinutes(ctx.at, ctx.zone) };
   const found: Found[] = [];
-  for (const m of plain.matchAll(ISO_DATE))
+  for (const m of plain.matchAll(ISO_DATE)) {
+    // A reference number shaped like a date ("2026-13-45") is not one; its token would never read.
+    const iso = `${m[1]}-${m[2]}-${m[3]}`;
+    if (isNaN(Date.parse(iso)) || new Date(iso).toISOString().slice(0, 10) !== iso) continue;
     found.push({
       from: m.index,
       end: m.index + m[0].length,
-      anchor: { local: `${m[1]}-${m[2]}-${m[3]}`, precision: "day" },
+      anchor: { local: iso, precision: "day" },
       written: true,
     });
+  }
   let start = 0;
   for (const sep of [...plain.matchAll(CLAUSE), null]) {
     const end = sep ? sep.index : plain.length;
@@ -355,7 +362,7 @@ function chronoPass(plain: string, ctx: AnchorContext): string {
         from: ctx.said ? at + lead.length : at - the,
         end: at + lead.length + words.length,
         anchor,
-        written: DATE_PHRASE.test(words),
+        written: DATE_PHRASE.test(words.replace(CLOCK, " ").trim()),
       });
     }
     if (sep) start = sep.index + sep[0].length;

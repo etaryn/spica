@@ -132,7 +132,9 @@ retried or regenerated after a failure, so structural failures show (SDK transpo
 meant as a token (`platform/time-anchors.ts`), builders place tokens on their owner's calendar and
 one wrapper renders them where prompts reach the model; extract dates from the message's send
 time; her view of the conversation has day dividers and glosses; guard v7 `wrong_day` drops a
-misdated reach-out. Its paid close runs (`review:world-outreach`, `eval:guard`) are next.
+misdated reach-out; merged 2026-10-24, close runs done (`evals/results/analysis-2026-10-24-phase-16b.md`).
+**Next: Phase 16c, time anchor fixes** (settled with Ethan 2026-10-24): the 16b close run's date
+bugs; design doc `docs/2026-10-24-phase-16c-anchor-fixes-design.md`, plan in `docs/superpowers/plans/`.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

@@ -2,7 +2,7 @@
 import { expect, test } from "vitest";
 import { emptyLabels, type CheckedLabels } from "@/mind/memory/user/annotations";
 import { conversations, type LayerTurn } from "@/mind/memory/user/layers";
-import { conversationKey, type UnitResult } from "../../evals/lib/label-replay";
+import { conversationKey } from "../../evals/lib/label-replay";
 import { renderReview } from "../../evals/lib/label-review";
 import type { ReplayConversation } from "../../evals/lib/replay-source";
 
@@ -76,31 +76,32 @@ const labelled: CheckedLabels = {
       claim_kind: null,
     },
   ],
-  drops: [{ layer: "proposition", id: "p2", reason: "wrong_speaker" }],
+  drops: [
+    { layer: "proposition", id: "p2", reason: "wrong_speaker" },
+    { layer: "move", id: "m2", reason: "bad_link", ref: "replies_to m9" },
+  ],
 };
-const results: UnitResult[] = [
-  {
-    unit: "conversation",
-    thinking: false,
-    calls: new Map([[conversationKey(c), [{ messages: "1 to 3", labels: labelled, error: null }]]]),
-  },
-  {
-    unit: "conversation",
-    thinking: true,
-    calls: new Map([
-      [conversationKey(c), [{ messages: "1 to 3", labels: null, error: "bad enum" }]],
-    ]),
-  },
-];
+// A later conversation whose context turns hold the named words but whose own turns don't.
+const later: ReplayConversation = {
+  ...c,
+  id: "later-conversation",
+  before: c.turns,
+  turns: [turn("u9", "user", 59, "morning")],
+  exchanges: [],
+};
 
-test("the review shows totals, the named case, the numbered conversation, v11 and each unit's labels", () => {
+test("the review shows totals, the named case, the numbered conversation, v11 and the labels", () => {
   const out = renderReview({
     stamp: "STAMP",
-    conversations: [c],
-    results,
+    title: "exchange mode, reading with thinking",
+    conversations: [later, c],
+    calls: new Map([
+      [conversationKey(c), [{ messages: "1 to 3", labels: labelled, error: null }]],
+      [conversationKey(later), [{ messages: "4 to 4", labels: null, error: "read: bad enum" }]],
+    ]),
     usage: [
       {
-        purpose: "extract_labels_conversation",
+        purpose: "extract_labels_read",
         calls: 1,
         input: 3500,
         output: 1200,
@@ -112,15 +113,16 @@ test("the review shows totals, the named case, the numbered conversation, v11 an
       { title: "since friday, from her own question", text: "has it been dark since friday" },
     ],
   });
-  expect(out).toContain("# Labelling replay STAMP");
-  expect(out).toContain(
-    "| conversation | off | 1 | 0 | 1 | 0 | 0 | 1 | 0 | 0 | 1 (wrong_speaker 1) |",
-  );
-  expect(out).toContain("| conversation | on | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |");
-  expect(out).toContain("| extract_labels_conversation | 1 | 3500 | 1200 | 0 | $0.001 |");
-  expect(out.indexOf("### since friday, from her own question")).toBeLessThan(
-    out.indexOf("## Conversations"),
-  );
+  expect(out).toContain("# Labelling replay STAMP: exchange mode, reading with thinking");
+  expect(out).toContain("| 2 | 1 | 1 | 0 | 0 | 1 | 0 | 0 | 2 (wrong_speaker 1, bad_link 1) |");
+  expect(out).toContain("| extract_labels_read | 1 | 3500 | 1200 | 0 | $0.001 |");
+  // The named case is the conversation where the words were said, not one that only shows them.
+  const named = out.slice(out.indexOf("## Named cases"), out.indexOf("## Conversations"));
+  expect(named).toContain("### since friday, from her own question");
+  expect(named).toContain("- p1 user state");
+  expect(named).not.toContain("failed");
+  expect(out).toContain(`### 16c close · 2026-01-12T10:00 · ${c.id}`);
+  expect(out).toContain("### 16c close · 2026-01-12T10:59 · later-conversation");
   expect(out).toContain("[2.1] User · Mon 2026-01-12 10:30 (UTC): yeah nothing yet");
   expect(out).toContain("- user event: The user has been waiting since Friday.");
   expect(out).toContain('- m2 answers → m1: "yeah nothing yet" (User)');
@@ -128,5 +130,6 @@ test("the review shows totals, the named case, the numbered conversation, v11 an
     '- p1 user state "waiting to hear back" · salience 0.5 · rests on m2: "yeah nothing yet" (User)',
   );
   expect(out).toContain("- dropped proposition p2: wrong_speaker");
-  expect(out).toContain("- failed: bad enum");
+  expect(out).toContain("- dropped move m2: bad_link (replies_to m9)");
+  expect(out).toContain("- failed: read: bad enum");
 });

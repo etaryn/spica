@@ -1,9 +1,9 @@
-/** The replay's run loop: exchange mode carries labels forward; a failed call is recorded, not retried. */
+/** The replay's run loop: each exchange is read, then understood; a failed call is recorded, not retried. */
 import { expect, test } from "vitest";
 import type { Labels } from "@/mind/memory/user/annotations";
 import { conversations, type LayerTurn } from "@/mind/memory/user/layers";
 import type { ClassifyRequest, LLMProvider } from "@/mind/platform/llm/types";
-import { conversationKey, runUnit } from "../../evals/lib/label-replay";
+import { conversationKey, runReplay } from "../../evals/lib/label-replay";
 import type { ReplayConversation } from "../../evals/lib/replay-source";
 
 class ScriptedLLM implements LLMProvider {
@@ -58,11 +58,14 @@ const meaning = (propositions: Labels["propositions"] = []) => ({
   intimacy: null,
   bid_response: null,
 });
-const opts = { system: "SYSTEM", thinking: false, maxTokens: 100, timeoutMs: 1000 };
+const opts = { system: "SYSTEM", readTokens: 300, meaningTokens: 100, timeoutMs: 1000 };
 
-test("each labelling is a reading call, then a meaning call that sees what was read", async () => {
-  const llm = new ScriptedLLM([
+test("each exchange is read by the reading model, then understood by the meaning model", async () => {
+  const reader = new ScriptedLLM([
     reading([{ id: "m1", pieces: ["1.1"], act: "states", replies_to: "" }]),
+    reading([{ id: "m3", pieces: ["3.1"], act: "states", replies_to: "" }]),
+  ]);
+  const meaner = new ScriptedLLM([
     meaning([
       {
         id: "p1",
@@ -82,25 +85,25 @@ test("each labelling is a reading call, then a meaning call that sees what was r
         claim_kind: null,
       },
     ]),
-    reading([{ id: "m3", pieces: ["3.1"], act: "states", replies_to: "" }]),
     meaning(),
   ]);
-  const result = await runUnit(llm, "exchange", [c], opts);
-  expect(llm.requests.map((r) => r.purpose)).toEqual([
-    "extract_labels_exchange_read",
-    "extract_labels_exchange_meaning",
-    "extract_labels_exchange_read",
-    "extract_labels_exchange_meaning",
+  const result = await runReplay({ read: reader, meaning: meaner }, [c], opts);
+  expect(reader.requests.map((r) => [r.purpose, r.maxTokens])).toEqual([
+    ["extract_labels_read", 300],
+    ["extract_labels_read", 300],
   ]);
-  expect(llm.requests[0]!.input).toContain("Label the new messages (1 to 2).");
-  expect(llm.requests[0]!.input).not.toContain("Already labelled");
+  expect(meaner.requests.map((r) => [r.purpose, r.maxTokens])).toEqual([
+    ["extract_labels_meaning", 100],
+    ["extract_labels_meaning", 100],
+  ]);
+  expect(reader.requests[0]!.input).toContain("Label the new messages (1 to 2).");
+  expect(reader.requests[0]!.input).not.toContain("Already labelled");
   // The meaning call sees the moves just read; the next exchange sees everything labelled so far.
-  expect(llm.requests[1]!.input).toContain("- m1 states [1.1]");
-  expect(llm.requests[2]!.input).toContain('- p1 user event "job interview" planned · moves m1');
-  expect(llm.requests[2]!.input).toContain("Label the new messages (3 to 4).");
-  const calls = result.calls.get(conversationKey(c))!;
+  expect(meaner.requests[0]!.input).toContain("- m1 states [1.1]");
+  expect(reader.requests[1]!.input).toContain('- p1 user event "job interview" planned · moves m1');
+  expect(reader.requests[1]!.input).toContain("Label the new messages (3 to 4).");
   expect(
-    calls.map((x) => [
+    result.get(conversationKey(c))!.map((x) => [
       x.messages,
       x.labels?.moves.map((m) => m.id),
       x.labels?.propositions.map((p) => p.id),
@@ -112,20 +115,15 @@ test("each labelling is a reading call, then a meaning call that sees what was r
   ]);
 });
 
-test("conversation mode labels the whole conversation at once, and a failed call is kept as failed", async () => {
-  const llm = new ScriptedLLM([new Error("act: invalid enum value")]);
-  const result = await runUnit(llm, "conversation", [c], { ...opts, thinking: true });
-  expect(llm.requests.map((r) => r.purpose)).toEqual(["extract_labels_conversation_thinking_read"]);
-  expect(llm.requests[0]!.input).toContain("Label the new messages (1 to 4).");
-  expect(result.calls.get(conversationKey(c))).toEqual([
-    { messages: "1 to 4", labels: null, error: "read: act: invalid enum value" },
+test("a failed call is kept as failed and the next exchange still runs", async () => {
+  const reader = new ScriptedLLM([
+    new Error("act: invalid enum value"),
+    reading([{ id: "m3", pieces: ["3.1"], act: "states", replies_to: "" }]),
   ]);
-});
-
-test("a conversation no reply ever ended is still labelled whole", async () => {
-  const lonely: ReplayConversation = { ...c, turns: [c.turns[0]!], exchanges: [] };
-  const llm = new ScriptedLLM([reading([]), meaning()]);
-  const result = await runUnit(llm, "conversation", [lonely], opts);
-  expect(llm.requests[0]!.input).toContain("Open threads: none");
-  expect(result.calls.get(conversationKey(lonely))![0]!.error).toBeNull();
+  const meaner = new ScriptedLLM([meaning()]);
+  const result = await runReplay({ read: reader, meaning: meaner }, [c], opts);
+  expect(result.get(conversationKey(c))!.map((x) => [x.messages, x.error])).toEqual([
+    ["1 to 2", "read: act: invalid enum value"],
+    ["3 to 4", null],
+  ]);
 });

@@ -1,13 +1,13 @@
 /**
- * The labelling replay's review file: totals per unit and pass, tokens and cost, the named cases,
- * then every conversation numbered into pieces with v11's facts beside each unit's labels, cited
- * words and dates written out, and every dropped label with its reason.
+ * The labelling replay's review file: totals, tokens and cost, the named cases, then every
+ * conversation numbered into pieces with v11's facts beside the labels, cited words and dates
+ * written out, and every dropped label or link with its reason.
  */
 import { emptyLabels, mergeLabels, type CheckedLabels } from "@/mind/memory/user/annotations";
 import { messagesOf } from "@/mind/memory/user/layers";
 import { numberPieces, renderPieces, type Piece } from "@/mind/memory/user/pieces";
 import { renderResolved } from "@/mind/platform/time-labels";
-import { conversationKey, type UnitResult } from "./label-replay";
+import { conversationKey, type CallResult } from "./label-replay";
 import type { ReplayConversation } from "./replay-source";
 
 export type UsageLine = {
@@ -21,8 +21,10 @@ export type UsageLine = {
 export type NamedCase = { title: string; text: string };
 export type ReviewInput = {
   stamp: string;
+  /** How the run labelled: its unit and which calls thought. */
+  title: string;
   conversations: ReplayConversation[];
-  results: UnitResult[];
+  calls: Map<string, CallResult[]>;
   usage: UsageLine[];
   namedCases: NamedCase[];
 };
@@ -40,21 +42,20 @@ export const NAMED_CASES: NamedCase[] = [
 const LAYERS = ["moves", "mentions", "times", "propositions", "threads", "idiolect"] as const;
 
 export function renderReview(input: ReviewInput): string {
+  // A named case is the conversation where the words were said, not a later one showing them.
   const named = input.namedCases.flatMap((n) => {
-    const c = input.conversations.find((x) =>
-      [...x.before, ...x.turns].some((t) => t.text.includes(n.text)),
-    );
+    const c = input.conversations.find((x) => x.turns.some((t) => t.text.includes(n.text)));
     return c ? [{ title: n.title, c }] : [];
   });
   const invented = input.conversations.filter((c) => c.run === "invented").length;
   return [
-    `# Labelling replay ${input.stamp}`,
+    `# Labelling replay ${input.stamp}: ${input.title}`,
     "",
     `Extract v12 over ${input.conversations.length} conversations (${invented} invented).`,
     "",
     "## Totals",
     "",
-    ...totals(input.results),
+    ...totals(input.calls),
     "",
     "## Tokens and cost",
     "",
@@ -62,33 +63,30 @@ export function renderReview(input: ReviewInput): string {
     "",
     "## Named cases",
     "",
-    ...named.flatMap(({ title, c }) => [`### ${title}`, "", ...conversation(c, input.results)]),
+    ...named.flatMap(({ title, c }) => [`### ${title}`, "", ...conversation(c, input.calls)]),
     "## Conversations",
     "",
     ...input.conversations.flatMap((c) => [
-      `### ${c.run} · ${c.turns[0]?.created_at.toISOString().slice(0, 16) ?? ""} · ${c.id.slice(0, 8)}`,
+      `### ${c.run} · ${c.turns[0]?.created_at.toISOString().slice(0, 16) ?? ""} · ${c.id}`,
       "",
-      ...conversation(c, input.results),
+      ...conversation(c, input.calls),
     ]),
   ].join("\n");
 }
 
-function totals(results: UnitResult[]): string[] {
-  const rows = results.map((r) => {
-    const calls = [...r.calls.values()].flat();
-    const ok = calls.flatMap((x) => (x.labels ? [x.labels] : []));
-    const counts = LAYERS.map((layer) => ok.reduce((n, l) => n + l[layer].length, 0));
-    const drops = ok.flatMap((l) => l.drops);
-    const reasons = new Map<string, number>();
-    for (const d of drops) reasons.set(d.reason, (reasons.get(d.reason) ?? 0) + 1);
-    const why = [...reasons].map(([reason, n]) => `${reason} ${n}`).join(", ");
-    const failed = calls.length - ok.length;
-    return `| ${r.unit} | ${r.thinking ? "on" : "off"} | ${calls.length} | ${failed} | ${counts.join(" | ")} | ${drops.length}${why ? ` (${why})` : ""} |`;
-  });
+function totals(byConversation: Map<string, CallResult[]>): string[] {
+  const calls = [...byConversation.values()].flat();
+  const ok = calls.flatMap((x) => (x.labels ? [x.labels] : []));
+  const counts = LAYERS.map((layer) => ok.reduce((n, l) => n + l[layer].length, 0));
+  const drops = ok.flatMap((l) => l.drops);
+  const reasons = new Map<string, number>();
+  for (const d of drops) reasons.set(d.reason, (reasons.get(d.reason) ?? 0) + 1);
+  const why = [...reasons].map(([reason, n]) => `${reason} ${n}`).join(", ");
+  const failed = calls.length - ok.length;
   return [
-    `| Unit | Thinking | Calls | Failed | ${LAYERS.map((l) => l[0]!.toUpperCase() + l.slice(1)).join(" | ")} | Drops |`,
-    `|${" --- |".repeat(LAYERS.length + 5)}`,
-    ...rows,
+    `| Calls | Failed | ${LAYERS.map((l) => l[0]!.toUpperCase() + l.slice(1)).join(" | ")} | Drops |`,
+    `|${" --- |".repeat(LAYERS.length + 3)}`,
+    `| ${calls.length} | ${failed} | ${counts.join(" | ")} | ${drops.length}${why ? ` (${why})` : ""} |`,
   ];
 }
 
@@ -109,7 +107,7 @@ function usage(lines: UsageLine[]): string[] {
   ];
 }
 
-function conversation(c: ReplayConversation, results: UnitResult[]): string[] {
+function conversation(c: ReplayConversation, calls: Map<string, CallResult[]>): string[] {
   const turns = [...c.before, ...c.turns];
   const pieces = numberPieces(messagesOf(turns), c.before.length);
   const byId = new Map(pieces.map((p) => [p.id, p]));
@@ -126,18 +124,15 @@ function conversation(c: ReplayConversation, results: UnitResult[]): string[] {
     "",
     ...(v11.length ? ["v11 (as logged):", ...v11, ""] : []),
   ];
-  for (const r of results) {
-    lines.push(`#### ${r.unit} mode, thinking ${r.thinking ? "on" : "off"}`, "");
-    let known = emptyLabels();
-    for (const call of r.calls.get(conversationKey(c)) ?? []) {
-      lines.push(`Call (messages ${call.messages}):`);
-      if (!call.labels) {
-        lines.push(`- failed: ${call.error}`, "");
-        continue;
-      }
-      known = mergeLabels(known, call.labels);
-      lines.push(...describe(call.labels, known, byId), "");
+  let known = emptyLabels();
+  for (const call of calls.get(conversationKey(c)) ?? []) {
+    lines.push(`Call (messages ${call.messages}):`);
+    if (!call.labels) {
+      lines.push(`- failed: ${call.error}`, "");
+      continue;
     }
+    known = mergeLabels(known, call.labels);
+    lines.push(...describe(call.labels, known, byId), "");
   }
   return lines;
 }
@@ -196,6 +191,8 @@ function describe(l: CheckedLabels, known: CheckedLabels, pieces: Map<string, Pi
     ...(l.bid_response
       ? [`- bid response ${l.bid_response.response} (${l.bid_response.move})`]
       : []),
-    ...l.drops.map((d) => `- dropped ${d.layer} ${d.id}: ${d.reason}`),
+    ...l.drops.map(
+      (d) => `- dropped ${d.layer} ${d.id}: ${d.reason}${d.ref ? ` (${d.ref})` : ""}`,
+    ),
   ];
 }

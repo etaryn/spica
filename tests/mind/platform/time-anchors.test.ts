@@ -258,3 +258,18 @@ test("ISO dates anchor, and merge with the day words beside them", () => {
     "2026-01-14",
   ]);
 });
+
+test("a part of the day with a clock time anchors as that time", () => {
+  const fri = { at: at("2026-01-09T09:00:00Z"), zone: "UTC" };
+  const stored = anchorTimes("tonight at 20:45 i'm finally watching the film", fri);
+  expect(stored).toBe("⟦2026-01-09T20:45|time|UTC⟧ i'm finally watching the film");
+  expect(read(stored, at("2026-01-10T09:00:00Z"))).toBe(
+    "yesterday, Friday 9 January at 20:45 i'm finally watching the film",
+  );
+  expect(anchorTimes("tomorrow morning at 9", fri)).toBe("⟦2026-01-10T09:00|time|UTC⟧");
+  expect(anchorTimes("see you at 8", fri)).toBe("see you at 8");
+  // Her world wrote this one; noon is a clock time like any other.
+  expect(anchorTimes("stalker tonight at noon, the online club", fri)).toBe(
+    "stalker ⟦2026-01-09T12:00|time|UTC⟧, the online club",
+  );
+});

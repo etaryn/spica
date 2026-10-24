@@ -95,7 +95,7 @@ const CLAUSE = /,\s*|;\s*|\s+(?:and|but)\s+/g;
 const ORDINAL = /^(?:the )?\d{1,2}(?:st|nd|rd|th)$/i;
 const MONTH_ONLY =
   /^(?:(this|next|last) month|in (january|february|march|april|may|june|july|august|september|october|november|december))$/i;
-const CLOCK = /\s*\b(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b\s*/i;
+const CLOCK = /\s*\b(?:at\s+)?(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)\b\s*/i;
 const LEAD = /^(?:on|at)\s+/i;
 const NOUN_AFTER =
   /^\s+(roast|brunch|lunch|dinner|service|market|papers?|school|league|mood|best|blues|vibes|feeling)\b/i;
@@ -413,7 +413,9 @@ function classify(
   const rest = words.replace(CLOCK, " ").trim();
   if (!rest || rest === words) return null;
   const dated = classifyDay(rest, plain, r, ctx);
-  if (!dated || dated.precision !== "day") return null;
+  // A clock time sits on a day or a part of one ("tonight at 20:45"); the clock is the finer.
+  if (!dated || !["day", "morning", "afternoon", "evening", "night"].includes(dated.precision))
+    return null;
   const hh = String(r.start.get("hour")).padStart(2, "0");
   const mm = String(r.start.get("minute") ?? 0).padStart(2, "0");
   return { local: `${dated.local}T${hh}:${mm}`, precision: "time" };

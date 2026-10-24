@@ -47,7 +47,15 @@ const c: ReplayConversation = {
 const labelled: CheckedLabels = {
   ...emptyLabels(),
   moves: [
-    { id: "m2", pieces: ["2.1"], coords: [], speaker: "user", act: "answers", repliesTo: "m1" },
+    {
+      id: "m2",
+      pieces: ["2.1"],
+      coords: [],
+      speaker: "user",
+      act: "answers",
+      repliesTo: "m1",
+      context: false,
+    },
   ],
   propositions: [
     {

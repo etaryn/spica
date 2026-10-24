@@ -146,6 +146,8 @@ export type CheckedMove = {
   speaker: Speaker;
   act: Act;
   repliesTo: string | null;
+  /** On an earlier message that had no move yet: there so replies can point at it, never news. */
+  context: boolean;
 };
 type Nulled<T, K extends keyof T> = Omit<T, K> & { [P in K]: string | null };
 export type CheckedMention = Nulled<
@@ -175,8 +177,15 @@ export type CheckedThread = Nulled<Labels["threads"][number], "thread_id" | "che
 export type CheckedIdiolect = Labels["idiolect"][number] & { startedBy: Speaker };
 
 export type DropReason =
-  "bad_ref" | "nothing_new" | "bad_move" | "words_missing" | "wrong_speaker" | "bad_time";
-export type Drop = { layer: string; id: string; reason: DropReason };
+  | "bad_ref"
+  | "nothing_new"
+  | "bad_move"
+  | "words_missing"
+  | "wrong_speaker"
+  | "bad_time"
+  // The label stays; only the link named in `ref` is removed.
+  | "bad_link";
+export type Drop = { layer: string; id: string; reason: DropReason; ref?: string };
 
 export type CheckedLabels = {
   moves: CheckedMove[];
@@ -234,7 +243,8 @@ export function mergeLabels(a: CheckedLabels, b: CheckedLabels): CheckedLabels {
 
 /**
  * Holds one call's labels to the transcript. A label that fails a check is dropped with its
- * reason, and so is any label resting on a dropped one; nothing is asked again.
+ * reason, and so is a memory resting on a dropped move. A broken link (a reply, a time, a thread)
+ * loses only the link: the label it hung from stays. Nothing is asked again.
  */
 export function checkLabels(raw: Labels, ctx: CheckContext): CheckedLabels {
   const check = new Checker(ctx, raw);
@@ -272,6 +282,7 @@ class Checker {
   private readonly allMentions: Set<string>;
   private readonly allTimes: Map<string, CheckedTime>;
   private readonly allPropositions: Set<string>;
+  private readonly labelledPieces: Set<string>;
 
   constructor(
     private readonly ctx: CheckContext,
@@ -286,6 +297,7 @@ class Checker {
     this.allMentions = new Set(e.mentions.map((m) => m.id));
     this.allTimes = new Map(e.times.map((t) => [t.id, t]));
     this.allPropositions = new Set(e.propositions.map((p) => p.id));
+    this.labelledPieces = new Set(e.moves.flatMap((m) => m.pieces));
     this.taken = new Set([
       ...this.allMoves.keys(),
       ...this.allMentions,
@@ -302,10 +314,13 @@ class Checker {
       if (!this.claim("move", m.id)) continue;
       const cited = this.cite(m.pieces);
       if (!cited) {
-        this.drop("move", m.id, "bad_ref");
+        this.drop("move", m.id, "bad_ref", `pieces ${m.pieces.join(" ")}`);
         continue;
       }
-      if (!cited.some((p) => p.isNew)) {
+      // An earlier message with no move yet may be labelled, so a reply can point at it; one that
+      // already has its move is not labelled twice.
+      const context = !cited.some((p) => p.isNew);
+      if (context && cited.some((p) => this.labelledPieces.has(p.id))) {
         this.drop("move", m.id, "nothing_new");
         continue;
       }
@@ -314,17 +329,13 @@ class Checker {
         this.drop("move", m.id, "bad_move");
         continue;
       }
-      const repliesTo = none(m.replies_to);
+      let repliesTo = none(m.replies_to);
       if (repliesTo !== null) {
         const target = this.allMoves.get(repliesTo);
-        // A target that exists but hasn't been reached yet starts after this move.
-        if (!target) {
-          this.drop("move", m.id, this.rawMoves.has(repliesTo) ? "bad_move" : "bad_ref");
-          continue;
-        }
-        if (this.first(target.pieces) >= this.first(m.pieces)) {
-          this.drop("move", m.id, "bad_move");
-          continue;
+        // A reply points back: at a move already checked, which starts before this one.
+        if (!target || this.first(target.pieces) >= this.first(m.pieces)) {
+          this.drop("move", m.id, "bad_link", `replies_to ${repliesTo}`);
+          repliesTo = null;
         }
       }
       const move: CheckedMove = {
@@ -334,6 +345,7 @@ class Checker {
         speaker,
         act: m.act,
         repliesTo,
+        context,
       };
       this.allMoves.set(m.id, move);
       kept.push(move);
@@ -346,10 +358,14 @@ class Checker {
     for (const m of raw) {
       if (!this.claim("mention", m.id)) continue;
       const piece = this.pieces.get(m.piece);
-      const refersTo = none(m.refers_to);
-      if (!piece || (refersTo !== null && !this.openThreads.has(refersTo))) {
-        this.drop("mention", m.id, "bad_ref");
+      if (!piece) {
+        this.drop("mention", m.id, "bad_ref", `piece ${m.piece}`);
         continue;
+      }
+      let refersTo = none(m.refers_to);
+      if (refersTo !== null && !this.openThreads.has(refersTo)) {
+        this.drop("mention", m.id, "bad_link", `refers_to ${refersTo}`);
+        refersTo = null;
       }
       if (!piece.isNew) {
         this.drop("mention", m.id, "nothing_new");
@@ -424,21 +440,24 @@ class Checker {
     const kept: CheckedProposition[] = [];
     for (const p of raw) {
       if (!this.claim("proposition", p.id)) continue;
-      const moves = p.moves.map((id) => this.allMoves.get(id));
-      const threadId = none(p.thread_id);
-      const updates = none(p.updates);
-      const broken =
-        moves.length === 0 ||
-        moves.some((m) => !m) ||
-        p.times.some((id) => !this.allTimes.has(id)) ||
-        p.mentions.some((id) => !this.allMentions.has(id)) ||
-        (threadId !== null && !this.openThreads.has(threadId)) ||
-        (updates !== null && !this.allPropositions.has(updates));
-      if (broken) {
-        this.drop("proposition", p.id, "bad_ref");
+      // A memory stands on its moves: without them it falls. Its other links are only links.
+      const missing = p.moves.filter((id) => !this.allMoves.has(id));
+      if (p.moves.length === 0 || missing.length) {
+        this.drop("proposition", p.id, "bad_ref", `moves ${missing.join(" ") || "none"}`);
         continue;
       }
-      const fresh = (moves as CheckedMove[]).filter((m) => this.isNew(m.pieces));
+      const moves = p.moves.map((id) => this.allMoves.get(id)!);
+      const times = this.keep("proposition", p.id, "times", p.times, (id) => this.allTimes.has(id));
+      const mentions = this.keep("proposition", p.id, "mentions", p.mentions, (id) =>
+        this.allMentions.has(id),
+      );
+      const threadId = this.known("proposition", p.id, "thread_id", none(p.thread_id), (id) =>
+        this.openThreads.has(id),
+      );
+      const updates = this.known("proposition", p.id, "updates", none(p.updates), (id) =>
+        this.allPropositions.has(id),
+      );
+      const fresh = moves.filter((m) => this.isNew(m.pieces));
       if (fresh.length === 0) {
         this.drop("proposition", p.id, "nothing_new");
         continue;
@@ -452,6 +471,8 @@ class Checker {
       this.allPropositions.add(p.id);
       kept.push({
         ...p,
+        times,
+        mentions,
         thread_id: threadId,
         new_thread: none(p.new_thread),
         updates,
@@ -469,21 +490,24 @@ class Checker {
     const kept: CheckedThread[] = [];
     for (const t of raw) {
       const threadId = none(t.thread_id);
-      const checkpointId = none(t.checkpoint);
-      const checkpoint = checkpointId === null ? null : this.allTimes.get(checkpointId);
-      const broken =
-        (threadId !== null && !this.openThreads.has(threadId)) ||
-        checkpoint === undefined ||
-        t.propositions.some((id) => !this.allPropositions.has(id));
-      if (broken) {
-        this.drop("thread", threadId ?? t.title, "bad_ref");
+      // Touching or resolving a thread nobody showed has nothing to act on.
+      if (threadId !== null && !this.openThreads.has(threadId)) {
+        this.drop("thread", threadId, "bad_ref", `thread_id ${threadId}`);
         continue;
       }
+      const label = threadId ?? t.title;
+      const checkpointId = this.known("thread", label, "checkpoint", none(t.checkpoint), (id) =>
+        this.allTimes.has(id),
+      );
+      const propositions = this.keep("thread", label, "propositions", t.propositions, (id) =>
+        this.allPropositions.has(id),
+      );
       kept.push({
         ...t,
         thread_id: threadId,
         checkpoint: checkpointId,
-        checkpointAt: checkpoint?.resolved ?? null,
+        propositions,
+        checkpointAt: checkpointId === null ? null : this.allTimes.get(checkpointId)!.resolved,
       });
     }
     return kept;
@@ -508,26 +532,31 @@ class Checker {
     return kept;
   }
 
+  // The scores stand on their own; the moves they cite are only where they were read from.
   relationship(raw: Labels["relationship"]): Labels["relationship"] {
     if (!raw) return null;
-    const cited = [...raw.moves, ...(raw.hurt?.moves ?? [])];
-    if (cited.every((id) => this.allMoves.has(id))) return raw;
-    this.drop("relationship", "relationship", "bad_ref");
-    return null;
+    const known = (id: string) => this.allMoves.has(id);
+    const moves = this.keep("relationship", "relationship", "moves", raw.moves, known);
+    const hurt = raw.hurt && {
+      ...raw.hurt,
+      moves: this.keep("relationship", "relationship", "hurt.moves", raw.hurt.moves, known),
+    };
+    return { ...raw, moves, hurt };
   }
 
   intimacy(raw: Labels["intimacy"]): Labels["intimacy"] {
     if (!raw) return null;
-    if (raw.moves.every((id) => this.allMoves.has(id))) return raw;
-    this.drop("intimacy", "intimacy", "bad_ref");
-    return null;
+    const moves = this.keep("intimacy", "intimacy", "moves", raw.moves, (id) =>
+      this.allMoves.has(id),
+    );
+    return { ...raw, moves };
   }
 
   bid(raw: Labels["bid_response"]): Labels["bid_response"] {
     if (!raw) return null;
     const move = this.allMoves.get(raw.move);
     if (!move) {
-      this.drop("bid_response", raw.move, "bad_ref");
+      this.drop("bid_response", raw.move, "bad_ref", `move ${raw.move}`);
       return null;
     }
     // A bid response is how the user met her bid, so it is always one of their moves.
@@ -552,14 +581,40 @@ class Checker {
     return null;
   }
 
-  private drop(layer: string, id: string, reason: DropReason): void {
-    this.drops.push({ layer, id, reason });
+  private drop(layer: string, id: string, reason: DropReason, ref?: string): void {
+    this.drops.push(ref === undefined ? { layer, id, reason } : { layer, id, reason, ref });
+  }
+
+  /** The ids that point somewhere real; the rest are recorded as broken links and left out. */
+  private keep(
+    layer: string,
+    id: string,
+    field: string,
+    ids: string[],
+    exists: (id: string) => boolean,
+  ): string[] {
+    const broken = ids.filter((x) => !exists(x));
+    if (broken.length) this.drop(layer, id, "bad_link", `${field} ${broken.join(" ")}`);
+    return ids.filter(exists);
+  }
+
+  /** One optional link: kept when it points somewhere real, otherwise recorded and cleared. */
+  private known(
+    layer: string,
+    id: string,
+    field: string,
+    value: string | null,
+    exists: (id: string) => boolean,
+  ): string | null {
+    if (value === null || exists(value)) return value;
+    this.drop(layer, id, "bad_link", `${field} ${value}`);
+    return null;
   }
 
   /** Claims an id for this conversation; one already used is a broken reference. */
   private claim(layer: string, id: string): boolean {
     if (this.taken.has(id)) {
-      this.drop(layer, id, "bad_ref");
+      this.drop(layer, id, "bad_ref", "id already used");
       return false;
     }
     this.taken.add(id);

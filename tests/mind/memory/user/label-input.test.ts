@@ -36,7 +36,15 @@ const thursday = {
 const earlier: CheckedLabels = {
   ...emptyLabels(),
   moves: [
-    { id: "m1", pieces: ["1.1"], coords: [], speaker: "spica", act: "asks", repliesTo: null },
+    {
+      id: "m1",
+      pieces: ["1.1"],
+      coords: [],
+      speaker: "spica",
+      act: "asks",
+      repliesTo: null,
+      context: false,
+    },
   ],
   times: [
     {

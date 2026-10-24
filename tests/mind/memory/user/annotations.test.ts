@@ -28,7 +28,7 @@ const move = (
   ids: string[],
   speaker: CheckedMove["speaker"],
   act: CheckedMove["act"],
-): CheckedMove => ({ id, pieces: ids, coords: [], speaker, act, repliesTo: null });
+): CheckedMove => ({ id, pieces: ids, coords: [], speaker, act, repliesTo: null, context: false });
 const earlier: CheckedLabels = {
   ...emptyLabels(),
   moves: [move("m1", ["1.1"], "spica", "asks"), move("m2", ["2.1"], "spica", "asks")],
@@ -168,19 +168,21 @@ test("labels resting only on earlier messages are not new", () => {
   ]);
 });
 
-test("a move mixing speakers, or replying to something said after it, falls with what rests on it", () => {
-  const fallen = [
-    { layer: "proposition", id: "p1", reason: "bad_ref" },
-    { layer: "thread", id: "th1", reason: "bad_ref" },
-    { layer: "intimacy", id: "intimacy", reason: "bad_ref" },
-  ];
+test("a move mixing speakers falls with the memory resting on it; what only linked to it keeps going", () => {
   const mixed = base();
   mixed.moves[0] = { id: "m3", pieces: ["3.1", "5.1"], act: "corrects", replies_to: "m1" };
-  expect(checkLabels(mixed, ctx).drops).toEqual([
+  const out = checkLabels(mixed, ctx);
+  expect(out.drops).toEqual([
     { layer: "move", id: "m3", reason: "bad_move" },
-    ...fallen,
+    { layer: "proposition", id: "p1", reason: "bad_ref", ref: "moves m3" },
+    { layer: "thread", id: "th1", reason: "bad_link", ref: "propositions p1" },
+    { layer: "intimacy", id: "intimacy", reason: "bad_link", ref: "moves m3" },
   ]);
+  expect(out.threads[0]!.propositions).toEqual([]);
+  expect(out.intimacy?.moves).toEqual([]);
+});
 
+test("a reply pointing at something said after it loses the link, not the move", () => {
   const backwards = base();
   backwards.moves[0] = {
     id: "m3",
@@ -188,36 +190,72 @@ test("a move mixing speakers, or replying to something said after it, falls with
     act: "corrects",
     replies_to: "m4",
   };
-  expect(checkLabels(backwards, ctx).drops).toEqual([
-    { layer: "move", id: "m3", reason: "bad_move" },
-    ...fallen,
+  const out = checkLabels(backwards, ctx);
+  expect(out.drops).toEqual([
+    { layer: "move", id: "m3", reason: "bad_link", ref: "replies_to m4" },
   ]);
+  expect(out.moves.find((m) => m.id === "m3")!.repliesTo).toBeNull();
+  expect(ids(out.propositions)).toEqual(["p1", "p2"]);
 });
 
-test("time words must be in their piece, and every reference must exist", () => {
+test("time words must be in their piece; a memory loses a broken link but keeps itself", () => {
   const missing = base();
   missing.times[0] = time({ id: "t1", words: "saturday" });
-  expect(checkLabels(missing, ctx).drops).toEqual([
+  const out = checkLabels(missing, ctx);
+  expect(out.drops).toEqual([
     { layer: "time", id: "t1", reason: "words_missing" },
-    { layer: "proposition", id: "p1", reason: "bad_ref" },
-    { layer: "thread", id: "th1", reason: "bad_ref" },
+    { layer: "proposition", id: "p1", reason: "bad_link", ref: "times t1" },
+    { layer: "thread", id: "th1", reason: "bad_link", ref: "checkpoint t1" },
   ]);
+  expect(out.propositions[0]).toMatchObject({ id: "p1", times: [] });
+  expect(out.threads[0]).toMatchObject({ checkpoint: null, checkpointAt: null });
 
   const broken = base();
   broken.mentions[0] = { ...broken.mentions[0]!, piece: "3-2" };
   broken.moves.push({ id: "m6", pieces: ["m3.1"], act: "states", replies_to: "" });
   broken.propositions[1] = { ...broken.propositions[1]!, thread_id: "th9" };
-  const drops = checkLabels(broken, ctx).drops;
-  expect(drops).toContainEqual({ layer: "move", id: "m6", reason: "bad_ref" });
-  expect(drops).toContainEqual({ layer: "mention", id: "e1", reason: "bad_ref" });
-  expect(drops).toContainEqual({ layer: "proposition", id: "p2", reason: "bad_ref" });
+  const after = checkLabels(broken, ctx);
+  expect(after.drops).toEqual([
+    { layer: "move", id: "m6", reason: "bad_ref", ref: "pieces m3.1" },
+    { layer: "mention", id: "e1", reason: "bad_ref", ref: "piece 3-2" },
+    { layer: "proposition", id: "p1", reason: "bad_link", ref: "mentions e1" },
+    { layer: "proposition", id: "p2", reason: "bad_link", ref: "thread_id th9" },
+  ]);
+  expect(after.propositions.map((p) => [p.id, p.mentions, p.thread_id])).toEqual([
+    ["p1", [], "th1"],
+    ["p2", [], null],
+  ]);
+});
+
+test("an earlier message with no move yet can be labelled as context, so a reply can point at it", () => {
+  const onlyFirst: CheckContext = {
+    ...ctx,
+    earlier: { ...emptyLabels(), moves: [move("m1", ["1.1"], "spica", "asks")] },
+  };
+  const raw = base();
+  raw.moves.push(
+    { id: "m7", pieces: ["2.1"], act: "asks", replies_to: "" },
+    { id: "m8", pieces: ["1.1"], act: "asks", replies_to: "" },
+  );
+  raw.moves[1] = { id: "m4", pieces: ["4.1"], act: "confirms", replies_to: "m7" };
+  raw.propositions[1] = { ...raw.propositions[1]!, moves: ["m4", "m7"] };
+  const out = checkLabels(raw, onlyFirst);
+  expect(out.drops).toEqual([{ layer: "move", id: "m8", reason: "nothing_new" }]);
+  expect(out.moves.map((m) => [m.id, m.context, m.repliesTo])).toEqual([
+    ["m7", true, null],
+    ["m3", false, "m1"],
+    ["m4", false, "m7"],
+  ]);
+  expect(ids(out.propositions)).toEqual(["p1", "p2"]);
 });
 
 test("an id already used in this conversation is rejected, and the earlier label stays", () => {
   const raw = base();
   raw.moves.push({ id: "m1", pieces: ["4.1"], act: "states", replies_to: "" });
   const out = checkLabels(raw, ctx);
-  expect(out.drops).toEqual([{ layer: "move", id: "m1", reason: "bad_ref" }]);
+  expect(out.drops).toEqual([
+    { layer: "move", id: "m1", reason: "bad_ref", ref: "id already used" },
+  ]);
   expect(ids(out.moves)).toEqual(["m3", "m4"]);
   expect(earlier.moves[0]).toEqual(move("m1", ["1.1"], "spica", "asks"));
 });

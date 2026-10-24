@@ -1537,6 +1537,12 @@ like one warm conversation. A reach-out exchange applies none of this.
 A reach-out exchange (no user turn) extracts her words but applies no
 relationship or affect update.
 
+**Phase 17a (replay only, 2026-10-25):** `prompts/extract/v12.md` labels a conversation in layers
+instead of writing facts: moves (acts and what each replies to), mentions, times (a meaning code
+resolves from the send time of its message), propositions, threads, idiolect and the relationship
+blocks, each pointing at code-numbered pieces. Only `pnpm review:extract-labels` runs it;
+`prompts.extract` stays v11 until 17b. Analysis: `evals/results/analysis-2026-10-25-phase-17a.md`.
+
 ### 10.5 Guard (Built)
 
 `guard.enabled: true` (false is a kill switch: the first candidate is sent
@@ -2527,7 +2533,8 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Date fixes from the 16c close run** (Phase 16d, next; to settle with Ethan item by item; evidence in `evals/results/analysis-2026-10-24-phase-16c.md`) | B129 "since <weekday>" points back; B130 extract adding a day; B131 a thread's next check-in read as its event date; B1 a user fact taken from her words; B132 the 16c anchoring minors | — |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. Next: **17b** labels as memory (v12 live, stand-off storage, readers; B133–B136), **17c** turn-taking on labels, **17d** notes cite labels | B133–B136 |
+| **Date fixes from the 16c close run** (Phase 16d, paused for Phase 17 on 2026-10-25: each item is re-checked at 17b's close; evidence in `evals/results/analysis-2026-10-24-phase-16c.md`) | B129 "since <weekday>" points back; B130 extract adding a day; B131 a thread's next check-in read as its event date; B1 a user fact taken from her words; B132 the 16c anchoring minors | — |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2632,7 +2639,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B132).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B136).
 
 ### 25.1 Memory and recall
 - **B1.** Extraction sometimes turns her words into user facts (after a bare
@@ -2664,6 +2671,17 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   ISO date between a date and its clock loses the time; an ISO match keeps "on" before its token
   ("on yesterday, …"); "in three days from Saturday" stores two dates; world-tick's planned-event
   intentions take no shown dates. *Phase 16d.*
+- **B1, B129–B132** are paused for Phase 17 (2026-10-25): each is re-checked at 17b's close against
+  labelled memory, then fixed or closed.
+- **B133.** The labelling meaning call (thinking off) cites move ids the reading call never made: 23 of
+  86 memories fell in the 17a rerun. Thinking on it too (three calls: the grammar then needs a split),
+  or let a memory cite pieces as well as moves. *Phase 17b.*
+- **B134.** A memory can take a time from words it doesn't rest on (Sam's half marathon got "since
+  friday" from her question). Rule: a memory's times sit in the pieces of its moves. *Phase 17b.*
+- **B135.** Labelled memory kept 57 memories where v11 stored 148 facts on the same exchanges; v11 split
+  finer, so a hand pass decides what v12 misses. *Phase 17b.*
+- **B136.** Structured output enforces types, not enum values (SDK 0.127.0): one invalid value fails the
+  whole labelling call. Decide whether a bad value drops one label instead. *Phase 17b.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

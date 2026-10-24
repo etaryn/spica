@@ -139,8 +139,12 @@ misdated reach-out; merged 2026-10-24, close runs done (`evals/results/analysis-
 clause at a time and whole date phrases, a day said twice is one token, ISO dates anchor, extract's
 weekday cross-check is gone (extract v11), a row's own date and the dates her loops were shown
 date the words they write; merged, close run done (`evals/results/analysis-2026-10-24-phase-16c.md`).
-**Next: Phase 16d, date fixes from the 16c close run** (§20 row; §25 B129–B132 and B1), to settle
-with Ethan item by item before a design doc.
+**Phase 17, labelled memory** (§20 row; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`):
+what was said is kept as said and every layer of its meaning is labelled apart from it. **17a is
+built** (2026-10-25, replay only: extract v12 in exchange mode, a reading call with thinking and a
+meaning call without; `pnpm review:extract-labels`; analysis `evals/results/analysis-2026-10-25-phase-17a.md`).
+**Next: 17b, labels as memory** (v12 live, stand-off storage, readers; §25 B133–B136). Phase 16d
+(B129–B132, B1) is paused; each item is re-checked at 17b's close.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

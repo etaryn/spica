@@ -64,6 +64,17 @@ The layers built here are a first set; the infrastructure is the point, and laye
 | **17c. Turn-taking on labels** | The code-made layers written as the system runs. The turn judge cites piece ids for open questions instead of rewriting them; a question closes when a move replies to it (B9). Bid responses come from replies (`bidAfter`) | Exit test |
 | **17d. Notes cite labels** | Summarise, model, reflect and ideate cite propositions and moves by id and never write dates; code renders what they cite; a note resting on a superseded label is retired. **Deletes** the remaining stored-text anchoring (`shownDates`, anchoring in `insertFact`, the merge, ISO and clause rules) | Exit test; close run `review:world-outreach`, plus `exit:user` (never run yet) for long conversations |
 
+**17a is built (2026-10-25).** What it settled for 17b:
+- **Exchange mode** (Ethan).
+- **Two calls per exchange,** because one grammar for every layer is over the API limit:
+  - a reading call (moves, mentions, times) with thinking;
+  - a meaning call (propositions, threads, idiolect, relationship) without.
+- **Optional ids say none with "",** because the API allows at most 16 nullable fields.
+- **A broken link drops only the link,** and an earlier message with no move yet may be context.
+
+Results, open items and the analysis: §20 row, §25 B133–B136,
+`evals/results/analysis-2026-10-25-phase-17a.md`.
+
 The order is fixed by dependency: 17b needs 17a's format, 17c needs 17b's storage, and 17d needs
 labels in storage to cite. Storage and readers land together in 17b, since writing a format no
 reader can read would need a shim, which the replace-from-the-ground-up rule rules out.

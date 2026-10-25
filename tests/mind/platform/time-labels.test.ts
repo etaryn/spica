@@ -2,8 +2,11 @@
 import { expect, test } from "vitest";
 import {
   countFrom,
+  labelInstant,
+  labelToken,
   renderResolved,
   resolveTime,
+  type ResolvedTime,
   type TimeMeaning,
 } from "@/mind/platform/time-labels";
 
@@ -118,4 +121,28 @@ test("counting from a week, weekend or month starts inside it, or at its end whe
   );
   const day = span({ unit: "day", shift: 1 }, "2026-01-05");
   expect(countFrom(day, "weekday")).toBe("2026-01-06");
+});
+
+test("a resolved time becomes a token the renderer dates, with its edges outside", () => {
+  const r = (t: Partial<ResolvedTime>): ResolvedTime => ({
+    date: "2026-01-08",
+    precision: "day",
+    part: null,
+    clock: null,
+    span: "at",
+    rough: false,
+    ...t,
+  });
+  expect(labelToken(r({}), "UTC")).toBe("⟦2026-01-08|day|UTC⟧");
+  expect(labelToken(r({ clock: "10:00" }), "UTC")).toBe("⟦2026-01-08T10:00|time|UTC⟧");
+  expect(labelToken(r({ part: "evening" }), "UTC")).toBe("⟦2026-01-08|evening|UTC⟧");
+  expect(labelToken(r({ span: "since" }), "UTC")).toBe("⟦2026-01-08|since|UTC⟧");
+  expect(labelToken(r({ precision: "month", date: "2026-01-01", part: "end" }), "UTC")).toBe(
+    "the end of ⟦2026-01|month|UTC⟧",
+  );
+  expect(labelToken(r({ rough: true, span: "until" }), "UTC")).toBe(
+    "around until ⟦2026-01-08|day|UTC⟧",
+  );
+  expect(labelToken(r({}), "UTC", "thurs")).toBe("⟦2026-01-08|day|UTC|thurs⟧");
+  expect(labelInstant(r({ clock: "10:00" }), "UTC").toISOString()).toBe("2026-01-08T10:00:00.000Z");
 });

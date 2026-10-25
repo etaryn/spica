@@ -242,9 +242,18 @@ function mapPlain(text: string, fn: (plain: string) => string): string {
   return out + fn(text.slice(last));
 }
 
+/** A token in the one format every renderer reads. `said` keeps the words and glosses them. */
+export function formatToken(
+  local: string,
+  precision: Precision,
+  zone: string,
+  said?: string,
+): string {
+  return `⟦${local}|${precision}|${zone}${said ? `|${said.replace(/[|⟧]/g, "")}` : ""}⟧`;
+}
+
 function token(local: string, precision: Precision, ctx: AnchorContext, words: string): string {
-  const said = ctx.said ? `|${words.replace(/[|⟧]/g, "")}` : "";
-  return `⟦${local}|${precision}|${ctx.zone}${said}⟧`;
+  return formatToken(local, precision, ctx.zone, ctx.said ? words : undefined);
 }
 
 const weekdayOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();

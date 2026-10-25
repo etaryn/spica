@@ -46,7 +46,6 @@ export class FakeLLMProvider implements LLMProvider {
   handlers: Record<string, Handler> = {
     // Every new message gets a move and nothing else; tests script memories with `scriptedLabels`.
     ...scriptedLabels({}),
-    extract: () => ({ facts: [], entities: [], threads: [], relationship: null }),
     reconcile: () => ({ relation: "new", target_fact_id: null }),
     // Passing everything lets fake-mode scripts exercise the guard's mechanics, not its rubric.
     guard: () => ({ reasoning: "ok", violations: [] }),

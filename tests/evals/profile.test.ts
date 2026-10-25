@@ -21,7 +21,7 @@ test("--annotate adds the judge purposes but does not unlock mode: real scripts"
 });
 
 test("a real reply unlocks mode: real scripts; --llm=real means every purpose", () => {
-  expect(resolveProfile({ llm: "fake", real: "reply,extract" }).realScripts).toBe(true);
+  expect(resolveProfile({ llm: "fake", real: "reply,labels_read" }).realScripts).toBe(true);
   const all = resolveProfile({ llm: "real" });
   expect([...all.realPurposes]).toEqual(ALL_PURPOSES);
   expect(all.realScripts).toBe(true);

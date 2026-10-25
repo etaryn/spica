@@ -18,6 +18,7 @@ import { coreWorldTick } from "@/mind/process/core/world-tick";
 import { receiveTurn } from "@/mind/process/receive/receive-turn";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { fakeSources, tmpMediaDir, webItem } from "../helpers/web";
 
 beforeEach(resetDb);
@@ -66,24 +67,12 @@ async function setup() {
 
 /** A user's exchange carrying the canary, as in the mind-split exit. */
 async function plantCanary(deps: Awaited<ReturnType<typeof setup>>) {
-  deps.llm.handlers.extract = () => ({
-    facts: [
-      {
-        subject: "user",
-        kind: "trait",
-        content: `The user's code word is ${TOKEN}.`,
-        occurred_at: null,
-        salience: 0.9,
-        valence: 0,
-        confidence: 0.9,
-        entity_names: [],
-        thread_title: null,
-      },
-    ],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  Object.assign(
+    deps.llm.handlers,
+    scriptedLabels({
+      memories: [{ said: TOKEN, label: `code word ${TOKEN}`, kind: "trait", salience: 0.9 }],
+    }),
+  );
   const u = await createTestUser("Alice");
   const { turn } = await receiveTurn(deps, u, {
     clientMessageId: randomUUID(),

@@ -33,6 +33,8 @@ export type Stretch = {
   interests: string[];
   /** What earlier calls labelled in this conversation. */
   earlier: CheckedLabels;
+  /** Every id the conversation has used, shown or not. */
+  usedIds?: string[];
 };
 
 const NO_MEANING = { propositions: [], threads: [] } satisfies Pick<
@@ -57,6 +59,7 @@ export async function labelStretch(
     zone: s.zone,
     threadIds: s.threads.map((t) => t.id),
     earlier: s.earlier,
+    usedIds: s.usedIds,
   };
   const drops: Drop[] = [];
   const ask = async <S extends z.ZodObject>(

@@ -7,7 +7,6 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
-import { anchorExtraction } from "@/mind/memory/user/extract";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { anchorTimes, renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import { coreWander } from "@/mind/process/core/wander";
@@ -32,35 +31,6 @@ test("2: 'yesterday, Thursday 8 January' and an ISO twin are one date each", () 
   expect(tokenDates(anchorTimes("Interview on Thursday afternoon, 2026-01-08.", ctx))).toHaveLength(
     1,
   );
-});
-
-test("3: the interview stays on Thursday when their message says 'that's sunday'", () => {
-  const sent = new Date("2026-01-05T15:43:00Z");
-  const fact = {
-    subject: "user",
-    kind: "event",
-    content: "The user has a design job interview on Thursday afternoon.",
-    occurred_at: null,
-    when_direction: "upcoming",
-    salience: 0.7,
-    valence: 0,
-    confidence: 0.9,
-    entity_names: [],
-    thread_title: null,
-  };
-  const out = anchorExtraction(
-    {
-      facts: [fact],
-      entities: [],
-      threads: [],
-      relationship: null,
-      intimacy: null,
-      bid: null,
-    } as never,
-    [{ role: "user", text: "no half marathon yet lol, that's sunday", created_at: sent }],
-    "UTC",
-  );
-  expect(day(out.facts[0]!.occurred_at)).toBe("2026-01-08");
 });
 
 test("4: a seed's own date dates its words", async () => {

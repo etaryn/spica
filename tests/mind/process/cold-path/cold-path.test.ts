@@ -16,7 +16,9 @@ import {
   testDbUrl,
   vec,
 } from "../../../helpers/db";
+import type { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { makeTestDeps } from "../../../helpers/deps";
+import { newMessages, scriptedLabels, type ScriptedMemory } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -50,43 +52,104 @@ async function exchange(
   return { ut, ct, job: { userId, turnIds: [ut.id, ct.id], replyTurnId: ct.id, recalled: [] } };
 }
 
+const script = (labels: Parameters<typeof scriptedLabels>[0]) => (deps: { llm: FakeLLMProvider }) =>
+  Object.assign(deps.llm.handlers, scriptedLabels(labels));
+const biscuit = script({
+  memories: [
+    {
+      said: "Biscuit",
+      label: "dog Biscuit",
+      kind: "trait",
+      salience: 0.8,
+      valence: 0.6,
+      confidence: 0.95,
+      mention: { words: "Biscuit", name: "Biscuit", type: "pet", relation: "dog" },
+    },
+  ],
+});
+
 function depsWith() {
   const deps = { ...makeTestDeps(), embedder: new ScriptedEmbedder(1024) };
-  deps.llm.handlers.extract = (input: string) => ({
-    facts:
-      input.includes("New exchange") && input.includes("Biscuit")
-        ? [
-            {
-              subject: "user",
-              kind: "trait",
-              content: "The user's dog is called Biscuit.",
-              occurred_at: null,
-              salience: 0.8,
-              valence: 0.6,
-              confidence: 0.95,
-              entity_names: ["Biscuit"],
-              thread_title: null,
-            },
-          ]
-        : [],
-    entities: [{ name: "Biscuit", aliases: [], type: "pet", subject: "user", relation: "dog" }],
-    threads: [],
-    relationship: null,
-  });
+  biscuit(deps);
   return deps;
 }
 
-test("extracts, embeds, reconciles and applies in one go; turns marked extracted", async () => {
+test("labels, embeds, reconciles and applies in one go; turns marked extracted", async () => {
   const deps = depsWith();
   const u = await createTestUser();
-  const { job } = await exchange(u, "my dog Biscuit ate my headphones", "iconic", 0);
+  const { ut, job } = await exchange(u, "my dog Biscuit ate my headphones", "iconic", 0);
   const out = await runColdPath(deps, job);
   expect(out.status).toBe("done");
   expect(out.applied).toMatchObject({ inserted: 1, entitiesCreated: 1 });
   const facts = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
-  expect(facts.map((f) => f.content)).toEqual(["The user's dog is called Biscuit."]);
+  expect(facts.map((f) => f.content)).toEqual([
+    'dog Biscuit — the user said "my dog Biscuit ate my headphones"',
+  ]);
   const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
   expect(turns.every((t) => t.extracted)).toBe(true);
+  // Both messages got a move, and the memory points back at its fact.
+  const labels = await getTestDb()
+    .select()
+    .from(s.annotation)
+    .where(eq(s.annotation.session_id, ut.session_id));
+  expect(labels.map((l) => l.layer).sort()).toEqual(["mention", "move", "move", "proposition"]);
+  expect(labels.find((l) => l.layer === "proposition")!.fact_id).toBe(facts[0]!.id);
+});
+
+test("her reply in the same minute as their message is labelled after it", async () => {
+  const deps = depsWith();
+  const u = await createTestUser();
+  const { job } = await exchange(u, "my dog Biscuit", "cute", 0);
+  await runColdPath(deps, job);
+  const read = deps.llm.structuredCalls.find((c) => c.purpose === "labels_read")!.input;
+  expect(read).toMatch(/\[1\.1\] User[^\n]*my dog Biscuit\n\[2\.1\] Spica[^\n]*cute/);
+  expect(read).toContain("Label the new messages (1 to 2).");
+});
+
+test("a memory that updates an earlier one supersedes it by id, with no reconcile call", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const first = await exchange(u, "interview is thursday", "good luck", 0);
+  script({ memories: [{ id: "p-int", said: "thursday", label: "job interview" }] })(deps);
+  await runColdPath(deps, first.job);
+  const db = getTestDb();
+  const ut = await insertTurn(db, u, {
+    id: randomUUID(),
+    session_id: first.ut.session_id,
+    role: "user",
+    text: "they moved it to friday",
+    created_at: at(5),
+  });
+  const ct = await insertTurn(db, u, {
+    id: randomUUID(),
+    session_id: first.ut.session_id,
+    role: "companion",
+    text: "oh!",
+    created_at: at(5),
+    reply_to: ut.id,
+  });
+  script({
+    memories: [
+      {
+        id: "p-moved",
+        said: "moved it",
+        label: "job interview",
+        updates: "p-int",
+        status: "planned",
+      },
+    ],
+  })(deps);
+  const reconciles = () => deps.llm.structuredCalls.filter((c) => c.purpose === "reconcile").length;
+  const before = reconciles();
+  await runColdPath(deps, { userId: u, turnIds: [ut.id, ct.id], replyTurnId: ct.id, recalled: [] });
+  expect(reconciles()).toBe(before);
+  // The second call saw what the first labelled.
+  const read = deps.llm.structuredCalls.filter((c) => c.purpose === "labels_meaning").at(-1)!;
+  expect(read.input).toContain('p-int user event "job interview"');
+  const rows = await db.select().from(s.fact).where(eq(s.fact.user_id, u));
+  const old = rows.find((r) => r.content.includes("interview is thursday"))!;
+  const moved = rows.find((r) => r.content.includes("they moved it to friday"))!;
+  expect(old).toMatchObject({ status: "superseded", superseded_by: moved.id });
 });
 
 test("idempotent: a second run is skipped and makes no LLM call", async () => {
@@ -208,7 +271,8 @@ test("a busy per-user lock rejects with LockBusyError", async () => {
 
 test("any other failure is never retried: the job logs it and counts it on the exchange", async () => {
   const deps = depsWith();
-  deps.llm.handlers.extract = () => {
+  // The second of the three calls fails, after the first already labelled the exchange.
+  deps.llm.handlers.labels_meaning = () => {
     throw new Error("Failed to parse structured output");
   };
   const error = vi.spyOn(deps.log, "error");
@@ -218,6 +282,12 @@ test("any other failure is never retried: the job logs it and counts it on the e
   expect(error).toHaveBeenCalledWith("cold_path failed", { userId: u, error: "Error" });
   const row = await getTurn(getTestDb(), u, ct.id);
   expect(row).toMatchObject({ extracted: false, extract_attempts: 1 });
+  expect(await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).toEqual([]);
+  expect(await getTestDb().select().from(s.annotation).where(eq(s.annotation.user_id, u))).toEqual(
+    [],
+  );
+  // Nothing is asked again.
+  expect(deps.llm.structuredCalls.map((c) => c.purpose)).toEqual(["labels_read", "labels_meaning"]);
 });
 
 test("context turns are passed as context; crisis exchange marks facts sensitive; recall write-back applied", async () => {
@@ -262,12 +332,14 @@ test("context turns are passed as context; crisis exchange marks facts sensitive
     ],
   });
   expect(out.applied!.recalledUpdated).toBe(1);
-  const input = deps.llm.structuredCalls.find((c) => c.purpose === "extract")!.input;
-  expect(input.indexOf("earlier chat")).toBeLessThan(input.indexOf("New exchange"));
+  const input = deps.llm.structuredCalls.filter((c) => c.purpose === "labels_read").at(-1)!.input;
+  expect(input.indexOf("earlier chat")).toBeGreaterThan(-1);
+  expect(input.indexOf("earlier chat")).toBeLessThan(input.indexOf("Biscuit is all I have"));
+  expect(input).toContain("Label the new messages (3 to 4).");
   const [f] = await getTestDb()
     .select()
     .from(s.fact)
-    .where(sql`${s.fact.content} LIKE 'The user''s dog%'`);
+    .where(sql`${s.fact.content} LIKE 'dog Biscuit%'`);
   expect(f!.payload).toEqual({ sensitive: true });
 });
 
@@ -283,22 +355,10 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
     trigger: "reach_out",
   });
   const updateRelationship = vi.fn();
-  deps.llm.handlers.extract = () => ({
-    facts: [],
-    entities: [],
-    threads: [],
-    relationship: {
-      warmth: 0.9,
-      trust: 0,
-      tension: 0,
-      hurt: null,
-      apology: false,
-      make_up: false,
-      ends_relationship: false,
-      retracts_ending: false,
-      wants_repair: false,
-    },
-  });
+  script({
+    memories: [{ said: "Solaris", label: "finished Solaris", status: "happened" }],
+    relationship: { warmth: 0.9 },
+  })(deps);
   const out = await runColdPath({ ...deps, updateRelationship } as never, {
     userId: u,
     turnIds: [c.id],
@@ -309,28 +369,23 @@ test("an exchange with no user turn (a reach-out) extracts but touches neither r
   expect(updateRelationship).not.toHaveBeenCalled();
   expect(await deps.core.state.get()).toBeNull();
   expect((await getTurn(getTestDb(), u, c.id))?.extracted).toBe(true);
+  // Her words are still labelled and remembered as hers.
+  const [memory] = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
+  expect(memory).toMatchObject({
+    subject: "self",
+    content: 'finished Solaris, happened — Spica said "finally finished Solaris"',
+  });
+  const labels = await getTestDb().select().from(s.annotation).where(eq(s.annotation.user_id, u));
+  expect(labels.map((l) => l.layer).sort()).toEqual(["move", "proposition"]);
 });
 
 test("an emotional exchange moves the user's affect and never touches core state", async () => {
   const deps = depsWith();
-  deps.llm.handlers.extract = () => ({
-    facts: [
-      {
-        subject: "user",
-        kind: "event",
-        content: "The user got a promotion.",
-        occurred_at: null,
-        salience: 0.5,
-        valence: 0.9,
-        confidence: 1,
-        entity_names: [],
-        thread_title: null,
-      },
+  script({
+    memories: [
+      { said: "promoted", label: "promotion", salience: 0.5, valence: 0.9, confidence: 1 },
     ],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  })(deps);
   const u = await createTestUser();
   const { job } = await exchange(u, "i got promoted!", "that's great", 0);
   const before = await deps.core.state.get();
@@ -341,26 +396,17 @@ test("an emotional exchange moves the user's affect and never touches core state
   expect(await deps.core.state.get()).toEqual(before);
 });
 
-const emotionalFact = (subject: "user" | "self" | "shared", content: string, valence: number) => ({
-  subject,
-  kind: "event" as const,
-  content,
-  occurred_at: null,
+const emotionalFact = (said: string, label: string, valence: number): ScriptedMemory => ({
+  said,
+  label,
   salience: 0.5,
   valence,
   confidence: 1,
-  entity_names: [],
-  thread_title: null,
 });
 
 test("her own emotional news doesn't colour how she feels about them", async () => {
   const deps = depsWith();
-  deps.llm.handlers.extract = () => ({
-    facts: [emotionalFact("self", "Spica's telescope images finally arrived.", 0.9)],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  script({ memories: [emotionalFact("telescope images", "telescope images arrived", 0.9)] })(deps);
   const u = await createTestUser();
   const { job } = await exchange(u, "how's your day?", "my telescope images came!!", 0);
   await runColdPath(deps, job);
@@ -370,18 +416,18 @@ test("her own emotional news doesn't colour how she feels about them", async () 
 });
 
 test("her own reaction to what they did isn't counted on top of it", async () => {
-  const run = async (facts: ReturnType<typeof emotionalFact>[]) => {
+  const run = async (memories: ScriptedMemory[]) => {
     const deps = depsWith();
-    deps.llm.handlers.extract = () => ({ facts, entities: [], threads: [], relationship: null });
+    script({ memories })(deps);
     const u = await createTestUser();
-    const { job } = await exchange(u, "whatever", "ok", 0);
+    const { job } = await exchange(u, "your films are pretentious", "ha, fair", 0);
     await runColdPath(deps, job);
     return (await getParams(getTestDb(), u)).affect_valence.value;
   };
-  const one = await run([emotionalFact("user", "The user mocked her taste in films.", -0.8)]);
+  const one = await run([emotionalFact("pretentious", "mocked her taste in films", -0.8)]);
   const withHerReaction = await run([
-    emotionalFact("user", "The user mocked her taste in films.", -0.8),
-    emotionalFact("self", "Spica laughed it off.", 0.4),
+    emotionalFact("pretentious", "mocked her taste in films", -0.8),
+    emotionalFact("fair", "laughed it off", 0.4),
   ]);
   expect(withHerReaction).toBe(one);
   expect(one).toBeLessThan(0.5);
@@ -390,25 +436,19 @@ test("her own reaction to what they did isn't counted on top of it", async () =>
 /** Her three claim kinds in one exchange, with core grounding scripted to `sim` (or failing). */
 function selfClaimDeps(sim: number | Error) {
   const deps = { ...makeTestDeps(), embedder: new ScriptedEmbedder(1024) };
-  deps.llm.handlers.extract = (input: string) => ({
-    facts: input.includes("New exchange")
-      ? (["life", "opinion", "reaction"] as const).map((claim_kind) => ({
-          subject: "self",
-          kind: "event",
-          content: `Spica claim ${claim_kind}.`,
-          occurred_at: null,
-          salience: 0.5,
-          valence: 0,
-          confidence: 0.9,
-          entity_names: [],
-          thread_title: null,
-          claim_kind,
-        }))
-      : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  script((input) => {
+    const hers = newMessages(input).find((m) => m.speaker === "spica");
+    return {
+      memories: hers
+        ? (["life", "opinion", "reaction"] as const).map((claim_kind) => ({
+            said: hers.text,
+            label: `claim ${claim_kind}`,
+            salience: 0.5,
+            claim_kind,
+          }))
+        : [],
+    };
+  })(deps);
   deps.core.memory.groundingMatch = async () => {
     if (sim instanceof Error) throw sim;
     return {
@@ -451,7 +491,8 @@ test("a duplicate claim leaves the existing fact's grading alone", async () => {
     relation: "duplicate",
     target_fact_id: /id=([0-9a-f-]{36})/.exec(input)?.[1] ?? null,
   });
-  await runColdPath(deps, (await exchange(u, "c", "d", 5)).job);
+  // The same claim said again, in the same words.
+  await runColdPath(deps, (await exchange(u, "c", "b", 5)).job);
   const rows = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(rows.filter((r) => r.claim_kind === "life").map((r) => r.grounded)).toEqual([true]);
 });
@@ -581,27 +622,18 @@ async function tell(
 
 function ledgerDeps() {
   const deps = makeTestDeps();
-  deps.llm.handlers.extract = (input: string) => ({
-    facts: input.includes("New exchange")
-      ? [
-          {
-            subject: "self",
-            kind: "feeling",
-            content: SECRET,
-            occurred_at: null,
-            salience: 0.6,
-            valence: -0.4,
-            confidence: 0.9,
-            entity_names: [],
-            thread_title: null,
-            claim_kind: "life",
-          },
-        ]
-      : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  script({
+    memories: [
+      {
+        said: "about alcor",
+        label: "scared Alcor will outgrow her",
+        kind: "feeling",
+        salience: 0.6,
+        valence: -0.4,
+        claim_kind: "life",
+      },
+    ],
+  })(deps);
   deps.llm.handlers.reconcile = (input: string) => ({
     relation: /id=([0-9a-f-]{36})/.test(input) ? "duplicate" : "new",
     target_fact_id: /id=([0-9a-f-]{36})/.exec(input)?.[1] ?? null,
@@ -611,7 +643,7 @@ function ledgerDeps() {
 
 async function seedSecret(deps: ReturnType<typeof makeTestDeps>) {
   const [embedding] = await deps.embedder.embed([SECRET], "document");
-  return deps.core.memory.insert({
+  const id = await deps.core.memory.insert({
     kind: "reflection",
     content: SECRET,
     embedding: embedding!,
@@ -625,6 +657,12 @@ async function seedSecret(deps: ReturnType<typeof makeTestDeps>) {
     source_ref: null,
     depth: 3,
   });
+  // Her claim is quoted in her own words, not the memory's, so it grounds on the secret by script.
+  deps.core.memory.groundingMatch = async () => ({
+    similarity: 1,
+    ref: { kind: "memory", id, depth: 3 },
+  });
+  return id;
 }
 
 const ledgerOf = (u: string) =>

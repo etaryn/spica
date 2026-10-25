@@ -23,6 +23,7 @@ import { cardView } from "@/mind/process/onboarding/score";
 import { submitCard } from "@/mind/process/onboarding/submit";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 
 // The real pages run with the session and deps swapped for the test user and test deps.
 const page = vi.hoisted(() => ({ user: null as unknown, deps: null as unknown }));
@@ -167,30 +168,16 @@ test("3: a later conversation fact supersedes a card fact", async () => {
   const d = setup();
   const u = await meet(d, "Sam");
   const [card] = (await cardFactsOf(u)).filter((f) => f.content === HOMEBODY);
-  const SAID = "The user goes out most nights.";
-  d.embedder.set(SAID, card!.embedding);
-  d.llm.handlers.extract = (input: string) => ({
-    facts: input.includes("New exchange")
-      ? [
-          {
-            subject: "user",
-            kind: "trait",
-            content: SAID,
-            occurred_at: null,
-            salience: 0.6,
-            valence: 0,
-            confidence: 0.9,
-            entity_names: [],
-            thread_title: null,
-            claim_kind: null,
-          },
-        ]
-      : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-    bid_response: null,
-  });
+  // The memory is embedded as its label and their words; its vector sits on the card fact's.
+  d.embedder.set("goes out most nights: honestly i go out most nights", card!.embedding);
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels({
+      memories: [
+        { said: "go out most nights", label: "goes out most nights", kind: "trait", salience: 0.6 },
+      ],
+    }),
+  );
   d.llm.handlers.reconcile = () => ({ relation: "contradicts", target_fact_id: card!.id });
   const ex = await talk(d, u, "honestly i go out most nights");
   await runColdPath(d, {

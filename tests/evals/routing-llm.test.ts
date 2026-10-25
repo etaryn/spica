@@ -29,14 +29,14 @@ test("routes the reply and each structured purpose to real or fake", async () =>
   ).toEqual({ which: "real" });
   expect(
     await onlyJudge.classifyJson({
-      purpose: "extract",
+      purpose: "labels_meaning",
       system: "",
       input: "",
       schema: z.any(),
       timeoutMs: 1,
       maxTokens: 1,
     }),
-  ).toEqual({ facts: [], entities: [], threads: [], relationship: null });
+  ).toEqual({ propositions: [], threads: [] });
   expect(
     await new RoutingLLM(real, fake, new Set(["reply"])).generateReply({
       system: [{ text: "" }],

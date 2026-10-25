@@ -233,7 +233,7 @@ export interface RunOptions {
   profiles?: Record<string, Profile>;
   /** This run's turn judge is real (`--real turn_judge` or `--llm=real`): `fake_known_failure` no longer masks a failing `turn` assertion. Default false. */
   turnJudgeReal?: boolean;
-  /** This run's extract purpose is real (`--real extract` or `--llm=real`): a script's `signal_source: "model"` then skips SignalLLM. Default false. */
+  /** This run's labelling is real (`--real labels_read,labels_meaning,labels_signals` or `--llm=real`): a script's `signal_source: "model"` then skips SignalLLM. Default false. */
   extractReal?: boolean;
   /** This run's real purposes, for `needs_real`. */
   realPurposes?: ReadonlySet<string>;

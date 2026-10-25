@@ -20,33 +20,24 @@ import { tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { movedParams } from "@/mind/state/user/relationship/update";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { recordingModule } from "../../../helpers/modules";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-const BISCUIT = "The user's dog is called Biscuit.";
+const BISCUIT = 'dog Biscuit — the user said "my dog is called Biscuit"';
 
 function setup(modules: Module[]) {
   const deps = makeTestDeps({}, modules);
-  deps.llm.handlers.extract = () => ({
-    facts: [
-      {
-        subject: "user",
-        kind: "trait",
-        content: BISCUIT,
-        occurred_at: null,
-        salience: 0.5,
-        valence: 0.5,
-        confidence: 0.9,
-        entity_names: [],
-        thread_title: null,
-      },
-    ],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  Object.assign(
+    deps.llm.handlers,
+    scriptedLabels({
+      memories: [
+        { said: "dog is called", label: "dog Biscuit", kind: "trait", salience: 0.5, valence: 0.5 },
+      ],
+    }),
+  );
   return deps;
 }
 

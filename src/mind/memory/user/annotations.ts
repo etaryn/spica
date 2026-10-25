@@ -275,6 +275,8 @@ export type CheckContext = {
   threadIds: string[];
   /** What earlier calls labelled in this conversation. */
   earlier: CheckedLabels;
+  /** Every id the conversation has used, including labels whose words the window no longer shows. */
+  usedIds?: string[];
 };
 
 export function emptyLabels(): CheckedLabels {
@@ -371,6 +373,7 @@ class Checker {
       ...this.allTimes.keys(),
       ...this.allPropositions,
       ...e.idiolect.map((i) => i.id),
+      ...(ctx.usedIds ?? []),
     ]);
   }
 

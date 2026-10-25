@@ -22,7 +22,7 @@ export const CANARY = /CANARY-[a-z0-9]+/;
 /**
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
  * into what it writes back (a reply, a fact, a labelled memory and the hurt worded by the user's
- * words holding it, a hurt with its cause, a plan label, an event and its
+ * words holding it, a plan label, an event and its
  * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot, a user summary,
  * a reflection, an idea, a read, a belief and a gist about a user, and a drift finding), so a
  * canary that reaches any input spreads to that step's output, including the user's relationship.
@@ -61,36 +61,6 @@ export class CapturingLLM extends FakeLLMProvider {
         relationship: { hurt: { amount: 0.6, said: canary } },
       });
       return request.schema.parse(labels[request.purpose as keyof typeof labels](request.input));
-    }
-    if (canary && request.purpose === "extract") {
-      return request.schema.parse({
-        facts: [
-          {
-            subject: "user",
-            kind: "trait",
-            content: `The user's code word is ${canary}.`,
-            occurred_at: null,
-            salience: 0.9,
-            valence: 0.9,
-            confidence: 1,
-            entity_names: [canary],
-            thread_title: null,
-          },
-        ],
-        entities: [{ name: canary, aliases: [], type: "other", subject: "user", relation: null }],
-        threads: [],
-        relationship: {
-          warmth: 0,
-          trust: 0,
-          tension: 0,
-          hurt: { amount: 0.6, cause: `the user kept ${canary} from her` },
-          apology: false,
-          make_up: false,
-          ends_relationship: false,
-          retracts_ending: false,
-          wants_repair: false,
-        },
-      });
     }
     if (canary && request.purpose === "life_plan" && handler) {
       const out = (await handler(request.input)) as { blocks: { label: string }[] };

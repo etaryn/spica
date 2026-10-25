@@ -163,12 +163,12 @@ describe("AnthropicProvider.classifyJson", () => {
 });
 
 describe("structured model roles", () => {
-  test("model: extract / judge pick the configured model; default is cheap", async () => {
+  test("model: labels / judge pick the configured model; default is cheap", async () => {
     const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
     const p = new AnthropicProvider(client, {
       ...models,
       cheap: "m-cheap",
-      extract: "m-extract",
+      labels: "m-labels",
       judge: "m-judge",
     });
     const schema = z.object({ ok: z.boolean() });
@@ -182,7 +182,7 @@ describe("structured model roles", () => {
     });
     await p.classifyJson({
       purpose: "x",
-      model: "extract",
+      model: "labels",
       system: "s",
       input: "i",
       schema,
@@ -198,7 +198,7 @@ describe("structured model roles", () => {
       timeoutMs: 1,
       maxTokens: 1,
     });
-    expect(parse.mock.calls.map((c) => c[0].model)).toEqual(["m-cheap", "m-extract", "m-judge"]);
+    expect(parse.mock.calls.map((c) => c[0].model)).toEqual(["m-cheap", "m-labels", "m-judge"]);
   });
 });
 
@@ -315,8 +315,8 @@ describe("usage sink", () => {
     ).rejects.toThrow();
     const structured = stubClient(undefined, { usage, parsed_output: { ok: true } });
     await new AnthropicProvider(structured.client, models, onUsage).classifyJson({
-      purpose: "extract",
-      model: "extract",
+      purpose: "labels_read",
+      model: "labels",
       system: "s",
       input: "i",
       schema: z.object({ ok: z.boolean() }),
@@ -341,7 +341,7 @@ describe("usage sink", () => {
         cache_creation_input_tokens: 5,
       },
       {
-        purpose: "extract",
+        purpose: "labels_read",
         model: "claude-haiku-5-5",
         input_tokens: 100,
         output_tokens: 20,
@@ -379,14 +379,14 @@ describe("FakeLLMProvider handlers", () => {
     ).toEqual({ relation: "duplicate", target_fact_id: "abc" });
     expect(
       await f.classifyJson({
-        purpose: "extract",
+        purpose: "labels_meaning",
         system: "",
         input: "x",
         schema: any,
         timeoutMs: 1,
         maxTokens: 1,
       }),
-    ).toEqual({ facts: [], entities: [], threads: [], relationship: null });
+    ).toEqual({ propositions: [], threads: [] });
     await expect(
       f.classifyJson({
         purpose: "judge_recall",
@@ -400,7 +400,7 @@ describe("FakeLLMProvider handlers", () => {
     expect(f.structuredCalls.map((c) => c.purpose)).toEqual([
       "crisis",
       "reconcile",
-      "extract",
+      "labels_meaning",
       "judge_recall",
     ]);
   });

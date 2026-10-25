@@ -15,6 +15,7 @@ import { runUserMind, sweepPendingUserMindRuns } from "@/mind/process/user/run";
 import { tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { newMessages, scriptedLabels } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -44,45 +45,23 @@ async function count(table: string, where = "true"): Promise<number> {
   return Number(res.rows[0]!.n);
 }
 
-/** Scripted extraction: "TRUST" raises trust sharply; "BIG" stores a salient fact. */
+/** Scripted labels: "TRUST" raises trust sharply; "BIG" stores a salient fact. */
 function deps() {
   const d = makeTestDeps();
-  d.llm.handlers.extract = (input: string) => {
-    const latest = input.split("New exchange").at(-1) ?? "";
-    return {
-      facts: latest.includes("BIG")
-        ? [
-            {
-              subject: "user",
-              kind: "event",
-              content: `Big news from ${latest.match(/BIG \w+/)?.[0] ?? "BIG"}.`,
-              occurred_at: null,
-              salience: 0.9,
-              valence: 0.6,
-              confidence: 0.9,
-              entity_names: [],
-              thread_title: null,
-              claim_kind: null,
-            },
-          ]
-        : [],
-      entities: [],
-      threads: [],
-      relationship: latest.includes("TRUST")
-        ? {
-            warmth: 0,
-            trust: 1,
-            tension: 0,
-            hurt: null,
-            apology: false,
-            make_up: false,
-            ends_relationship: false,
-            retracts_ending: false,
-            wants_repair: false,
-          }
-        : null,
-    };
-  };
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels((input) => {
+      const latest = newMessages(input)
+        .filter((m) => m.speaker === "user")
+        .map((m) => m.text)
+        .join(" ");
+      const big = latest.match(/BIG \w+/)?.[0];
+      return {
+        memories: big ? [{ said: big, label: `big news ${big}`, salience: 0.9, valence: 0.6 }] : [],
+        relationship: latest.includes("TRUST") ? { trust: 1 } : null,
+      };
+    }),
+  );
   return d;
 }
 

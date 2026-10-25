@@ -7,6 +7,7 @@ import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { makeTestDeps } from "../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -15,25 +16,11 @@ afterAll(closeTestDb);
 type D = ReturnType<typeof makeTestDeps>;
 type Established = { idiolect: { established_at: string | null } };
 
-const JOKE = "Spica and the user joke that every cloud is a whale.";
+const JOKE = "whale cloud again";
 const SESSION = randomUUID();
-const idiolectFact = (extra: object = {}) => ({
-  subject: "shared",
-  kind: "idiolect",
-  content: JOKE,
-  occurred_at: null,
-  salience: 0.6,
-  valence: 0.6,
-  confidence: 0.9,
-  entity_names: [],
-  thread_title: null,
-  claim_kind: null,
-  idiolect_type: "joke",
-  started_by: "user",
-  ...extra,
-});
-const extracting = (d: D, fact: object) => {
-  d.llm.handlers.extract = () => ({ facts: [fact], entities: [], threads: [], relationship: null });
+/** The user's message is a running joke; `said` picks whose words it is. */
+const joking = (d: D, said = JOKE) => {
+  Object.assign(d.llm.handlers, scriptedLabels({ idiolect: [{ said, type: "joke" }] }));
 };
 
 /** One user message and her reply, then the cold path on them. Returns her reply's id. */
@@ -50,7 +37,7 @@ async function exchange(d: D, u: string, session = SESSION): Promise<string> {
     id: randomUUID(),
     session_id: session,
     role: "companion",
-    text: "ha",
+    text: "lol same",
     created_at: d.clock.now(),
     reply_to: ut.id,
   });
@@ -67,7 +54,7 @@ const idiolects = (u: string) =>
 test("a joke starts as a candidate and is established when a later exchange calls it back", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
-  extracting(d, idiolectFact());
+  joking(d);
   await exchange(d, u);
   const [first] = await idiolects(u);
   expect(first!.payload).toMatchObject({
@@ -84,7 +71,7 @@ test("a joke starts as a candidate and is established when a later exchange call
 test("a retry of the same exchange never establishes it", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
-  extracting(d, idiolectFact());
+  joking(d);
   const replyId = await exchange(d, u);
   const [first] = await idiolects(u);
 
@@ -121,7 +108,7 @@ test("a duplicate of a non-idiolect shared fact establishes nothing", async () =
     status: "open",
     source_ref: randomUUID(),
   });
-  extracting(d, idiolectFact());
+  joking(d);
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: plain.id });
   await exchange(d, u);
   const [row] = await getTestDb().select().from(s.fact).where(eq(s.fact.id, plain.id));
@@ -131,14 +118,15 @@ test("a duplicate of a non-idiolect shared fact establishes nothing", async () =
   expect(candidate!.payload).toMatchObject({ idiolect: { established_at: null } });
 });
 
-test("an idiolect fact is always between them, never her own claim", async () => {
+test("an idiolect from her words is still between them, never her own claim", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
-  extracting(d, idiolectFact({ subject: "self", claim_kind: "reaction" }));
+  joking(d, "lol same");
   await exchange(d, u);
   const [row] = await idiolects(u);
   expect(row!.subject).toBe("shared");
   expect(row!.claim_kind).toBeNull();
+  expect(row!.payload).toMatchObject({ idiolect: { started_by: "spica" } });
 });
 
 test("establishIdiolect keeps sensitive and fills a missing idiolect payload", async () => {
@@ -171,19 +159,13 @@ test("establishIdiolect keeps sensitive and fills a missing idiolect payload", a
   });
 });
 
-test("missing idiolect fields fall back to a reference the user started", async () => {
-  const d = makeTestDeps();
-  const u = await createTestUser();
-  extracting(d, idiolectFact({ idiolect_type: null, started_by: null }));
-  await exchange(d, u);
-  const [row] = await idiolects(u);
-  expect(row!.payload).toMatchObject({ idiolect: { type: "reference", started_by: "user" } });
-});
-
 test("a fact of another kind carries no idiolect fields", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
-  extracting(d, idiolectFact({ kind: "event" }));
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels({ memories: [{ said: JOKE, label: "whale clouds", subject: "shared" }] }),
+  );
   await exchange(d, u);
   const [row] = await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u));
   expect(row!.payload).toBeNull();
@@ -192,7 +174,7 @@ test("a fact of another kind carries no idiolect fields", async () => {
 test("a callback in the same sitting doesn't establish the joke; the next sitting does", async () => {
   const d = makeTestDeps();
   const u = await createTestUser();
-  extracting(d, idiolectFact());
+  joking(d);
   await exchange(d, u);
   const [first] = await idiolects(u);
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: first!.id });

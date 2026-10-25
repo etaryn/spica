@@ -1,8 +1,8 @@
 /**
  * The cold path: after she has replied, it turns the exchange into memory and relationship state.
- * The steps are extract, embed, reconcile against near memories, grade her own claims against
- * core, encode, then update the
- * relationship, including her feelings toward them. It all runs in one transaction holding a
+ * The steps are label (three calls over the conversation so far), embed, reconcile against near
+ * memories (or by the id a label says it updates), grade her own claims against core, encode,
+ * then update the relationship, including her feelings toward them. It all runs in one transaction holding a
  * per-user advisory lock, so a crash writes nothing and two exchanges from one user never
  * reconcile at once. It never delays a reply, and a failure is never retried (`runColdPathJob`).
  */
@@ -10,6 +10,7 @@ import type { GroundRef } from "@/mind/memory/core/types";
 import { recordDisclosures } from "@/mind/memory/user/disclosure";
 import { sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
+import { sessionAnnotations } from "@/db/repos/user/annotations";
 import { nearFacts } from "@/db/repos/user/facts";
 import {
   bumpExtractAttempts,
@@ -20,8 +21,14 @@ import {
 import { listOpenThreads } from "@/db/repos/user/threads";
 import { retireIdeas } from "@/db/repos/user/user-mind";
 import { getTimezone } from "@/db/repos/user/users";
+import { mergeLabels } from "@/mind/memory/user/annotations";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
-import { extract, type Extraction, type ExtractedFact } from "@/mind/memory/user/extract";
+import { labelStretch } from "@/mind/memory/user/label";
+import { memoryPlans, signalsOf, type MemoryPlan } from "@/mind/memory/user/label-memory";
+import { messagesOf } from "@/mind/memory/user/layers";
+import { numberPieces } from "@/mind/memory/user/pieces";
+import { factIdsByLocal, fromRows } from "@/mind/memory/user/stored-labels";
+import { zoneOrUtc } from "@/mind/platform/timezone";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
 import type { Trigger } from "@/db/repos/user/user-mind";
@@ -45,7 +52,7 @@ export type ColdPathOutcome = {
   moved?: ParamName[];
 };
 
-type CandidateFact = { fact: ExtractedFact; source: "turn" | "inferred" };
+type CandidateFact = { fact: MemoryPlan; source: "turn" | "inferred" };
 
 /**
  * The `cold_path` job. Only a busy lock throws for pg-boss to retry, since no prompt has run yet.
@@ -82,7 +89,13 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     const turns = await getTurnsByIds(tx, job.userId, job.turnIds);
     if (turns.length === 0 || turns.every((t) => t.extracted)) return { status: "skipped" };
 
-    const { extraction, context } = await extractExchange(deps, tx, job.userId, turns);
+    const { labels, all, stored, pieces, zone, sessionId, context } = await labelExchange(
+      deps,
+      tx,
+      job.userId,
+      turns,
+    );
+    const read = signalsOf(labels, all, pieces, config.extraction.quote_chars);
 
     // Each idea she was shown gets one chance; idempotent, so a retried job changes nothing.
     // ponytail: a cold path re-enqueued by the sweep carries no offered ideas, so they stay live until they expire
@@ -91,27 +104,41 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     const crisis = turns.some((t) => t.safety_flag?.flagged);
     // A reach-out on its own is only her words: no user behaviour to score, no exchange tone.
     const hasUserTurn = turns.some((t) => t.role === "user");
-    const signals = crisis || !hasUserTurn ? null : extraction.relationship;
-    const intimacy = crisis || !hasUserTurn ? null : extraction.intimacy;
+    const signals = crisis || !hasUserTurn ? null : read.signals;
+    const intimacy = crisis || !hasUserTurn ? null : read.intimacy;
     const bid =
       crisis || !hasUserTurn
         ? null
-        : bidAfter(extraction.bid, context, turns, config.session.idle_gap_minutes);
+        : bidAfter(read.bid, context, turns, config.session.idle_gap_minutes);
 
     const hurt = significantHurt(signals, config.relationship.signal_deadzone);
-    const candidates: CandidateFact[] = extraction.facts.map((fact) => ({ fact, source: "turn" }));
+    const candidates: CandidateFact[] = memoryPlans(
+      labels,
+      all,
+      pieces,
+      zone,
+      config.extraction,
+    ).map((fact) => ({ fact, source: "turn" }));
     if (hurt) candidates.push(hurtFeeling(hurt, config));
 
-    const planned = await reconcileCandidates(deps, tx, job.userId, candidates);
+    const planned = await reconcileCandidates(
+      deps,
+      tx,
+      job.userId,
+      candidates,
+      factIdsByLocal(stored),
+    );
 
     const applied = await encodeExtraction(tx, config, {
       userId: job.userId,
       now: clock.now(),
       // Turns come back oldest first: the exchange's first turn (hers, for a reach-out).
       exchangeAt: turns[0]!.created_at,
-      entities: extraction.entities,
+      labels,
+      stored,
+      sessionId,
+      zone,
       facts: planned,
-      threads: extraction.threads,
       sensitive: crisis,
       sourceRef: job.replyTurnId ?? turns.at(-1)!.id,
       recalled: job.recalled ?? [],
@@ -201,28 +228,54 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
   return outcome;
 }
 
-async function extractExchange(
-  deps: Deps,
-  tx: Db,
-  userId: string,
-  turns: Turn[],
-): Promise<{ extraction: Extraction; context: Turn[] }> {
+/**
+ * Labels the exchange: the conversation so far (capped at `window_messages`) with a few turns from
+ * before it to read it by, and what earlier exchanges of the conversation already labelled.
+ */
+async function labelExchange(deps: Deps, tx: Db, userId: string, turns: Turn[]) {
   const { config } = deps;
-  const context = (
-    await turnsUpTo(tx, userId, turns[0]!, config.extraction.context_turns + 1)
-  ).slice(0, -1);
-
-  const extraction = await extract(deps, {
-    newTurns: turns,
-    contextTurns: context,
-    openThreads: await listOpenThreads(tx, userId, config.extraction.open_threads_in_prompt),
-    timezone: await getTimezone(tx, userId),
-    herInterests: snapshotSection(
+  // Their messages come before her reply to them, even when both carry the same minute.
+  const exchange = [...turns].sort(
+    (a, b) =>
+      a.created_at.getTime() - b.created_at.getTime() ||
+      Number(a.role !== "user") - Number(b.role !== "user"),
+  );
+  const ids = new Set(exchange.map((t) => t.id));
+  const last = exchange.at(-1)!;
+  const before = (
+    await turnsUpTo(tx, userId, exchange[0]!, config.extraction.window_messages)
+  ).filter((t) => !ids.has(t.id));
+  // The conversation so far, with a few turns from before it to read it by.
+  const start = before.findIndex((t) => t.session_id === last.session_id);
+  const context = before.slice(
+    Math.max(0, (start === -1 ? before.length : start) - config.extraction.context_turns),
+  );
+  const pieces = numberPieces(messagesOf([...context, ...exchange]), context.length);
+  // ponytail: a deferred reply in another session from its burst reads only its own session's labels; key by the conversation layer if that loses links
+  const stored = await sessionAnnotations(tx, userId, last.session_id);
+  const earlier = fromRows(stored, pieces);
+  const zone = zoneOrUtc(await getTimezone(tx, userId));
+  const labels = await labelStretch(deps, {
+    pieces,
+    zone,
+    threads: await listOpenThreads(tx, userId, config.extraction.open_threads_in_prompt),
+    interests: snapshotSection(
       (await deps.core.memory.latestSnapshot())?.content ?? "",
       "Interests",
     ),
+    earlier,
+    // ponytail: the model isn't told ids its window no longer shows, so it may pick one and lose that label; list the highest ids used if long conversations show it
+    usedIds: stored.map((r) => r.local_id),
   });
-  return { extraction, context };
+  return {
+    labels,
+    all: mergeLabels(earlier, labels),
+    stored,
+    pieces,
+    zone,
+    sessionId: last.session_id,
+    context,
+  };
 }
 
 /**
@@ -239,15 +292,21 @@ function hurtFeeling(hurt: NonNullable<Signals["hurt"]>, config: Deps["config"])
   return {
     source: "inferred",
     fact: {
+      localId: null,
       subject: "self",
       kind: "feeling",
       content: hurtFactContent(hurt.cause),
+      embedText: hurtFactContent(hurt.cause),
       occurred_at: null,
       salience: config.relationship.hurt_fact_salience,
       valence: -hurt.amount,
       confidence: config.relationship.hurt_fact_confidence,
-      entity_names: [],
-      thread_title: null,
+      claim_kind: null,
+      mentions: [],
+      threadId: null,
+      newThread: null,
+      updates: null,
+      idiolect: null,
     },
   };
 }
@@ -257,11 +316,13 @@ async function reconcileCandidates(
   tx: Db,
   userId: string,
   candidates: CandidateFact[],
+  /** Earlier memories of this conversation by their label id: what an update points at. */
+  earlierFacts: Map<string, string>,
 ): Promise<PlannedFact[]> {
   const { config, embedder } = deps;
   const embeddings = candidates.length
     ? await embedder.embed(
-        candidates.map((c) => c.fact.content),
+        candidates.map((c) => c.fact.embedText),
         "document",
       )
     : [];
@@ -271,19 +332,22 @@ async function reconcileCandidates(
     const embedding = embeddings[i];
     if (!embedding) throw new Error("embedder returned fewer vectors than facts");
 
-    const neighbors = await nearFacts(
-      tx,
-      userId,
-      fact.subject,
-      embedding,
-      config.reconcile.neighbor_k,
-      config.reconcile.contradiction_similarity,
-    );
-    const decision = await reconcileAgainstNeighbours(
-      deps,
-      { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
-      neighbors,
-    );
+    // A label that says which memory it changes needs no model to find it.
+    const updated = fact.updates ? earlierFacts.get(fact.updates) : undefined;
+    const decision = updated
+      ? { relation: "contradicts" as const, targetId: updated }
+      : await reconcileAgainstNeighbours(
+          deps,
+          { label: `${fact.subject}, ${fact.kind}`, content: fact.content },
+          await nearFacts(
+            tx,
+            userId,
+            fact.subject,
+            embedding,
+            config.reconcile.neighbor_k,
+            config.reconcile.contradiction_similarity,
+          ),
+        );
     const grounding = await groundClaim(deps, fact, embedding);
     planned.push({
       fact,
@@ -304,7 +368,7 @@ async function reconcileCandidates(
  */
 async function groundClaim(
   deps: Deps,
-  fact: ExtractedFact,
+  fact: MemoryPlan,
   embedding: number[],
 ): Promise<{ grounded: boolean | null; ref: GroundRef | null }> {
   if (fact.claim_kind !== "life" && fact.claim_kind !== "opinion")

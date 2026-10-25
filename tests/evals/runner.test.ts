@@ -345,10 +345,11 @@ test("a cold-path failure is never retried: it fails the script so it shows", as
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
   let calls = 0;
-  llm.handlers.extract = () => {
+  const read = llm.handlers.labels_read!;
+  llm.handlers.labels_read = (input: string) => {
     calls += 1;
     if (calls === 1) throw new Error("Failed to parse structured output");
-    return { facts: [], entities: [], threads: [], relationship: null };
+    return read(input);
   };
   const script = ScriptSchema.parse({
     name: "retry",

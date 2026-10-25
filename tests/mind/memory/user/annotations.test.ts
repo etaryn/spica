@@ -405,3 +405,14 @@ test("each call's loose schema converts and stays within the nullable limit", ()
     expect(JSON.stringify(format.schema)).toContain("one of:");
   }
 });
+
+test("an id used earlier in the conversation stays taken even when its words aren't shown", () => {
+  const out = checkLabels(base(), { ...ctx, usedIds: ["m3"] });
+  expect(ids(out.moves)).toEqual(["m4"]);
+  expect(out.drops).toContainEqual({
+    layer: "move",
+    id: "m3",
+    reason: "bad_ref",
+    ref: "id already used",
+  });
+});

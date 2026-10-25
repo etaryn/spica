@@ -9,7 +9,6 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { ensureRelationship } from "@/db/repos/user/relationship";
-import { anchorExtraction } from "@/mind/memory/user/extract";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { withTimeRendering } from "@/mind/platform/llm/render-net";
 import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
@@ -76,38 +75,6 @@ test("2: a weekday in her summary takes the date of the memory she was shown", a
   );
   const [date] = tokenDates((await liveSummary(d.db, u))!.content);
   expect(date!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
-});
-
-test("3: extract dates a fact from its message's own time, in the labelled direction", () => {
-  const sent = new Date("2026-01-12T09:00:00Z");
-  const fact = {
-    subject: "user",
-    kind: "event",
-    content: "The user finished the task over the weekend.",
-    occurred_at: null,
-    when_direction: "past",
-    salience: 0.7,
-    valence: 0,
-    confidence: 0.9,
-    entity_names: [],
-    thread_title: null,
-    claim_kind: null,
-    idiolect_type: null,
-    started_by: null,
-  };
-  const out = anchorExtraction(
-    {
-      facts: [fact],
-      entities: [],
-      threads: [],
-      relationship: null,
-      intimacy: null,
-      bid: null,
-    } as never,
-    [{ role: "user", text: "finished it over the weekend", created_at: sent }],
-    "UTC",
-  );
-  expect(out.facts[0]!.occurred_at!.toISOString().slice(0, 10)).toBe("2026-01-10");
 });
 
 test("4: her view keeps an older message's words and says what they mean now", () => {

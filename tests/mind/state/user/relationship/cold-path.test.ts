@@ -12,6 +12,7 @@ import {
 import { insertTurn } from "@/db/repos/user/session-log";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../../helpers/db";
+import { scriptedLabels, type ScriptedSignals } from "@/mind/platform/llm/fake-labels";
 import { makeTestDeps } from "../../../../helpers/deps";
 
 beforeEach(resetDb);
@@ -56,9 +57,14 @@ async function exchange(
   return { userId, turnIds: [ut.id, ct.id], replyTurnId: ct.id, recalled: [] };
 }
 
-function withSignals(rel: unknown) {
+/** The labelling reads `rel` from their message; the hurt's words are code's, from their message. */
+function withSignals(
+  rel:
+    (Omit<ScriptedSignals, "hurt"> & { hurt?: { amount: number; cause?: string } | null }) | null,
+) {
   const deps = makeTestDeps();
-  deps.llm.handlers.extract = () => ({ facts: [], entities: [], threads: [], relationship: rel });
+  const relationship = rel && { ...rel, hurt: rel.hurt ? { amount: rel.hurt.amount } : null };
+  Object.assign(deps.llm.handlers, scriptedLabels({ relationship }));
   return deps;
 }
 
@@ -75,7 +81,7 @@ test("a hurt signal stores the cause as a self feeling fact, raises hurt, makes 
     subject: "self",
     kind: "feeling",
     source: "inferred",
-    content: "Spica felt hurt because the user called her news stupid.",
+    content: 'Spica felt hurt because the user said "your news is stupid".',
   });
   const row = await getRelationshipRow(getTestDb(), u);
   expect(row).toMatchObject({ make_up_state: "due", hurt_cause_fact: facts[0]!.id });
@@ -161,58 +167,31 @@ test("savepoint: a relationship failure rolls back only the relationship part", 
       throw new Error("boom");
     },
   });
-  deps.llm.handlers.extract = () => ({
-    facts: [
-      {
-        subject: "user",
-        kind: "trait",
-        content: "The user likes tea.",
-        occurred_at: null,
-        salience: 0.5,
-        valence: 0,
-        confidence: 0.9,
-        entity_names: [],
-        thread_title: null,
-      },
-    ],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  Object.assign(
+    deps.llm.handlers,
+    scriptedLabels({
+      memories: [{ said: "tea", label: "likes tea", kind: "trait", salience: 0.5 }],
+    }),
+  );
   const u = await createTestUser();
   const job = await exchange(deps, u, "i like tea");
   expect((await runColdPath(deps, job)).status).toBe("done");
   expect(await getRelationshipRow(getTestDb(), u)).toBeNull();
   expect(
     (await getTestDb().select().from(s.fact).where(eq(s.fact.user_id, u))).map((f) => f.content),
-  ).toEqual(["The user likes tea."]);
+  ).toEqual(['likes tea — the user said "i like tea"']);
   const turns = await getTestDb().select().from(s.session_log).where(eq(s.session_log.user_id, u));
   expect(turns.every((t) => t.extracted)).toBe(true);
 });
 
 test("crisis exchange leaves her feelings toward them (affect, afterglow) untouched", async () => {
-  const warmFact = {
-    subject: "user",
-    kind: "event",
-    content: "The user got the job they wanted.",
-    occurred_at: null,
-    salience: 0.9,
-    valence: 0.9,
-    confidence: 0.9,
-    entity_names: [],
-    thread_title: null,
-  };
+  const warmFact = { said: "the job", label: "got the job", salience: 0.9, valence: 0.9 };
   const feelings = async (u: string) => {
     const p = await getParams(getTestDb(), u);
     return { affect: p.affect_valence.value, afterglow: p.afterglow.value };
   };
   const extractWarm = (deps: ReturnType<typeof makeTestDeps>) => {
-    deps.llm.handlers.extract = () => ({
-      facts: [warmFact],
-      entities: [],
-      threads: [],
-      relationship: null,
-    });
+    Object.assign(deps.llm.handlers, scriptedLabels({ memories: [warmFact] }));
   };
 
   // Precondition: the same warm exchange outside a crisis does move them.
@@ -233,15 +212,9 @@ test("crisis exchange leaves her feelings toward them (affect, afterglow) untouc
   expect(await feelings(u)).toEqual(before);
 });
 
-function withIntimacy(intimacy: unknown) {
+function withIntimacy(intimacy: { user_disclosure: number; user_responsiveness: number | null }) {
   const deps = makeTestDeps();
-  deps.llm.handlers.extract = () => ({
-    facts: [],
-    entities: [],
-    threads: [],
-    relationship: null,
-    intimacy,
-  });
+  Object.assign(deps.llm.handlers, scriptedLabels({ intimacy }));
   return deps;
 }
 

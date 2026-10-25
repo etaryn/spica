@@ -38,7 +38,10 @@ export type AnchorContext = {
   /** Keep the words and gloss them (her view of older messages) instead of replacing them. */
   said?: boolean;
 };
-export type AnchorHints = Omit<AnchorContext, "at" | "zone">;
+export type AnchorHints = Omit<AnchorContext, "at" | "zone"> & {
+  /** Store the words as given: a labelled memory quotes them, and its dates are already tokens. */
+  asSaid?: boolean;
+};
 
 type Anchor = { local: string; precision: Precision; zone: string };
 

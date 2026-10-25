@@ -103,7 +103,6 @@ export class AnthropicProvider implements LLMProvider {
   private modelIdFor(model: StructuredModel): string {
     const ids: Record<StructuredModel, string> = {
       cheap: this.models.cheap,
-      extract: this.models.extract,
       labels: this.models.labels,
       judge: this.models.judge,
       guard: this.models.guard,

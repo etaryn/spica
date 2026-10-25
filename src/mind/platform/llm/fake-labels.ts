@@ -98,12 +98,15 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
     const holding = (words: string) =>
       messages.find((m) => m.text.toLowerCase().includes(words.toLowerCase()));
     const moveId = (m: NewMessage) => `m${m.message}-${hash(m.text)}`;
+    // The message number keeps ids apart when a later exchange says the same words again.
+    const idFor = (prefix: string, m: NewMessage, key: string) =>
+      `${prefix}${m.message}-${hash(key)}`;
     const pieceOf = (m: NewMessage, words: string) => pieceHolding(input, m, words) ?? m.pieces[0]!;
-    return { s, messages, holding, moveId, pieceOf };
+    return { s, messages, holding, moveId, pieceOf, idFor };
   };
   return {
     labels_read: (input) => {
-      const { s, messages, holding, moveId, pieceOf } = at(input);
+      const { s, messages, holding, moveId, pieceOf, idFor } = at(input);
       const scripted = (m: NewMessage) =>
         s.memories?.find((x) => holding(x.said) === m && x.act)?.act;
       return {
@@ -118,7 +121,7 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
           if (!x.mention || !m) return [];
           return [
             {
-              id: `e-${hash(x.mention.words)}`,
+              id: idFor("e", m, x.mention.words),
               piece: pieceOf(m, x.mention.words),
               words: x.mention.words,
               refers_to: "",
@@ -135,7 +138,7 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
           const { words, ...meaning } = x.time;
           return [
             {
-              id: `t-${hash(words + x.label)}`,
+              id: idFor("t", m, words + x.label),
               piece: pieceOf(m, words),
               words,
               from: "said",
@@ -155,21 +158,23 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
       };
     },
     labels_meaning: (input) => {
-      const { s, holding, moveId } = at(input);
+      const { s, holding, moveId, idFor } = at(input);
       return {
         propositions: (s.memories ?? []).flatMap((x) => {
           const m = holding(x.said);
           if (!m) return [];
+          const tm = x.time && holding(x.time.words);
+          const em = x.mention && holding(x.mention.words);
           return [
             {
-              id: x.id ?? `p-${hash(x.label + x.said)}`,
+              id: x.id ?? idFor("p", m, x.label + x.said),
               moves: [moveId(m)],
               subject: x.subject ?? (m.speaker === "user" ? "user" : "self"),
               kind: x.kind ?? "event",
               label: x.label,
               status: x.status ?? null,
-              times: x.time && holding(x.time.words) ? [`t-${hash(x.time.words + x.label)}`] : [],
-              mentions: x.mention && holding(x.mention.words) ? [`e-${hash(x.mention.words)}`] : [],
+              times: x.time && tm ? [idFor("t", tm, x.time.words + x.label)] : [],
+              mentions: x.mention && em ? [idFor("e", em, x.mention.words)] : [],
               thread_id: x.thread_id ?? "",
               new_thread: x.new_thread ?? "",
               updates: x.updates ?? "",
@@ -192,14 +197,14 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
       };
     },
     labels_signals: (input) => {
-      const { s, messages, holding, moveId } = at(input);
+      const { s, messages, holding, moveId, idFor } = at(input);
       const userMoves = messages.filter((m) => m.speaker === "user").map(moveId);
       const r = s.relationship;
       const hurtAt = r?.hurt?.said ? holding(r.hurt.said) : undefined;
       return {
         idiolect: (s.idiolect ?? []).flatMap((i) => {
           const m = holding(i.said);
-          return m ? [{ id: `i-${hash(i.said)}`, pieces: m.pieces, type: i.type }] : [];
+          return m ? [{ id: idFor("i", m, i.said), pieces: m.pieces, type: i.type }] : [];
         }),
         relationship: r
           ? {

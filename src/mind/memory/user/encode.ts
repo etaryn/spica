@@ -1,11 +1,13 @@
 /**
- * Encoding: writes one exchange's extraction into the user's memory. It covers entities, threads
- * and facts (each reconciled against what's already stored), then the hot path's recall
- * reinforcement. Runs inside the cold path's transaction; every id the model supplied is checked
- * to belong to this user.
+ * Encoding: writes one exchange's labels into the user's memory. It covers the people and things
+ * the mentions name, threads, memories (each reconciled against what's already stored), every
+ * label as an annotation pointing at the words, then the hot path's recall reinforcement. Runs
+ * inside the cold path's transaction; every id the model supplied is checked to belong to this
+ * user.
  */
 import type { GroundRef } from "@/mind/memory/core/types";
 import type { Db } from "@/db/client";
+import { insertAnnotations, type AnnotationRow } from "@/db/repos/user/annotations";
 import { normalizeName, upsertEntityMention } from "@/db/repos/user/entities";
 import {
   applyRecall,
@@ -25,12 +27,14 @@ import {
 } from "@/db/repos/user/threads";
 import type { RecalledFact } from "@/mind/memory/shared/types";
 import type { Config } from "@/mind/platform/config";
-import type { ExtractedEntity, ExtractedFact, ExtractedThread } from "./extract";
+import { labelInstant } from "@/mind/platform/time-labels";
 import type { Decision } from "@/mind/memory/shared/reconcile";
-import { idiolectPayload } from "./idiolect";
+import type { CheckedLabels } from "./annotations";
+import type { MemoryPlan } from "./label-memory";
+import { entityIdsByLocal, toRows } from "./stored-labels";
 
 export type PlannedFact = {
-  fact: ExtractedFact;
+  fact: MemoryPlan;
   embedding: number[];
   decision: Decision;
   source?: "turn" | "inferred";
@@ -44,11 +48,16 @@ export type EncodeInput = {
   userId: string;
   /** When the job runs: recall write-back, entity last_mentioned, thread resolve. */
   now: Date;
-  /** The exchange's earliest turn: new facts' created_at, thread open and touch. */
+  /** The exchange's earliest turn: new facts' created_at, thread open and touch, labels. */
   exchangeAt: Date;
-  entities: ExtractedEntity[];
+  /** This call's checked labels. */
+  labels: CheckedLabels;
+  /** The conversation's labels from earlier exchanges. */
+  stored: AnnotationRow[];
+  sessionId: string;
+  /** Their zone: a thread's checkpoint is a day on their calendar. */
+  zone: string;
   facts: PlannedFact[];
-  threads: ExtractedThread[];
   sensitive: boolean;
   sourceRef: string;
   recalled: RecalledFact[];
@@ -72,16 +81,6 @@ export type EncodeOutcome = {
   written: { id: string; kind: string }[];
 };
 
-type EntitySubject = "user" | "self";
-
-function entityKey(subject: EntitySubject, name: string): string {
-  return `${subject}|${normalizeName(name)}`;
-}
-
-function entitySubjectOf(subject: ExtractedFact["subject"]): EntitySubject {
-  return subject === "self" ? "self" : "user";
-}
-
 export async function encodeExtraction(
   db: Db,
   config: Config,
@@ -101,8 +100,25 @@ export async function encodeExtraction(
   };
 
   const entityIds = await encodeEntities(db, config, input, outcome);
-  const threadIds = await encodeThreads(db, input, outcome);
-  await encodeFacts(db, config, input, entityIds, threadIds, outcome);
+  const threads = await encodeThreads(db, input, outcome);
+  await encodeFacts(db, config, input, entityIds, threads, outcome);
+  const factIds = new Map(
+    input.facts.flatMap((p, i) => {
+      const id = outcome.factIds[i];
+      return p.fact.localId && id ? [[p.fact.localId, id] as const] : [];
+    }),
+  );
+  await insertAnnotations(
+    db,
+    input.userId,
+    toRows(input.labels, {
+      sessionId: input.sessionId,
+      exchangeRef: input.replyTurnId ?? input.turnIds.at(-1)!,
+      at: input.exchangeAt,
+      factIds,
+      entityIds,
+    }),
+  );
   outcome.recalledUpdated = await writeBackRecall(db, config, input);
 
   await markExtracted(db, input.userId, input.turnIds);
@@ -111,129 +127,91 @@ export async function encodeExtraction(
 
 // ---------- Entities ----------
 
-/** Upserts the declared entities plus any named only inside a fact. Returns ids by entity key. */
+/**
+ * Upserts what each new mention names; a mention of an open thread names no entity. Returns
+ * entity ids by mention id, earlier exchanges' included.
+ */
 async function encodeEntities(
   db: Db,
   config: Config,
   input: EncodeInput,
   outcome: EncodeOutcome,
 ): Promise<Map<string, string>> {
-  const mentions = withEntitiesNamedInFacts(input.entities, input.facts);
   const settings = {
     newSalience: config.extraction.new_entity_salience,
     bump: config.extraction.entity_bump,
     cap: config.retrieval.recall_cap,
   };
-
-  const entityIds = new Map<string, string>();
-  for (const mention of mergeMentions(mentions)) {
-    const knownId = entityIds.get(entityKey(mention.subject, mention.name));
-    const { id, created } = knownId
-      ? { id: knownId, created: false }
-      : await upsertEntityMention(db, input.userId, mention, input.now, settings);
+  const entityIds = entityIdsByLocal(input.stored);
+  for (const m of input.labels.mentions) {
+    if (m.refers_to !== null || m.name === null || !normalizeName(m.name)) continue;
+    const { id, created } = await upsertEntityMention(
+      db,
+      input.userId,
+      {
+        name: m.name,
+        aliases: normalizeName(m.words) === normalizeName(m.name) ? [] : [m.words],
+        type: m.type ?? "other",
+        subject: m.subject ?? "user",
+        relation: m.relation,
+      },
+      input.now,
+      settings,
+    );
     if (created) outcome.entitiesCreated += 1;
-
-    for (const name of [mention.name, ...mention.aliases]) {
-      entityIds.set(entityKey(mention.subject, name), id);
-    }
+    entityIds.set(m.id, id);
   }
   return entityIds;
 }
 
-function withEntitiesNamedInFacts(
-  declared: ExtractedEntity[],
-  facts: PlannedFact[],
-): ExtractedEntity[] {
-  const mentions = [...declared];
-  const known = new Set(
-    mentions.flatMap((m) => [m.name, ...m.aliases].map((name) => entityKey(m.subject, name))),
-  );
-
-  for (const { fact } of facts) {
-    const subject = entitySubjectOf(fact.subject);
-    for (const name of fact.entity_names) {
-      if (!normalizeName(name)) continue;
-      const key = entityKey(subject, name);
-      if (known.has(key)) continue;
-
-      mentions.push({ name, aliases: [], type: "other", subject, relation: null });
-      known.add(key);
-    }
-  }
-  return mentions;
-}
-
-/** Drops blank names and merges mentions with the same subject and name, so no alias is lost. */
-function mergeMentions(mentions: ExtractedEntity[]): ExtractedEntity[] {
-  const byKey = new Map<string, ExtractedEntity>();
-
-  for (const mention of mentions) {
-    if (!normalizeName(mention.name)) continue;
-    const aliases = mention.aliases.filter((alias) => normalizeName(alias));
-    const key = entityKey(mention.subject, mention.name);
-    const earlier = byKey.get(key);
-
-    if (!earlier) {
-      byKey.set(key, { ...mention, aliases });
-      continue;
-    }
-    byKey.set(key, {
-      ...earlier,
-      aliases: [...new Set([...earlier.aliases, ...aliases])],
-      relation: earlier.relation ?? mention.relation,
-      type: earlier.type === "other" ? mention.type : earlier.type,
-    });
-  }
-  return [...byKey.values()];
-}
-
 // ---------- Threads ----------
 
-/** Opens, touches or resolves threads. Returns thread ids by normalized title. */
+type ThreadIds = { byTitle: Map<string, string>; byProposition: Map<string, string> };
+
+/** Opens, touches or resolves threads, by id or by title. */
 async function encodeThreads(
   db: Db,
   input: EncodeInput,
   outcome: EncodeOutcome,
-): Promise<Map<string, string>> {
+): Promise<ThreadIds> {
   const { userId } = input;
-  const threadIds = new Map<string, string>();
+  const ids: ThreadIds = { byTitle: new Map(), byProposition: new Map() };
+  const record = (id: string, titles: string[], propositions: string[]) => {
+    for (const t of titles) ids.byTitle.set(normalizeName(t), id);
+    for (const p of propositions) ids.byProposition.set(p, id);
+  };
 
-  for (const update of input.threads) {
-    const byId = update.thread_id ? await getOwnedThread(db, userId, update.thread_id) : null;
-    const existing = byId ?? (await findOpenThreadByTitle(db, userId, update.title));
+  for (const t of input.labels.threads) {
+    const checkpoint = t.checkpointAt ? labelInstant(t.checkpointAt, input.zone) : null;
+    const byId = t.thread_id ? await getOwnedThread(db, userId, t.thread_id) : null;
+    const existing = byId ?? (await findOpenThreadByTitle(db, userId, t.title));
 
-    if (update.action === "open") {
+    if (t.action === "open") {
       if (existing && existing.status === "open") {
-        await touchThread(db, userId, existing.id, input.exchangeAt, update.next_checkpoint);
-        threadIds.set(normalizeName(update.title), existing.id);
+        await touchThread(db, userId, existing.id, input.exchangeAt, checkpoint);
+        record(existing.id, [t.title, existing.title], t.propositions);
         continue;
       }
       const thread = await insertThread(
         db,
         userId,
-        {
-          title: update.title,
-          subject: update.subject,
-          stakes: update.stakes,
-          next_checkpoint: update.next_checkpoint,
-        },
+        { title: t.title, subject: t.subject, stakes: t.stakes, next_checkpoint: checkpoint },
         input.exchangeAt,
       );
       outcome.threadsOpened += 1;
-      threadIds.set(normalizeName(update.title), thread.id);
+      record(thread.id, [t.title], t.propositions);
       continue;
     }
 
     if (!existing) continue;
-    if (update.action === "touch") {
-      await touchThread(db, userId, existing.id, input.exchangeAt, update.next_checkpoint);
+    if (t.action === "touch") {
+      await touchThread(db, userId, existing.id, input.exchangeAt, checkpoint);
     } else {
       await resolveThread(db, userId, existing.id, input.now);
     }
-    threadIds.set(normalizeName(update.title), existing.id);
-    threadIds.set(normalizeName(existing.title), existing.id);
+    record(existing.id, [t.title, existing.title], t.propositions);
   }
-  return threadIds;
+  return ids;
 }
 
 // ---------- Facts ----------
@@ -243,52 +221,54 @@ async function encodeFacts(
   config: Config,
   input: EncodeInput,
   entityIds: Map<string, string>,
-  threadIds: Map<string, string>,
+  threads: ThreadIds,
   outcome: EncodeOutcome,
 ): Promise<void> {
   const { userId } = input;
 
   for (const planned of input.facts) {
-    const fact = planned.fact;
+    const plan = planned.fact;
     const sensitive = input.sensitive ? { sensitive: true } : null;
-    const payload =
-      fact.kind === "idiolect" ? { ...sensitive, idiolect: idiolectPayload(fact) } : sensitive;
-    const subject = entitySubjectOf(fact.subject);
-
-    const entityRefs = fact.entity_names
-      .map((name) => entityIds.get(entityKey(subject, name)))
-      .filter((id): id is string => !!id);
-    const threadId = fact.thread_title
-      ? (threadIds.get(normalizeName(fact.thread_title)) ??
-        (await findOpenThreadByTitle(db, userId, fact.thread_title))?.id ??
-        null)
-      : null;
+    const threadId =
+      plan.threadId ??
+      (plan.localId ? threads.byProposition.get(plan.localId) : undefined) ??
+      (plan.newThread
+        ? (threads.byTitle.get(normalizeName(plan.newThread)) ??
+          (await findOpenThreadByTitle(db, userId, plan.newThread))?.id)
+        : undefined) ??
+      null;
 
     const row = {
-      subject: fact.subject,
-      kind: fact.kind,
-      content: fact.content,
-      payload,
+      subject: plan.subject,
+      kind: plan.kind,
+      content: plan.content,
+      payload: plan.idiolect ? { ...sensitive, idiolect: plan.idiolect } : sensitive,
       embedding: planned.embedding,
-      entity_refs: [...new Set(entityRefs)],
+      entity_refs: [...new Set(plan.mentions.flatMap((id) => entityIds.get(id) ?? []))],
       thread_id: threadId,
-      occurred_at: fact.occurred_at,
+      occurred_at: plan.occurred_at,
       created_at: input.exchangeAt,
-      salience: fact.salience,
-      valence: fact.valence,
-      confidence: fact.confidence,
+      salience: plan.salience,
+      valence: plan.valence,
+      confidence: plan.confidence,
       source: planned.source ?? "turn",
       source_ref: input.sourceRef,
-      claim_kind: fact.claim_kind ?? null,
+      claim_kind: plan.claim_kind,
       grounded: planned.grounded ?? null,
     };
+    // A labelled memory quotes its words as said, and its dates are already tokens.
+    const insert = (extra: {
+      status: "open" | "resolved" | "superseded";
+      superseded_by?: string;
+    }) => insertFact(db, userId, { ...row, ...extra }, { asSaid: true });
+    const news = { subject: plan.subject, salience: plan.salience, content: plan.content };
 
     const target = planned.decision.targetId
       ? await getFact(db, userId, planned.decision.targetId)
       : null;
     // A joke merged into a plain fact would be lost as a joke: it starts as its own candidate.
     const relation =
-      target && !(fact.kind === "idiolect" && target.kind !== "idiolect")
+      target && !(plan.kind === "idiolect" && target.kind !== "idiolect")
         ? planned.decision.relation
         : "new";
 
@@ -299,7 +279,7 @@ async function encodeFacts(
         target.id,
         config.reconcile.duplicate_bump,
         config.retrieval.recall_cap,
-        fact.confidence,
+        plan.confidence,
       );
       // A joke becomes theirs only once it survives a gap: a callback in a later sitting.
       if (
@@ -323,52 +303,36 @@ async function encodeFacts(
         await setFactStatus(db, userId, target.id, "resolved");
         outcome.resolved += 1;
       }
-      const inserted = await insertFact(db, userId, { ...row, status: "resolved" });
+      const inserted = await insert({ status: "resolved" });
       outcome.written.push({ id: inserted.id, kind: inserted.kind });
       outcome.inserted += 1;
-      outcome.insertedFacts.push({
-        subject: fact.subject,
-        salience: fact.salience,
-        content: fact.content,
-      });
+      outcome.insertedFacts.push(news);
       outcome.factIds.push(inserted.id);
       continue;
     }
 
     if (relation === "contradicts" && target) {
       if (targetIsNewer) {
-        const inserted = await insertFact(db, userId, {
-          ...row,
-          status: "superseded",
-          superseded_by: target.id,
-        });
+        const inserted = await insert({ status: "superseded", superseded_by: target.id });
         outcome.written.push({ id: inserted.id, kind: inserted.kind });
         outcome.factIds.push(inserted.id);
       } else {
-        const inserted = await insertFact(db, userId, { ...row, status: "open" });
+        const inserted = await insert({ status: "open" });
         outcome.written.push({ id: inserted.id, kind: inserted.kind });
         await setFactStatus(db, userId, target.id, "superseded", inserted.id);
         outcome.factIds.push(inserted.id);
         // Only news that stands counts as salient: an already-overridden fact is no big event.
-        outcome.insertedFacts.push({
-          subject: fact.subject,
-          salience: fact.salience,
-          content: fact.content,
-        });
+        outcome.insertedFacts.push(news);
       }
       outcome.superseded += 1;
       outcome.inserted += 1;
       continue;
     }
 
-    const inserted = await insertFact(db, userId, { ...row, status: "open" });
+    const inserted = await insert({ status: "open" });
     outcome.written.push({ id: inserted.id, kind: inserted.kind });
     outcome.inserted += 1;
-    outcome.insertedFacts.push({
-      subject: fact.subject,
-      salience: fact.salience,
-      content: fact.content,
-    });
+    outcome.insertedFacts.push(news);
     outcome.factIds.push(inserted.id);
   }
 }

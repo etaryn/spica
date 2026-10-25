@@ -17,6 +17,7 @@ import { nudge } from "@/mind/state/user/relationship/params";
 import type { BidResponse } from "@/mind/state/user/relationship/signals";
 import { closeTestDb, createTestUser, getTestDb, resetDb, seedStageFor } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { newMessages, scriptedLabels } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -53,35 +54,23 @@ async function coreDump(): Promise<string> {
   return parts.join("\n");
 }
 
-/** What extraction reads off the next exchange. */
-type Next = { bid: BidResponse | null; facts: object[] };
+/** What the labelling reads off the next exchange: a bid response, and whose words start a joke. */
+type Next = { bid: BidResponse | null; joke: "user" | "spica" | null };
 function setup() {
   const d = makeTestDeps();
-  const next: Next = { bid: null, facts: [] };
-  d.llm.handlers.extract = (input: string) => ({
-    facts: input.includes("New exchange") ? next.facts : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-    bid_response: next.bid,
-  });
+  const next: Next = { bid: null, joke: null };
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels((input) => {
+      const by = newMessages(input).find((m) => m.speaker === next.joke);
+      return {
+        idiolect: by ? [{ said: by.text, type: "joke" }] : [],
+        bid: next.bid,
+      };
+    }),
+  );
   return { d, next };
 }
-
-const idiolectFact = (content: string, started_by: "user" | "spica") => ({
-  subject: "shared",
-  kind: "idiolect",
-  content,
-  occurred_at: null,
-  salience: 0.6,
-  valence: 0.6,
-  confidence: 0.9,
-  entity_names: [],
-  thread_title: null,
-  claim_kind: null,
-  idiolect_type: "joke",
-  started_by,
-});
 
 async function user(d: D, closeness: number) {
   const u = await createTestUser();
@@ -221,23 +210,24 @@ test("a joke seen once is not offered; called back in a later exchange, it is", 
   const u = await user(d, 0.5);
   const session = randomUUID();
 
-  next.facts = [idiolectFact(JOKE, "spica")];
+  next.joke = "spica";
   await settle(d, u, await talk(d, u, session));
-  next.facts = [];
+  next.joke = null;
   expect((await talk(d, u, session)).system).not.toContain(SLOT);
 
   const [born] = await getTestDb()
     .select()
     .from(s.fact)
     .where(and(eq(s.fact.user_id, u), eq(s.fact.kind, "idiolect")));
-  next.facts = [idiolectFact(JOKE, "spica")];
+  next.joke = "spica";
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: born!.id });
   // A joke becomes theirs once it survives a gap: the callback comes in a later sitting.
   const later = randomUUID();
   await settle(d, u, await talk(d, u, later));
-  next.facts = [];
+  next.joke = null;
 
-  expect((await talk(d, u, later)).system).toContain(`- ${JOKE} (you started this)`);
+  expect(born!.content).toMatch(/^Spica said "/);
+  expect((await talk(d, u, later)).system).toContain(`- ${born!.content} (you started this)`);
 });
 
 test("a new user gets only the idiolect they started; a close friend gets hers too", async () => {
@@ -279,9 +269,10 @@ test("leak canary and side channel: one user's idiolect never reaches another us
   const coreBefore = await coreDump();
 
   const session = randomUUID();
-  const secret = idiolectFact(`whale cloud: the user calls Spica ${canary}.`, "user");
-  next.facts = [secret];
-  await settle(d, a, await talk(d, a, session));
+  next.joke = "user";
+  // A callback says the joke again: the same words, so it finds the first by its embedding.
+  const joke = `whale cloud, the user calls Spica ${canary}`;
+  await settle(d, a, await talk(d, a, session, joke));
   const [born] = await getTestDb()
     .select()
     .from(s.fact)
@@ -289,8 +280,8 @@ test("leak canary and side channel: one user's idiolect never reaches another us
   d.llm.handlers.reconcile = () => ({ relation: "duplicate", target_fact_id: born!.id });
   next.bid = "toward";
   const later = randomUUID();
-  await settle(d, a, await talk(d, a, later));
-  next.facts = [];
+  await settle(d, a, await talk(d, a, later, joke));
+  next.joke = null;
   next.bid = null;
   expect((await talk(d, a, later)).system).toContain(canary);
 

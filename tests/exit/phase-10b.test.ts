@@ -20,6 +20,7 @@ import { buildCandidates } from "@/mind/process/outreach/candidates";
 import { loadCandidateInputs } from "@/mind/process/outreach/inputs";
 import { closeTestDb, createTestUser, getTestDb, resetDb, seedStageFor } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { newMessages, scriptedLabels } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -84,28 +85,26 @@ async function setup() {
     });
   }
   const said = { claim: null as string | null };
-  d.llm.handlers.extract = (input: string) => ({
-    facts:
-      said.claim && input.includes("New exchange")
-        ? [
-            {
-              subject: "self",
-              kind: "event",
-              content: said.claim,
-              occurred_at: null,
-              salience: 0.5,
-              valence: 0,
-              confidence: 0.9,
-              entity_names: [],
-              thread_title: null,
-              claim_kind: "life",
-            },
-          ]
-        : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  // Her claim is her reply, labelled with the memory it tells. A fake embedding only matches the
+  // same text, so the claim grounds on that memory by script.
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels((input) => {
+      const hers = newMessages(input).find((m) => m.speaker === "spica");
+      return {
+        memories:
+          said.claim && hers
+            ? [{ said: hers.text, label: said.claim, salience: 0.5, claim_kind: "life" }]
+            : [],
+      };
+    }),
+  );
+  d.core.memory.groundingMatch = async () => {
+    const depth = ([1, 2, 3] as const).find((k) => MEM[k] === said.claim);
+    return depth
+      ? { similarity: 1, ref: { kind: "memory" as const, id: ids[depth]!, depth } }
+      : { similarity: 0, ref: null };
+  };
   return { d, ids, said };
 }
 

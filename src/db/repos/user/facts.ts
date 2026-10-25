@@ -163,7 +163,7 @@ export async function insertFact(
     known: [...(hints.known ?? []), ...(row.occurred_at ? [row.occurred_at as Date] : [])],
   };
   // An inside joke or ritual is the words themselves: "see you tomorrow" there is no date.
-  const asSaid = row.kind === "idiolect";
+  const asSaid = hints.asSaid === true || row.kind === "idiolect";
   return one(
     await db
       .insert(fact)

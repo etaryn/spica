@@ -5,6 +5,11 @@ import {
   checkLabels,
   emptyLabels,
   LabelsSchema,
+  loosen,
+  PropositionsSchema,
+  ReadingSchema,
+  SignalsSchema,
+  sieve,
   type CheckContext,
   type CheckedLabels,
   type CheckedMove,
@@ -353,4 +358,50 @@ test("a weekday counted from next week lands inside that week", () => {
     ["t8", "2026-10-26"],
     ["t9", "2026-10-26"],
   ]);
+});
+
+test("a memory's time must sit in the moves it rests on: one from elsewhere loses only the link", () => {
+  const labels = base();
+  // The train ticket rests on "and yes booked" and her question, never on "friday now lol".
+  labels.propositions[1] = { ...labels.propositions[1]!, times: ["t1"] };
+  const out = checkLabels(labels, ctx);
+  expect(out.propositions.find((p) => p.id === "p2")?.times).toEqual([]);
+  expect(out.drops).toContainEqual({
+    layer: "proposition",
+    id: "p2",
+    reason: "bad_link",
+    ref: "times t1",
+  });
+});
+
+test("a value outside its list drops only that label; the rest of the call stays", () => {
+  const raw = { ...base(), moves: [{ ...base().moves[0]!, act: "shrugs" }, base().moves[1]!] };
+  const { labels, drops } = sieve(raw, ReadingSchema);
+  expect(ids(labels.moves)).toEqual(["m4"]);
+  expect(labels.times).toHaveLength(1);
+  expect(drops).toEqual([{ layer: "moves", id: "m3", reason: "bad_value", ref: "act" }]);
+});
+
+test("a bad value in a block drops the block, not the call", () => {
+  const raw = { ...base(), bid_response: { response: "sideways", move: "m4" } };
+  const { labels, drops } = sieve(raw, SignalsSchema);
+  expect(labels.bid_response).toBeNull();
+  expect(labels.intimacy).not.toBeNull();
+  expect(drops).toEqual([
+    { layer: "bid_response", id: "bid_response", reason: "bad_value", ref: "response" },
+  ]);
+});
+
+test("each call's loose schema converts and stays within the nullable limit", () => {
+  const unions = (node: unknown): number => {
+    if (!node || typeof node !== "object") return 0;
+    const own = "anyOf" in node || Array.isArray((node as { type?: unknown }).type) ? 1 : 0;
+    return own + Object.values(node).reduce((n: number, child) => n + unions(child), 0);
+  };
+  for (const schema of [ReadingSchema, PropositionsSchema, SignalsSchema]) {
+    const format = zodOutputFormat(loosen(schema) as never);
+    expect(unions(format.schema)).toBeLessThanOrEqual(16);
+    // The enum is still described to the model.
+    expect(JSON.stringify(format.schema)).toContain("one of:");
+  }
 });

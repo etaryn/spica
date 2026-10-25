@@ -139,6 +139,69 @@ export type Labels = z.infer<typeof LabelsSchema>;
 // points at them.
 export const ReadingSchema = LabelsSchema.pick({ moves: true, mentions: true, times: true });
 export const MeaningSchema = LabelsSchema.omit({ moves: true, mentions: true, times: true });
+// With thinking on, even the meaning grammar is over the limit, so it is asked in two parts.
+export const PropositionsSchema = LabelsSchema.pick({ propositions: true, threads: true });
+export const SignalsSchema = LabelsSchema.pick({
+  idiolect: true,
+  relationship: true,
+  intimacy: true,
+  bid_response: true,
+});
+
+/**
+ * The schema as the model is sent it: every enum becomes a string described with its values.
+ * Structured output enforces types only, so an enum there only fails the whole call at parse
+ * time; `sieve` checks the values one label at a time instead.
+ */
+export function loosen(schema: z.ZodType): z.ZodType {
+  if (schema instanceof z.ZodObject) {
+    return z.object(
+      Object.fromEntries(Object.entries(schema.shape).map(([k, v]) => [k, loosen(v as z.ZodType)])),
+    );
+  }
+  if (schema instanceof z.ZodArray) return z.array(loosen(schema.element as z.ZodType));
+  if (schema instanceof z.ZodNullable) return loosen(schema.unwrap() as z.ZodType).nullable();
+  if (schema instanceof z.ZodEnum) {
+    return z.string().describe(`one of: ${(schema.options as string[]).join(" | ")}`);
+  }
+  return schema;
+}
+
+/** Keeps each label that fits `strict`; one with a value outside its list is dropped alone. */
+export function sieve<S extends z.ZodObject>(
+  raw: unknown,
+  strict: S,
+): { labels: z.infer<S>; drops: Drop[] } {
+  const input = (raw ?? {}) as Record<string, unknown>;
+  const drops: Drop[] = [];
+  const out: Record<string, unknown> = {};
+  for (const [layer, field] of Object.entries(strict.shape)) {
+    const value = input[layer];
+    if (field instanceof z.ZodArray) {
+      const items: unknown[] = Array.isArray(value) ? value : [];
+      out[layer] = items.filter((item, i) => {
+        const parsed = (field.element as z.ZodType).safeParse(item);
+        if (!parsed.success) drops.push(badValue(layer, labelId(item, i), parsed.error));
+        return parsed.success;
+      });
+      continue;
+    }
+    const parsed = (field as z.ZodType).safeParse(value ?? null);
+    if (!parsed.success) drops.push(badValue(layer, layer, parsed.error));
+    out[layer] = parsed.success ? parsed.data : null;
+  }
+  return { labels: out as z.infer<S>, drops };
+}
+
+function labelId(item: unknown, i: number): string {
+  const o = item as { id?: unknown; thread_id?: unknown; title?: unknown } | null;
+  for (const v of [o?.id, o?.thread_id, o?.title]) if (typeof v === "string" && v) return v;
+  return String(i);
+}
+
+function badValue(layer: string, id: string, error: z.ZodError): Drop {
+  return { layer, id, reason: "bad_value", ref: error.issues[0]?.path.join(".") ?? "" };
+}
 
 export type CheckedMove = {
   id: string;
@@ -185,7 +248,9 @@ export type DropReason =
   | "wrong_speaker"
   | "bad_time"
   // The label stays; only the link named in `ref` is removed.
-  | "bad_link";
+  | "bad_link"
+  // A value outside its allowed list: only this label goes.
+  | "bad_value";
 export type Drop = { layer: string; id: string; reason: DropReason; ref?: string };
 
 export type CheckedLabels = {
@@ -448,7 +513,12 @@ class Checker {
         continue;
       }
       const moves = p.moves.map((id) => this.allMoves.get(id)!);
-      const times = this.keep("proposition", p.id, "times", p.times, (id) => this.allTimes.has(id));
+      // A memory's times come from the words it rests on, never from a question beside it.
+      const own = new Set(moves.flatMap((m) => m.pieces));
+      const times = this.keep("proposition", p.id, "times", p.times, (id) => {
+        const t = this.allTimes.get(id);
+        return !!t && own.has(t.piece);
+      });
       const mentions = this.keep("proposition", p.id, "mentions", p.mentions, (id) =>
         this.allMentions.has(id),
       );

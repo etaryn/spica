@@ -9,7 +9,10 @@
  */
 import type { RetrievalResult, RetrievedFact } from "@/mind/memory/shared/types";
 import type { ChatMessage, ReplyRequest } from "@/mind/platform/llm/types";
-import { anchorTimes, dateToken, ownDate } from "@/mind/platform/time-anchors";
+import type { AnnotationRow } from "@/db/repos/user/annotations";
+import type { CheckedTime } from "@/mind/memory/user/annotations";
+import { dateToken, ownDate } from "@/mind/platform/time-anchors";
+import { labelToken } from "@/mind/platform/time-labels";
 import { localDateString } from "@/mind/platform/timezone";
 import { HOUR } from "@/mind/platform/time";
 
@@ -46,6 +49,7 @@ export interface AssembleInput {
   /** Her own memories that fit the conversation. */
   coreMemories: RetrievedFact[];
   recentTurns: {
+    id?: string;
     role: "user" | "companion";
     text: string;
     created_at?: Date;
@@ -59,6 +63,8 @@ export interface AssembleInput {
   userTimezone: string;
   /** Now on both calendars, so day words in the conversation read right. */
   nowLine?: string | null;
+  /** The time labels on the turns shown, so an older message's day words carry their date. */
+  glosses?: Gloss[];
   /**
    * Leaves out turns from before the latest gap of at least this many hours (the gap up to now
    * counts too). After days apart the old transcript is stale; deep memory carries what matters.
@@ -225,7 +231,7 @@ function conversationMessages(input: AssembleInput): ChatMessage[] {
   const firstUser = window.findIndex((t) => t.role === "user");
   const turns = wroteFirst ? window : firstUser === -1 ? [] : window.slice(firstUser);
 
-  const texts = viewTurns(turns, input.now, input.userTimezone);
+  const texts = viewTurns(turns, input.now, input.userTimezone, input.glosses);
   const messages: ChatMessage[] = turns.map((turn, i) => ({
     role: turn.role === "user" ? "user" : "assistant",
     content: texts[i]!,
@@ -233,15 +239,28 @@ function conversationMessages(input: AssembleInput): ChatMessage[] {
   return wroteFirst ? [{ role: "user", content: WROTE_FIRST }, ...messages] : messages;
 }
 
+export type Gloss = { turnId: string; start: number; end: number; token: string };
+
+/** Each time label on an older message, as a token that keeps the words and dates them. */
+export function glossesOf(rows: AnnotationRow[], zone: string): Gloss[] {
+  return rows.flatMap((r) => {
+    const t = r.data as CheckedTime;
+    const c = r.coords[0];
+    return c && t.resolved ? [{ ...c, token: labelToken(t.resolved, zone, t.words) }] : [];
+  });
+}
+
 /**
- * Her view of the conversation: a divider wherever the date changes, and each time word in a
- * message from an earlier day kept with what it means now, worked out from that message's own
- * send time. Messages from today read exactly as typed. The stored transcript is never changed.
+ * Her view of the conversation: a divider wherever the date changes, and each labelled time in a
+ * message from an earlier day kept with what it means now (its label was resolved from that
+ * message's own send time). Nothing parses the words: a message with no time label, and every
+ * message from today, reads exactly as typed. The stored transcript is never changed.
  */
 export function viewTurns(
-  turns: { text: string; created_at?: Date }[],
+  turns: { id?: string; text: string; created_at?: Date }[],
   now: Date,
   zone: string,
+  glosses: Gloss[] = [],
 ): string[] {
   const today = localDateString(now, zone);
   let lastDay: string | null = null;
@@ -253,10 +272,17 @@ export function viewTurns(
         ? `— ${dateToken(t.created_at, zone)} —\n`
         : "";
     lastDay = day;
-    const text =
-      day === today ? t.text : anchorTimes(t.text, { at: t.created_at, zone, said: true });
+    const own = glosses.filter((g) => g.turnId === t.id);
+    const text = day === today ? t.text : glossed(t.text, own);
     return `${divider}${text}`;
   });
+}
+
+/** The words at each gloss replaced by its token, last first so earlier ranges stay put. */
+function glossed(text: string, glosses: Gloss[]): string {
+  return [...glosses]
+    .sort((a, b) => b.start - a.start)
+    .reduce((out, g) => out.slice(0, g.start) + g.token + out.slice(g.end), text);
 }
 
 const WROTE_FIRST = "[You wrote to them first]";

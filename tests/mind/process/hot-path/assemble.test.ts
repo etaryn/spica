@@ -3,8 +3,10 @@ import {
   assemblePrompt as assembleBlocks,
   gapLine,
   relationshipLine,
+  glossesOf,
   viewTurns,
 } from "@/mind/process/hot-path/assemble";
+import type { AnnotationRow } from "@/db/repos/user/annotations";
 import { systemText } from "@/mind/platform/llm/types";
 import { anchorTimes, renderTimes } from "@/mind/platform/time-anchors";
 import { emptyRetrieval } from "@/mind/memory/shared/types";
@@ -659,18 +661,46 @@ test("a memory whose words carry its date isn't dated twice", () => {
   expect(renderTimes(system, now, 6)).toMatch(/- The race is tomorrow, Tuesday 13 January\.$/m);
 });
 
-test("older messages get a day divider and glosses from their own send time; today's read as typed", () => {
+test("older messages get a day divider and glosses from their time labels; today's read as typed", () => {
   const now = new Date("2026-01-13T09:00:00Z"); // Tuesday
   const texts = viewTurns(
     [
-      { text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") },
-      { text: "today was rough", created_at: new Date("2026-01-12T20:05:00Z") },
-      { text: "morning! race is today", created_at: new Date("2026-01-13T08:50:00Z") },
+      { id: "a", text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") },
+      // No time label: nothing parses its words, so it reads as typed.
+      { id: "b", text: "today was rough", created_at: new Date("2026-01-12T20:05:00Z") },
+      { id: "c", text: "morning! race is today", created_at: new Date("2026-01-13T08:50:00Z") },
     ],
     now,
     "UTC",
+    [
+      { turnId: "a", start: 11, end: 19, token: "⟦2026-01-13|day|UTC|tomorrow⟧" },
+      { turnId: "c", start: 17, end: 22, token: "⟦2026-01-13|day|UTC|today⟧" },
+    ],
   ).map((t) => renderTimes(t, now, 6));
   expect(texts[0]).toBe("— yesterday, Monday 12 January —\nmy race is tomorrow (that's today)");
-  expect(texts[1]).toBe("today (that's yesterday, Monday 12 January) was rough");
+  expect(texts[1]).toBe("today was rough");
   expect(texts[2]).toBe("— today —\nmorning! race is today");
+});
+
+test("a time label on an older message becomes its gloss", () => {
+  const rows = [
+    {
+      coords: [{ turnId: "a", start: 11, end: 19 }],
+      data: {
+        words: "tomorrow",
+        resolved: {
+          date: "2026-01-13",
+          precision: "day",
+          part: null,
+          clock: null,
+          span: "at",
+          rough: false,
+        },
+      },
+    },
+    { coords: [{ turnId: "b", start: 0, end: 4 }], data: { words: "soon", resolved: null } },
+  ] as unknown as AnnotationRow[];
+  expect(glossesOf(rows, "UTC")).toEqual([
+    { turnId: "a", start: 11, end: 19, token: "⟦2026-01-13|day|UTC|tomorrow⟧" },
+  ]);
 });

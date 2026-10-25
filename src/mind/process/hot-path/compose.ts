@@ -5,6 +5,7 @@
  * the guard, and puts the reply into her texting form. Read-only: the caller inserts and sends the reply, enqueues the cold path, then
  * calls `writeGuardLog`. Serves normal replies, the crisis path, and reach-outs.
  */
+import { timeLabelsOn } from "@/db/repos/user/annotations";
 import { listOnboardingFacts } from "@/db/repos/user/facts";
 import * as sessionLog from "@/db/repos/user/session-log";
 import type { Turn } from "@/db/repos/user/session-log";
@@ -59,6 +60,7 @@ import {
   type AssembleInput,
   gapLine,
   relationshipLine,
+  glossesOf,
   viewTurns,
 } from "./assemble";
 import { howToText, loadHowToTextPhrases } from "./how-to-text";
@@ -362,6 +364,19 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
   const herZone = lifeTimezone(config.life, clock.now());
   // Bounded, so a failed lookup dates in UTC rather than rejecting while nothing awaits it.
   const theirZoneLookup = bounded(deps, "their zone", userId, () => userZone(deps, userId), "UTC");
+  // The time labels on the turns shown: an older message's day words read with their date.
+  const timeLabels = bounded(
+    deps,
+    "time labels",
+    userId,
+    () =>
+      timeLabelsOn(
+        deps.db,
+        userId,
+        recent.map((t) => t.id),
+      ),
+    [],
+  );
   // A malformed payload renders nothing rather than failing the reply.
   const summary = inCrisis
     ? Promise.resolve(null)
@@ -505,6 +520,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     input.openQuestions.length > 0 || input.answering.some((t) => t.text.trim().endsWith("?"));
 
   const theirZone = await theirZoneLookup;
+  const glosses = glossesOf(await timeLabels, theirZone);
   const reachOutText = input.reachOut
     ? renderReachOut(
         loadPrompt("reach-out", config.prompts.reach_out),
@@ -538,6 +554,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     ideas: shownIdeas.map((i) => i.content),
     idiolect: shownIdiolect.map((i) => ({ content: i.content, started_by: i.payload.started_by })),
     recentTurns: recent,
+    glosses,
     windowGapHours: config.chat.window_gap_hours,
     now: clock.now(),
     timezone: herZone,
@@ -565,7 +582,7 @@ async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Pro
     first: firstDraft,
     input: {
       kind: inCrisis ? "crisis_reply" : input.reachOut ? "reach_out" : "reply",
-      recentTurns: viewTurns(recent, clock.now(), theirZone).map((text, i) => ({
+      recentTurns: viewTurns(recent, clock.now(), theirZone, glosses).map((text, i) => ({
         role: recent[i]!.role,
         text,
         at: recent[i]!.created_at,

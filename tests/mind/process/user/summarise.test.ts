@@ -295,7 +295,8 @@ test("summarise reads a stamped previous note and dated threads; no zone means U
   expect(input.previous.written).toBe(written(new Date(now.getTime() - 2 * D), "UTC"));
   // Her old note's "tomorrow" was stored as the day it meant.
   expect(tokenDates(input.previous.whats_live)).toHaveLength(1);
-  expect(input.open_threads).toContain(`sister's visit (next: ${sat})`);
+  // No memory on the thread yet, so only when to ask shows.
+  expect(input.open_threads).toContain(`sister's visit (ask after ${sat})`);
 });
 
 test("a summary's relative words are stored as the day they meant", async () => {

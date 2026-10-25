@@ -79,10 +79,12 @@ test("2: a weekday in her summary takes the date of the memory she was shown", a
 
 test("4: her view keeps an older message's words and says what they mean now", () => {
   const now = new Date("2026-01-13T09:00:00Z");
+  // The gloss comes from the message's time label, resolved from its own send time.
   const [line] = viewTurns(
-    [{ text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") }],
+    [{ id: "a", text: "my race is tomorrow", created_at: new Date("2026-01-12T20:00:00Z") }],
     now,
     "UTC",
+    [{ turnId: "a", start: 11, end: 19, token: "⟦2026-01-13|day|UTC|tomorrow⟧" }],
   );
   expect(renderTimes(line!, now, 6)).toBe(
     "— yesterday, Monday 12 January —\nmy race is tomorrow (that's today)",

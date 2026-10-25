@@ -113,15 +113,6 @@ test("each token reads on its own calendar", () => {
   expect(read(her, at("2026-01-12T17:00:00Z"))).toBe("Clear skies last night, Monday 12 January.");
 });
 
-test("said mode keeps the words and glosses them only when their meaning moved", () => {
-  const glossed = anchorTimes("my race is tomorrow", { ...utc, said: true });
-  expect(read(glossed, at("2026-01-12T20:00:00Z"))).toBe("my race is tomorrow");
-  expect(read(glossed, at("2026-01-13T08:00:00Z"))).toBe("my race is tomorrow (that's today)");
-  expect(read(glossed, at("2026-01-14T08:00:00Z"))).toBe(
-    "my race is tomorrow (that's yesterday, Tuesday 13 January)",
-  );
-});
-
 test("dates code holds become tokens: a memory's date shows once; written stamps", () => {
   expect(read(dateToken(at("2026-01-11T08:00:00Z"), "UTC"), MON)).toBe(
     "yesterday, Sunday 11 January",
@@ -205,11 +196,6 @@ test("quoted words stay as said", () => {
   ])
     expect(anchorTimes(text, utc)).toBe(text);
   expect(days(anchorTimes('They said "soon" and meant tomorrow.', utc))).toEqual(["2026-01-13"]);
-});
-
-test("a bare weekday in an older message, with nothing to date it by, keeps its words unglossed", () => {
-  const said = { at: MON, zone: "UTC", said: true };
-  expect(anchorTimes("I went running on Sunday", said)).toBe("I went running on Sunday");
 });
 
 test("a long phrase around a date keeps every word (the 16b run's summary)", () => {

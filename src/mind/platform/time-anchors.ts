@@ -33,10 +33,8 @@ export type AnchorContext = {
   zone: string;
   /** Dates the writer was shown: a bare weekday takes the nearest of these on that weekday. */
   known?: Date[];
-  /** Extract's label for the time words: which way a bare weekday or weekend points. */
+  /** Which way a bare weekday or weekend points. */
   direction?: "past" | "upcoming" | null;
-  /** Keep the words and gloss them (her view of older messages) instead of replacing them. */
-  said?: boolean;
 };
 export type AnchorHints = Omit<AnchorContext, "at" | "zone"> & {
   /** Store the words as given: a labelled memory quotes them, and its dates are already tokens. */
@@ -255,8 +253,8 @@ export function formatToken(
   return `⟦${local}|${precision}|${zone}${said ? `|${said.replace(/[|⟧]/g, "")}` : ""}⟧`;
 }
 
-function token(local: string, precision: Precision, ctx: AnchorContext, words: string): string {
-  return formatToken(local, precision, ctx.zone, ctx.said ? words : undefined);
+function token(local: string, precision: Precision, ctx: AnchorContext): string {
+  return formatToken(local, precision, ctx.zone);
 }
 
 const weekdayOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
@@ -269,8 +267,7 @@ const today = (ctx: AnchorContext) => localDateString(ctx.at, ctx.zone);
 function durations(plain: string, ctx: AnchorContext): string {
   return plain.replace(DURATION, (match, n1?: string, u1?: string, n2?: string, u2?: string) => {
     const span = count((n1 ?? n2)!) * ((u1 ?? u2)!.toLowerCase().startsWith("week") ? 7 : 1);
-    const t = token(shiftLocalDate(today(ctx), -span), "since", ctx, match);
-    return ctx.said ? t : `since ${t}`;
+    return `since ${token(shiftLocalDate(today(ctx), -span), "since", ctx)}`;
   });
 }
 
@@ -278,9 +275,9 @@ function weeks(plain: string, ctx: AnchorContext): string {
   const monday = mondayOf(today(ctx));
   return plain.replace(WEEK, (match) => {
     const m = match.toLowerCase();
-    if (m.includes("end of")) return token(shiftLocalDate(monday, 4), "day", ctx, match);
+    if (m.includes("end of")) return token(shiftLocalDate(monday, 4), "day", ctx);
     const shift = m.startsWith("next") ? 7 : m.startsWith("last") ? -7 : 0;
-    return token(shiftLocalDate(monday, shift), "week", ctx, match);
+    return token(shiftLocalDate(monday, shift), "week", ctx);
   });
 }
 
@@ -305,7 +302,7 @@ function weekends(plain: string, ctx: AnchorContext): string {
         sat =
           Math.abs(dayDiff(prevSat, day)) <= Math.abs(dayDiff(thisSat, day)) ? prevSat : thisSat;
     }
-    return token(sat, "weekend", ctx, match);
+    return token(sat, "weekend", ctx);
   });
 }
 
@@ -327,8 +324,6 @@ function pickWeekday(day: string, wd: number, ctx: AnchorContext): string | null
   if (ctx.direction === "upcoming") return shiftLocalDate(day, ahead || 7);
   const known = nearestKnown(ctx, [wd], day);
   if (known) return known;
-  // Read as typed, a bare weekday could point either way; the day line above it dates it.
-  if (ctx.said) return null;
   return shiftLocalDate(day, ahead);
 }
 
@@ -370,8 +365,8 @@ function chronoPass(plain: string, ctx: AnchorContext): string {
       // "the afternoon of …" renders with its own "the".
       const the = /\bthe\s+$/i.test(clause.slice(0, r.index)) && / of /i.test(words) ? 4 : 0;
       found.push({
-        // Her own notes drop "on"/"at"; her view of older messages keeps every word.
-        from: ctx.said ? at + lead.length : at - the,
+        // Her own notes drop "on"/"at".
+        from: at - the,
         end: at + lead.length + words.length,
         anchor,
         written: DATE_PHRASE.test(words.replace(CLOCK, " ").trim()),
@@ -382,10 +377,7 @@ function chronoPass(plain: string, ctx: AnchorContext): string {
   let out = plain;
   // From the end backwards, so earlier indices stay valid while the text changes.
   for (const f of merged(found, plain).sort((a, b) => b.from - a.from))
-    out =
-      out.slice(0, f.from) +
-      token(f.anchor.local, f.anchor.precision, ctx, plain.slice(f.from, f.end)) +
-      out.slice(f.end);
+    out = out.slice(0, f.from) + token(f.anchor.local, f.anchor.precision, ctx) + out.slice(f.end);
   return out;
 }
 

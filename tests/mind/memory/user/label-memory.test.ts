@@ -93,3 +93,29 @@ test("her hurt is worded by the moves that hurt her, or by all their new moves w
     'the user said "interview thursday at 10. / my sis is visiting too"',
   );
 });
+
+test("a hurt never loses its words: named moves that aren't theirs fall back to their new moves", () => {
+  const labels = labelled({ relationship: { hurt: { amount: 0.6, said: "my sis" } } });
+  labels.relationship!.hurt!.moves = ["m-hers"];
+  expect(hurtCause(labels, labels, pieces, 160)).toBe(
+    'the user said "interview thursday at 10. / my sis is visiting too"',
+  );
+  // With no move of theirs at all, it still names where it came from.
+  const none = { ...labels, moves: [] };
+  expect(hurtCause(none, none, pieces, 160)).toBe("something the user said");
+});
+
+test("a memory whose mention refers to an open thread joins that thread", () => {
+  const labels = labelled({
+    memories: [
+      {
+        said: "interview thursday",
+        label: "job interview",
+        mention: { words: "interview", name: "interview" },
+      },
+    ],
+  });
+  labels.mentions[0]!.refers_to = "thread-1";
+  const [plan] = memoryPlans(labels, labels, pieces, "UTC", config.extraction);
+  expect(plan!.threadId).toBe("thread-1");
+});

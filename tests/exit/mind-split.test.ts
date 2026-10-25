@@ -181,11 +181,18 @@ describe("leak canary", () => {
 
   test("the canary reached A's relationship: her hurt and its cause", async () => {
     const alice = await userIdByName("alice");
-    const cause = await getTestDb().execute(
-      sql`SELECT f.content FROM relationship r JOIN fact f ON f.id = r.hurt_cause_fact
-          WHERE r.user_id = ${alice}`,
+    // Her hurt memories: the first quotes the message holding the canary. A later one, scripted
+    // because her echoed reply carried the canary, quotes that exchange's own message.
+    const hurts = await getTestDb().execute(
+      sql`SELECT content FROM fact WHERE user_id = ${alice} AND subject = 'self'
+          AND kind = 'feeling' AND source = 'inferred'`,
     );
-    expect(String(cause.rows[0]?.content ?? "")).toContain(TOKEN);
+    expect(hurts.rows.some((r) => String(r.content).includes(TOKEN))).toBe(true);
+    const cause = await getTestDb().execute(
+      sql`SELECT count(*)::int AS n FROM relationship WHERE user_id = ${alice}
+          AND hurt_cause_fact IS NOT NULL`,
+    );
+    expect(Number(cause.rows[0]!.n)).toBe(1);
     const hurt = await getTestDb().execute(
       sql`SELECT count(*)::int AS n FROM relationship_event
           WHERE user_id = ${alice} AND param = 'hurt' AND cause = 'signal'`,

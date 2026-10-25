@@ -80,6 +80,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
   const { db, config, clock, log } = deps;
 
   const outcome = await db.transaction(async (tx): Promise<ColdPathOutcome> => {
+    // ponytail: the lock spans the three labelling calls (minutes at worst), and `cold_path.retry_limit` is sized for an exchange queued behind them; label before taking the lock if users queue past it
     const lockKey = `cold_path:${job.userId}`;
     const lock = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS ok`,

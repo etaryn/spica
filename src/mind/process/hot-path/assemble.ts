@@ -278,9 +278,16 @@ export function viewTurns(
   });
 }
 
-/** The words at each gloss replaced by its token, last first so earlier ranges stay put. */
+/**
+ * The words at each gloss replaced by its token, last first so earlier ranges stay put. Where two
+ * labels cover the same words, the longer one is kept.
+ */
 function glossed(text: string, glosses: Gloss[]): string {
-  return [...glosses]
+  const kept: Gloss[] = [];
+  for (const g of [...glosses].sort((a, b) => b.end - b.start - (a.end - a.start))) {
+    if (!kept.some((k) => g.start < k.end && k.start < g.end)) kept.push(g);
+  }
+  return kept
     .sort((a, b) => b.start - a.start)
     .reduce((out, g) => out.slice(0, g.start) + g.token + out.slice(g.end), text);
 }

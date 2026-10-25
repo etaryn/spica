@@ -704,3 +704,17 @@ test("a time label on an older message becomes its gloss", () => {
     { turnId: "a", start: 11, end: 19, token: "⟦2026-01-13|day|UTC|tomorrow⟧" },
   ]);
 });
+
+test("two time labels over the same words gloss it once, never garbling the message", () => {
+  const now = new Date("2026-01-13T09:00:00Z");
+  const [text] = viewTurns(
+    [{ id: "a", text: "race tomorrow afternoon ok", created_at: new Date("2026-01-12T20:00:00Z") }],
+    now,
+    "UTC",
+    [
+      { turnId: "a", start: 5, end: 13, token: "⟦2026-01-13|day|UTC|tomorrow⟧" },
+      { turnId: "a", start: 5, end: 23, token: "⟦2026-01-13|afternoon|UTC|tomorrow afternoon⟧" },
+    ],
+  );
+  expect(text!.split("\n")[1]).toBe("race ⟦2026-01-13|afternoon|UTC|tomorrow afternoon⟧ ok");
+});

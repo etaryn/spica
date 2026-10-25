@@ -16,25 +16,25 @@ const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
  * latest fact.
  */
 const latestFact = sql`
-  SELECT f.id, f.content, f.salience, f.occurred_at,
-    COALESCE((f.payload->>'sensitive')::boolean, false) AS sensitive
+  SELECT f.id, f.content, f.salience, COALESCE((f.payload->>'sensitive')::boolean, false) AS sensitive
   FROM fact f
   WHERE f.user_id = t.user_id AND f.thread_id = t.id AND f.scope = 'private'
     AND f.status NOT IN ('superseded', 'stale')
   ORDER BY f.created_at DESC LIMIT 1`;
 
 /**
- * `excludeSensitive` drops threads whose latest fact is sensitive. `event_at` is the latest
- * fact's date: when the thing happens, apart from `next_checkpoint`, when to ask about it.
+ * `excludeSensitive` drops threads whose latest fact is sensitive. `event` is the first date token
+ * in the latest fact's words, at its own precision (a day, a week, a month): when the thing
+ * happens, apart from `next_checkpoint`, when to ask about it.
  */
 export async function listOpenThreads(
   db: Db,
   userId: string,
   limit: number,
   opts: { excludeSensitive?: boolean } = {},
-): Promise<{ id: string; title: string; next_checkpoint: Date | null; event_at: Date | null }[]> {
+): Promise<{ id: string; title: string; next_checkpoint: Date | null; event: string | null }[]> {
   const res = await db.execute(sql`
-    SELECT t.id, t.title, t.next_checkpoint, lf.occurred_at AS event_at FROM thread t
+    SELECT t.id, t.title, t.next_checkpoint, substring(lf.content from '⟦[^⟧]+⟧') AS event FROM thread t
     LEFT JOIN LATERAL (${latestFact}) lf ON true
     WHERE t.user_id = ${userId} AND t.status = 'open'
       ${opts.excludeSensitive ? sql`AND COALESCE(lf.sensitive, false) = false` : sql``}
@@ -44,7 +44,7 @@ export async function listOpenThreads(
     id: String(r.id),
     title: String(r.title),
     next_checkpoint: r.next_checkpoint ? new Date(r.next_checkpoint as string | Date) : null,
-    event_at: r.event_at ? new Date(r.event_at as string | Date) : null,
+    event: r.event ? String(r.event) : null,
   }));
 }
 

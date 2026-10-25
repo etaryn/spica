@@ -132,13 +132,13 @@ export function stampedNote(
 
 /** Open storylines: the event's day apart from when to ask, so a check-in never reads as the event. */
 export function threadLines(
-  threads: { title: string; event_at?: Date | null; next_checkpoint: Date | null }[],
+  threads: { title: string; event?: string | null; next_checkpoint: Date | null }[],
   tz: string | null,
 ): string[] {
   const zone = zoneOrUtc(tz);
   return threads.map((t) => {
     const parts = [
-      ...(t.event_at ? [`on ${dateToken(t.event_at, zone)}`] : []),
+      ...(t.event ? [`on ${t.event}`] : []),
       ...(t.next_checkpoint ? [`ask after ${dateToken(t.next_checkpoint, zone)}`] : []),
     ];
     return parts.length ? `${t.title} (${parts.join("; ")})` : t.title;

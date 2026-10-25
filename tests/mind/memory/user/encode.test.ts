@@ -608,3 +608,34 @@ test("a memory that supersedes or resolves another keeps its thread", async () =
   expect(rows.find((r) => r.content === "job interview friday")!.thread_id).toBe(t.id);
   expect(rows.find((r) => r.content === "passed the driving test")!.thread_id).toBe(t.id);
 });
+
+test("replacing a memory that was already replaced replaces the newest one instead", async () => {
+  const { u, input } = await setup();
+  const thursday = await seed(u, "interview thursday");
+  const friday = await seed(u, "interview friday", {
+    created_at: new Date("2026-01-02T00:00:00Z"),
+  });
+  await facts.setFactStatus(db(), u, thursday.id, "superseded", friday.id);
+  await encodeExtraction(
+    db(),
+    config,
+    input({
+      facts: [
+        {
+          fact: f("interview monday"),
+          embedding: vec(),
+          decision: { relation: "contradicts", targetId: thursday.id },
+        },
+      ],
+    }),
+  );
+  const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+  const monday = rows.find((r) => r.content === "interview monday")!;
+  expect(rows.filter((r) => r.status === "open").map((r) => r.content)).toEqual([
+    "interview monday",
+  ]);
+  expect(rows.find((r) => r.id === friday.id)).toMatchObject({
+    status: "superseded",
+    superseded_by: monday.id,
+  });
+});

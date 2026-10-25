@@ -40,7 +40,7 @@ function run(model: string): string {
       "1",
       "--review",
       "--real",
-      "reply,guard,guard_crisis,turn_judge,extract,embed",
+      "reply,guard,guard_crisis,turn_judge,labels_read,labels_meaning,labels_signals,embed",
     ],
     {
       env: { ...process.env, SPICA_CONFIG: overrides(model) },

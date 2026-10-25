@@ -49,6 +49,7 @@ export function memoryPlans(
 ): MemoryPlan[] {
   const moves = new Map(all.moves.map((m) => [m.id, m]));
   const times = new Map(all.times.map((t) => [t.id, t]));
+  const mentions = new Map(all.mentions.map((m) => [m.id, m]));
   const words = (ids: string[]): LineMove[] =>
     ids
       .map((id) => moves.get(id))
@@ -71,7 +72,9 @@ export function memoryPlans(
       confidence: p.confidence,
       claim_kind: p.claim_kind,
       mentions: p.mentions,
-      threadId: p.thread_id,
+      // A memory that mentions an open storyline belongs to it.
+      threadId:
+        p.thread_id ?? p.mentions.map((id) => mentions.get(id)?.refers_to).find(Boolean) ?? null,
       newThread: p.new_thread,
       updates: p.updates,
       idiolect: null,
@@ -105,11 +108,12 @@ export function hurtCause(
   pieces: Piece[],
   quoteChars: number,
 ): string {
-  const named = new Set(labels.relationship?.hurt?.moves ?? []);
+  const cited = new Set(labels.relationship?.hurt?.moves ?? []);
   const theirs = all.moves.filter((m) => m.speaker === "user" && !m.context);
-  const hurting = named.size
-    ? theirs.filter((m) => named.has(m.id))
-    : theirs.filter((m) => labels.moves.includes(m));
+  const named = theirs.filter((m) => cited.has(m.id));
+  const hurting = named.length ? named : theirs.filter((m) => labels.moves.includes(m));
+  // A hurt with no words would be dropped as empty: it still says where it came from.
+  if (!hurting.length) return "something the user said";
   return quoted(
     hurting.map((m) => ({ speaker: m.speaker, act: "states" as const, text: moveText(m, pieces) })),
     quoteChars,

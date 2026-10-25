@@ -85,7 +85,7 @@
     "dormant_after_days": 14
   },
   "cold_path": {
-    "retry_limit": 3,
+    "retry_limit": 6,
     "retry_delay_seconds": 30,
     "sweep_cron": "30 4 * * *",
     "sweep_min_age_minutes": 10,

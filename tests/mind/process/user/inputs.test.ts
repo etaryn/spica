@@ -7,10 +7,10 @@ test("a thread line keeps the event's day apart from when to ask", () => {
     [
       {
         title: "half marathon",
-        event_at: new Date("2026-01-11T12:00:00Z"),
+        event: "⟦2026-01-11|day|UTC⟧",
         next_checkpoint: new Date("2026-01-12T09:00:00Z"),
       },
-      { title: "new flat", event_at: null, next_checkpoint: null },
+      { title: "new flat", event: null, next_checkpoint: null },
     ],
     "UTC",
   );
@@ -18,4 +18,10 @@ test("a thread line keeps the event's day apart from when to ask", () => {
     "half marathon (on ⟦2026-01-11|day|UTC⟧; ask after ⟦2026-01-12|day|UTC⟧)",
     "new flat",
   ]);
+});
+
+test("an event known only to the week keeps that precision", () => {
+  expect(
+    threadLines([{ title: "move", event: "⟦2026-01-12|week|UTC⟧", next_checkpoint: null }], "UTC"),
+  ).toEqual(["move (on ⟦2026-01-12|week|UTC⟧)"]);
 });

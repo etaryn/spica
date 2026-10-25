@@ -263,9 +263,15 @@ async function encodeFacts(
     }) => insertFact(db, userId, { ...row, ...extra }, { asSaid: true });
     const news = { subject: plan.subject, salience: plan.salience, content: plan.content };
 
-    const target = planned.decision.targetId
+    let target = planned.decision.targetId
       ? await getFact(db, userId, planned.decision.targetId)
       : null;
+    // A memory already replaced points on to what replaced it: the newest is the live one.
+    const passed = new Set<string>();
+    while (target?.status === "superseded" && target.superseded_by && !passed.has(target.id)) {
+      passed.add(target.id);
+      target = await getFact(db, userId, target.superseded_by);
+    }
     // A joke merged into a plain fact would be lost as a joke: it starts as its own candidate.
     const relation =
       target && !(plan.kind === "idiolect" && target.kind !== "idiolect")

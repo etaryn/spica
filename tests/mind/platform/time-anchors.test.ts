@@ -51,10 +51,6 @@ test("a bare weekday takes a date the writer was shown, else points by the rule"
   expect(days(anchorTimes(sunday, { at: written, zone: "UTC" }))).toEqual(["2026-01-11"]);
   const wednesday = { at: at("2026-01-14T23:00:00Z"), zone: "UTC" };
   expect(days(anchorTimes("They're awake late on Wednesday.", wednesday))).toEqual(["2026-01-14"]);
-  const past = { ...utc, direction: "past" as const };
-  expect(days(anchorTimes("The user finished it on Saturday.", past))).toEqual(["2026-01-10"]);
-  const ahead = { ...utc, direction: "upcoming" as const };
-  expect(days(anchorTimes("The user has a meeting on Monday.", ahead))).toEqual(["2026-01-19"]);
 });
 
 test("weeks, weekends, offsets, explicit dates and durations anchor", () => {
@@ -176,16 +172,6 @@ test("phrases land where the old resolver put them", () => {
   expect(one("this morning", { at: at("2026-01-05T23:30:00Z"), zone: "UTC" })).toBe("2026-01-05");
   expect(one("in october", { at: at("2026-10-16T09:00:00Z"), zone: "UTC" })).toBe("2026-10-01");
   expect(one("this friday", { at: at("2026-01-09T09:00:00Z"), zone: "UTC" })).toBe("2026-01-09");
-});
-
-test("a yearless date or month takes the side of now its label points to", () => {
-  const oct = { at: at("2026-10-19T09:00:00Z"), zone: "UTC" }; // Monday 19 October 2026
-  const past = { ...oct, direction: "past" as const };
-  const ahead = { ...oct, direction: "upcoming" as const };
-  expect(days(anchorTimes("Started uni in September.", past))).toEqual(["2026-09-01"]);
-  expect(days(anchorTimes("Moved to Leeds in March.", past))).toEqual(["2026-03-01"]);
-  expect(days(anchorTimes("Ran a marathon on 15 March.", past))).toEqual(["2026-03-15"]);
-  expect(days(anchorTimes("Our wedding is on 20 May.", ahead))).toEqual(["2027-05-20"]);
 });
 
 test("quoted words stay as said", () => {

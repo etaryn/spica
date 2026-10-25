@@ -437,6 +437,39 @@ export const session_log = pgTable(
   ],
 );
 
+export const annotationLayer = pgEnum("annotation_layer", [
+  "move",
+  "mention",
+  "time",
+  "proposition",
+  "idiolect",
+]);
+
+// The labels on a conversation, apart from its words: each points into `session_log` by
+// character range, and the memories it became point back through `fact_id`.
+export const annotation = pgTable(
+  "annotation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: userRef(),
+    session_id: uuid("session_id").notNull(),
+    // The reply whose cold path wrote it.
+    exchange_ref: uuid("exchange_ref")
+      .notNull()
+      .references(() => session_log.id, { onDelete: "cascade" }),
+    layer: annotationLayer("layer").notNull(),
+    local_id: text("local_id").notNull(),
+    coords: jsonb("coords").$type<{ turnId: string; start: number; end: number }[]>().notNull(),
+    data: jsonb("data").notNull(),
+    fact_id: uuid("fact_id").references(() => fact.id, { onDelete: "set null" }),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("annotation_session_local_uq").on(t.user_id, t.session_id, t.local_id),
+    index("annotation_user_session_idx").on(t.user_id, t.session_id),
+  ],
+);
+
 /** Extensible homeostatic params: a new param needs no migration. */
 export const relationship_param = pgTable(
   "relationship_param",

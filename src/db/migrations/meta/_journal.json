@@ -302,6 +302,13 @@
       "when": 1792817632592,
       "tag": "0042_powerful_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792915474873,
+      "tag": "0043_light_white_tiger",
+      "breakpoints": true
     }
   ]
 }

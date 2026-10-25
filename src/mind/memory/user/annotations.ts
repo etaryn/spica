@@ -236,7 +236,10 @@ export type CheckedProposition = Nulled<
 export type CheckedThread = Nulled<Labels["threads"][number], "thread_id" | "checkpoint"> & {
   checkpointAt: ResolvedTime | null;
 };
-export type CheckedIdiolect = Labels["idiolect"][number] & { startedBy: Speaker };
+export type CheckedIdiolect = Labels["idiolect"][number] & {
+  startedBy: Speaker;
+  coords: Coordinate[];
+};
 
 export type DropReason =
   | "bad_ref"
@@ -596,7 +599,7 @@ class Checker {
         continue;
       }
       const earliest = [...cited].sort((a, b) => this.first([a.id]) - this.first([b.id]))[0]!;
-      kept.push({ ...i, startedBy: earliest.message.speaker });
+      kept.push({ ...i, startedBy: earliest.message.speaker, coords: cited.map(coordinate) });
     }
     return kept;
   }

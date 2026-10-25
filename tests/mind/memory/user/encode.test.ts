@@ -575,3 +575,36 @@ describe("encodeExtraction", () => {
     expect(mia?.type).toBe("person");
   });
 });
+
+test("a memory that supersedes or resolves another keeps its thread", async () => {
+  const { u, input } = await setup();
+  const t = await threads.insertThread(
+    db(),
+    u,
+    { title: "interview", subject: "user", stakes: "high", next_checkpoint: null },
+    now,
+  );
+  const old = await seed(u, "job interview thursday", { thread_id: t.id });
+  const done = await seed(u, "driving test", { thread_id: t.id });
+  await encodeExtraction(
+    db(),
+    config,
+    input({
+      facts: [
+        {
+          fact: f("job interview friday"),
+          embedding: vec(),
+          decision: { relation: "contradicts", targetId: old.id },
+        },
+        {
+          fact: f("passed the driving test"),
+          embedding: vec(),
+          decision: { relation: "resolves", targetId: done.id },
+        },
+      ],
+    }),
+  );
+  const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+  expect(rows.find((r) => r.content === "job interview friday")!.thread_id).toBe(t.id);
+  expect(rows.find((r) => r.content === "passed the driving test")!.thread_id).toBe(t.id);
+});

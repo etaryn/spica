@@ -271,6 +271,8 @@ async function encodeFacts(
       target && !(plan.kind === "idiolect" && target.kind !== "idiolect")
         ? planned.decision.relation
         : "new";
+    // What replaces or settles a memory carries on its storyline.
+    if (target && row.thread_id === null && relation !== "new") row.thread_id = target.thread_id;
 
     if (relation === "duplicate" && target) {
       await bumpDuplicate(

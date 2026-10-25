@@ -95,6 +95,9 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
       job.userId,
       turns,
     );
+    // What the checks threw out stays visible: nothing is asked again.
+    if (labels.drops.length)
+      log.info("labels dropped", { userId: job.userId, drops: labels.drops });
     const read = signalsOf(labels, all, pieces, config.extraction.quote_chars);
 
     // Each idea she was shown gets one chance; idempotent, so a retried job changes nothing.

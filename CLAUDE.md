@@ -141,10 +141,13 @@ weekday cross-check is gone (extract v11), a row's own date and the dates her lo
 date the words they write; merged, close run done (`evals/results/analysis-2026-10-24-phase-16c.md`).
 **Phase 17, labelled memory** (§20 row; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`):
 what was said is kept as said and every layer of its meaning is labelled apart from it. **17a is
-built** (2026-10-25, replay only: extract v12 in exchange mode, a reading call with thinking and a
-meaning call without; `pnpm review:extract-labels`; analysis `evals/results/analysis-2026-10-25-phase-17a.md`).
-**Next: 17b, labels as memory** (v12 live, stand-off storage, readers; §25 B133–B136). Phase 16d
-(B129–B132, B1) is paused; each item is re-checked at 17b's close.
+built** (2026-10-25, replay only; analysis `evals/results/analysis-2026-10-25-phase-17a.md`).
+**17b, labels as memory, is built on branch `phase-17b`** (2026-10-25, not merged): the cold path
+labels each exchange in three thinking calls (`memory/user/label.ts`, `prompts/labels/v1.md`), keeps
+every label in `annotation`, and stores memories as code-built lines (`memory-line.ts`); her view of
+older messages is glossed from time labels; extract v11 and its anchoring are gone. Close run
+`review:world-outreach` pending, with the 16d re-check (B1, B129–B132). Next: 17c, turn-taking on
+labels.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

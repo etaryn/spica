@@ -12,7 +12,7 @@
   shared code importing user, process or admin-repo code: don't work around it.
 - Message flow: POST → crisis check ∥ turn judge → `turn-taking/` → `hot-path/` (`composeFrom`:
   retrieve → assemble → one generation) → `guard/` (one check, no regeneration, fallback) →
-  `shapeText` → pacing/`availability/` → SSE + push → `cold-path/` (extract → reconcile → update
+  `shapeText` → pacing/`availability/` → SSE + push → `cold-path/` (label → reconcile → update
   state; tone nudges the user's affect, never core mood → big-event check). A reach-out is a reply
   with a synthetic trigger through the same hot path.
 - The hot path is read-only; memory writes never delay a reply.

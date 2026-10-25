@@ -330,7 +330,8 @@ Commands: `pnpm typecheck`, `pnpm lint` (ESLint and Prettier), `pnpm format`, `p
 Every table here references `user(id) ON DELETE CASCADE`.
 
 - **`fact`**: the memory atom. `subject` (`user | self | shared`), `kind`,
-  `content` (understandable on its own; Built 16b: each time phrase is stored as a date token,
+  `content` (Built 17b: a labelled memory's content is its memory line, §10.4, written by code
+  and stored as given; for her notes and older rows: understandable on its own; Built 16b: each time phrase is stored as a date token,
   `⟦local|precision|zone⟧`, anchored by `insertFact` in the user's zone, and rendered with its
   distance only where a prompt reaches a model; Built 16c: anchoring reads one clause at a time
   and anchors a span only when one rule reads all of it, so no word is lost; ISO dates anchor; a
@@ -389,6 +390,16 @@ Every table here references `user(id) ON DELETE CASCADE`.
     (`claim_kind` enum: `life | opinion | reaction`; null for `user` and
     `shared` facts) and `grounded` (nullable boolean): whether core backed a
     `life` or `opinion` claim when she made it (§12.6). Null when unchecked.
+- **`annotation`** (**Built 17b**, migration `0043`): the labels on a conversation, apart from
+  its words. `user_id`, `session_id` (the conversation), `exchange_ref` (the reply whose cold path
+  wrote it; cascade), `layer` (`move | mention | time | proposition | idiolect`), `local_id` (the
+  conversation's own id, `m3`, `t2`; unique per `user_id` and `session_id`), `coords` (jsonb
+  `[{turnId, start, end}]`: character ranges in `session_log.text`; empty for a proposition),
+  `data` (the checked label; a mention's also holds its `entity_id`), `fact_id` (the memory a
+  proposition or idiolect label became; set null on delete), `created_at`. Read back as what a
+  conversation already has labelled, piece ids worked out again from the coordinates, and as the
+  times behind the glosses in her view of older messages (§10.3). Thread actions live in `thread`,
+  the relationship blocks in the relationship's rows.
 - **`entity`**: people, places and things, with `subject` (`user | self`),
   aliases, salience.
 - **`thread`**: ongoing storylines with `next_checkpoint` and `stakes`.
@@ -1407,9 +1418,12 @@ when the guard is on.
       Built 16b: each day in the window opens with a divider ("— Monday 12
       January (yesterday) —", from the turns' send times, in their zone; today's
       turns have none when the window opens on today), and a time word in an
-      earlier day's message keeps its words with a gloss from that message's own
-      send time ("tomorrow (that's today)"); today's messages read as typed; the
-      stored transcript never changes (`viewTurns`, reply v19). A window that opens on her reach-outs keeps them behind a
+      earlier day's message keeps its words with a gloss ("tomorrow (that's
+      today)"); **Changed 17b:** the gloss comes only from the message's time
+      label (`annotation`, resolved from its own send time), loaded bounded on the
+      hot path, so nothing parses the words and an unlabelled message reads as
+      typed; today's messages read as typed; the stored transcript never changes
+      (`viewTurns`, reply v19). A window that opens on her reach-outs keeps them behind a
       "[You wrote to them first]" user line; a reach-out after days of silence
       keeps only her unanswered reach-outs. A reach-out's "Where things stand with them" reads the
       newest non-sensitive summary (§9.5)
@@ -1495,11 +1509,28 @@ A `## Now` section gives now on both calendars. Her messages are never post-proc
 
 Asynchronous, after sending; never blocks a reply.
 
-1. **Extract** (strict JSON, `models.extract`, `prompts.extract`): candidate
-   facts (including `feeling` and `promise`), entity mentions, thread
-   updates with checkpoints, and a **relationship block** (warmth, trust,
-   tension, hurt with cause, apology, make-up, ending, retraction, repair),
-   scored only from the user's behaviour toward her in the new exchange.
+1. **Label** (**Built 17b**, replacing extract v11; `models.labels`, `prompts.labels` v1, from
+   extract v12): the exchange's turns, after the conversation so far (its session's turns, capped
+   at `extraction.window_messages`, plus `extraction.context_turns` from before it), are labelled
+   in three calls, each thinking (`models.labels_thinking`; `labels_max_tokens`,
+   `labels_timeout_ms`, `labels_cache`): `labels_read` (moves, mentions, times),
+   `labels_meaning` (propositions, threads) and `labels_signals` (idiolect and the relationship,
+   intimacy and bid blocks). Each call sees what the calls before it, and the conversation's
+   earlier exchanges, labelled (rebuilt from `annotation` by coordinate). The model is sent each
+   enum as a described string; code keeps a label whose values fit and drops only that label
+   (`bad_value`) otherwise (B136). A memory's times must sit in the words its own moves cover; a
+   time from elsewhere is a broken link (B134). Every id the conversation has used stays taken,
+   shown or not. The drops are logged (`labels dropped`). Their messages are labelled before her
+   reply when both share a minute. The relationship block is scored only from the user's
+   behaviour toward her in the new messages; her hurt's words are the moves that hurt her, or
+   their new moves when none is named.
+   Each proposition and idiolect label becomes a memory whose `content` is its **memory line**,
+   built once by code (`memory/user/memory-line.ts`): its label and status, its times as date
+   tokens (rendered with their distance when a prompt is sent), then the words it rests on,
+   quoted with who said them (`extraction.quote_chars`). Its embedding is the label and the
+   words, no dates; `occurred_at` is its first time. Idiolect takes its weight from
+   `extraction.idiolect`. Mentions that name something upsert entities; the words become an
+   alias. Every label is stored in `annotation` (§6.1), a proposition's row pointing at its fact.
 2. **Reconcile** each candidate against near neighbours (same subject,
    similarity ≥ `reconcile.near_match_similarity`): `duplicate` (merge, bump
    salience), `resolves`, `contradicts` (supersede), `new`. A small
@@ -1534,14 +1565,17 @@ like one warm conversation. A reach-out exchange applies none of this.
    (`cold_path.retry_limit`, backoff), since no prompt has run yet. `cold_path_sweep` queues
    only exchanges no cold path has run on (`extract_attempts` 0: the job was lost), once.
 
-A reach-out exchange (no user turn) extracts her words but applies no
+**Built 17b:** a label that names the memory it `updates` (one from an earlier exchange of the
+same conversation) supersedes it directly, with no reconcile call; the rest reconcile as above,
+shown as memory lines. A memory that supersedes or resolves another keeps its thread.
+
+A reach-out exchange (no user turn) labels her words but applies no
 relationship or affect update.
 
-**Phase 17a (replay only, 2026-10-25):** `prompts/extract/v12.md` labels a conversation in layers
-instead of writing facts: moves (acts and what each replies to), mentions, times (a meaning code
-resolves from the send time of its message), propositions, threads, idiolect and the relationship
-blocks, each pointing at code-numbered pieces. Only `pnpm review:extract-labels` runs it;
-`prompts.extract` stays v11 until 17b. Analysis: `evals/results/analysis-2026-10-25-phase-17a.md`.
+**Phase 17a (replay only, 2026-10-25):** extract v12 labelled conversations in layers, run only by
+`pnpm review:extract-labels`; 17b made it live as labels v1. The replay runs the live
+`labelStretch`. Analysis: `evals/results/analysis-2026-10-25-phase-17a.md` (17a, the B135 hand
+pass and the 17b rerun).
 
 ### 10.5 Guard (Built)
 
@@ -1932,17 +1966,14 @@ sees it among what she already brought up.
 
 **Built 15c:** reconcile's contradiction band: neighbours from `reconcile.contradiction_similarity`
 (0.75) up to `near_match_similarity` (0.82) are shown `[distant]` and can only be contradicted
-(reconcile v2), in both minds. **Built 16b:** extraction v10 keeps a fact's time words as said
-and labels them (`when_direction`: past, upcoming or null); code anchors them
-(`anchorExtraction`, chrono-node) from the send time of their last message, in their zone, in
-the labelled direction, and `occurred_at` is the fact's first anchor. **Built 16c:** the weekday
-cross-check is gone (it moved a right date to their message's weekday), and extraction v11 adds
-no date or weekday they didn't say. A thread's
-`checkpoint_when` is anchored ahead into `next_checkpoint`. The model never guesses a date
-(its `when`, `{when}`, `occurred_at` and `next_checkpoint` fields went with `when.ts`). "this
-week" is a week token. Extraction input also
-carries her snapshot's Interests, so her own titles ("Mirror", "Stalker") read as films. Upcoming
-plans are always stored; extraction never infers a gender.
+(reconcile v2), in both minds. **Built 17b:** a labelled memory's dates are never parsed from
+prose: the model says what each time phrase means (unit, shift, weekday…), code resolves it from
+the send time of the message holding the words (`platform/time-labels.ts`), and the memory line
+carries it as a date token; `occurred_at` is its first time, a thread's `next_checkpoint` its
+checkpoint time. The extraction anchoring (`anchorExtraction`, `when_direction`) went with v11;
+the stored-text anchoring in `insertFact` remains for her notes only, until 17d. The labelling
+input also carries her snapshot's Interests, so her own titles ("Mirror", "Stalker") read as
+films.
 
 ### 12.4 Imperfect memory
 
@@ -2533,7 +2564,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. Next: **17b** labels as memory (v12 live, stand-off storage, readers; B133–B136), **17c** turn-taking on labels, **17d** notes cite labels | B133–B136 |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built 2026-10-25; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Next: **17c** turn-taking on labels, **17d** notes cite labels | 16d re-check (B1, B129–B132) |
 | **Date fixes from the 16c close run** (Phase 16d, paused for Phase 17 on 2026-10-25: each item is re-checked at 17b's close; evidence in `evals/results/analysis-2026-10-24-phase-16c.md`) | B129 "since <weekday>" points back; B130 extract adding a day; B131 a thread's next check-in read as its event date; B1 a user fact taken from her words; B132 the 16c anchoring minors | — |
 | **Frontend** | The client and its latency: B34 | B34 |
 
@@ -2663,7 +2694,8 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 - **B131.** A thread's next check-in reads as its event's date: `open_threads` showed "half marathon
   (next: in 3 days, Friday 9 January)" and summarise wrote "The half marathon is now Friday 9
   January, not Sunday 11 January", kept through two summaries and two models. Label the line so
-  "next" reads as when to check in. *Phase 16d.*
+  "next" reads as when to check in. *Phase 16d.* Built 17b: thread lines read
+  `title (on <event>; ask after <checkpoint>)`; checked at the 17b close run.
 - **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
   date: "yesterday (Friday 9 January)" isn't merged; "the 8th and 9th of January" leaves "the 8th"
   raw; a weekend, week or since token beside a written-out date isn't merged (the merge runs in the
@@ -2673,15 +2705,6 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   intentions take no shown dates. *Phase 16d.*
 - **B1, B129–B132** are paused for Phase 17 (2026-10-25): each is re-checked at 17b's close against
   labelled memory, then fixed or closed.
-- **B133.** The labelling meaning call (thinking off) cites move ids the reading call never made: 23 of
-  86 memories fell in the 17a rerun. Thinking on it too (three calls: the grammar then needs a split),
-  or let a memory cite pieces as well as moves. *Phase 17b.*
-- **B134.** A memory can take a time from words it doesn't rest on (Sam's half marathon got "since
-  friday" from her question). Rule: a memory's times sit in the pieces of its moves. *Phase 17b.*
-- **B135.** Labelled memory kept 57 memories where v11 stored 148 facts on the same exchanges; v11 split
-  finer, so a hand pass decides what v12 misses. *Phase 17b.*
-- **B136.** Structured output enforces types, not enum values (SDK 0.127.0): one invalid value fails the
-  whole labelling call. Decide whether a bad value drops one label instead. *Phase 17b.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

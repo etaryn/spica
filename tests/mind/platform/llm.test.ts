@@ -240,6 +240,32 @@ describe("judge effort and thinking", () => {
     expect(guard).toMatchObject({ thinking: { type: "adaptive" } });
   });
 
+  test("the labels role has its own model and thinking; other structured calls keep theirs", async () => {
+    const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
+    const p = new AnthropicProvider(client, {
+      ...models,
+      labels: "m-labels",
+      labels_thinking: "adaptive",
+      structured_thinking: "disabled",
+    });
+    const schema = z.object({ ok: z.boolean() });
+    const ask = (model: "labels" | "cheap") =>
+      p.classifyJson({
+        purpose: "x",
+        model,
+        system: "s",
+        input: "i",
+        schema,
+        timeoutMs: 1,
+        maxTokens: 1,
+      });
+    await ask("labels");
+    await ask("cheap");
+    const [labels, cheap] = parse.mock.calls.map((c) => c[0]);
+    expect(labels).toMatchObject({ model: "m-labels", thinking: { type: "adaptive" } });
+    expect(cheap).toMatchObject({ thinking: { type: "disabled" } });
+  });
+
   test("a null effort sends none, so Haiku can serve the reply or judge role", async () => {
     const reply = stubClient({ stop_reason: "end_turn", content: [{ type: "text", text: "hi" }] });
     await new AnthropicProvider(reply.client, { ...models, reply_effort: null }).generateReply({

@@ -247,4 +247,3 @@ code itself.
 | 2026-10-25 | Optional ids, names and the clock in the labelling schema say none with "", which code turns into null | The API refuses a structured-output schema with more than 16 nullable fields. |
 | 2026-10-25 | Each exchange is labelled in two calls: reading (moves, mentions, times) with thinking, then meaning (propositions, threads, idiolect, relationship) without | One grammar for every layer is over the API's size limit, and thinking shrinks it further; thinking removed the reading errors (Ethan chose exchange mode). |
 | 2026-10-25 | `MAX_STEPS` (48) in `time-labels.ts` stays a constant | It only stops the date search on an impossible day; nothing tunes it. |
-| 2026-10-25 | The labelling replay's token caps and timeout are constants in `evals/extract-replay.ts` | They are a dev tool's limits, not the mind's settings. |

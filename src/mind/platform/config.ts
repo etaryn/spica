@@ -63,6 +63,13 @@ const models = z.object({
   extract_cache: cacheTtl,
   // The guard's prompt is the same on every call and it runs on every reply, so a burst reads it.
   guard_cache: cacheTtl,
+  // Labelling: its own role, since it thinks and needs room and time for it. The cold path is
+  // asynchronous, so a slow call never delays a reply.
+  labels: text,
+  labels_thinking: thinking,
+  labels_max_tokens: positiveInt,
+  labels_timeout_ms: positiveInt,
+  labels_cache: cacheTtl,
 });
 
 const embedding = z.object({
@@ -738,6 +745,7 @@ const prompts = z.object({
   post_check: promptVersion,
   format_draft: promptVersion,
   extract: promptVersion,
+  labels: promptVersion,
   reconcile: promptVersion,
   judge_recall: promptVersion,
   judge_false_recall: promptVersion,

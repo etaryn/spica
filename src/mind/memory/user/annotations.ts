@@ -134,12 +134,10 @@ export const LabelsSchema = z.object({
 });
 export type Labels = z.infer<typeof LabelsSchema>;
 
-// The output grammar for every layer at once is over the API's size limit, so a stretch is labelled
-// in two calls: first what the text holds (moves, mentions, times), then what it means, which
-// points at them.
+// The output grammar for every layer at once is over the API's size limit, and thinking shrinks it
+// further, so a stretch is labelled in three calls: what the text holds (moves, mentions, times),
+// what it means (memories, threads), and what it says about them, each pointing at the last.
 export const ReadingSchema = LabelsSchema.pick({ moves: true, mentions: true, times: true });
-export const MeaningSchema = LabelsSchema.omit({ moves: true, mentions: true, times: true });
-// With thinking on, even the meaning grammar is over the limit, so it is asked in two parts.
 export const PropositionsSchema = LabelsSchema.pick({ propositions: true, threads: true });
 export const SignalsSchema = LabelsSchema.pick({
   idiolect: true,

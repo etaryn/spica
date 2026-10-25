@@ -24,7 +24,12 @@
     "reply_max_retries": 1,
     "reply_cache": "5m",
     "extract_cache": "5m",
-    "guard_cache": "5m"
+    "guard_cache": "5m",
+    "labels": "claude-haiku-5-5",
+    "labels_thinking": "adaptive",
+    "labels_max_tokens": 16000,
+    "labels_timeout_ms": 180000,
+    "labels_cache": "5m"
   },
   "embedding": {
     "provider": "voyage",
@@ -214,6 +219,7 @@
     "sim_user": "v2",
     "persona": "v7",
     "extract": "v11",
+    "labels": "v1",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",

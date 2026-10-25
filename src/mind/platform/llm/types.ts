@@ -25,7 +25,7 @@ export function systemText(blocks: SystemBlock[]): string {
 
 /** Which configured model a structured call uses (config `models.<role>`). */
 export type StructuredModel =
-  "cheap" | "extract" | "judge" | "guard" | "turn_judge" | "life" | "core" | "user_mind";
+  "cheap" | "extract" | "labels" | "judge" | "guard" | "turn_judge" | "life" | "core" | "user_mind";
 
 /** Receives every completed call's usage; the evals tally spend with it. */
 export type UsageSink = (usage: LlmUsage) => void;

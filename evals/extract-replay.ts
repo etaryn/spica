@@ -1,7 +1,7 @@
 /**
- * Replay for labelled memory: reruns the labelling calls (extract v12) over the latest world runs'
- * conversations and the invented chat ones, after each exchange, the reading call thinking and the
- * meaning call not, and writes one review file to read by hand. Reads dumps and call logs;
+ * Replay for labelled memory: reruns the live labelling (three calls, each thinking) over the
+ * latest world runs' conversations and the invented chat ones, after each exchange, and writes one
+ * review file to read by hand. Reads dumps and call logs;
  * writes no database. Every call is logged under evals/results/calls/. `--dry` builds every input
  * and prints the counts and one input, without calling a model.
  */
@@ -13,7 +13,6 @@ import { messagesOf } from "@/mind/memory/user/layers";
 import { numberPieces } from "@/mind/memory/user/pieces";
 import { loadConfig } from "@/mind/platform/config";
 import { spend } from "@/mind/platform/llm/meter";
-import { loadPrompt } from "@/mind/platform/prompts";
 import { realProvider } from "./lib/call-log";
 import { runReplay } from "./lib/label-replay";
 import { NAMED_CASES, renderReview } from "./lib/label-review";
@@ -27,13 +26,7 @@ const RUNS = [
   { run: "16b close", trace: "2026-10-24T08-48-12-791Z", calls: "eval-2026-10-24T08-48-12-585Z" },
   { run: "16c close", trace: "2026-10-24T15-12-40-678Z", calls: "eval-2026-10-24T15-12-40-452Z" },
 ];
-// A dev tool's limits, not the mind's: room for the reading call's thinking, and for the meaning.
-const READ_TOKENS = 16384;
-const MEANING_TOKENS = 8192;
-const TIMEOUT_MS = 180_000;
-
 const config = loadConfig();
-const thinkingConfig = loadConfig({ models: { structured_thinking: "adaptive" } });
 const conversations = [
   ...RUNS.flatMap((r) =>
     loadRun(
@@ -73,19 +66,10 @@ const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const file = path.join(RESULTS, `review-extract-labels-${stamp}.md`);
 mkdirSync(RESULTS, { recursive: true });
 
-console.log("exchange mode: reading with thinking, meaning without…");
+console.log("exchange mode: three calls, each thinking…");
 const calls = await runReplay(
-  {
-    read: realProvider(thinkingConfig, "extract-replay-read", usage.record),
-    meaning: realProvider(config, "extract-replay-meaning", usage.record),
-  },
+  { llm: realProvider(config, "extract-replay", usage.record), config },
   conversations,
-  {
-    system: loadPrompt("extract", "v12"),
-    readTokens: READ_TOKENS,
-    meaningTokens: MEANING_TOKENS,
-    timeoutMs: TIMEOUT_MS,
-  },
 );
 const lines = usage.summary().map((u) => ({
   purpose: u.purpose,
@@ -99,7 +83,7 @@ writeFileSync(
   file,
   renderReview({
     stamp,
-    title: "exchange mode, reading with thinking, meaning without",
+    title: "exchange mode, three calls with thinking",
     conversations,
     calls,
     usage: lines,

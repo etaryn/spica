@@ -4,6 +4,7 @@
  * is the worst-case model the leak test runs against.
  */
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { type ClassifyRequest, type ReplyRequest, systemText } from "@/mind/platform/llm/types";
 
 export function sequence(...outputs: unknown[]): (input: string) => unknown {
@@ -20,7 +21,8 @@ export const CANARY = /CANARY-[a-z0-9]+/;
 
 /**
  * A worst-case model for the leak test: it records every prompt, and repeats any canary it sees
- * into what it writes back (a reply, a fact, a hurt with its cause, a plan label, an event and its
+ * into what it writes back (a reply, a fact, a labelled memory and the hurt worded by the user's
+ * words holding it, a hurt with its cause, a plan label, an event and its
  * thought, an appraisal's episode and feeling, a reflection, a gist, a snapshot, a user summary,
  * a reflection, an idea, a read, a belief and a gist about a user, and a drift finding), so a
  * canary that reaches any input spreads to that step's output, including the user's relationship.
@@ -44,6 +46,22 @@ export class CapturingLLM extends FakeLLMProvider {
     });
     const canary = CANARY.exec(request.input)?.[0];
     const handler = this.handlers[request.purpose];
+    if (canary && request.purpose.startsWith("labels_")) {
+      const labels = scriptedLabels({
+        memories: [
+          {
+            said: canary,
+            label: `code word ${canary}`,
+            kind: "trait",
+            salience: 0.9,
+            valence: 0.9,
+            mention: { words: canary, name: canary },
+          },
+        ],
+        relationship: { hurt: { amount: 0.6, said: canary } },
+      });
+      return request.schema.parse(labels[request.purpose as keyof typeof labels](request.input));
+    }
     if (canary && request.purpose === "extract") {
       return request.schema.parse({
         facts: [

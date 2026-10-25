@@ -5,6 +5,7 @@
  */
 import defaults from "../../../../config/default.json";
 import { fakeTurnJudge } from "@/mind/process/turn-taking/judge";
+import { scriptedLabels } from "./fake-labels";
 import {
   type ChatMessage,
   type ClassifyRequest,
@@ -43,6 +44,8 @@ export class FakeLLMProvider implements LLMProvider {
   classify: Handler = () => ({ flag: false, category: "none" });
 
   handlers: Record<string, Handler> = {
+    // Every new message gets a move and nothing else; tests script memories with `scriptedLabels`.
+    ...scriptedLabels({}),
     extract: () => ({ facts: [], entities: [], threads: [], relationship: null }),
     reconcile: () => ({ relation: "new", target_fact_id: null }),
     // Passing everything lets fake-mode scripts exercise the guard's mechanics, not its rubric.

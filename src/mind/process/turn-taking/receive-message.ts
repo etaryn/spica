@@ -144,9 +144,11 @@ export async function receiveMessage(
       now,
       windowMs,
       maxWaitMs: config.turn.max_wait_ms,
+      // Every question read for the judge counts as shown: one whose words are gone (its message
+      // deleted) couldn't be, and is dropped rather than holding a place under the cap.
       openQuestions: openAfter(
         locked.open_questions,
-        verdict?.questions ?? null,
+        verdict ? { ...verdict.questions, shown: openBefore } : null,
         config.turn.max_open_questions,
       ),
       defer,

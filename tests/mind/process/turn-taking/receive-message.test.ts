@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { ConflictError, InputError, ReplyFailedError } from "@/mind/platform/errors";
 import { TURN_BACKCHANNEL_QUEUE, TURN_TIMER_QUEUE } from "@/mind/platform/jobs";
 import { receiveMessage } from "@/mind/process/turn-taking/receive-message";
+import { mutateState } from "@/mind/process/turn-taking/state";
 import { getState } from "@/db/repos/user/conversation-state";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import * as rel from "@/db/repos/user/relationship";
@@ -42,6 +43,21 @@ describe("receiveMessage", () => {
     expect(deps.llm.calls).toHaveLength(0); // no reply generated in the POST
     const logs = await listJudgeLogs(getTestDb(), u);
     expect(logs.map((l) => [l.kind, l.turn_id])).toEqual([["turn", input.clientMessageId]]);
+  });
+
+  test("an open question whose words are gone is dropped, so it never holds a place under the cap", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    const lost = [1, 2, 3].map(() => ({ coords: [{ turnId: randomUUID(), start: 0, end: 4 }] }));
+    await mutateState(getTestDb(), u, deps.clock.now(), () => ({
+      patch: { open_questions: lost },
+      result: null,
+    }));
+    const input = msg("so are you coming?");
+    await receiveMessage(deps, u, input);
+    expect((await getState(getTestDb(), u))!.open_questions).toEqual([
+      { coords: [{ turnId: input.clientMessageId, start: 0, end: 18 }] },
+    ]);
   });
 
   test("an incomplete message waits longer; a burst keeps one buffer with a capped wait", async () => {

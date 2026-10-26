@@ -96,6 +96,7 @@ export class FakeLLMProvider implements LLMProvider {
       return {
         reflection: first ? `What stays with me: ${first}`.slice(0, 280) : null,
         subject: "user",
+        times: [],
       };
     },
     // Deterministic: an idea about the first new memory, none without one.

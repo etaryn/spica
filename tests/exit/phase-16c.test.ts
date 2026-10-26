@@ -1,7 +1,7 @@
 /**
  * Phase 16c exit, all fake, from the 16b close run: anchoring keeps every word, a day said twice
- * is one token, a fact keeps its own weekday, her loops date a weekday by the day they were shown,
- * a row's own date wins, and a part of the day with a clock time anchors. A's data never reaches
+ * is one token, a fact keeps its own weekday, her core loops date a weekday by the day they were
+ * shown, and a part of the day with a clock time anchors. A's data never reaches
  * a core loop, and A's fact leaves core unchanged.
  */
 import { sql } from "drizzle-orm";
@@ -16,8 +16,6 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-const day = (d: Date | undefined | null) => d?.toISOString().slice(0, 10) ?? null;
-
 test("1: the swallowed summary keeps every word", () => {
   const at = new Date("2026-01-05T10:21:40Z");
   const text =
@@ -31,24 +29,6 @@ test("2: 'yesterday, Thursday 8 January' and an ISO twin are one date each", () 
   expect(tokenDates(anchorTimes("Interview on Thursday afternoon, 2026-01-08.", ctx))).toHaveLength(
     1,
   );
-});
-
-test("4: a seed's own date dates its words", async () => {
-  const u = await createTestUser();
-  const r = await insertFact(getTestDb(), u, {
-    subject: "user",
-    kind: "event",
-    content: "The user is running a half marathon on Sunday morning.",
-    embedding: vec(),
-    created_at: new Date("2026-01-04T10:00:00Z"),
-    occurred_at: new Date("2026-01-11T09:00:00Z"),
-    status: "open",
-    salience: 0.6,
-    valence: 0,
-    confidence: 0.9,
-    source: "turn",
-  });
-  expect(day(tokenDates(r.content)[0])).toBe("2026-01-11");
 });
 
 test("5: 'tonight at 20:45' anchors", () => {

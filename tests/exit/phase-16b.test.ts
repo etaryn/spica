@@ -1,17 +1,16 @@
 /**
- * Phase 16b exit, all fake: stored text keeps the date each time phrase meant and every prompt
- * reads it on its own day, each on its owner's calendar; a weekday takes the date she was shown;
- * extract dates from the message's own time; her view glosses older messages; a reach-out on the
+ * Phase 16b exit, all fake: every prompt reads a stored date token on its own day, on its
+ * owner's calendar; extract dates from the message's own time; her view glosses older messages; a reach-out on the
  * wrong day is dropped. A's dates never reach B, no raw token reaches a model, core is unchanged.
  */
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
-import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
+import { insertRun } from "@/db/repos/user/user-mind";
 import { ensureRelationship } from "@/db/repos/user/relationship";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { withTimeRendering } from "@/mind/platform/llm/render-net";
-import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
+import { renderTimes } from "@/mind/platform/time-anchors";
 import { viewTurns } from "@/mind/process/hot-path/assemble";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
@@ -21,7 +20,6 @@ import { makeTestDeps } from "../helpers/deps";
 beforeEach(resetDb);
 afterAll(closeTestDb);
 
-const D = 86_400_000;
 const row = (content: string, at: Date, kind: "summary" | "event" = "summary") => ({
   subject: (kind === "summary" ? "shared" : "user") as "shared" | "user",
   kind,
@@ -42,40 +40,6 @@ const runFor = async (d: ReturnType<typeof makeTestDeps>, u: string, ref: string
     now: d.clock.now(),
     cap: 9,
   }))!;
-
-test("1: 'tomorrow' stored on day 1 reads as today on day 2 and yesterday on day 3", async () => {
-  const u = await createTestUser();
-  const day1 = new Date("2026-01-12T09:00:00Z");
-  const r = await insertFact(getTestDb(), u, row("Sister visits tomorrow.", day1));
-  expect(renderTimes(r.content, new Date(day1.getTime() + D), 6)).toBe("Sister visits today.");
-  expect(renderTimes(r.content, new Date(day1.getTime() + 2 * D), 6)).toBe(
-    "Sister visits yesterday, Tuesday 13 January.",
-  );
-});
-
-test("2: a weekday in her summary takes the date of the memory she was shown", async () => {
-  const d = makeTestDeps();
-  const u = await createTestUser();
-  // Last Sunday's race: read forward, "Sunday" would be the coming one.
-  const race = new Date(d.clock.now().getTime() - D);
-  await insertFact(d.db, u, {
-    ...row("The user ran a half marathon.", d.clock.now(), "event"),
-    source: "turn",
-    occurred_at: race,
-  });
-  d.llm.handlers.user_summarise = () => ({
-    where_things_stand: "Race Sunday.",
-    whats_live: "Nothing new.",
-    how_i_feel: "Glad.",
-  });
-  await userSummarise(
-    { ...d, snapshot: null },
-    await runFor(d, u, "exchange:a"),
-    await loadRunInputs(d, u),
-  );
-  const [date] = tokenDates((await liveSummary(d.db, u))!.content);
-  expect(date!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
-});
 
 test("4: her view keeps an older message's words and says what they mean now", () => {
   const now = new Date("2026-01-13T09:00:00Z");

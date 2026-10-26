@@ -34,10 +34,7 @@ export type AnchorContext = {
   /** Dates the writer was shown: a bare weekday takes the nearest of these on that weekday. */
   known?: Date[];
 };
-export type AnchorHints = Omit<AnchorContext, "at" | "zone"> & {
-  /** Store the words as given: a labelled memory quotes them, and its dates are already tokens. */
-  asSaid?: boolean;
-};
+export type AnchorHints = Omit<AnchorContext, "at" | "zone">;
 
 type Anchor = { local: string; precision: Precision; zone: string };
 

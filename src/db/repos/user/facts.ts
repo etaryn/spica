@@ -2,9 +2,6 @@
  * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
  * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
  */
-import { anchorFields, anchorTimes, type AnchorHints } from "@/mind/platform/time-anchors";
-import { zoneOrUtc } from "@/mind/platform/timezone";
-import { getTimezone } from "./users";
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
@@ -143,36 +140,12 @@ export async function nearFacts(
   });
 }
 
-/**
- * Stored text keeps the date each time phrase meant: content and a summary's or read's parts are
- * anchored from the moment written, in the user's zone, so they read right on any later day.
- */
-export async function insertFact(
-  db: Db,
-  userId: string,
-  row: NewFact,
-  hints: AnchorHints = {},
-): Promise<FactRow> {
-  // Every caller passes a Date: the moment it was written is the moment its words mean.
-  const at = row.created_at as Date;
-  const ctx = {
-    at,
-    zone: zoneOrUtc(await getTimezone(db, userId)),
-    ...hints,
-    // The date the row carries is the one its words mean.
-    known: [...(hints.known ?? []), ...(row.occurred_at ? [row.occurred_at as Date] : [])],
-  };
-  // An inside joke or ritual is the words themselves: "see you tomorrow" there is no date.
-  const asSaid = hints.asSaid === true || row.kind === "idiolect";
+/** A memory or note as given: what its words mean was settled before it got here. */
+export async function insertFact(db: Db, userId: string, row: NewFact): Promise<FactRow> {
   return one(
     await db
       .insert(fact)
-      .values({
-        ...row,
-        content: asSaid ? row.content : anchorTimes(row.content, ctx),
-        payload: asSaid ? row.payload : anchorFields(row.payload, ctx),
-        user_id: userId,
-      })
+      .values({ ...row, user_id: userId })
       .returning(),
   );
 }
@@ -252,6 +225,25 @@ export async function setFactStatus(
     .update(fact)
     .set({ status, ...(supersededBy ? { superseded_by: supersededBy } : {}) })
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
+  // Her ideas, reflections and beliefs resting on a memory she no longer holds go with it; her
+  // summary and read are rewritten whole by the next run.
+  if (status === "superseded") await retireNotesCiting(db, userId, id);
+}
+
+// ponytail: a jsonb scan over one user's open notes; index payload->'cites' if a user's notes
+// grow large
+async function retireNotesCiting(db: Db, userId: string, id: string): Promise<void> {
+  await db
+    .update(fact)
+    .set({ status: "stale" })
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.status, "open"),
+        inArray(fact.kind, ["idea", "reflection", "belief"]),
+        sql`${fact.payload}->'cites' @> ${JSON.stringify([id])}::jsonb`,
+      ),
+    );
 }
 
 /**

@@ -113,20 +113,6 @@ export function triggerText(t: Trigger): string {
   }
 }
 
-/**
- * The memories as a loop's prompt shows them, each dated once on their calendar (in its words when
- * they carry the date), so the model never counts days.
- */
-export function memoryLines(facts: RunInputs["facts"], tz: string | null) {
-  const zone = zoneOrUtc(tz);
-  return facts.map(({ subject, kind, content, occurred_at }) => ({
-    subject,
-    kind,
-    content,
-    when: ownDate(content, occurred_at, zone),
-  }));
-}
-
 /** One of her notes as a loop reads it, headed by when she wrote it: its "today" was that day's. */
 export function stampedNote(
   row: { payload: unknown; created_at: Date } | null,
@@ -152,19 +138,6 @@ export function threadLines(
     ];
     return parts.length ? `${t.title} (${parts.join("; ")})` : t.title;
   });
-}
-
-/** The dates a loop was shown, so a weekday it writes takes the day it saw. */
-export function shownDates(
-  facts: { occurred_at: Date | null }[],
-  threads: { next_checkpoint: Date | null }[],
-  texts: (string | null | undefined)[],
-): Date[] {
-  return [
-    ...facts.flatMap((f) => (f.occurred_at ? [f.occurred_at] : [])),
-    ...threads.flatMap((t) => (t.next_checkpoint ? [t.next_checkpoint] : [])),
-    ...texts.flatMap((t) => (t ? tokenDates(t) : [])),
-  ];
 }
 
 type Subject = "user" | "self" | "shared";

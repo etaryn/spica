@@ -113,7 +113,7 @@ test("the batch runs all five loops in order; a failed reflect still runs the re
   deps.llm.handlers.user_reflect = () => {
     throw new Error("boom");
   };
-  deps.llm.handlers.user_ideate = () => ({ idea: "Ask about the trip." });
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask about the trip.", about: "them", times: [] });
   const runId = (await recordBigEvents(deps, deps.db, u, "exchange:a", trig))!;
   expect(await runUserMind(deps, { runId })).toBe("failed");
   const loops = await getTestDb().execute(

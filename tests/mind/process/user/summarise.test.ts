@@ -6,7 +6,7 @@ import { insertRun, liveSummary } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
 import { userSummarise } from "@/mind/process/user/summarise";
 import { nowLine } from "@/mind/platform/time-anchors";
-import { dateToken, tokenDates, written } from "@/mind/platform/time-anchors";
+import { dateToken, written } from "@/mind/platform/time-anchors";
 import {
   closeTestDb,
   createTestUser,
@@ -295,8 +295,6 @@ test("summarise reads a stamped previous note and dated threads; no zone means U
     }),
   );
   expect(input.previous.written).toBe(written(new Date(now.getTime() - 2 * D), "UTC"));
-  // Her old note's "tomorrow" was stored as the day it meant.
-  expect(tokenDates(input.previous.whats_live)).toHaveLength(1);
   // No memory on the thread yet, so only when to ask shows.
   expect(input.open_threads).toContainEqual({
     id: "t1",

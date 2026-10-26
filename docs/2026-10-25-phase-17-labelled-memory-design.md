@@ -112,7 +112,7 @@ reply links. The code-made layers needed no new storage. History row in
 
 **17d is built (2026-10-26)** on branch `phase-17d`: her notes cite memories and threads by id,
 each with whose it is, label their own time words, and are retired when a memory they cite is
-superseded (design doc `docs/2026-10-26-phase-17d-notes-cite-labels-design.md`). Ethan wants
+superseded. Ethan wants
 Phase 16's anchoring replaced on principle, so core follows in **17e**, which closes the phase.
 
 ## Scope

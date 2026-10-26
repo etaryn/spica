@@ -21,14 +21,14 @@ test("mutateState creates the row, applies the patch, and is user-scoped", async
       now,
       windowMs: 4000,
       maxWaitMs: 40000,
-      openQuestions: [{ turn_id: ID, text: "q?" }],
+      openQuestions: [{ coords: [{ turnId: ID, start: 0, end: 2 }] }],
     }),
   );
   expect(r.version).toBe(1);
   expect(await getState(db, a)).toMatchObject({
     buffer_turn_ids: [ID],
     buffer_version: 1,
-    open_questions: [{ turn_id: ID, text: "q?" }],
+    open_questions: [{ coords: [{ turnId: ID, start: 0, end: 2 }] }],
   });
   expect(await getState(db, b)).toBeNull();
 });

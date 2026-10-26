@@ -4,7 +4,7 @@
  * on a cue word ("and", "but"), or is a single word.
  */
 
-export function cueVerdict(buffer: string[], openQuestions: string[], cues: string[]) {
+export function cueVerdict(buffer: string[], cues: string[]): { complete: boolean } {
   const last = (buffer.at(-1) ?? "").trim();
   const words = last
     .toLowerCase()
@@ -15,10 +15,5 @@ export function cueVerdict(buffer: string[], openQuestions: string[], cues: stri
   const trailsOff = /(\.\.\.|…)$/.test(last);
   const endsOnCue = words.length > 0 && cues.includes(words.at(-1)!);
   const singleWord = words.length < 2;
-  const complete = !(trailsOff || endsOnCue || singleWord);
-
-  const asked = buffer.filter((m) => m.trim().endsWith("?")).map((m) => m.trim());
-  const open_questions = [...new Set([...openQuestions, ...asked])];
-
-  return { complete, open_questions, backchannel: null };
+  return { complete: !(trailsOff || endsOnCue || singleWord) };
 }

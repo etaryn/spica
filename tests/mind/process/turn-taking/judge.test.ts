@@ -1,6 +1,12 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { numberPieces } from "@/mind/memory/user/pieces";
 import { cueVerdict } from "@/mind/process/turn-taking/cues";
-import { judgeTurn, logTurnDecision, renderJudgeInput } from "@/mind/process/turn-taking/judge";
+import {
+  askedFrom,
+  judgeTurn,
+  logTurnDecision,
+  renderJudgeInput,
+} from "@/mind/process/turn-taking/judge";
 import { listJudgeLogs } from "@/db/repos/user/judge-log";
 import { insertTurn } from "@/db/repos/user/session-log";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../../../helpers/db";
@@ -11,49 +17,79 @@ afterAll(closeTestDb);
 const cues = ["wait", "also", "and", "so", "but", "like", "because"];
 const t0 = new Date("2026-01-05T09:00:00Z");
 const at = (s: number) => new Date(t0.getTime() + s * 1000);
-
-test("cue verdict: trailing cues, ellipses and one-word messages are incomplete; questions become open", () => {
-  expect(cueVerdict(["ok so today was insane and"], [], cues).complete).toBe(false);
-  expect(cueVerdict(["my boss called me in..."], [], cues).complete).toBe(false);
-  expect(cueVerdict(["hmm"], [], cues).complete).toBe(false);
-  expect(cueVerdict(["turns out it was a promotion lol"], [], cues).complete).toBe(true);
-  expect(cueVerdict(["what should I cook tonight?"], ["old?"], cues)).toEqual({
-    complete: true,
-    open_questions: ["old?", "what should I cook tonight?"],
-    backchannel: null,
-  });
-  expect(cueVerdict(["I passed"], [], cues).complete).toBe(true);
+const msgs = (...texts: string[]) =>
+  texts.map((text, i) => ({ id: `t${i + 1}`, text, at: at(i * 4) }));
+const shownQ = (text: string, turnId = "old") => ({
+  question: { coords: [{ turnId, start: 0, end: text.length }] },
+  text,
 });
 
-test("renderJudgeInput shows context, open questions and the buffer with gaps", () => {
+test("cue verdict: trailing cues, ellipses and one-word messages are incomplete", () => {
+  expect(cueVerdict(["ok so today was insane and"], cues).complete).toBe(false);
+  expect(cueVerdict(["my boss called me in..."], cues).complete).toBe(false);
+  expect(cueVerdict(["hmm"], cues).complete).toBe(false);
+  expect(cueVerdict(["turns out it was a promotion lol"], cues)).toEqual({ complete: true });
+});
+
+test("renderJudgeInput numbers the new messages' pieces and gives open questions ids", () => {
   const s = renderJudgeInput(
     {
       context: [
         { role: "user", text: "hey", at: at(-60) },
         { role: "companion", text: "hi!", at: at(-55) },
       ],
-      buffer: [
-        { text: "ok so today was insane", at: at(0) },
-        { text: "my boss called me in", at: at(6) },
-      ],
-      openQuestions: ["what should I cook?"],
+      buffer: msgs("ok so today was insane", "did you end up going? lol"),
+      openQuestions: [shownQ("what should I cook?")],
     },
     at(6),
   );
   expect(s).toContain("User: hey");
   expect(s).toContain("Spica: hi!");
-  expect(s).toContain("- what should I cook?");
-  expect(s).toContain("- (+0s) ok so today was insane\n- (+6s) my boss called me in");
+  expect(s).toContain("- q1: what should I cook?");
+  expect(s).toContain(
+    "[1.1] (+0s) ok so today was insane\n[2.1] (+4s) did you end up going?\n[2.2] lol",
+  );
 });
 
-test("fake judge (default handler) applies the cue check to the rendered buffer", async () => {
+test("askedFrom maps ids to coordinates, joins a spread question, drops unknown ids and repeats", () => {
+  const buffer = msgs("so did you", "end up going?");
+  const pieces = numberPieces(
+    buffer.map((m) => ({ ...m, speaker: "user" as const })),
+    0,
+  );
+  const old = shownQ("what should I cook?");
+  const r = askedFrom(
+    { still_open: ["q1", "q7"], asked: [["1.1", "2.1"], ["9.9"], ["2.1"]] },
+    [old],
+    pieces,
+  );
+  expect(r.questions.shown).toEqual([old.question]);
+  expect(r.questions.kept).toEqual([old.question]);
+  expect(r.questions.asked).toEqual([
+    {
+      coords: [
+        { turnId: "t1", start: 0, end: 10 },
+        { turnId: "t2", start: 0, end: 13 },
+      ],
+    },
+  ]);
+  expect(r.openWords).toEqual(["what should I cook?", "so did you / end up going?"]);
+});
+
+test("fake judge (default handler) keeps every open question and asks each piece ending in ?", async () => {
   const deps = makeTestDeps();
   const v = await judgeTurn(deps, {
     context: [],
-    buffer: [{ text: "my boss called me in and", at: t0 }],
+    buffer: msgs("my boss called me in and"),
     openQuestions: [],
   });
   expect(v).toMatchObject({ complete: false, backchannel: null, source: "model" });
+  const w = await judgeTurn(deps, {
+    context: [],
+    buffer: msgs("what should I cook tonight?"),
+    openQuestions: [shownQ("old?")],
+  });
+  expect(w.openWords).toEqual(["old?", "what should I cook tonight?"]);
 });
 
 test("a judge outage falls back to the cue check, labelled keyword_fallback", async () => {
@@ -63,12 +99,12 @@ test("a judge outage falls back to the cue check, labelled keyword_fallback", as
   };
   const v = await judgeTurn(deps, {
     context: [],
-    buffer: [{ text: "what should I cook tonight?", at: t0 }],
+    buffer: msgs("what should I cook tonight?"),
     openQuestions: [],
   });
   expect(v).toMatchObject({
     complete: true,
-    open_questions: ["what should I cook tonight?"],
+    openWords: ["what should I cook tonight?"],
     backchannel: null,
     source: "keyword_fallback",
     error: "Error",
@@ -80,26 +116,28 @@ test("a model verdict passes through, with overlong backchannels dropped", async
   deps.llm.handlers.turn_judge = () => ({
     reasoning: "story mid-flight",
     complete: false,
-    open_questions: [],
+    still_open: [],
+    asked: [],
     backchannel: "wait what, no way, tell me everything",
   });
   const v = await judgeTurn(deps, {
     context: [],
-    buffer: [{ text: "my boss called me in", at: t0 }],
+    buffer: msgs("my boss called me in"),
     openQuestions: [],
   });
   expect(v).toMatchObject({ complete: false, backchannel: null, reasoning: "story mid-flight" });
   deps.llm.handlers.turn_judge = () => ({
     reasoning: "r",
     complete: false,
-    open_questions: [],
+    still_open: [],
+    asked: [],
     backchannel: "huh",
   });
   expect(
     (
       await judgeTurn(deps, {
         context: [],
-        buffer: [{ text: "my boss called me in", at: t0 }],
+        buffer: msgs("my boss called me in"),
         openQuestions: [],
       })
     ).backchannel,
@@ -118,13 +156,14 @@ test("logTurnDecision writes one kind=turn row with ids and the verdict, and nev
   });
   const verdict = {
     complete: true,
-    open_questions: [],
+    questions: { shown: [], kept: [], asked: [] },
+    openWords: [],
     backchannel: null,
     reasoning: "done",
     source: "model" as const,
     latencyMs: 5,
     error: null,
-    promptVersion: "turn-judge@v2",
+    promptVersion: "turn-judge@v3",
   };
   await logTurnDecision(deps, u, {
     turnId: turn.id,
@@ -140,7 +179,7 @@ test("logTurnDecision writes one kind=turn row with ids and the verdict, and nev
     attempt: 1,
     outcome: null,
     source: "model",
-    prompt_version: "turn-judge@v2",
+    prompt_version: "turn-judge@v3",
   });
   expect(rows[0]!.input).toEqual({ buffer_turn_ids: [turn.id], open_questions: [] });
   expect(rows[0]!.output).toMatchObject({ complete: true, wait_ms: 4000, reasoning: "done" });

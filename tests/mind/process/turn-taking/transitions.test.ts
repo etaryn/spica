@@ -114,7 +114,7 @@ describe("commit", () => {
     buffer_turn_ids: ["a", "b"],
     buffer_started_at: at(0),
     buffer_version: 2,
-    open_questions: [{ turn_id: "a", text: "what should I cook?" }],
+    open_questions: [{ coords: [{ turnId: "a", start: 0, end: 19 }] }],
   });
   test("a stale version or empty buffer is a no-op", () => {
     expect(T.commit(buffered, { version: 1, now: at(5) })).toEqual({
@@ -134,7 +134,7 @@ describe("commit", () => {
       kind: "commit",
       turnIds: ["a", "b"],
       epoch: 0,
-      openQuestions: ["what should I cook?"],
+      openQuestions: [{ coords: [{ turnId: "a", start: 0, end: 19 }] }],
       deferredBlock: null,
     });
     expect(r.patch).toMatchObject({
@@ -385,5 +385,35 @@ describe("availability deferral", () => {
     });
     expect(next.result.deferredUntil).toBeNull();
     expect(next.result.waitUntil.toISOString()).toBe("2026-01-05T10:32:04.000Z");
+  });
+});
+
+describe("closeQuestions", () => {
+  const open = empty({
+    open_questions: [
+      { coords: [{ turnId: "a", start: 0, end: 10 }] },
+      {
+        coords: [
+          { turnId: "b", start: 0, end: 5 },
+          { turnId: "c", start: 0, end: 8 },
+        ],
+      },
+    ],
+  });
+  test("closes every question with words inside a move she replied to", () => {
+    const r = T.closeQuestions(open, {
+      answered: [{ turnId: "c", start: 0, end: 20 }],
+      now: at(9),
+    });
+    expect(r.result).toBe(1);
+    expect(r.patch).toEqual({
+      open_questions: [{ coords: [{ turnId: "a", start: 0, end: 10 }] }],
+      updated_at: at(9),
+    });
+  });
+  test("nothing matching writes nothing", () => {
+    expect(
+      T.closeQuestions(open, { answered: [{ turnId: "z", start: 0, end: 5 }], now: at(9) }),
+    ).toEqual({ patch: null, result: 0 });
   });
 });

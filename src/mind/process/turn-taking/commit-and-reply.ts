@@ -25,6 +25,7 @@ import { deliverPart } from "@/mind/process/deliver";
 import { guardOutgoing } from "@/mind/process/guard/outgoing";
 import { composeReply, type Composed } from "@/mind/process/hot-path/compose";
 import { readDelayMs, sleepUntil, typingMs } from "./pacing";
+import { withWords } from "./questions";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 
@@ -77,8 +78,10 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<Timer
     sessionLog.getTurnsByIds;
 
   let turns: Turn[];
+  let openQuestions: string[];
   try {
     turns = await getTurns(db, userId, committed.turnIds);
+    openQuestions = (await withWords(db, userId, committed.openQuestions)).map((q) => q.text);
   } catch (e) {
     return retryOrGiveUp(deps, job, committed, e);
   }
@@ -97,7 +100,7 @@ export async function runTurnTimer(deps: Deps, job: TurnTimerJob): Promise<Timer
   // Compose during the read delay. Settled, so a rejection is never unhandled while we sleep.
   const composing: Promise<Settled<Composed>> = composeReply(deps, userId, {
     turns,
-    openQuestions: committed.openQuestions,
+    openQuestions,
     flag: null,
     deferredBlock: committed.deferredBlock,
   }).then(

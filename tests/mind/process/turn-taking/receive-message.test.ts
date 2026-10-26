@@ -30,7 +30,7 @@ describe("receiveMessage", () => {
     const s = (await getState(getTestDb(), u))!;
     expect(s.buffer_turn_ids).toEqual([input.clientMessageId]);
     expect(s.open_questions).toEqual([
-      { turn_id: input.clientMessageId, text: "what should I cook tonight?" },
+      { coords: [{ turnId: input.clientMessageId, start: 0, end: 27 }] },
     ]);
     expect(timers(deps)).toEqual([
       {
@@ -66,7 +66,8 @@ describe("receiveMessage", () => {
     deps.llm.handlers.turn_judge = () => ({
       reasoning: "mid-story",
       complete: false,
-      open_questions: [],
+      still_open: [],
+      asked: [],
       backchannel: "huh",
     });
     await receiveMessage(deps, u, msg("my boss called me in"));

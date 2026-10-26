@@ -26,6 +26,7 @@ import { markReachOutAnswered } from "@/mind/process/outreach/answered";
 import { receiveTurn, type UserMessageInput } from "@/mind/process/receive/receive-turn";
 import { judgeTurn, logTurnDecision, type TurnVerdict } from "./judge";
 import { waitWindowMs } from "./pacing";
+import { openAfter, withWords } from "./questions";
 import { mutateState } from "./state";
 import * as T from "./transitions";
 
@@ -127,12 +128,6 @@ export async function receiveMessage(
     ? await deferWhileBusy(deps, userId, clock.now(), turn.id)
     : NO_DELAY;
 
-  const openQuestions = carryOpenQuestions(
-    verdict,
-    openBefore,
-    turn.id,
-    config.turn.max_open_questions,
-  );
   const now = clock.now();
   const defer =
     availability.delayMs > 0
@@ -149,7 +144,13 @@ export async function receiveMessage(
       now,
       windowMs,
       maxWaitMs: config.turn.max_wait_ms,
-      openQuestions,
+      // Every question read for the judge counts as shown: one whose words are gone (its message
+      // deleted) couldn't be, and is dropped rather than holding a place under the cap.
+      openQuestions: openAfter(
+        locked.open_questions,
+        verdict ? { ...verdict.questions, shown: openBefore } : null,
+        config.turn.max_open_questions,
+      ),
       defer,
     });
   });
@@ -237,8 +238,8 @@ function startJudging(
 
     return judgeTurn(deps, {
       context: context.map((t) => ({ role: t.role, text: t.text, at: t.created_at })),
-      buffer: buffered.map((t) => ({ text: t.text, at: t.created_at })),
-      openQuestions: openBefore.map((q) => q.text),
+      buffer: buffered.map((t) => ({ id: t.id, text: t.text, at: t.created_at })),
+      openQuestions: await withWords(db, userId, openBefore),
     });
   })().catch((e: unknown) => {
     log.error("turn judge input failed", { userId, turnId: turn.id, error: errorName(e) });
@@ -246,21 +247,6 @@ function startJudging(
   });
 
   return { bufferIds, verdict };
-}
-
-/** Keeps each open question's original turn when it was already open; new ones point here. */
-function carryOpenQuestions(
-  verdict: TurnVerdict | null,
-  openBefore: OpenQuestion[],
-  turnId: string,
-  max: number,
-): OpenQuestion[] {
-  if (!verdict) return openBefore;
-
-  return verdict.open_questions.slice(0, max).map((text) => ({
-    turn_id: openBefore.find((q) => q.text === text)?.turn_id ?? turnId,
-    text,
-  }));
 }
 
 async function alreadyHandled(

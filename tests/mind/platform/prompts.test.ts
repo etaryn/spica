@@ -41,7 +41,8 @@ test("loads the turn judge prompt", () => {
   const c = loadConfig();
   const p = loadPrompt("turn-judge", c.prompts.turn_judge);
   expect(p).toMatch(/complete/);
-  expect(p).toMatch(/open_questions/);
+  expect(p).toMatch(/still_open/);
+  expect(p).toMatch(/asked/);
   expect(p).toMatch(/backchannel/);
 });
 

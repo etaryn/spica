@@ -49,6 +49,14 @@ const lastTimer = (deps: D) =>
   deps.queue.jobs.filter((j) => j.name === TURN_TIMER_QUEUE).at(-1)!.data as TurnTimerJob;
 
 describe("runTurnTimer", () => {
+  test("the reply sees an open question in the user's own words", async () => {
+    const deps = makeTestDeps();
+    const u = await createTestUser();
+    await receiveMessage(deps, u, msg("should I take the job in leeds?"));
+    await runTurnTimer(deps, lastTimer(deps));
+    expect(deps.llm.calls.at(-1)!.system).toContain("- should I take the job in leeds?");
+  });
+
   test("one reply answers the whole buffer: paced timeline, typing events, reply_to = last turn, cold path gets every turn", async () => {
     const deps = makeTestDeps();
     const u = await createTestUser();
@@ -374,7 +382,8 @@ describe("runBackchannel", () => {
     deps.llm.handlers.turn_judge = () => ({
       reasoning: "r",
       complete: false,
-      open_questions: [],
+      still_open: [],
+      asked: [],
       backchannel: "huh",
     });
     const m = msg("my boss called me in");

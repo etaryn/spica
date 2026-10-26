@@ -54,11 +54,14 @@ async function coreDump(): Promise<string> {
   return parts.join("\n");
 }
 
-/** What the labelling reads off the next exchange: a bid response, and whose words start a joke. */
-type Next = { bid: BidResponse | null; joke: "user" | "spica" | null };
+/**
+ * What the labelling reads off the next exchange: a bid response, whose words start a joke, and
+ * her words the user's new messages reply to.
+ */
+type Next = { bid: BidResponse | null; joke: "user" | "spica" | null; link: string | null };
 function setup() {
   const d = makeTestDeps();
-  const next: Next = { bid: null, joke: null };
+  const next: Next = { bid: null, joke: null, link: null };
   Object.assign(
     d.llm.handlers,
     scriptedLabels((input) => {
@@ -66,6 +69,9 @@ function setup() {
       return {
         idiolect: by ? [{ said: by.text, type: "joke" }] : [],
         bid: next.bid,
+        replies: newMessages(input)
+          .filter((m) => m.speaker === "user" && next.link)
+          .map((m) => ({ said: m.text, to: next.link! })),
       };
     }),
   );
@@ -154,11 +160,14 @@ test("toward, away and against move warmth and trust as configured", async () =>
     const u = await user(d, 0.5);
     const session = randomUUID();
     const before = await getParams(d.db, u);
-    await talk(d, u, session, "hey");
+    const first = await talk(d, u, session, "hey");
     const second = await talk(d, u, session, "and then?");
     next.bid = bid;
+    // Toward and against rest on a reply to her; away is meeting her with no reply.
+    next.link = bid === "away" ? null : first.r.text.slice(0, 20);
     await settle(d, u, second);
     next.bid = null;
+    next.link = null;
 
     const after = await getParams(d.db, u);
     const events = await bidEvents(u);
@@ -201,8 +210,27 @@ test("answering her reach-out soon after counts, though it lands in a new sessio
   });
   const answer = await talk(d, u, randomUUID(), "no way, how was it?");
   next.bid = "toward";
+  next.link = "I finally watched";
   await settle(d, u, answer);
   expect((await bidEvents(u)).length).toBeGreaterThan(0);
+});
+
+test("toward with no reply to her records no bid", async () => {
+  const { d, next } = setup();
+  const u = await user(d, 0.5);
+  d.clock.advance(60_000);
+  await insertTurn(d.db, u, {
+    id: randomUUID(),
+    session_id: randomUUID(),
+    role: "companion",
+    text: "I finally watched Casablanca!",
+    created_at: d.clock.now(),
+    trigger: "reach_out",
+  });
+  const answer = await talk(d, u, randomUUID(), "no way, how was it?");
+  next.bid = "toward";
+  await settle(d, u, answer);
+  expect(await bidEvents(u)).toEqual([]);
 });
 
 test("a joke seen once is not offered; called back in a later exchange, it is", async () => {

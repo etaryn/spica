@@ -57,6 +57,8 @@ export type LabelScript = {
   relationship?: ScriptedSignals | null;
   intimacy?: { user_disclosure: number; user_responsiveness: number | null } | null;
   bid?: "toward" | "away" | "against" | null;
+  /** The new move holding `said` replies to the move on the latest earlier (or new) message holding `to`. */
+  replies?: { said: string; to: string }[];
 };
 type NewMessage = { message: number; speaker: "user" | "spica"; pieces: string[]; text: string };
 type Handlers = Record<
@@ -71,13 +73,17 @@ export function newMessages(input: string): NewMessage[] {
   const range = RANGE.exec(input);
   if (!range) return [];
   const [first, last] = [Number(range[1]), Number(range[2] ?? range[1])];
+  return allMessages(input).filter((m) => m.message >= first && m.message <= last);
+}
+
+/** Every message shown, earlier ones included. */
+function allMessages(input: string): NewMessage[] {
   const conversation = input.split("Conversation:\n")[1]?.split("\n\n")[0] ?? "";
   const byNumber = new Map<number, NewMessage>();
   for (const line of conversation.split("\n")) {
     const m = PIECE.exec(line);
     if (!m) continue;
     const message = Number(m[1]);
-    if (message < first || message > last) continue;
     const msg = byNumber.get(message) ?? {
       message,
       speaker: m[3] === "User" ? ("user" as const) : ("spica" as const),
@@ -109,13 +115,39 @@ export function scriptedLabels(script: LabelScript | ((input: string) => LabelSc
       const { s, messages, holding, moveId, pieceOf, idFor } = at(input);
       const scripted = (m: NewMessage) =>
         s.memories?.find((x) => holding(x.said) === m && x.act)?.act;
+      // An earlier message's move, as "Already labelled" lists it ("- m3-ab12c asks [3.1]").
+      const labelled = (n: number) =>
+        input
+          .split("\n")
+          .map((l) => /^- (m\S*) \w+ \[(\d+)\./.exec(l))
+          .find((x) => x && Number(x[2]) === n)?.[1];
+      const everything = allMessages(input);
+      const context: { id: string; pieces: string[]; act: string; replies_to: string }[] = [];
+      const linkFor = (m: NewMessage): string => {
+        const r = s.replies?.find((x) => holding(x.said) === m);
+        if (!r) return "";
+        const target = everything
+          .filter((x) => x.message < m.message && x.text.toLowerCase().includes(r.to.toLowerCase()))
+          .at(-1);
+        if (!target) return "";
+        const shown = messages.find((x) => x.message === target.message);
+        if (shown) return moveId(shown);
+        const known = labelled(target.message);
+        if (known) return known;
+        // No move on it yet: give it one, so the reply can point at it.
+        const id = moveId(target);
+        if (!context.some((c) => c.id === id))
+          context.push({ id, pieces: target.pieces, act: "states", replies_to: "" });
+        return id;
+      };
+      const moves = messages.map((m) => ({
+        id: moveId(m),
+        pieces: m.pieces,
+        act: scripted(m) ?? "states",
+        replies_to: linkFor(m),
+      }));
       return {
-        moves: messages.map((m) => ({
-          id: moveId(m),
-          pieces: m.pieces,
-          act: scripted(m) ?? "states",
-          replies_to: "",
-        })),
+        moves: [...context, ...moves],
         mentions: (s.memories ?? []).flatMap((x) => {
           const m = x.mention && holding(x.mention.words);
           if (!x.mention || !m) return [];

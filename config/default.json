@@ -226,7 +226,7 @@
     "guard": "v7",
     "guard_crisis": "v1",
     "guard_fallback": "v2",
-    "turn_judge": "v2",
+    "turn_judge": "v3",
     "relationship_summary": "v3",
     "relationship_openness": "v1",
     "relationship_stage": "v1",

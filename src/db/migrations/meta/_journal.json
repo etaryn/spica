@@ -309,6 +309,13 @@
       "when": 1792915474873,
       "tag": "0043_light_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793004364495,
+      "tag": "0044_open_questions_coordinates",
+      "breakpoints": true
     }
   ]
 }

@@ -107,9 +107,10 @@ export function normalizeBid(raw: unknown): BidResponse | null {
 }
 
 /**
- * A response counts only when the user answers her last message within the idle gap: coming
- * back after a gap is not turning away. Timed, not by session id: a reach-out or a deferred
- * reply sits in a different session from the user's answer to it.
+ * Toward and against already rest on a reply to her, so they count however late. Away has no
+ * reply to check, so it counts only when the user writes within the idle gap of her last message:
+ * coming back after a gap is not turning away. Timed, not by session id: a reach-out or a
+ * deferred reply sits in a different session from the user's answer to it.
  */
 export function bidAfter(
   response: BidResponse | null,
@@ -118,6 +119,7 @@ export function bidAfter(
   idleGapMinutes: number,
 ): BidResponse | null {
   if (!response) return null;
+  if (response !== "away") return response;
   const hers = context.filter((t) => t.role === "companion").at(-1);
   const firstUser = turns.find((t) => t.role === "user");
   if (!hers || !firstUser) return null;

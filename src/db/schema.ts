@@ -532,7 +532,8 @@ export const relationship_event = pgTable(
   (t) => [index("relationship_event_user_created_idx").on(t.user_id, t.created_at)],
 );
 
-export type OpenQuestion = { turn_id: string; text: string };
+/** A question the user asked her that she hasn't answered: where its words are, never a rewrite. */
+export type OpenQuestion = { coords: { turnId: string; start: number; end: number }[] };
 
 export type LifeBlockKind = "busy" | "downtime";
 /** One block of her shared day plan; times are "HH:MM" in her zone, "24:00" = midnight. */

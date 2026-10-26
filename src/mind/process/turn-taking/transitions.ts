@@ -6,6 +6,7 @@
  */
 import type { ConvState, StatePatch } from "@/db/repos/user/conversation-state";
 import type { OpenQuestion } from "@/db/schema";
+import { overlaps } from "./questions";
 
 export type Step<R> = { patch: StatePatch | null; result: R };
 
@@ -105,7 +106,7 @@ export type CommitResult =
       kind: "commit";
       turnIds: string[];
       epoch: number;
-      openQuestions: string[];
+      openQuestions: OpenQuestion[];
       deferredBlock: string | null;
     };
 
@@ -139,7 +140,7 @@ export function commit(
       kind: "commit",
       turnIds: state.buffer_turn_ids,
       epoch: state.reply_epoch,
-      openQuestions: state.open_questions.map((q) => q.text),
+      openQuestions: state.open_questions,
       deferredBlock: state.deferred_block,
     },
   };
@@ -324,4 +325,17 @@ export function availabilityNote(state: ConvState, input: { now: Date }): Step<b
     state.deferred_until.getTime() > input.now.getTime() &&
     state.buffer_turn_ids.length > 0;
   return { patch: null, result: allowed };
+}
+
+/** Her reply answered these: every open question with words inside a move she replied to closes. */
+export function closeQuestions(
+  state: ConvState,
+  input: { answered: OpenQuestion["coords"]; now: Date },
+): Step<number> {
+  const open = state.open_questions.filter(
+    (q) => !q.coords.some((c) => input.answered.some((a) => overlaps(c, a))),
+  );
+  const closed = state.open_questions.length - open.length;
+  if (closed === 0) return { patch: null, result: 0 };
+  return { patch: { open_questions: open, updated_at: input.now }, result: closed };
 }

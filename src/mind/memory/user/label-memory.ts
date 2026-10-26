@@ -19,7 +19,7 @@ import type { Intimacy } from "@/mind/state/user/relationship/types";
 import type { CheckedLabels, CheckedMove } from "./annotations";
 import type { IdiolectPayload } from "./idiolect";
 import { embedText, memoryLine, moveText, quoted, type LineMove } from "./memory-line";
-import type { Piece } from "./pieces";
+import type { Coordinate, Piece } from "./pieces";
 
 export type MemoryPlan = {
   /** The proposition's or idiolect label's id in this conversation; null for her hurt. */
@@ -120,6 +120,16 @@ export function hurtCause(
   );
 }
 
+/** The user's moves one of her new moves replies to: whatever they asked there is answered. */
+export function answeredBy(labels: CheckedLabels, all: CheckedLabels): Coordinate[] {
+  const byId = new Map(all.moves.map((m) => [m.id, m]));
+  return labels.moves.flatMap((m) => {
+    if (m.speaker !== "spica" || m.context || !m.repliesTo) return [];
+    const target = byId.get(m.repliesTo);
+    return target?.speaker === "user" ? target.coords : [];
+  });
+}
+
 /** The relationship, intimacy and bid blocks in the shapes the relationship update reads. */
 export function signalsOf(
   labels: CheckedLabels,
@@ -140,8 +150,35 @@ export function signalsOf(
   return {
     signals,
     intimacy: normalizeIntimacy(labels.intimacy),
-    bid: normalizeBid(labels.bid_response?.response ?? null),
+    bid: bidFromReplies(labels, all, pieces),
   };
+}
+
+/**
+ * How they met her bid, held to the reply links: toward or against is a user move that replies
+ * to one of hers; away is that none of their new moves answers her last message.
+ */
+function bidFromReplies(
+  labels: CheckedLabels,
+  all: CheckedLabels,
+  pieces: Piece[],
+): BidResponse | null {
+  const read = labels.bid_response;
+  const response = normalizeBid(read?.response ?? null);
+  if (!read || !response) return null;
+  const byId = new Map(all.moves.map((m) => [m.id, m]));
+  if (response !== "away") {
+    const target = byId.get(byId.get(read.move)?.repliesTo ?? "");
+    return target?.speaker === "spica" ? response : null;
+  }
+  const lastHers = pieces.filter((p) => !p.isNew && p.message.speaker === "spica").at(-1);
+  const answered = labels.moves.some(
+    (m) =>
+      m.speaker === "user" &&
+      !m.context &&
+      byId.get(m.repliesTo ?? "")?.coords.some((c) => c.turnId === lastHers?.message.id),
+  );
+  return answered ? null : response;
 }
 
 function order(pieces: Piece[], m: CheckedMove): number {

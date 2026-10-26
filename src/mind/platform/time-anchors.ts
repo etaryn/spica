@@ -445,7 +445,9 @@ function classifyDay(
     if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
     if (!m[1] && HABIT_BEFORE.test(before)) return null;
     const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
-    const local = m[1] ? explicitWeekday(day, wd, m[1].toLowerCase()) : pickWeekday(day, wd, ctx);
+    // "since friday" always points back.
+    const which = /\bsince\s+$/i.test(before) ? "last" : m[1]?.toLowerCase();
+    const local = which ? explicitWeekday(day, wd, which) : pickWeekday(day, wd, ctx);
     if (!local) return null;
     return { local, precision: (m[3]?.toLowerCase() as Precision | undefined) ?? "day" };
   }

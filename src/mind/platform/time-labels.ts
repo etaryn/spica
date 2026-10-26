@@ -72,7 +72,9 @@ const MONTH_NAMES = [
 /** The day `meaning` points at from `base` ("YYYY-MM-DD"); null when it doesn't hold together. */
 export function resolveTime(meaning: TimeMeaning, base: string): ResolvedTime | null {
   if (meaning.clock !== null && !CLOCK.test(meaning.clock)) return null;
-  const date = resolveDate(meaning, base);
+  // "since friday" is never a coming Friday, so a forward reading is turned back.
+  const shift = meaning.span === "since" ? -Math.abs(meaning.shift) : meaning.shift;
+  const date = resolveDate({ ...meaning, shift }, base);
   if (date === null) return null;
   return {
     date,

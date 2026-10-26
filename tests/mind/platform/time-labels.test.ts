@@ -26,6 +26,12 @@ const meaning = (m: Partial<TimeMeaning>): TimeMeaning => ({
 const date = (m: Partial<TimeMeaning>, base = MON) => resolveTime(meaning(m), base)?.date ?? null;
 const read = (m: Partial<TimeMeaning>) => renderResolved(resolveTime(meaning(m), MON)!);
 
+test("since always points back, whatever direction the label gave", () => {
+  expect(date({ unit: "weekday", weekday: "friday", shift: 1, span: "since" })).toBe("2026-01-02");
+  expect(date({ unit: "weekend", shift: 1, span: "since" })).toBe("2026-01-03");
+  expect(date({ unit: "weekday", weekday: "friday", shift: 1 })).toBe("2026-01-09");
+});
+
 test("days count from the base day", () => {
   expect(date({ unit: "day", shift: 1 })).toBe("2026-01-06");
   expect(date({ unit: "day", shift: -1 })).toBe("2026-01-04");

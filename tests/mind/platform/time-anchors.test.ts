@@ -158,6 +158,8 @@ test("phrases land where the old resolver put them", () => {
   expect(one("next monday")).toBe("2026-01-12");
   expect(one("on friday", wed)).toBe("2026-01-09");
   expect(one("last friday")).toBe("2026-01-02");
+  expect(one("has been waiting since friday")).toBe("2026-01-02");
+  expect(one("quiet since next friday")).toBe("2026-01-02");
   expect(one("sunday")).toBe("2026-01-11");
   // A week is dated by its Friday, so an idea about the span lives until the week is out.
   expect(one("next week")).toBe("2026-01-16");

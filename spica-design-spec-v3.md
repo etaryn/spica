@@ -413,7 +413,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   **Built 15b:** `pointed` (`absence_remark | callback | null`, the allowed
   pointed remark she sent, so the guard holds each to once per occasion;
   migration 0034; §10.5).
-- **`conversation_state`**: turn-taking state (§10.1). `deferred_block` holds
+- **`conversation_state`**: turn-taking state (§10.1). `open_questions`
+  holds coordinates (`{coords: [{turnId, start, end}]}`), never text
+  (migration 0044 emptied the old rows; 17c). `deferred_block` holds
   the key of the busy or offline block that deferred the buffer
   (`<date>#<start>`, or `offline#<when she logged off>`), so the "they wrote while you were…" line can be
   rebuilt from the day plan; it replaces the stored `deferred_fact`.
@@ -1305,9 +1307,23 @@ She does not answer one message at a time. Code: `src/mind/process/turn-taking/`
   turn; the crisis check and the turn judge run in parallel.
 - **Buffer and judge:** the turn joins the buffer; a cheap `context_complete?`
   judge (`models.turn_judge`, `prompts/turn-judge`) returns
-  `{reasoning, complete, open_questions, backchannel}`; a keyword cue
-  fallback covers errors. Open questions are held (max
-  `turn.max_open_questions`) and dropped when answered or moved past.
+  `{reasoning, complete, still_open, asked, backchannel}`; a keyword cue
+  fallback covers errors (it keeps every open question and asks each new
+  piece ending in "?"). Open questions are held (max
+  `turn.max_open_questions`, oldest first) and dropped when answered or moved
+  past. **Changes in 17c:** open questions are the user's own words, stored
+  as coordinates into their messages and never rewritten. The judge reads the
+  new messages as numbered pieces (the labels' numbering) and the open
+  questions by id (`q1…`), and points: `still_open` lists the ids it keeps,
+  `asked` the pieces of each new question (one question may span bubbles; its
+  words are shown joined by " / "). It can drop only questions it was shown
+  and add only from the new messages; the merge runs under the state lock
+  against what is open then (`openAfter`), so a question closed meanwhile
+  never reopens and a concurrent message's question is never lost. A question
+  closes when one of her moves in the exchange's labels replies to the user
+  move holding it: the cold path collects those moves (`answeredBy`) and,
+  after its transaction, `T.closeQuestions` removes every open question whose
+  words overlap them (a failure is logged and left for the judge to drop).
 - **Waiting:** `turn.settle_ms` after a complete-looking message, longer
   (`turn.wait_ms` plus a short-message bonus) after an incomplete one, capped
   at `turn.max_wait_ms` from the buffer's start. Waiting is durable: a
@@ -1320,7 +1336,7 @@ She does not answer one message at a time. Code: `src/mind/process/turn-taking/`
   only mid-thought, at most `turn.backchannel_max_words`, never when every
   buffered word is in `turn.greeting_words` (stretched letters folded, so
   "hiii" is "hi"), and never when every word of it repeats the user's own;
-  `prompts/turn-judge/v2.md` says the same.
+  `prompts/turn-judge/v3.md` says the same.
 - **Commit and reply:** the timer commits the buffer, composes one reply to
   all of it, paces it (read delay by length, typing time per character,
   gaps between bubbles) and sends over SSE. Version and epoch checks make
@@ -1839,15 +1855,18 @@ weight is a first guess (test phase).
 `src/mind/state/user/relationship/signals.ts`, `applyBid` in `transitions.ts`,
 `src/mind/memory/user/idiolect.ts`. Every number is a first guess (test phase).
 
-- **Bids are read, not tagged.** Extraction v7's `bid_response` (`toward`,
-  `away`, `against`, or null) judges how the user's new messages met her last
-  message before them, if it was a bid (a joke, a question, her news, an
-  invitation, a reach-out). Code keeps it only when the user's first new turn
-  comes within `session.idle_gap_minutes` of that message: coming back after a
-  gap is not turning away. Timed rather than by `session_id`, because a
-  reach-out or a deferred reply sits in a different session from the answer
-  to it. No user turn, a crisis, or no earlier message of hers: null. An
-  invalid value is null.
+- **Bids are read, then held to the reply links.** The labels' `bid_response`
+  (`toward`, `away`, `against`, or null) judges how the user's new messages
+  met her last message before them, if it was a bid (a joke, a question, her
+  news, an invitation, a reach-out). **Changes in 17c:** toward and against
+  count only when the cited user move replies to one of her moves, however
+  late (the link shows it was answered). Away has no link to check: it counts
+  only when none of the user's new moves replies to her last message and the
+  user's first new turn comes within `session.idle_gap_minutes` of it, since
+  coming back after a gap is not turning away. Timed rather than by
+  `session_id`, because a reach-out or a deferred reply sits in a different
+  session from the answer to it. No user turn, a crisis, or no earlier
+  message of hers: null. An invalid value is null.
 - **Effect:** `relationship.bids.effects` gives each response its moves (toward
   warmth +0.03; away warmth −0.03; against warmth −0.06, trust −0.03), applied
   with `nudge` (cause `bid`, `detail.response`); gains take diminishing
@@ -2564,7 +2583,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. Next: **17c** turn-taking on labels, **17d** notes cite labels | B9 (17c); B1, B132 (17d) |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. Next: **17d** notes cite labels | B1, B132 (17d) |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2691,8 +2710,7 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
-- **B7.** Concurrency edge cases: concurrent POSTs can overwrite
-  `open_questions`; concurrent crisis requests with different snapshot tails
+- **B7.** Concurrency edge cases: concurrent crisis requests with different snapshot tails
   pick different `reply_to`s; a retry's attempt count is inherited by turns
   merged during generation; `restore` and `giveUp` check only the epoch;
   cold-path sweep bounds use `created_at` (ties can cross exchanges;
@@ -2700,8 +2718,6 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 - **B8.** History catch-up serves the full stored text of a reply whose later
   bubbles a crisis dropped; store the sent part count or cut the text.
   *Later.*
-- **B9.** `open_questions` are never cleared when a reply answers them; only
-  a model verdict or a crisis replaces them. *Later.*
 - **B10.** A retried reply loses `deferredBlock`; `judge_log` `wait_ms`
   records the window, not the deferred wait; the once-per-block note check
   and the first-message deferral read run outside the lock (fail open).

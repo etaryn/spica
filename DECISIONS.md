@@ -266,3 +266,9 @@ code itself.
 | 2026-10-25 | Where two time labels cover the same words in her view, the longer one is glossed | Overlapping replacements would garble the message. |
 | 2026-10-25 | `AnchorContext.direction` deleted | Only extract v11 set it. |
 | 2026-10-26 | A `since` time label with a forward shift is turned back (`-|shift|`), for every unit | Nobody says "since" about a time still to come; one rule covers weekdays, weekends and dates. |
+| 2026-10-26 | A question split over bubbles is one open question with several coordinates; its words are shown joined by " / " | Texting spreads a question across bubbles; " / " is how a move's pieces are already joined. |
+| 2026-10-26 | An open question closes when any of its coordinates overlaps a user move one of her new moves replies to | Overlap survives a change in how messages are split into pieces. |
+| 2026-10-26 | Closing open questions runs after the cold-path transaction; a failure is logged, not retried | The state lock stays short, and the judge still drops an answered question on the next message. |
+| 2026-10-26 | The open-question cap applies under the state lock, oldest first; the judge's verdict is uncapped | The cap must hold against what is open at write time, not what the judge read. |
+| 2026-10-26 | The judge's keyword fallback keeps every shown question and asks each new piece ending in "?" | Without a model nothing can tell a question was answered or withdrawn. |
+| 2026-10-26 | `questions.ts` takes its coordinate type from `OpenQuestion["coords"]` | One shape, without turn-taking importing the memory engine for a type. |

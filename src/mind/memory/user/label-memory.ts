@@ -150,8 +150,35 @@ export function signalsOf(
   return {
     signals,
     intimacy: normalizeIntimacy(labels.intimacy),
-    bid: normalizeBid(labels.bid_response?.response ?? null),
+    bid: bidFromReplies(labels, all, pieces),
   };
+}
+
+/**
+ * How they met her bid, held to the reply links: toward or against is a user move that replies
+ * to one of hers; away is that none of their new moves answers her last message.
+ */
+function bidFromReplies(
+  labels: CheckedLabels,
+  all: CheckedLabels,
+  pieces: Piece[],
+): BidResponse | null {
+  const read = labels.bid_response;
+  const response = normalizeBid(read?.response ?? null);
+  if (!read || !response) return null;
+  const byId = new Map(all.moves.map((m) => [m.id, m]));
+  if (response !== "away") {
+    const target = byId.get(byId.get(read.move)?.repliesTo ?? "");
+    return target?.speaker === "spica" ? response : null;
+  }
+  const lastHers = pieces.filter((p) => !p.isNew && p.message.speaker === "spica").at(-1);
+  const answered = labels.moves.some(
+    (m) =>
+      m.speaker === "user" &&
+      !m.context &&
+      byId.get(m.repliesTo ?? "")?.coords.some((c) => c.turnId === lastHers?.message.id),
+  );
+  return answered ? null : response;
 }
 
 function order(pieces: Piece[], m: CheckedMove): number {

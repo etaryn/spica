@@ -2,8 +2,8 @@
 import { expect, test } from "vitest";
 import { checkLabels, emptyLabels, mergeLabels } from "@/mind/memory/user/annotations";
 import { buildLabelInput } from "@/mind/memory/user/label-input";
-import { answeredBy, hurtCause, memoryPlans } from "@/mind/memory/user/label-memory";
-import { numberPieces } from "@/mind/memory/user/pieces";
+import { answeredBy, hurtCause, memoryPlans, signalsOf } from "@/mind/memory/user/label-memory";
+import { coordinate, numberPieces } from "@/mind/memory/user/pieces";
 import { scriptedLabels, type LabelScript } from "@/mind/platform/llm/fake-labels";
 import { loadConfig } from "@/mind/platform/config";
 import { PropositionsSchema, ReadingSchema, SignalsSchema } from "@/mind/memory/user/annotations";
@@ -142,4 +142,43 @@ test("answeredBy gives the words of each user move one of her new moves replies 
     ],
   };
   expect(answeredBy(labels, mergeLabels(earlier, labels))).toEqual([coord("m1")]);
+});
+
+test("toward and against need a reply to her; away needs that nothing answered her last message", () => {
+  const shown = numberPieces(
+    [
+      { id: "h", speaker: "spica", text: "guess what, I got the part", at },
+      { id: "u", speaker: "user", text: "no way!!", at },
+    ],
+    1,
+  );
+  const move = (
+    id: string,
+    speaker: "user" | "spica",
+    piece: string,
+    repliesTo: string | null,
+  ) => ({
+    id,
+    pieces: [piece],
+    coords: [coordinate(shown.find((p) => p.id === piece)!)],
+    speaker,
+    act: "bids" as const,
+    repliesTo,
+    context: false,
+  });
+  const hers = move("m1", "spica", "1.1", null);
+  const read = (theirs: ReturnType<typeof move>, response: "toward" | "away" | "against") => {
+    const labels = {
+      ...emptyLabels(),
+      moves: [theirs],
+      bid_response: { response, move: theirs.id },
+    };
+    const all = mergeLabels({ ...emptyLabels(), moves: [hers] }, labels);
+    return signalsOf(labels, all, shown, 80).bid;
+  };
+  expect(read(move("m2", "user", "2.1", "m1"), "toward")).toBe("toward");
+  expect(read(move("m2", "user", "2.1", "m1"), "against")).toBe("against");
+  expect(read(move("m2", "user", "2.1", null), "toward")).toBeNull();
+  expect(read(move("m2", "user", "2.1", null), "away")).toBe("away");
+  expect(read(move("m2", "user", "2.1", "m1"), "away")).toBeNull();
 });

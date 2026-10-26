@@ -954,16 +954,18 @@ test("normalizeBid keeps the three responses and nulls anything else", () => {
   expect(normalizeBid(undefined)).toBeNull();
 });
 
-test("a bid counts when the user answers her last message within the idle gap", () => {
-  const hers = turn("companion", 0);
-  expect(bidAfter("away", [hers], [turn("user", 5), turn("companion", 6)], GAP)).toBe("away");
-  // A reply to her reach-out or a deferred reply lands in a new session; it still counts.
-  expect(bidAfter("toward", [turn("companion", 0, "x")], [turn("user", 2, "y")], GAP)).toBe(
-    "toward",
+test("a toward or against response counts however late: the reply link shows it", () => {
+  expect(bidAfter("toward", [turn("companion", 0)], [turn("user", GAP + 60)], GAP)).toBe("toward");
+  expect(bidAfter("against", [turn("companion", 0)], [turn("user", GAP + 60)], GAP)).toBe(
+    "against",
   );
 });
 
-test("coming back after the idle gap, or with nothing of hers before, is no bid", () => {
+test("away counts only when they write within the idle gap of her last message", () => {
+  const hers = turn("companion", 0);
+  expect(bidAfter("away", [hers], [turn("user", 5), turn("companion", 6)], GAP)).toBe("away");
+  // A reply to her reach-out or a deferred reply lands in a new session; it still counts.
+  expect(bidAfter("away", [turn("companion", 0, "x")], [turn("user", 2, "y")], GAP)).toBe("away");
   expect(bidAfter("away", [turn("companion", 0)], [turn("user", GAP + 1)], GAP)).toBeNull();
   expect(bidAfter("away", [], [turn("user", 1)], GAP)).toBeNull();
   expect(bidAfter("away", [turn("companion", 0)], [turn("companion", 1)], GAP)).toBeNull();

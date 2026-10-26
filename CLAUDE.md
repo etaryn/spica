@@ -142,12 +142,13 @@ date the words they write; merged, close run done (`evals/results/analysis-2026-
 **Phase 17, labelled memory** (§20 row; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`):
 what was said is kept as said and every layer of its meaning is labelled apart from it. **17a is
 built** (2026-10-25, replay only; analysis `evals/results/analysis-2026-10-25-phase-17a.md`).
-**17b, labels as memory, is built on branch `phase-17b`** (2026-10-25, not merged): the cold path
+**17b, labels as memory, is built** (merged 2026-10-26): the cold path
 labels each exchange in three thinking calls (`memory/user/label.ts`, `prompts/labels/v1.md`), keeps
 every label in `annotation`, and stores memories as code-built lines (`memory-line.ts`); her view of
-older messages is glossed from time labels; extract v11 and its anchoring are gone. Close run
-`review:world-outreach` pending, with the 16d re-check (B1, B129–B132). Next: 17c, turn-taking on
-labels.
+older messages is glossed from time labels; extract v11 and its anchoring are gone. Close run done
+(`evals/results/analysis-2026-10-26-phase-17b.md`); Phase 16d was settled in it (B129–B131 done,
+"since" always points back; B1 narrowed to ideate and B132 left for 17d; new B137, B138).
+**Next: 17c, turn-taking on labels** (the phase doc's 17c row; B9).
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

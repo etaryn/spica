@@ -2564,8 +2564,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built 2026-10-25; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Next: **17c** turn-taking on labels, **17d** notes cite labels | 16d re-check (B1, B129–B132) |
-| **Date fixes from the 16c close run** (Phase 16d, paused for Phase 17 on 2026-10-25: each item is re-checked at 17b's close; evidence in `evals/results/analysis-2026-10-24-phase-16c.md`) | B129 "since <weekday>" points back; B130 extract adding a day; B131 a thread's next check-in read as its event date; B1 a user fact taken from her words; B132 the 16c anchoring minors | — |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. Next: **17c** turn-taking on labels, **17d** notes cite labels | B9 (17c); B1, B132 (17d) |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2670,41 +2669,24 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B136).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B138).
 
 ### 25.1 Memory and recall
-- **B1.** Extraction sometimes turns her words into user facts (after a bare
-  "hey" it stored a user fact taken from her question). Tighten the prompt,
-  or drop user facts whose content appears only in her turns. *Phase 11.* 2026-10-24 world run:
-  extract stored "The user ran a half marathon recently." from an exchange holding only her
-  reach-out, and her telescope booking became Sam's (ideate: "Ask Sam how the telescope booking
-  … is shaping up"; extract: "The user has not heard back yet about the telescope booking."). *Tuning.*
-  2026-10-24 (Phase 16c close run, `evals/results/analysis-2026-10-24-phase-16c.md`): extract stored
-  "The user has a studio deadline on friday" from her line "friday's close enough now" (they said
-  only "ok i should really try to sleep"), and it became a "deadline day" reach-out. *Phase 16d.*
-- **B129.** "since Friday" reads forward. Extract stored "…has been waiting since Friday" (no
-  `when_direction`, her own "has it been dark since friday" meaning the interview) as the coming
-  Friday 16 January; summaries then expected the studio's decision that day, she spoke of a
-  "friday deadline", and a reach-out said "deadline day". "since" before a bare weekday or weekend
-  always points back, whatever the label. *Phase 16d.*
-- **B130.** Extract v11 still adds a day: "okay the interview happened" became "…which happened on
-  Friday." (stored Friday 9 January; the interview was Thursday 8). v11's "never add a date or
-  weekday they didn't say" wasn't obeyed. A stronger line or an example, or code that drops a
-  weekday their message never named (not a swap: the 16b cross-check moved right dates). *Phase 16d.*
-- **B131.** A thread's next check-in reads as its event's date: `open_threads` showed "half marathon
-  (next: in 3 days, Friday 9 January)" and summarise wrote "The half marathon is now Friday 9
-  January, not Sunday 11 January", kept through two summaries and two models. Label the line so
-  "next" reads as when to check in. *Phase 16d.* Built 17b: thread lines read
-  `title (on <event>; ask after <checkpoint>)`; checked at the 17b close run.
+- **B1.** Her life read as the user's. The memory side was fixed in 17b: each memory line names
+  its speaker and her lines are stored as subject `self`, and the 17b close run stored no user fact
+  from her words. Ideate still does it. In the 17b close run
+  (`evals/results/analysis-2026-10-26-phase-17b.md`) it wrote "Ask Sam whether the telescope has
+  been behaving since ⟦01-06⟧, or whether they've been squinting at nothing" from her own booking,
+  twice; neither was sent. *Phase 17d* (notes cite labels, so a note about her can't be cited as
+  theirs).
 - **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
   date: "yesterday (Friday 9 January)" isn't merged; "the 8th and 9th of January" leaves "the 8th"
   raw; a weekend, week or since token beside a written-out date isn't merged (the merge runs in the
   chrono pass only); on disagreement the merge drops the other phrase's part of the day; a comma or
   ISO date between a date and its clock loses the time; an ISO match keeps "on" before its token
   ("on yesterday, …"); "in three days from Saturday" stores two dates; world-tick's planned-event
-  intentions take no shown dates. *Phase 16d.*
-- **B1, B129–B132** are paused for Phase 17 (2026-10-25): each is re-checked at 17b's close against
-  labelled memory, then fixed or closed.
+  intentions take no shown dates. Not exercised by the 17b close run. This anchoring now serves only
+  her loops and notes. *Phase 17d*, which deletes it.
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
@@ -2820,6 +2802,15 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   `sw.js` matches clicks by pathname; a VAPID key rotation reuses old
   subscriptions; the opt-out flag is per browser; a throwing unsubscribe
   leaves the switch stale. *Before users.*
+- **B137.** An after-event idea is offered before its event. On Mon 5, ideate wrote "Ask Sam how
+  the design interview ⟦2026-01-08⟧ went" (`stale_after` 8 January), and outreach picked it six
+  times that day. The guard dropped each draft as `wrong_day` until one was reworded to a before
+  check-in. Tight expiry also kills the idea on the day it becomes true. An idea about an event's
+  outcome shouldn't be a candidate before the event, and should live a short while past it (17b
+  close run, `evals/results/analysis-2026-10-26-phase-17b.md`). *Tuning.*
+- **B138.** An empty `check_in` wins on a big day. On the morning of the interview (Thu 8, 11:00;
+  the interview was at 14:00) the winner was a `check_in` with no text, and she sent "hey sam" (17b
+  close run). *Tuning.*
 
 ### 25.6 Voice and reply model
 - **B34.** `POST /api/chat` takes ~2 s (crisis check and judge in the

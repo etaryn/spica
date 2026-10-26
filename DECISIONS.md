@@ -265,3 +265,4 @@ code itself.
 | 2026-10-25 | A memory whose mention refers to an open thread joins that thread | The thread's latest memory and event date follow what was said about it. |
 | 2026-10-25 | Where two time labels cover the same words in her view, the longer one is glossed | Overlapping replacements would garble the message. |
 | 2026-10-25 | `AnchorContext.direction` deleted | Only extract v11 set it. |
+| 2026-10-26 | A `since` time label with a forward shift is turned back (`-|shift|`), for every unit | Nobody says "since" about a time still to come; one rule covers weekdays, weekends and dates. |

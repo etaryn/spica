@@ -746,6 +746,7 @@ const prompts = z.object({
   post_check: promptVersion,
   format_draft: promptVersion,
   labels: promptVersion,
+  notes: promptVersion,
   reconcile: promptVersion,
   judge_recall: promptVersion,
   judge_false_recall: promptVersion,

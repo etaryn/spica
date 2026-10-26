@@ -93,8 +93,7 @@ const ex = (s: Partial<Signals>, at: Date = t0) => ({
 });
 const hurtBy = (amount: number) => ({ hurt: { amount, cause: "the user said something" } });
 
-test("1: extraction v8, gains 1, and a 0.5 sting lands as 0.5", () => {
-  expect(config.prompts.extract).toBe("v11");
+test("1: gains 1, and a 0.5 sting lands as 0.5", () => {
   expect(cfg.gains.hurt).toBe(1);
   expect(cfg.gains.tension).toBe(1);
   const r = relationshipAfterExchange(fresh(), init(), ex(hurtBy(0.5)), cfg);

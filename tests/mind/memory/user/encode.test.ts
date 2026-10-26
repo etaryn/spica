@@ -1,13 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { renderAbsolute } from "@/mind/platform/time-anchors";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
+import {
+  emptyLabels,
+  type CheckedLabels,
+  type CheckedMention,
+  type CheckedThread,
+} from "@/mind/memory/user/annotations";
 import { encodeExtraction, type EncodeInput } from "@/mind/memory/user/encode";
-import type { ExtractedFact } from "@/mind/memory/user/extract";
+import type { MemoryPlan } from "@/mind/memory/user/label-memory";
 import * as facts from "@/db/repos/user/facts";
 import { findEntityByName } from "@/db/repos/user/entities";
 import { insertTurn } from "@/db/repos/user/session-log";
+import { sessionAnnotations, type AnnotationRow } from "@/db/repos/user/annotations";
 import * as threads from "@/db/repos/user/threads";
 import * as s from "@/db/schema";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../../../helpers/db";
@@ -18,17 +24,55 @@ afterAll(closeTestDb);
 const config = loadConfig();
 const now = new Date("2026-01-12T09:00:00Z");
 const db = () => getTestDb();
-const f = (content: string, over: Partial<ExtractedFact> = {}): ExtractedFact => ({
+const f = (content: string, over: Partial<MemoryPlan> = {}): MemoryPlan => ({
+  localId: null,
   subject: "user",
   kind: "event",
   content,
+  embedText: content,
   occurred_at: null,
   salience: 0.6,
   valence: 0,
   confidence: 0.9,
-  entity_names: [],
-  thread_title: null,
+  claim_kind: null,
+  mentions: [],
+  threadId: null,
+  newThread: null,
+  updates: null,
+  idiolect: null,
   ...over,
+});
+const mention = (over: Partial<CheckedMention>): CheckedMention => ({
+  id: "e1",
+  piece: "1.1",
+  words: "x",
+  refers_to: null,
+  name: null,
+  type: "person",
+  subject: "user",
+  relation: null,
+  coord: { turnId: "t", start: 0, end: 1 },
+  ...over,
+});
+const thread = (over: Partial<CheckedThread>): CheckedThread => ({
+  action: "open",
+  thread_id: null,
+  title: "x",
+  subject: "user",
+  stakes: "med",
+  checkpoint: null,
+  propositions: [],
+  checkpointAt: null,
+  ...over,
+});
+const labels = (over: Partial<CheckedLabels>): CheckedLabels => ({ ...emptyLabels(), ...over });
+const day = (date: string) => ({
+  date,
+  precision: "day" as const,
+  part: null,
+  clock: null,
+  span: "at" as const,
+  rough: false,
 });
 
 async function setup() {
@@ -52,9 +96,11 @@ async function setup() {
     userId: u,
     now,
     exchangeAt: now,
-    entities: [],
+    labels: emptyLabels(),
+    stored: [],
+    sessionId: ut.session_id,
+    zone: "UTC",
     facts: [],
-    threads: [],
     sensitive: false,
     sourceRef: ct.id,
     recalled: [],
@@ -82,30 +128,48 @@ async function seed(u: string, content: string, over: Partial<facts.NewFact> = {
 }
 
 describe("encodeExtraction", () => {
-  test("new fact: inserted with entities, thread, source_ref; turns marked extracted", async () => {
-    const { u, ct, input } = await setup();
+  test("new memory: its mention names an entity, its thread opens, and every label is stored", async () => {
+    const { u, ut, ct, input } = await setup();
     const out = await encodeExtraction(
       db(),
       config,
       input({
-        entities: [
-          { name: "Mia", aliases: ["my sis"], type: "person", subject: "user", relation: "sister" },
-        ],
-        threads: [
-          {
-            action: "open",
-            title: "Mia starting uni",
-            subject: "user",
-            stakes: "med",
-            next_checkpoint: new Date("2026-10-02T09:00:00Z"),
-            thread_id: null,
-          },
-        ],
+        labels: labels({
+          mentions: [
+            mention({ id: "e1", words: "my sis", name: "Mia", relation: "sister", piece: "1.1" }),
+          ],
+          threads: [
+            thread({
+              title: "Mia starting uni",
+              propositions: ["p1"],
+              checkpointAt: day("2026-10-02"),
+            }),
+          ],
+          propositions: [
+            {
+              id: "p1",
+              moves: [],
+              subject: "user",
+              kind: "event",
+              label: "Mia starting uni",
+              status: "planned",
+              times: [],
+              mentions: ["e1"],
+              thread_id: null,
+              new_thread: null,
+              updates: null,
+              salience: 0.6,
+              valence: 0,
+              confidence: 0.9,
+              claim_kind: null,
+            },
+          ],
+        }),
         facts: [
           {
-            fact: f("The user's sister Mia starts university in October.", {
-              entity_names: ["my sis"],
-              thread_title: "mia starting UNI",
+            fact: f('Mia starting uni, planned — the user said "my sis starts uni in october"', {
+              localId: "p1",
+              mentions: ["e1"],
             }),
             embedding: vec(),
             decision: { relation: "new", targetId: null },
@@ -125,8 +189,78 @@ describe("encodeExtraction", () => {
       status: "open",
       payload: null,
     });
+    expect(mia!.aliases).toEqual(["my sis"]);
+    // A day's checkpoint is its noon on their calendar, as the renderer reads a day token.
+    expect(t!.next_checkpoint!.toISOString()).toBe("2026-10-02T12:00:00.000Z");
+    const stored = await sessionAnnotations(db(), u, ut.session_id);
+    expect(stored.map((r) => [r.layer, r.local_id, r.fact_id])).toEqual([
+      ["mention", "e1", null],
+      ["proposition", "p1", row!.id],
+    ]);
+    expect((stored[0]!.data as { entity_id: string }).entity_id).toBe(mia!.id);
     const turns = await db().select().from(s.session_log).where(eq(s.session_log.user_id, u));
     expect(turns.every((x) => x.extracted)).toBe(true);
+  });
+
+  test("a labelled line is stored exactly as given: its words are never anchored", async () => {
+    const { u, input } = await setup();
+    const line = 'friday drinks, planned — the user said "drinks on friday?"';
+    await encodeExtraction(
+      db(),
+      config,
+      input({
+        facts: [{ fact: f(line), embedding: vec(), decision: { relation: "new", targetId: null } }],
+      }),
+    );
+    const [row] = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+    expect(row!.content).toBe(line);
+  });
+
+  test("a mention labelled in an earlier exchange still links its entity", async () => {
+    const { u, ut, input } = await setup();
+    const earlier = { layer: "mention", local_id: "e1", data: { entity_id: null } };
+    const out = await encodeExtraction(
+      db(),
+      config,
+      input({
+        labels: labels({
+          mentions: [mention({ id: "e9", words: "Juniper", name: "Juniper", type: "pet" })],
+        }),
+        facts: [
+          {
+            fact: f("cat juniper", { localId: "p1", mentions: ["e9"] }),
+            embedding: vec(),
+            decision: { relation: "new", targetId: null },
+          },
+        ],
+      }),
+    );
+    expect(out.entitiesCreated).toBe(1);
+    const juniper = await findEntityByName(db(), u, "user", "Juniper");
+    const out2 = await encodeExtraction(
+      db(),
+      config,
+      input({
+        stored: [
+          {
+            ...earlier,
+            local_id: "e9",
+            data: { entity_id: juniper!.id },
+            session_id: ut.session_id,
+          } as unknown as AnnotationRow,
+        ],
+        facts: [
+          {
+            fact: f("juniper knocked the coffee over", { localId: "p2", mentions: ["e9"] }),
+            embedding: vec(),
+            decision: { relation: "new", targetId: null },
+          },
+        ],
+      }),
+    );
+    expect(out2.entitiesCreated).toBe(0);
+    const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+    expect(rows.every((r) => r.entity_refs.includes(juniper!.id))).toBe(true);
   });
 
   test("duplicate bumps the target (capped), contradicts supersedes, resolves resolves", async () => {
@@ -164,7 +298,7 @@ describe("encodeExtraction", () => {
     const o = await facts.getFact(db(), u, old.id);
     expect(o!.status).toBe("superseded");
     const replacement = await facts.getFact(db(), u, o!.superseded_by!);
-    expect(renderAbsolute(replacement!.content)).toBe("Mia starts in November 2026.");
+    expect(replacement!.content).toBe("Mia starts in November.");
     expect((await facts.getFact(db(), u, plan.id))!.status).toBe("resolved");
   });
 
@@ -201,7 +335,7 @@ describe("encodeExtraction", () => {
       superseded_by: null,
     });
     const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
-    const late = rows.find((r) => renderAbsolute(r.content) === "Mia starts in November 2026.")!;
+    const late = rows.find((r) => r.content === "Mia starts in November.")!;
     expect(late).toMatchObject({ status: "superseded", superseded_by: newer.id });
     const tea = rows.find((r) => r.content === "The user likes tea.")!;
     expect(late.created_at.toISOString()).toBe(exchangeAt.toISOString());
@@ -254,16 +388,11 @@ describe("encodeExtraction", () => {
       db(),
       config,
       input({
-        threads: [
-          {
-            action: "resolve",
-            title: "their thing",
-            subject: "user",
-            stakes: "low",
-            next_checkpoint: null,
-            thread_id: foreignThread.id,
-          },
-        ],
+        labels: labels({
+          threads: [
+            thread({ action: "resolve", title: "their thing", thread_id: foreignThread.id }),
+          ],
+        }),
         facts: [
           {
             fact: f("A fact."),
@@ -279,7 +408,7 @@ describe("encodeExtraction", () => {
     expect(await threads.listOpenThreads(db(), u, 5)).toEqual([]);
   });
 
-  test("case/alias variants link one entity; sensitive flag; recall write-back skips deleted facts", async () => {
+  test("case variants link one entity; sensitive flag; recall write-back skips deleted facts", async () => {
     const { u, ct, input } = await setup();
     const kept = await seed(u, "Kept memory.");
     const gone = await seed(u, "Forgotten memory.");
@@ -298,10 +427,15 @@ describe("encodeExtraction", () => {
       config,
       input({
         sensitive: true,
-        entities: [{ name: "MIA ", aliases: [], type: "person", subject: "user", relation: null }],
+        labels: labels({
+          mentions: [
+            mention({ id: "e1", words: "MIA ", name: "MIA " }),
+            mention({ id: "e2", words: "mia", name: "Mia" }),
+          ],
+        }),
         facts: [
           {
-            fact: f("The user said Mia is struggling.", { entity_names: ["mia", "Mia"] }),
+            fact: f("Mia struggling", { mentions: ["e1", "e2"] }),
             embedding: vec(),
             decision: { relation: "new", targetId: null },
           },
@@ -324,40 +458,30 @@ describe("encodeExtraction", () => {
       { title: "thesis deadline", subject: "user", stakes: "high", next_checkpoint: null },
       new Date("2026-01-01T00:00:00Z"),
     );
-    const cp = new Date("2026-02-01T09:00:00Z");
     await encodeExtraction(
       db(),
       config,
       input({
-        threads: [
-          {
-            action: "touch",
-            title: "thesis deadline",
-            subject: "user",
-            stakes: "high",
-            next_checkpoint: cp,
-            thread_id: t.id,
-          },
-        ],
+        labels: labels({
+          threads: [
+            thread({
+              action: "touch",
+              title: "thesis deadline",
+              thread_id: t.id,
+              checkpointAt: day("2026-02-01"),
+            }),
+          ],
+        }),
       }),
     );
     expect((await threads.getOwnedThread(db(), u, t.id))!.next_checkpoint!.toISOString()).toBe(
-      cp.toISOString(),
+      "2026-02-01T12:00:00.000Z",
     );
     await encodeExtraction(
       db(),
       config,
       input({
-        threads: [
-          {
-            action: "resolve",
-            title: "Thesis Deadline",
-            subject: "user",
-            stakes: "high",
-            next_checkpoint: null,
-            thread_id: null,
-          },
-        ],
+        labels: labels({ threads: [thread({ action: "resolve", title: "Thesis Deadline" })] }),
       }),
     );
     expect((await threads.getOwnedThread(db(), u, t.id))!.status).toBe("resolved");
@@ -366,23 +490,15 @@ describe("encodeExtraction", () => {
   test("#8 a late job opening or touching a thread keeps it due (exchange time, GREATEST on touch)", async () => {
     const { u, input } = await setup();
     const exchangeAt = new Date("2026-01-05T09:00:00Z");
-    const checkpoint = new Date("2026-01-08T09:00:00Z");
     // `now` (job time, 2026-01-12) is after the checkpoint; the exchange was before it.
     await encodeExtraction(
       db(),
       config,
       input({
         exchangeAt,
-        threads: [
-          {
-            action: "open",
-            title: "Driving test",
-            subject: "user",
-            stakes: "med",
-            next_checkpoint: checkpoint,
-            thread_id: null,
-          },
-        ],
+        labels: labels({
+          threads: [thread({ title: "Driving test", checkpointAt: day("2026-01-08") })],
+        }),
       }),
     );
     const [opened] = await threads.listOpenThreads(db(), u, 5);
@@ -391,22 +507,13 @@ describe("encodeExtraction", () => {
       "Driving test",
     ]);
 
+    const touch = labels({
+      threads: [thread({ action: "touch", title: "Driving test", thread_id: opened!.id })],
+    });
     await encodeExtraction(
       db(),
       config,
-      input({
-        exchangeAt: new Date("2026-01-06T09:00:00Z"),
-        threads: [
-          {
-            action: "touch",
-            title: "Driving test",
-            subject: "user",
-            stakes: "med",
-            next_checkpoint: null,
-            thread_id: opened!.id,
-          },
-        ],
-      }),
+      input({ exchangeAt: new Date("2026-01-06T09:00:00Z"), labels: touch }),
     );
     expect((await threads.dueThreads(db(), u, now, 5)).map((t) => t.title)).toEqual([
       "Driving test",
@@ -416,19 +523,7 @@ describe("encodeExtraction", () => {
     await encodeExtraction(
       db(),
       config,
-      input({
-        exchangeAt: new Date("2026-01-02T09:00:00Z"),
-        threads: [
-          {
-            action: "touch",
-            title: "Driving test",
-            subject: "user",
-            stakes: "med",
-            next_checkpoint: null,
-            thread_id: opened!.id,
-          },
-        ],
-      }),
+      input({ exchangeAt: new Date("2026-01-02T09:00:00Z"), labels: touch }),
     );
     expect((await threads.getOwnedThread(db(), u, opened!.id))!.last_touched).toEqual(
       new Date("2026-01-06T09:00:00Z"),
@@ -458,29 +553,89 @@ describe("encodeExtraction", () => {
     expect((await facts.getFact(db(), u, target.id))!.status).toBe("open");
   });
 
-  test("#10 mentions sharing a name merge their aliases; blank names are dropped", async () => {
+  test("#10 mentions naming one entity merge their words as aliases; a mention with no name names nothing", async () => {
     const { u, input } = await setup();
     const out = await encodeExtraction(
       db(),
       config,
       input({
-        entities: [
-          { name: "Mia", aliases: ["my sis"], type: "person", subject: "user", relation: "sister" },
-          { name: " mia ", aliases: ["Mimi"], type: "other", subject: "user", relation: null },
-          { name: "   ", aliases: [], type: "other", subject: "user", relation: null },
-        ],
-        facts: [
-          {
-            fact: f("Mia called.", { entity_names: ["Mia", " "] }),
-            embedding: vec(),
-            decision: { relation: "new", targetId: null },
-          },
-        ],
+        labels: labels({
+          mentions: [
+            mention({ id: "e1", words: "my sis", name: "Mia", relation: "sister" }),
+            mention({ id: "e2", words: "Mimi", name: " mia ", type: "other" }),
+            mention({ id: "e3", words: "she", name: null }),
+            mention({ id: "e4", words: "it", name: null, refers_to: randomUUID() }),
+          ],
+        }),
       }),
     );
     expect(out.entitiesCreated).toBe(1);
     const mia = await findEntityByName(db(), u, "user", "Mimi");
     expect(mia?.aliases.sort()).toEqual(["Mimi", "my sis"]);
     expect(mia?.type).toBe("person");
+  });
+});
+
+test("a memory that supersedes or resolves another keeps its thread", async () => {
+  const { u, input } = await setup();
+  const t = await threads.insertThread(
+    db(),
+    u,
+    { title: "interview", subject: "user", stakes: "high", next_checkpoint: null },
+    now,
+  );
+  const old = await seed(u, "job interview thursday", { thread_id: t.id });
+  const done = await seed(u, "driving test", { thread_id: t.id });
+  await encodeExtraction(
+    db(),
+    config,
+    input({
+      facts: [
+        {
+          fact: f("job interview friday"),
+          embedding: vec(),
+          decision: { relation: "contradicts", targetId: old.id },
+        },
+        {
+          fact: f("passed the driving test"),
+          embedding: vec(),
+          decision: { relation: "resolves", targetId: done.id },
+        },
+      ],
+    }),
+  );
+  const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+  expect(rows.find((r) => r.content === "job interview friday")!.thread_id).toBe(t.id);
+  expect(rows.find((r) => r.content === "passed the driving test")!.thread_id).toBe(t.id);
+});
+
+test("replacing a memory that was already replaced replaces the newest one instead", async () => {
+  const { u, input } = await setup();
+  const thursday = await seed(u, "interview thursday");
+  const friday = await seed(u, "interview friday", {
+    created_at: new Date("2026-01-02T00:00:00Z"),
+  });
+  await facts.setFactStatus(db(), u, thursday.id, "superseded", friday.id);
+  await encodeExtraction(
+    db(),
+    config,
+    input({
+      facts: [
+        {
+          fact: f("interview monday"),
+          embedding: vec(),
+          decision: { relation: "contradicts", targetId: thursday.id },
+        },
+      ],
+    }),
+  );
+  const rows = await db().select().from(s.fact).where(eq(s.fact.user_id, u));
+  const monday = rows.find((r) => r.content === "interview monday")!;
+  expect(rows.filter((r) => r.status === "open").map((r) => r.content)).toEqual([
+    "interview monday",
+  ]);
+  expect(rows.find((r) => r.id === friday.id)).toMatchObject({
+    status: "superseded",
+    superseded_by: monday.id,
   });
 });

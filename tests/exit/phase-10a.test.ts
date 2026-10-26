@@ -16,6 +16,7 @@ import { closenessCeiling } from "@/mind/state/user/relationship/closeness";
 import { tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { newMessages, scriptedLabels } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -55,31 +56,23 @@ async function coreDump(): Promise<string> {
   return parts.join("\n");
 }
 
-/** Scripted extraction: "DEEP" is a real disclosure, "WARM" is warm small talk. */
+/** Scripted labels: "DEEP" is a real disclosure, "WARM" is warm small talk. */
 function deps() {
   const d = makeTestDeps(OVERRIDES);
-  d.llm.handlers.extract = (input: string) => {
-    const latest = input.split("New exchange").at(-1) ?? "";
-    const warm = {
-      subject: "user",
-      kind: "event",
-      content: "Had a nice lunch.",
-      occurred_at: null,
-      salience: 0.3,
-      valence: 0.8,
-      confidence: 0.9,
-      entity_names: [],
-      thread_title: null,
-      claim_kind: null,
-    };
-    return {
-      facts: latest.includes("WARM") ? [warm] : [],
-      entities: [],
-      threads: [],
-      relationship: null,
-      intimacy: { user_disclosure: latest.includes("DEEP") ? 0.9 : 0, user_responsiveness: null },
-    };
-  };
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels((input) => {
+      const latest = newMessages(input)
+        .map((m) => m.text)
+        .join(" ");
+      return {
+        memories: latest.includes("WARM")
+          ? [{ said: "WARM", label: "nice lunch", salience: 0.3, valence: 0.8 }]
+          : [],
+        intimacy: { user_disclosure: latest.includes("DEEP") ? 0.9 : 0, user_responsiveness: null },
+      };
+    }),
+  );
   return d;
 }
 

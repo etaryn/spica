@@ -51,10 +51,6 @@ test("a bare weekday takes a date the writer was shown, else points by the rule"
   expect(days(anchorTimes(sunday, { at: written, zone: "UTC" }))).toEqual(["2026-01-11"]);
   const wednesday = { at: at("2026-01-14T23:00:00Z"), zone: "UTC" };
   expect(days(anchorTimes("They're awake late on Wednesday.", wednesday))).toEqual(["2026-01-14"]);
-  const past = { ...utc, direction: "past" as const };
-  expect(days(anchorTimes("The user finished it on Saturday.", past))).toEqual(["2026-01-10"]);
-  const ahead = { ...utc, direction: "upcoming" as const };
-  expect(days(anchorTimes("The user has a meeting on Monday.", ahead))).toEqual(["2026-01-19"]);
 });
 
 test("weeks, weekends, offsets, explicit dates and durations anchor", () => {
@@ -113,15 +109,6 @@ test("each token reads on its own calendar", () => {
   expect(read(her, at("2026-01-12T17:00:00Z"))).toBe("Clear skies last night, Monday 12 January.");
 });
 
-test("said mode keeps the words and glosses them only when their meaning moved", () => {
-  const glossed = anchorTimes("my race is tomorrow", { ...utc, said: true });
-  expect(read(glossed, at("2026-01-12T20:00:00Z"))).toBe("my race is tomorrow");
-  expect(read(glossed, at("2026-01-13T08:00:00Z"))).toBe("my race is tomorrow (that's today)");
-  expect(read(glossed, at("2026-01-14T08:00:00Z"))).toBe(
-    "my race is tomorrow (that's yesterday, Tuesday 13 January)",
-  );
-});
-
 test("dates code holds become tokens: a memory's date shows once; written stamps", () => {
   expect(read(dateToken(at("2026-01-11T08:00:00Z"), "UTC"), MON)).toBe(
     "yesterday, Sunday 11 January",
@@ -171,6 +158,8 @@ test("phrases land where the old resolver put them", () => {
   expect(one("next monday")).toBe("2026-01-12");
   expect(one("on friday", wed)).toBe("2026-01-09");
   expect(one("last friday")).toBe("2026-01-02");
+  expect(one("has been waiting since friday")).toBe("2026-01-02");
+  expect(one("quiet since next friday")).toBe("2026-01-02");
   expect(one("sunday")).toBe("2026-01-11");
   // A week is dated by its Friday, so an idea about the span lives until the week is out.
   expect(one("next week")).toBe("2026-01-16");
@@ -187,16 +176,6 @@ test("phrases land where the old resolver put them", () => {
   expect(one("this friday", { at: at("2026-01-09T09:00:00Z"), zone: "UTC" })).toBe("2026-01-09");
 });
 
-test("a yearless date or month takes the side of now its label points to", () => {
-  const oct = { at: at("2026-10-19T09:00:00Z"), zone: "UTC" }; // Monday 19 October 2026
-  const past = { ...oct, direction: "past" as const };
-  const ahead = { ...oct, direction: "upcoming" as const };
-  expect(days(anchorTimes("Started uni in September.", past))).toEqual(["2026-09-01"]);
-  expect(days(anchorTimes("Moved to Leeds in March.", past))).toEqual(["2026-03-01"]);
-  expect(days(anchorTimes("Ran a marathon on 15 March.", past))).toEqual(["2026-03-15"]);
-  expect(days(anchorTimes("Our wedding is on 20 May.", ahead))).toEqual(["2027-05-20"]);
-});
-
 test("quoted words stay as said", () => {
   for (const text of [
     'Their goodnight ritual: "see you tomorrow, same time".',
@@ -205,11 +184,6 @@ test("quoted words stay as said", () => {
   ])
     expect(anchorTimes(text, utc)).toBe(text);
   expect(days(anchorTimes('They said "soon" and meant tomorrow.', utc))).toEqual(["2026-01-13"]);
-});
-
-test("a bare weekday in an older message, with nothing to date it by, keeps its words unglossed", () => {
-  const said = { at: MON, zone: "UTC", said: true };
-  expect(anchorTimes("I went running on Sunday", said)).toBe("I went running on Sunday");
 });
 
 test("a long phrase around a date keeps every word (the 16b run's summary)", () => {

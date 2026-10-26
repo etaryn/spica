@@ -51,7 +51,7 @@ export function renderReview(input: ReviewInput): string {
   return [
     `# Labelling replay ${input.stamp}: ${input.title}`,
     "",
-    `Extract v12 over ${input.conversations.length} conversations (${invented} invented).`,
+    `Labels over ${input.conversations.length} conversations (${invented} invented).`,
     "",
     "## Totals",
     "",

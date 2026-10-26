@@ -25,7 +25,7 @@ export function systemText(blocks: SystemBlock[]): string {
 
 /** Which configured model a structured call uses (config `models.<role>`). */
 export type StructuredModel =
-  "cheap" | "extract" | "judge" | "guard" | "turn_judge" | "life" | "core" | "user_mind";
+  "cheap" | "labels" | "judge" | "guard" | "turn_judge" | "life" | "core" | "user_mind";
 
 /** Receives every completed call's usage; the evals tally spend with it. */
 export type UsageSink = (usage: LlmUsage) => void;
@@ -33,7 +33,7 @@ export type UsageSink = (usage: LlmUsage) => void;
 export type CacheTtl = "off" | "5m" | "1h";
 
 export interface ClassifyRequest<T> {
-  /** What the call is for ("crisis", "extract", "reconcile", "judge_recall", …); fakes route on it. */
+  /** What the call is for ("crisis", "labels_read", "reconcile", "judge_recall", …); fakes route on it. */
   purpose: string;
   model?: StructuredModel;
   system: string;

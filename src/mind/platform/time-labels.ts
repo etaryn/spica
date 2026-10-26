@@ -4,6 +4,7 @@
  * from the day they were said. No model works out a date, and no code reads the words.
  */
 import { z } from "zod";
+import { formatToken, tokenDates } from "./time-anchors";
 import { shiftLocalDate } from "./timezone";
 
 export const WEEKDAYS = [
@@ -71,7 +72,9 @@ const MONTH_NAMES = [
 /** The day `meaning` points at from `base` ("YYYY-MM-DD"); null when it doesn't hold together. */
 export function resolveTime(meaning: TimeMeaning, base: string): ResolvedTime | null {
   if (meaning.clock !== null && !CLOCK.test(meaning.clock)) return null;
-  const date = resolveDate(meaning, base);
+  // "since friday" is never a coming Friday, so a forward reading is turned back.
+  const shift = meaning.span === "since" ? -Math.abs(meaning.shift) : meaning.shift;
+  const date = resolveDate({ ...meaning, shift }, base);
   if (date === null) return null;
   return {
     date,
@@ -116,6 +119,32 @@ export function renderResolved(t: ResolvedTime): string {
   if (t.clock) parts.push(t.clock);
   const when = (t.rough ? "around " : "") + parts.join(", ");
   return t.span === "at" ? when : `${t.span} ${when}`;
+}
+
+/**
+ * A resolved time as a date token, so it reads with its distance on whatever day a prompt is
+ * sent. Its edges ("around", "until", "the end of") sit outside the token; with `said`, the
+ * words stay and the date is glossed beside them.
+ */
+export function labelToken(t: ResolvedTime, zone: string, said?: string): string {
+  const day = t.part && t.part !== "start" && t.part !== "end" ? t.part : "day";
+  const precision =
+    t.span === "since" ? "since" : t.precision !== "day" ? t.precision : t.clock ? "time" : day;
+  const local =
+    precision === "month"
+      ? t.date.slice(0, 7)
+      : precision === "time"
+        ? `${t.date}T${t.clock}`
+        : t.date;
+  const token = formatToken(local, precision, zone, said);
+  if (said) return token;
+  const edge = t.part === "start" || t.part === "end" ? `the ${t.part} of ` : "";
+  return `${t.rough ? "around " : ""}${t.span === "until" ? "until " : ""}${edge}${token}`;
+}
+
+/** The moment a resolved time points at, as the renderer reads its token. */
+export function labelInstant(t: ResolvedTime, zone: string): Date {
+  return tokenDates(labelToken(t, zone))[0]!;
 }
 
 function resolveDate(m: TimeMeaning, base: string): string | null {

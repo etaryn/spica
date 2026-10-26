@@ -2,8 +2,6 @@
   "models": {
     "reply": "claude-sonnet-5",
     "cheap": "claude-haiku-5-5",
-    "extract": "claude-haiku-5-5",
-    "extract_max_tokens": 2048,
     "judge": "claude-haiku-5-5",
     "life": "claude-haiku-5-5",
     "core": "claude-haiku-5-5",
@@ -23,8 +21,12 @@
     "reply_timeout_ms": 30000,
     "reply_max_retries": 1,
     "reply_cache": "5m",
-    "extract_cache": "5m",
-    "guard_cache": "5m"
+    "guard_cache": "5m",
+    "labels": "claude-haiku-5-5",
+    "labels_thinking": "adaptive",
+    "labels_max_tokens": 16000,
+    "labels_timeout_ms": 180000,
+    "labels_cache": "5m"
   },
   "embedding": {
     "provider": "voyage",
@@ -61,10 +63,12 @@
   },
   "extraction": {
     "context_turns": 6,
-    "max_candidates": 12,
     "open_threads_in_prompt": 20,
     "new_entity_salience": 0.5,
-    "entity_bump": 0.05
+    "entity_bump": 0.05,
+    "window_messages": 40,
+    "quote_chars": 160,
+    "idiolect": { "salience": 0.6, "valence": 0.3, "confidence": 0.9 }
   },
   "reconcile": {
     "neighbor_k": 5,
@@ -81,7 +85,7 @@
     "dormant_after_days": 14
   },
   "cold_path": {
-    "retry_limit": 3,
+    "retry_limit": 6,
     "retry_delay_seconds": 30,
     "sweep_cron": "30 4 * * *",
     "sweep_min_age_minutes": 10,
@@ -213,7 +217,7 @@
     "crisis_classifier": "v2",
     "sim_user": "v2",
     "persona": "v7",
-    "extract": "v11",
+    "labels": "v1",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",

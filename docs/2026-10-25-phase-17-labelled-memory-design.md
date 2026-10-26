@@ -96,8 +96,12 @@ reader can read would need a shim, which the replace-from-the-ground-up rule rul
   - guard `wrong_day`, which judges her outgoing messages, not storage.
 - **To settle in 17b:** the date glosses on older messages in her view of the conversation. They
   parse raw text, which tested weak.
-- **Phase 16d is paused.** At 17b's close, each 16d item (B129–B132, B1) is re-checked against the
-  new pipeline; what is left is fixed or backlogged then.
+- **Phase 16d was settled at 17b's close (2026-10-26).** B129 to B131 are done. B1 is narrowed to
+  ideate. B132 stays open for her loops' anchoring, which 17d deletes. The close run's new
+  findings are B137 and B138.
+
+**17b is built and merged (2026-10-26).** Close run analysis:
+`evals/results/analysis-2026-10-26-phase-17b.md`.
 
 ## Scope
 

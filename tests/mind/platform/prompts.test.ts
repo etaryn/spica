@@ -17,7 +17,7 @@ test("loads persona, reply rules, extraction, reconcile and crisis prompts", () 
   expect(reply).toMatch(/Trust it/);
   expect(reply).toMatch(/haven't answered/);
   expect(reply).toMatch(/several messages/);
-  expect(loadPrompt("extract", c.prompts.extract)).toMatch(/subject/);
+  expect(loadPrompt("labels", c.prompts.labels)).toMatch(/subject/);
   expect(loadPrompt("reconcile", c.prompts.reconcile)).toMatch(/contradicts/);
   expect(loadPrompt("safety/crisis-classifier", c.prompts.crisis_classifier)).toMatch(/self_harm/);
 });
@@ -88,8 +88,8 @@ test("reply v18 uses the card's pronouns and names or they for everyone else", (
   expect(loadPrompt("reply", c.prompts.reply)).toMatch(/use their name or they\/them/);
 });
 
-test("extract v12 labels pieces in layers and never asks for a date", () => {
-  const p = loadPrompt("extract", "v12");
+test("labels v1 labels pieces in layers and never asks for a date", () => {
+  const p = loadPrompt("labels", "v1");
   for (const section of [
     "## moves",
     "## mentions",
@@ -106,4 +106,7 @@ test("extract v12 labels pieces in layers and never asks for a date", () => {
   expect(p).toMatch(/replies_to/);
   expect(p).toMatch(/Never work out a date/);
   expect(p).not.toMatch(/when_direction/);
+  // A correction or repeat still makes a memory, and a memory's times come from its own moves.
+  expect(p).toMatch(/a correction is stored as the corrected version/);
+  expect(p).toMatch(/A proposition's times come from the words its own moves cover/);
 });

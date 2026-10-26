@@ -21,6 +21,7 @@ import { runUserMind } from "@/mind/process/user/run";
 import { tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { newMessages, scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { sequence } from "../helpers/llm";
 
 beforeEach(resetDb);
@@ -51,33 +52,22 @@ async function count(table: string, where = "true"): Promise<number> {
   return Number(res.rows[0]!.n);
 }
 
-/** Scripted extraction: "BIG" stores a salient fact. */
+/** Scripted labels: "BIG" stores a salient fact. */
 function deps(overrides: unknown = {}) {
   const d = makeTestDeps(overrides);
-  d.llm.handlers.extract = (input: string) => {
-    const latest = input.split("New exchange").at(-1) ?? "";
-    return {
-      facts: latest.includes("BIG")
-        ? [
-            {
-              subject: "user",
-              kind: "event",
-              content: `Big news from ${latest.match(/BIG \w+/)?.[0] ?? "BIG"}.`,
-              occurred_at: null,
-              salience: 0.9,
-              valence: 0.6,
-              confidence: 0.9,
-              entity_names: [],
-              thread_title: null,
-              claim_kind: null,
-            },
-          ]
-        : [],
-      entities: [],
-      threads: [],
-      relationship: null,
-    };
-  };
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels((input) => {
+      const latest = newMessages(input)
+        .filter((m) => m.speaker === "user")
+        .map((m) => m.text)
+        .join(" ");
+      const big = latest.match(/BIG \w+/)?.[0];
+      return {
+        memories: big ? [{ said: big, label: `big news ${big}`, salience: 0.9, valence: 0.6 }] : [],
+      };
+    }),
+  );
   return d;
 }
 type D = ReturnType<typeof deps>;

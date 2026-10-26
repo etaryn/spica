@@ -35,7 +35,6 @@ const CrisisCardSchema = z.object({
 const models = z.object({
   reply: text,
   cheap: text,
-  extract: text,
   judge: text,
   life: text,
   core: text,
@@ -43,7 +42,6 @@ const models = z.object({
   guard: text,
   turn_judge: text,
   reply_max_tokens: positiveInt,
-  extract_max_tokens: positiveInt,
   judge_max_tokens: positiveInt,
   guard_max_tokens: positiveInt,
   turn_judge_max_tokens: positiveInt,
@@ -59,10 +57,15 @@ const models = z.object({
   reply_max_retries: countFromZero,
   // Caches the reply's shared prefix (values + snapshot); "off" is the kill switch.
   reply_cache: cacheTtl,
-  // Extraction's fixed prefix (prompt + output schema) is ~4.6k tokens, past the cache minimum.
-  extract_cache: cacheTtl,
   // The guard's prompt is the same on every call and it runs on every reply, so a burst reads it.
   guard_cache: cacheTtl,
+  // Labelling: its own role, since it thinks and needs room and time for it. The cold path is
+  // asynchronous, so a slow call never delays a reply.
+  labels: text,
+  labels_thinking: thinking,
+  labels_max_tokens: positiveInt,
+  labels_timeout_ms: positiveInt,
+  labels_cache: cacheTtl,
 });
 
 const embedding = z.object({
@@ -185,10 +188,15 @@ const claims = z.object({ grounded_similarity: unit });
 
 const extraction = z.object({
   context_turns: countFromZero,
-  max_candidates: positiveInt,
   open_threads_in_prompt: countFromZero,
   new_entity_salience: unit,
   entity_bump: unit,
+  // The labelling window: the conversation so far, capped, with `context_turns` before it.
+  window_messages: positiveInt,
+  // How much of each move a memory line quotes.
+  quote_chars: positiveInt,
+  // The model gives idiolect no weight of its own: something only the two of them share starts here.
+  idiolect: z.object({ salience: unit, valence: z.number().min(-1).max(1), confidence: unit }),
 });
 
 const reconcile = z.object({
@@ -737,7 +745,7 @@ const prompts = z.object({
   post_draft: promptVersion,
   post_check: promptVersion,
   format_draft: promptVersion,
-  extract: promptVersion,
+  labels: promptVersion,
   reconcile: promptVersion,
   judge_recall: promptVersion,
   judge_false_recall: promptVersion,

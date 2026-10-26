@@ -33,12 +33,11 @@ export type AnchorContext = {
   zone: string;
   /** Dates the writer was shown: a bare weekday takes the nearest of these on that weekday. */
   known?: Date[];
-  /** Extract's label for the time words: which way a bare weekday or weekend points. */
-  direction?: "past" | "upcoming" | null;
-  /** Keep the words and gloss them (her view of older messages) instead of replacing them. */
-  said?: boolean;
 };
-export type AnchorHints = Omit<AnchorContext, "at" | "zone">;
+export type AnchorHints = Omit<AnchorContext, "at" | "zone"> & {
+  /** Store the words as given: a labelled memory quotes them, and its dates are already tokens. */
+  asSaid?: boolean;
+};
 
 type Anchor = { local: string; precision: Precision; zone: string };
 
@@ -242,9 +241,18 @@ function mapPlain(text: string, fn: (plain: string) => string): string {
   return out + fn(text.slice(last));
 }
 
-function token(local: string, precision: Precision, ctx: AnchorContext, words: string): string {
-  const said = ctx.said ? `|${words.replace(/[|⟧]/g, "")}` : "";
-  return `⟦${local}|${precision}|${ctx.zone}${said}⟧`;
+/** A token in the one format every renderer reads. `said` keeps the words and glosses them. */
+export function formatToken(
+  local: string,
+  precision: Precision,
+  zone: string,
+  said?: string,
+): string {
+  return `⟦${local}|${precision}|${zone}${said ? `|${said.replace(/[|⟧]/g, "")}` : ""}⟧`;
+}
+
+function token(local: string, precision: Precision, ctx: AnchorContext): string {
+  return formatToken(local, precision, ctx.zone);
 }
 
 const weekdayOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
@@ -257,8 +265,7 @@ const today = (ctx: AnchorContext) => localDateString(ctx.at, ctx.zone);
 function durations(plain: string, ctx: AnchorContext): string {
   return plain.replace(DURATION, (match, n1?: string, u1?: string, n2?: string, u2?: string) => {
     const span = count((n1 ?? n2)!) * ((u1 ?? u2)!.toLowerCase().startsWith("week") ? 7 : 1);
-    const t = token(shiftLocalDate(today(ctx), -span), "since", ctx, match);
-    return ctx.said ? t : `since ${t}`;
+    return `since ${token(shiftLocalDate(today(ctx), -span), "since", ctx)}`;
   });
 }
 
@@ -266,9 +273,9 @@ function weeks(plain: string, ctx: AnchorContext): string {
   const monday = mondayOf(today(ctx));
   return plain.replace(WEEK, (match) => {
     const m = match.toLowerCase();
-    if (m.includes("end of")) return token(shiftLocalDate(monday, 4), "day", ctx, match);
+    if (m.includes("end of")) return token(shiftLocalDate(monday, 4), "day", ctx);
     const shift = m.startsWith("next") ? 7 : m.startsWith("last") ? -7 : 0;
-    return token(shiftLocalDate(monday, shift), "week", ctx, match);
+    return token(shiftLocalDate(monday, shift), "week", ctx);
   });
 }
 
@@ -286,14 +293,12 @@ function weekends(plain: string, ctx: AnchorContext): string {
     else {
       const prevSat = wd === 0 || wd === 6 ? thisSat : shiftLocalDate(thisSat, -7);
       const known = nearestKnown(ctx, [6, 0], day);
-      if (ctx.direction === "past") sat = prevSat;
-      else if (ctx.direction === "upcoming") sat = thisSat;
-      else if (known) sat = weekdayOf(known) === 0 ? shiftLocalDate(known, -1) : known;
+      if (known) sat = weekdayOf(known) === 0 ? shiftLocalDate(known, -1) : known;
       else
         sat =
           Math.abs(dayDiff(prevSat, day)) <= Math.abs(dayDiff(thisSat, day)) ? prevSat : thisSat;
     }
-    return token(sat, "weekend", ctx, match);
+    return token(sat, "weekend", ctx);
   });
 }
 
@@ -307,17 +312,9 @@ function nearestKnown(ctx: AnchorContext, weekdays: number[], day: string): stri
   );
 }
 
-function pickWeekday(day: string, wd: number, ctx: AnchorContext): string | null {
-  const back = (weekdayOf(day) - wd + 7) % 7; // days since it last came round (0: today)
-  const ahead = (wd - weekdayOf(day) + 7) % 7; // days until it comes round (0: today)
-  if (ctx.direction === "past") return shiftLocalDate(day, -back);
-  // "monday" said on a Monday about something coming means next week's.
-  if (ctx.direction === "upcoming") return shiftLocalDate(day, ahead || 7);
-  const known = nearestKnown(ctx, [wd], day);
-  if (known) return known;
-  // Read as typed, a bare weekday could point either way; the day line above it dates it.
-  if (ctx.said) return null;
-  return shiftLocalDate(day, ahead);
+/** A bare weekday: the nearest shown date on it, else the next one to come round (0: today). */
+function pickWeekday(day: string, wd: number, ctx: AnchorContext): string {
+  return nearestKnown(ctx, [wd], day) ?? shiftLocalDate(day, (wd - weekdayOf(day) + 7) % 7);
 }
 
 function explicitWeekday(day: string, wd: number, which: string): string {
@@ -358,8 +355,8 @@ function chronoPass(plain: string, ctx: AnchorContext): string {
       // "the afternoon of …" renders with its own "the".
       const the = /\bthe\s+$/i.test(clause.slice(0, r.index)) && / of /i.test(words) ? 4 : 0;
       found.push({
-        // Her own notes drop "on"/"at"; her view of older messages keeps every word.
-        from: ctx.said ? at + lead.length : at - the,
+        // Her own notes drop "on"/"at".
+        from: at - the,
         end: at + lead.length + words.length,
         anchor,
         written: DATE_PHRASE.test(words.replace(CLOCK, " ").trim()),
@@ -370,10 +367,7 @@ function chronoPass(plain: string, ctx: AnchorContext): string {
   let out = plain;
   // From the end backwards, so earlier indices stay valid while the text changes.
   for (const f of merged(found, plain).sort((a, b) => b.from - a.from))
-    out =
-      out.slice(0, f.from) +
-      token(f.anchor.local, f.anchor.precision, ctx, plain.slice(f.from, f.end)) +
-      out.slice(f.end);
+    out = out.slice(0, f.from) + token(f.anchor.local, f.anchor.precision, ctx) + out.slice(f.end);
   return out;
 }
 
@@ -451,7 +445,9 @@ function classifyDay(
     if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
     if (!m[1] && HABIT_BEFORE.test(before)) return null;
     const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
-    const local = m[1] ? explicitWeekday(day, wd, m[1].toLowerCase()) : pickWeekday(day, wd, ctx);
+    // "since friday" always points back.
+    const which = /\bsince\s+$/i.test(before) ? "last" : m[1]?.toLowerCase();
+    const local = which ? explicitWeekday(day, wd, which) : pickWeekday(day, wd, ctx);
     if (!local) return null;
     return { local, precision: (m[3]?.toLowerCase() as Precision | undefined) ?? "day" };
   }
@@ -465,13 +461,9 @@ function classifyDay(
     const dd = String(Number(m[2] ?? m[5])).padStart(2, "0");
     const part = (m[1] as Precision | undefined) ?? "day";
     if (m[6]) return { local: `${m[6]}-${mo}-${dd}`, precision: part };
-    // A date without a year is on the side of now its label points to, else the nearest one.
+    // A date without a year is the nearest one.
     const y = Number(day.slice(0, 4));
-    const options = [y - 1, y, y + 1]
-      .map((year) => `${year}-${mo}-${dd}`)
-      .filter((o) =>
-        ctx.direction === "past" ? o <= day : ctx.direction === "upcoming" ? o >= day : true,
-      );
+    const options = [y - 1, y, y + 1].map((year) => `${year}-${mo}-${dd}`);
     const nearest = options.sort(
       (a, b) => Math.abs(dayDiff(a, day)) - Math.abs(dayDiff(b, day)),
     )[0]!;
@@ -494,7 +486,7 @@ function classifyDay(
     // "in october" said in October is this October; otherwise the next one, or the last one when
     // it already happened.
     const target = new Date(`${m[2]} 1, ${y} 12:00 UTC`).getUTCMonth() + 1;
-    const year = ctx.direction === "past" ? (target <= mo ? y : y - 1) : target >= mo ? y : y + 1;
+    const year = target >= mo ? y : y + 1;
     return { local: `${year}-${String(target).padStart(2, "0")}`, precision: "month" };
   }
   return null;

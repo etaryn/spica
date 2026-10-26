@@ -18,6 +18,7 @@ import { BASE, ScriptSchema } from "../../evals/lib/script";
 import { closeTestDb, getTestDb, resetDb, testDbUrl } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 import { CANARY, CapturingLLM } from "../helpers/llm";
+import { newMessages, scriptedLabels, type ScriptedMemory } from "@/mind/platform/llm/fake-labels";
 
 afterAll(closeTestDb);
 
@@ -58,47 +59,36 @@ const CORE_TABLES = [
 ];
 
 /**
- * Extraction keyed on markers in the user's own lines of the new exchange (her fake replies echo
- * them, so her lines are skipped). The canary reaches Alice's memory as an ordinary fact, so the
- * capturing model's own canary extraction, which adds a hurt every time, is bypassed.
+ * Labels keyed on markers in the user's own new messages (her fake replies echo them, so her
+ * messages are skipped). The canary reaches Alice's memory as an ordinary memory, so the
+ * capturing model's own canary labels, which add a hurt every time, are bypassed.
  */
 class ExitLLM extends CapturingLLM {
   override async classifyJson<T>(request: ClassifyRequest<T>): Promise<T> {
-    if (request.purpose !== "extract") return super.classifyJson(request);
-    this.seen.push({ kind: "structured", purpose: "extract", text: request.input });
-    return request.schema.parse(await this.handlers.extract!(request.input));
+    if (!request.purpose.startsWith("labels_")) return super.classifyJson(request);
+    this.seen.push({ kind: "structured", purpose: request.purpose, text: request.input });
+    return request.schema.parse(await this.handlers[request.purpose]!(request.input));
   }
 }
 
-function fact(content: string, kind: string, salience: number) {
-  return {
-    subject: "user",
-    kind,
-    content,
-    occurred_at: null,
-    salience,
-    valence: 0.2,
-    confidence: 0.9,
-    entity_names: [],
-    thread_title: null,
-  };
+function memory(said: string, label: string, kind: string, salience: number): ScriptedMemory {
+  return { said, label, kind, salience, valence: 0.2 };
 }
 
-function extract(input: string) {
-  const lines = (input.split("New exchange").at(-1) ?? "")
-    .split("\n")
-    .filter((l) => l.includes("] User: "))
-    .map((l) => l.slice(l.indexOf("] User: ") + 8));
-  const facts = lines.flatMap((l) => {
-    if (l.startsWith("ALICE-CANARY")) return [fact(`Alice's code word is ${TOKEN}.`, "trait", 0.9)];
-    if (l.startsWith("ALICE-BIG")) return [fact(l.slice(10), "event", 0.9)];
-    if (l.startsWith("ALICE-EVENT")) return [fact(l.slice(12), "event", 0.5)];
-    if (l.startsWith("ALICE-FEEL")) return [fact(l.slice(11), "feeling", 0.5)];
-    if (l.startsWith("BOB-SAYS hey")) return [fact("Bob had a long week.", "event", 0.9)];
-    return [];
-  });
-  return { facts, entities: [], threads: [], relationship: null };
-}
+const labels = scriptedLabels((input) => ({
+  memories: newMessages(input)
+    .filter((m) => m.speaker === "user")
+    .flatMap((m) => {
+      const l = m.text;
+      if (l.startsWith("ALICE-CANARY"))
+        return [memory("ALICE-CANARY", `code word ${TOKEN}`, "trait", 0.9)];
+      if (l.startsWith("ALICE-BIG")) return [memory("ALICE-BIG", l.slice(10), "event", 0.9)];
+      if (l.startsWith("ALICE-EVENT")) return [memory("ALICE-EVENT", l.slice(12), "event", 0.5)];
+      if (l.startsWith("ALICE-FEEL")) return [memory("ALICE-FEEL", l.slice(11), "feeling", 0.5)];
+      if (l.startsWith("BOB-SAYS hey")) return [memory("BOB-SAYS hey", "long week", "event", 0.9)];
+      return [];
+    }),
+}));
 
 const script = ScriptSchema.parse({
   name: "user-mind-exit",
@@ -162,7 +152,7 @@ beforeAll(async () => {
   llm = new ExitLLM({
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
-  llm.handlers.extract = extract;
+  Object.assign(llm.handlers, labels);
   const result = await runScript(script, {
     db: getTestDb(),
     dbUrl: testDbUrl,
@@ -282,9 +272,7 @@ describe("phase 9 exit", () => {
   });
 
   test("the canary never reached Bob's prompts or the core", async () => {
-    const bobCalls = llm.seen.filter(
-      (c) => c.text.includes("Bob had a long week.") || c.text.includes("BOB-SAYS"),
-    );
+    const bobCalls = llm.seen.filter((c) => c.text.includes("BOB-SAYS"));
     expect(bobCalls.length).toBeGreaterThan(0);
     for (const c of bobCalls) expect(c.text, c.purpose).not.toMatch(CANARY);
     const core = llm.seen.filter((c) => CORE_PURPOSES.has(c.purpose));

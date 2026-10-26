@@ -17,6 +17,7 @@ import { tickUser } from "@/mind/state/user/relationship/daily-tick";
 import { loadStagePhrases } from "@/mind/state/user/relationship/stages";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { scriptedLabels, type ScriptedSignals } from "@/mind/platform/llm/fake-labels";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -51,19 +52,18 @@ async function coreDump(): Promise<string> {
   return parts.join("\n");
 }
 
-/** What extraction reads off the next exchange. */
-type Next = { relationship: object | null; disclosure: number };
+/** What the labelling reads off the next exchange. */
+type Next = { relationship: ScriptedSignals | null; disclosure: number };
 function setup() {
   const d = makeTestDeps();
   const next: Next = { relationship: null, disclosure: 0 };
-  d.llm.handlers.extract = () => ({
-    facts: [],
-    entities: [],
-    threads: [],
-    relationship: next.relationship,
-    intimacy: { user_disclosure: next.disclosure, user_responsiveness: null },
-    bid_response: null,
-  });
+  Object.assign(
+    d.llm.handlers,
+    scriptedLabels(() => ({
+      relationship: next.relationship,
+      intimacy: { user_disclosure: next.disclosure, user_responsiveness: null },
+    })),
+  );
   return { d, next };
 }
 
@@ -145,17 +145,7 @@ const milestoneRuns = async (u: string) =>
     .flatMap((r) => r.triggers as { kind: string; name?: string }[])
     .filter((t) => t.kind === "milestone")
     .map((t) => t.name);
-const sore = (amount: number) => ({
-  warmth: 0,
-  trust: 0,
-  tension: 0,
-  hurt: { amount, cause: "they snapped at her" },
-  apology: false,
-  make_up: false,
-  ends_relationship: false,
-  retracts_ending: false,
-  wants_repair: false,
-});
+const sore = (amount: number): ScriptedSignals => ({ hurt: { amount } });
 const JOKE = "whale cloud: a whale in a top hat.";
 
 test("a friendship climbs the stages; each first fires once", async () => {

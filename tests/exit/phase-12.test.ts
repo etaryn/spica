@@ -22,6 +22,7 @@ import { recordBigEvents, runUserMind } from "@/mind/process/user/run";
 import { modules as production } from "@/modules";
 import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { recordingModule } from "../helpers/modules";
 
 beforeEach(resetDb);
@@ -62,24 +63,12 @@ function setup(first: Module[] = []) {
     { life: { timezone: "UTC" }, core: { world: { events_local_hour: 20 } } },
     [...first, user.module, publicModule],
   );
-  deps.llm.handlers.extract = () => ({
-    facts: [
-      {
-        subject: "user",
-        kind: "trait",
-        content: `The user's code word is ${TOKEN}.`,
-        occurred_at: null,
-        salience: 0.9,
-        valence: 0,
-        confidence: 0.9,
-        entity_names: [],
-        thread_title: null,
-      },
-    ],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  Object.assign(
+    deps.llm.handlers,
+    scriptedLabels({
+      memories: [{ said: TOKEN, label: `code word ${TOKEN}`, kind: "trait", salience: 0.9 }],
+    }),
+  );
   return { deps, user, heard, channel };
 }
 

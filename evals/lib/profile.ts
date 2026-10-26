@@ -2,7 +2,9 @@
 export const ALL_PURPOSES = [
   "reply",
   "crisis",
-  "extract",
+  "labels_read",
+  "labels_meaning",
+  "labels_signals",
   "reconcile",
   "guard",
   "guard_crisis",

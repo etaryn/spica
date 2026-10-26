@@ -73,7 +73,11 @@ export class AnthropicProvider implements LLMProvider {
     // model thinks by default when the request leaves it out.
     const isJudge = model === "judge";
     const effort = isJudge ? this.models.judge_effort : null;
-    const thinking = isJudge ? this.models.judge_thinking : this.models.structured_thinking;
+    const thinking = isJudge
+      ? this.models.judge_thinking
+      : model === "labels"
+        ? this.models.labels_thinking
+        : this.models.structured_thinking;
     const cacheControl = cacheControlFor(cache);
 
     const response = await this.client.messages.parse(
@@ -99,7 +103,7 @@ export class AnthropicProvider implements LLMProvider {
   private modelIdFor(model: StructuredModel): string {
     const ids: Record<StructuredModel, string> = {
       cheap: this.models.cheap,
-      extract: this.models.extract,
+      labels: this.models.labels,
       judge: this.models.judge,
       guard: this.models.guard,
       turn_judge: this.models.turn_judge,

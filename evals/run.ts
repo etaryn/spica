@@ -126,7 +126,7 @@ for (const script of scripts) {
       embedder,
       profiles,
       turnJudgeReal: realPurposes.has("turn_judge"),
-      extractReal: realPurposes.has("extract"),
+      extractReal: realPurposes.has("labels_signals"),
       realPurposes,
     });
     if (anyReal) await dumpDb(path.join(traceDir, `${script.name}-${k + 1}-db.json`));

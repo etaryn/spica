@@ -130,15 +130,19 @@ export function stampedNote(
   };
 }
 
-/** Open storylines, each with the next day to check in when there is one. */
+/** Open storylines: the event's day apart from when to ask, so a check-in never reads as the event. */
 export function threadLines(
-  threads: { title: string; next_checkpoint: Date | null }[],
+  threads: { title: string; event?: string | null; next_checkpoint: Date | null }[],
   tz: string | null,
 ): string[] {
   const zone = zoneOrUtc(tz);
-  return threads.map((t) =>
-    t.next_checkpoint ? `${t.title} (next: ${dateToken(t.next_checkpoint, zone)})` : t.title,
-  );
+  return threads.map((t) => {
+    const parts = [
+      ...(t.event ? [`on ${t.event}`] : []),
+      ...(t.next_checkpoint ? [`ask after ${dateToken(t.next_checkpoint, zone)}`] : []),
+    ];
+    return parts.length ? `${t.title} (${parts.join("; ")})` : t.title;
+  });
 }
 
 /** The dates a loop was shown, so a weekday it writes takes the day it saw. */

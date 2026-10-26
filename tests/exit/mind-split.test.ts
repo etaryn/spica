@@ -23,6 +23,7 @@ import { ensureRelationship, getParams } from "@/db/repos/user/relationship";
 import { loadConfig } from "@/mind/platform/config";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { keywordClassifier } from "@/mind/platform/llm/fake";
+import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { runColdPath } from "@/mind/process/cold-path/cold-path";
 import { coreMindTick } from "@/mind/process/core/mind-tick";
 import { coreWorldTick } from "@/mind/process/core/world-tick";
@@ -123,26 +124,12 @@ async function run(aText: string) {
     classify: (input) => keywordClassifier(config.safety.keywords)(messageToJudge(input)),
   });
   // Bob's first session is a big event too, so he gets a user mind run of his own.
-  llm.handlers.extract = (input: string) => ({
-    facts: (input.split("New exchange").at(-1) ?? "").includes("BOB-SAYS hey")
-      ? [
-          {
-            subject: "user",
-            kind: "event",
-            content: "Bob had a long week.",
-            occurred_at: null,
-            salience: 0.9,
-            valence: 0.2,
-            confidence: 0.9,
-            entity_names: [],
-            thread_title: null,
-          },
-        ]
-      : [],
-    entities: [],
-    threads: [],
-    relationship: null,
-  });
+  Object.assign(
+    llm.handlers,
+    scriptedLabels({
+      memories: [{ said: "BOB-SAYS hey", label: "long week", salience: 0.9, valence: 0.2 }],
+    }),
+  );
   llm.handlers.core_resolve = () => ({
     content: "Spica still got the telescope images, though the observatory closed early.",
     valence: 0.8,
@@ -194,11 +181,18 @@ describe("leak canary", () => {
 
   test("the canary reached A's relationship: her hurt and its cause", async () => {
     const alice = await userIdByName("alice");
-    const cause = await getTestDb().execute(
-      sql`SELECT f.content FROM relationship r JOIN fact f ON f.id = r.hurt_cause_fact
-          WHERE r.user_id = ${alice}`,
+    // Her hurt memories: the first quotes the message holding the canary. A later one, scripted
+    // because her echoed reply carried the canary, quotes that exchange's own message.
+    const hurts = await getTestDb().execute(
+      sql`SELECT content FROM fact WHERE user_id = ${alice} AND subject = 'self'
+          AND kind = 'feeling' AND source = 'inferred'`,
     );
-    expect(String(cause.rows[0]?.content ?? "")).toContain(TOKEN);
+    expect(hurts.rows.some((r) => String(r.content).includes(TOKEN))).toBe(true);
+    const cause = await getTestDb().execute(
+      sql`SELECT count(*)::int AS n FROM relationship WHERE user_id = ${alice}
+          AND hurt_cause_fact IS NOT NULL`,
+    );
+    expect(Number(cause.rows[0]!.n)).toBe(1);
     const hurt = await getTestDb().execute(
       sql`SELECT count(*)::int AS n FROM relationship_event
           WHERE user_id = ${alice} AND param = 'hurt' AND cause = 'signal'`,
@@ -208,7 +202,7 @@ describe("leak canary", () => {
     const aliceReply = llm.seen.find(
       (c) => c.kind === "reply" && c.text.includes("ALICE-SAYS anything new"),
     );
-    expect(aliceReply?.text).toContain(`the user kept ${TOKEN} from her`);
+    expect(aliceReply?.text).toContain(`the user said "ALICE-SAYS my secret code word is ${TOKEN}`);
   });
 
   test("no core table holds it", async () => {
@@ -289,7 +283,8 @@ describe("leak canary", () => {
       const calls = llm.seen.filter((c) => c.purpose === purpose);
       const alice = calls.filter((c) => c.text.includes(TOKEN));
       // Bob's calls are picked by his own memory, so a leak into them can't hide in Alice's group.
-      const bob = calls.filter((c) => c.text.includes("Bob had a long week."));
+      // The loops read JSON, so the quote in his memory's line arrives escaped.
+      const bob = calls.filter((c) => c.text.includes('long week — the user said \\"BOB-SAYS hey'));
       expect(alice.length, purpose).toBeGreaterThan(0);
       expect(bob.length, purpose).toBeGreaterThan(0);
       for (const c of bob) expect(c.text, purpose).not.toMatch(CANARY);
@@ -416,34 +411,22 @@ describe("side channel", () => {
       const alice = await createTestUser("alice");
       await ensureRelationship(deps.db, alice, morning, deps.config.relationship);
       if (exchange) {
-        deps.llm.handlers.extract = () => ({
-          facts: [
-            {
-              subject: "user",
-              kind: "trait",
-              content: `Alice loves talking to Spica ${TOKEN}.`,
-              occurred_at: null,
-              salience: 0.8,
-              valence: 0.9,
-              confidence: 1,
-              entity_names: [],
-              thread_title: null,
-            },
-          ],
-          entities: [],
-          threads: [],
-          relationship: {
-            warmth: 0.8,
-            trust: 0.4,
-            tension: 0,
-            hurt: null,
-            apology: false,
-            make_up: false,
-            ends_relationship: false,
-            retracts_ending: false,
-            wants_repair: false,
-          },
-        });
+        Object.assign(
+          deps.llm.handlers,
+          scriptedLabels({
+            memories: [
+              {
+                said: "love talking to you",
+                label: `loves talking to Spica ${TOKEN}`,
+                kind: "trait",
+                salience: 0.8,
+                valence: 0.9,
+                confidence: 1,
+              },
+            ],
+            relationship: { warmth: 0.8, trust: 0.4 },
+          }),
+        );
         const userTurn = await insertTurn(deps.db, alice, {
           id: randomUUID(),
           session_id: randomUUID(),

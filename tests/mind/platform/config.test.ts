@@ -38,7 +38,7 @@ describe("loadConfig", () => {
 
 test("phase 1 config groups load with defaults", () => {
   const c = loadConfig();
-  expect(c.models.extract).toBe("claude-haiku-5-5");
+  expect(c.models.labels).toBe("claude-haiku-5-5");
   expect(c.models.judge).toBe("claude-haiku-5-5");
   expect(c.retrieval).toMatchObject({
     candidate_pool: 200,

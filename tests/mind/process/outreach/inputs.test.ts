@@ -455,7 +455,7 @@ test("an idea's notes are the live, non-sensitive dated facts it came from", asy
       kind: "idea",
       content: "Ask if they get a break after Thursday.",
       created_at: ago(2),
-      payload: { from: [dated.id, hidden.id, old.id, "not-a-uuid"] },
+      payload: { cites: [dated.id, hidden.id, old.id, "not-a-uuid"] },
     }),
   );
   const [idea] = (await loadCandidateInputs(deps, u, now)).userIdeas;

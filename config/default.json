@@ -250,7 +250,7 @@
     "reach_out": "v4",
     "user_summarise": "v6",
     "user_reflect": "v6",
-    "user_ideate": "v7",
+    "user_ideate": "v8",
     "user_consolidate": "v1",
     "user_model": "v6",
     "post_draft": "v2",
@@ -787,9 +787,7 @@
       "ttl_days": 3,
       "recent_days": 14,
       "max_planned": 20,
-      "slot_max": 1,
-      "dated_facts": 3,
-      "source_similarity": 0.3
+      "slot_max": 1
     },
     "consolidate": {
       "gist_after_days": 7,

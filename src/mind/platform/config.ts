@@ -821,8 +821,6 @@ const userMind = z.object({
     recent_days: positiveInt,
     max_planned: positiveInt,
     slot_max: countFromZero,
-    dated_facts: countFromZero,
-    source_similarity: unit,
   }),
   consolidate: z.object({
     gist_after_days: positiveInt,

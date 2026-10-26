@@ -99,11 +99,13 @@ export class FakeLLMProvider implements LLMProvider {
         times: [],
       };
     },
-    // Deterministic: an idea about the first new memory, none without one.
+    // Deterministic: an idea about the first new memory, none without one; whose it is follows it.
     user_ideate: (input: string) => {
-      const ctx = JSON.parse(input) as { new_memories: { content: string }[] };
-      const first = ctx.new_memories[0]?.content;
-      return { idea: first ? `Ask about: ${first}`.slice(0, 190) : null };
+      const ctx = JSON.parse(input) as { new_memories: { content: string; subject: string }[] };
+      const first = ctx.new_memories[0];
+      const about =
+        first?.subject === "self" ? "you" : first?.subject === "shared" ? "both" : "them";
+      return { idea: first ? `Ask about: ${first.content}`.slice(0, 190) : null, about, times: [] };
     },
     // Deterministic: the week's memories in one line, so a canary in a source carries through.
     user_consolidate: (input: string) => {

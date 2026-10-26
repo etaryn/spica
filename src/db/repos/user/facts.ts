@@ -477,30 +477,3 @@ export async function datedFactsByIds(
   const byId = new Map(rows.map((r) => [r.id, { ...r, occurred_at: r.occurred_at! }]));
   return valid.flatMap((id) => byId.get(id) ?? []);
 }
-
-/** Of `ids`, the dated facts at least `minSim` similar to `vec`, closest first. */
-export async function nearestDated(
-  db: Db,
-  userId: string,
-  ids: string[],
-  vec: number[],
-  minSim: number,
-  limit: number,
-): Promise<string[]> {
-  if (!ids.length || limit < 1) return [];
-  const q = vecLiteral(vec);
-  const rows = await db
-    .select({ id: fact.id })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        inArray(fact.id, ids),
-        sql`${fact.occurred_at} IS NOT NULL`,
-        sql`(1 - (${fact.embedding} <=> ${q}::vector)) >= ${minSim}`,
-      ),
-    )
-    .orderBy(sql`${fact.embedding} <=> ${q}::vector`)
-    .limit(limit);
-  return rows.map((r) => r.id);
-}

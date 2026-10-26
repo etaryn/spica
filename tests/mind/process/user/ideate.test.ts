@@ -41,72 +41,19 @@ async function setup() {
 test("writes one open idea; null writes nothing; live ideas are passed back", async () => {
   const { deps, userId, run } = await setup();
   deps.llm.handlers.user_ideate = sequence(
-    { idea: "Ask how the audition went; they were nervous." },
-    { idea: null },
+    { idea: "Ask how the audition went; they were nervous.", about: "them", times: [] },
+    { idea: null, about: "them", times: [] },
   );
   const inputs = await loadRunInputs(deps, userId);
   expect(await userIdeate(deps, run, inputs)).toBe("done");
   expect(await userIdeate(deps, run, inputs)).toBe("done");
   const ideas = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   expect(ideas).toHaveLength(1);
-  expect(ideas[0]).toMatchObject({ kind: "idea", subject: "shared", status: "open" });
+  expect(ideas[0]).toMatchObject({ kind: "idea", subject: "user", status: "open" });
   const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_ideate")[1]!;
   expect(JSON.parse(second.input).already_planned).toEqual([
     "Ask how the audition went; they were nervous.",
   ]);
-});
-
-test("an idea keeps the dated facts it was written from, so a reach-out knows their dates", async () => {
-  const { deps, userId, run } = await setup();
-  const dated = await insertFact(deps.db, userId, {
-    subject: "user",
-    kind: "event",
-    content: "They have an interview on Thursday.",
-    embedding: vec(),
-    created_at: deps.clock.now(),
-    occurred_at: new Date(deps.clock.now().getTime() + 48 * 3_600_000),
-    status: "open",
-    salience: 0.8,
-    valence: 0,
-    confidence: 0.9,
-    source: "turn",
-  });
-  deps.llm.handlers.user_ideate = () => ({ idea: "Ask if they get a break after Thursday." });
-  await userIdeate(deps, run, await loadRunInputs(deps, userId));
-  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
-  // The undated audition fact isn't kept: only a date helps the reach-out.
-  expect(idea!.payload).toEqual({ from: [dated.id] });
-});
-
-test("only the dated facts near the idea come with it, closest first", async () => {
-  const { deps, userId, run } = await setup();
-  const idea = "Ask if they get a break after Thursday.";
-  const [near] = await deps.embedder.embed([idea], "document");
-  const dated = (content: string, embedding: number[]) =>
-    insertFact(deps.db, userId, {
-      subject: "user",
-      kind: "event",
-      content,
-      embedding,
-      created_at: deps.clock.now(),
-      occurred_at: new Date(deps.clock.now().getTime() + 48 * 3_600_000),
-      status: "open",
-      salience: 0.8,
-      valence: 0,
-      confidence: 0.9,
-      source: "turn",
-    });
-  // Unrelated: a vector pointing away from the idea's.
-  const dentist = await dated(
-    "They have a dentist appointment on Monday.",
-    Array.from({ length: 1024 }, (_, i) => (i % 2 ? 0.01 : -0.01)),
-  );
-  const interview = await dated("They have an interview on Thursday.", near!);
-  deps.llm.handlers.user_ideate = () => ({ idea });
-  await userIdeate(deps, run, await loadRunInputs(deps, userId));
-  const [row] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
-  expect(row!.payload).toEqual({ from: [interview.id] });
-  expect(dentist.id).not.toBe(interview.id);
 });
 
 const D = 86_400_000;
@@ -140,33 +87,9 @@ test("a far-off event never stretches an idea past its chance", () => {
   expect(ideaStaleAfter(written, [later], 3, "UTC")).toEqual(new Date(written.getTime() + 3 * D));
 });
 
-test("ideate stores stale_after from the dated facts it was written from", async () => {
-  const { deps, userId, run } = await setup();
-  const thursday = new Date(deps.clock.now().getTime() + 72 * 3_600_000);
-  await insertFact(deps.db, userId, {
-    subject: "user",
-    kind: "event",
-    content: "They have an interview on Thursday.",
-    embedding: vec(),
-    created_at: deps.clock.now(),
-    occurred_at: thursday,
-    status: "open",
-    salience: 0.8,
-    valence: 0,
-    confidence: 0.9,
-    source: "turn",
-  });
-  deps.llm.handlers.user_ideate = () => ({ idea: "Ask if they get a break after Thursday." });
-  await userIdeate(deps, run, await loadRunInputs(deps, userId));
-  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
-  expect(idea!.stale_after).toEqual(
-    ideaStaleAfter(deps.clock.now(), [thursday], deps.config.user_mind.ideate.ttl_days, "UTC"),
-  );
-});
-
 test("only a reflection from this run counts as noticed", async () => {
   const { deps, userId, run } = await setup();
-  deps.llm.handlers.user_ideate = () => ({ idea: null });
+  deps.llm.handlers.user_ideate = () => ({ idea: null, about: "them", times: [] });
   const reflect = (content: string, createdAt: Date) =>
     insertFact(deps.db, userId, {
       subject: "user",
@@ -273,19 +196,91 @@ test("an idea she already brought up recently is in already_planned", async () =
     source: "generated",
   });
   await retireIdeas(deps.db, userId, [raised.id]);
-  deps.llm.handlers.user_ideate = sequence({ idea: null });
+  deps.llm.handlers.user_ideate = sequence({ idea: null, about: "them", times: [] });
   await userIdeate(deps, run, await loadRunInputs(deps, userId));
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_ideate")!;
   expect(JSON.parse(call.input).already_planned).toContain("Ask how the pottery class went.");
 });
 
-test("an idea about tonight, from no dated memory, retires at the end of today", async () => {
+const tonight = {
+  field: "idea",
+  words: "tonight",
+  from: "",
+  unit: "day",
+  shift: 0,
+  weekday: null,
+  month: null,
+  day_of_month: null,
+  part: "night",
+  clock: "",
+  span: "at",
+  rough: false,
+};
+
+test("an idea cites the memory it's about, keeps it, and goes stale with its day", async () => {
   const { deps, userId, run } = await setup();
-  deps.llm.handlers.user_ideate = () => ({ idea: "Ask how tonight's gig goes." });
+  const interview = await insertFact(deps.db, userId, {
+    subject: "user",
+    kind: "event",
+    content: "design interview, planned",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    occurred_at: new Date("2026-01-07T14:00:00Z"),
+    status: "open",
+    salience: 0.95,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_ideate = () => ({ idea: "Ask how [m1] goes.", about: "them", times: [] });
   await userIdeate(deps, run, await loadRunInputs(deps, userId));
   const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
-  // Their zone is UTC: the end of today is the next midnight.
-  const midnight = new Date(deps.clock.now());
-  midnight.setUTCHours(24, 0, 0, 0);
-  expect(idea!.stale_after).toEqual(midnight);
+  expect(idea).toMatchObject({ subject: "user", payload: { cites: [interview.id] } });
+  expect(idea!.content).toBe(
+    "Ask how design interview, planned ⟦2026-01-07|day|UTC⟧ (theirs) goes.",
+  );
+  expect(idea!.stale_after).toEqual(new Date("2026-01-08T00:00:00Z"));
+});
+
+test("an idea about them resting only on her own life isn't written; an uncited one is", async () => {
+  const { deps, userId, run } = await setup();
+  await insertFact(deps.db, userId, {
+    subject: "self",
+    kind: "event",
+    content: "telescope booking, planned",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.99,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_ideate = sequence(
+    { idea: "Ask whether [m1] turned up Orion's belt.", about: "them", times: [] },
+    { idea: "Ask what they're reading lately.", about: "them", times: [] },
+    { idea: "Tell them [m1] came through.", about: "you", times: [] },
+  );
+  const inputs = await loadRunInputs(deps, userId);
+  for (let i = 0; i < 3; i++) await userIdeate(deps, run, inputs);
+  const ideas = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
+  expect(ideas.map((i) => [i.subject, i.content.slice(0, 20)]).sort()).toEqual([
+    ["self", "Tell them telescope "],
+    ["user", "Ask what they're rea"],
+  ]);
+  const uncited = ideas.find((i) => i.subject === "user")!;
+  expect(uncited.stale_after).toEqual(new Date(deps.clock.now().getTime() + 3 * D));
+});
+
+test("an idea's own 'tonight' is a token, and it retires at the end of today", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_ideate = () => ({
+    idea: "Ask how tonight's gig goes.",
+    about: "them",
+    times: [tonight],
+  });
+  await userIdeate(deps, run, await loadRunInputs(deps, userId));
+  const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
+  expect(idea!.content).toBe("Ask how ⟦2026-01-05|night|UTC|tonight⟧'s gig goes.");
+  expect(idea!.stale_after).toEqual(new Date("2026-01-06T00:00:00Z"));
 });

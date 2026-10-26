@@ -4,9 +4,11 @@ import { fact, user } from "@/db/schema";
 import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import {
   candidateFacts,
+  factCites,
   getFact,
   insertFact,
   listUnreadFacts,
+  liveFactsByIds,
   nearFacts,
 } from "@/db/repos/user/facts";
 import { adminDecayFacts } from "@/db/repos/admin/decay";
@@ -29,6 +31,7 @@ import {
   type Trigger,
 } from "@/db/repos/user/user-mind";
 import { adminStalePendingRuns } from "@/db/repos/admin/user-mind";
+import { earlierMemories } from "@/mind/process/user/inputs";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 beforeEach(resetDb);
@@ -384,4 +387,39 @@ test("a row's own date is a date its words were shown (the 16b seed)", async () 
     occurred_at: new Date("2026-01-17T12:00:00Z"),
   });
   expect(tokenDates(sister.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-17");
+});
+
+test("a note's cites are read from payload.cites; an older note cites nothing", () => {
+  expect(factCites({ cites: ["a", 3, "b"] })).toEqual(["a", "b"]);
+  expect(factCites({ from: ["a"] })).toEqual([]);
+  expect(factCites(null)).toEqual([]);
+});
+
+test("earlier memories: live ones her notes cite, minus the run's; clean runs skip sensitive", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const row = (content: string, extra: object = {}) =>
+    insertFact(db, u, {
+      subject: "user",
+      kind: "event",
+      content,
+      embedding: vec(),
+      created_at: now,
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.9,
+      source: "turn",
+      ...extra,
+    });
+  const kept = await row("kept");
+  const fresh = await row("fresh");
+  const secret = await row("secret", { payload: { sensitive: true } });
+  const gone = await row("gone", { status: "superseded" });
+  const notes = [{ payload: { cites: [kept.id, fresh.id, secret.id, gone.id] } }, null];
+  const clean = await earlierMemories(db, u, notes, { exclude: [fresh.id], clean: true });
+  expect(clean.map((f) => f.content)).toEqual(["kept"]);
+  const open = await earlierMemories(db, u, notes, { exclude: [fresh.id], clean: false });
+  expect(open.map((f) => f.content).sort()).toEqual(["kept", "secret"]);
+  expect(await liveFactsByIds(db, u, ["not-a-uuid"], true)).toEqual([]);
 });

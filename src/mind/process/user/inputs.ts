@@ -4,11 +4,20 @@
  * and the run's triggers in plain words. Sensitive memories (from a crisis) are read only while a
  * crisis window is open; outside one the chain restarts from her clean notes.
  */
-import { listUnreadFacts, type FactRow, type UnreadFact } from "@/db/repos/user/facts";
+import type { Db } from "@/db/client";
+import {
+  factCites,
+  liveFactsByIds,
+  listUnreadFacts,
+  type FactRow,
+  type UnreadFact,
+} from "@/db/repos/user/facts";
 import { getRelationshipRow } from "@/db/repos/user/relationship";
 import { getTimezone } from "@/db/repos/user/users";
 import { latestNonSensitiveSummary, liveSummary, type Trigger } from "@/db/repos/user/user-mind";
+import { lineHead } from "@/mind/memory/user/memory-line";
 import { isSensitive } from "@/mind/memory/user/retrieve";
+import type { Citable, Owner } from "@/mind/platform/notes";
 import { DAY } from "@/mind/platform/time";
 import { dateToken, ownDate, tokenDates, written } from "@/mind/platform/time-anchors";
 import { zoneOrUtc } from "@/mind/platform/timezone";
@@ -156,4 +165,96 @@ export function shownDates(
     ...threads.flatMap((t) => (t.next_checkpoint ? [t.next_checkpoint] : [])),
     ...texts.flatMap((t) => (t ? tokenDates(t) : [])),
   ];
+}
+
+type Subject = "user" | "self" | "shared";
+export type MemoryRow = {
+  id: string;
+  subject: Subject;
+  kind: string;
+  content: string;
+  occurred_at: Date | null;
+};
+export type ThreadRow = {
+  id: string;
+  title: string;
+  subject: Subject;
+  event: string | null;
+  next_checkpoint: Date | null;
+};
+
+const OWNER: Record<Subject, Owner> = { user: "theirs", self: "yours", shared: "you both" };
+
+/**
+ * What a loop may cite, numbered for it: the run's new memories, then the older ones her notes
+ * already cite, then the open storylines. Each is shown with its id, and reads in a note as its
+ * own line with whose it is.
+ */
+export function citables(
+  facts: MemoryRow[],
+  earlier: MemoryRow[],
+  threads: ThreadRow[],
+  tz: string | null,
+) {
+  const zone = zoneOrUtc(tz);
+  const memories = [...facts, ...earlier].map((f, i) => {
+    const id = `m${i + 1}`;
+    const head = lineHead(f.content);
+    const date = ownDate(head, f.occurred_at, zone);
+    const item: Citable = {
+      id,
+      ref: f.id,
+      kind: "memory",
+      text: date ? `${head} ${date}` : head,
+      owner: OWNER[f.subject],
+      at: f.occurred_at,
+    };
+    const line = {
+      id,
+      subject: f.subject,
+      kind: f.kind,
+      content: f.content,
+      when: ownDate(f.content, f.occurred_at, zone),
+    };
+    return { item, line };
+  });
+  const lines = threadLines(threads, tz);
+  const storylines = threads.map((t, i) => {
+    const id = `t${i + 1}`;
+    const item: Citable = {
+      id,
+      ref: t.id,
+      kind: "thread",
+      text: lines[i]!,
+      owner: OWNER[t.subject],
+      at: t.event ? (tokenDates(t.event)[0] ?? null) : null,
+    };
+    return { item, line: { id, thread: lines[i]! } };
+  });
+  return {
+    new_memories: memories.slice(0, facts.length).map((m) => m.line),
+    earlier_memories: memories.slice(facts.length).map((m) => m.line),
+    open_threads: storylines.map((s) => s.line),
+    items: [...memories, ...storylines].map((x) => x.item),
+  };
+}
+
+/**
+ * The live memories her notes cite that this run didn't bring, so a note can cite them again
+ * instead of copying their dates.
+ */
+export async function earlierMemories(
+  db: Db,
+  userId: string,
+  notes: ({ payload: unknown } | null | undefined)[],
+  opts: { exclude: string[]; clean: boolean },
+): Promise<UnreadFact[]> {
+  const skip = new Set(opts.exclude);
+  const ids = [...new Set(notes.flatMap((n) => (n ? factCites(n.payload) : [])))];
+  return liveFactsByIds(
+    db,
+    userId,
+    ids.filter((id) => !skip.has(id)),
+    opts.clean,
+  );
 }

@@ -32,9 +32,17 @@ export async function listOpenThreads(
   userId: string,
   limit: number,
   opts: { excludeSensitive?: boolean } = {},
-): Promise<{ id: string; title: string; next_checkpoint: Date | null; event: string | null }[]> {
+): Promise<
+  {
+    id: string;
+    title: string;
+    subject: "user" | "self" | "shared";
+    next_checkpoint: Date | null;
+    event: string | null;
+  }[]
+> {
   const res = await db.execute(sql`
-    SELECT t.id, t.title, t.next_checkpoint, substring(lf.content from '⟦[^⟧]+⟧') AS event FROM thread t
+    SELECT t.id, t.title, t.subject, t.next_checkpoint, substring(lf.content from '⟦[^⟧]+⟧') AS event FROM thread t
     LEFT JOIN LATERAL (${latestFact}) lf ON true
     WHERE t.user_id = ${userId} AND t.status = 'open'
       ${opts.excludeSensitive ? sql`AND COALESCE(lf.sensitive, false) = false` : sql``}
@@ -43,6 +51,7 @@ export async function listOpenThreads(
   return res.rows.map((r) => ({
     id: String(r.id),
     title: String(r.title),
+    subject: String(r.subject) as "user" | "self" | "shared",
     next_checkpoint: r.next_checkpoint ? new Date(r.next_checkpoint as string | Date) : null,
     event: r.event ? String(r.event) : null,
   }));

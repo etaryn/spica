@@ -32,6 +32,12 @@ export function memoryLine(
   return `${head}${dates ? ` ${dates}` : ""} — ${quoted(moves, quoteChars)}`;
 }
 
+/** A memory's label, status and dates: its line before the words it rests on. */
+export function lineHead(content: string): string {
+  const i = content.indexOf(" — ");
+  return i < 0 ? content : content.slice(0, i);
+}
+
 export function quoted(moves: LineMove[], quoteChars: number): string {
   return moves
     .map(

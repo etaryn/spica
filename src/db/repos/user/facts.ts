@@ -259,6 +259,18 @@ export async function setFactStatus(
  * same chain read (clean runs count only clean summaries), the weightiest first. A fact a busy
  * run left out stays unread for the next one. Her own generated kinds are never read back.
  */
+// What a loop reads of a memory.
+const LOOP_COLUMNS = {
+  id: fact.id,
+  subject: fact.subject,
+  kind: fact.kind,
+  content: fact.content,
+  salience: fact.salience,
+  occurred_at: fact.occurred_at,
+  created_at: fact.created_at,
+  sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
+};
+
 export async function listUnreadFacts(
   db: Db,
   userId: string,
@@ -276,16 +288,7 @@ export async function listUnreadFacts(
       AND t.created_at > ${since}::timestamptz ${cleanOnly}
   )`;
   return db
-    .select({
-      id: fact.id,
-      subject: fact.subject,
-      kind: fact.kind,
-      content: fact.content,
-      salience: fact.salience,
-      occurred_at: fact.occurred_at,
-      created_at: fact.created_at,
-      sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
-    })
+    .select(LOOP_COLUMNS)
     .from(fact)
     .where(
       and(
@@ -304,6 +307,34 @@ export async function listUnreadFacts(
     .limit(a.limit);
 }
 export type UnreadFact = Awaited<ReturnType<typeof listUnreadFacts>>[number];
+
+/** The memory ids a note cites (`payload.cites`); none for a note written before notes cited. */
+export function factCites(payload: unknown): string[] {
+  const cites = (payload as { cites?: unknown } | null)?.cites;
+  return Array.isArray(cites) ? cites.filter((x): x is string => typeof x === "string") : [];
+}
+
+/** The live memories among `ids`; outside a crisis window, none a crisis touched. */
+export async function liveFactsByIds(
+  db: Db,
+  userId: string,
+  ids: string[],
+  clean: boolean,
+): Promise<UnreadFact[]> {
+  const valid = ids.filter((id) => z.uuid().safeParse(id).success);
+  if (!valid.length) return [];
+  return db
+    .select(LOOP_COLUMNS)
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        inArray(fact.id, valid),
+        notInArray(fact.status, [...INACTIVE]),
+        clean ? sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false` : undefined,
+      ),
+    );
+}
 
 /**
  * Cold-path recall write-back. Every recalled fact that still exists gets a retrieval_trace row;

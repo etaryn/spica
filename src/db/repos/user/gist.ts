@@ -9,7 +9,14 @@ import { fact } from "@/db/schema";
 
 /** `before`: the local date memories must predate; `tz`: the user's zone. */
 export type GistWindow = { before: string; tz: string };
-export type GistSource = { id: string; content: string; occurred_at: Date; salience: number };
+export type GistSource = {
+  id: string;
+  subject: "user" | "self" | "shared";
+  kind: string;
+  content: string;
+  occurred_at: Date;
+  salience: number;
+};
 
 const dated = sql`COALESCE(${fact.occurred_at}, ${fact.created_at})`;
 const week = (tz: string) =>
@@ -50,6 +57,8 @@ export async function oldestGistGroup(
   const rows = await db
     .select({
       id: fact.id,
+      subject: fact.subject,
+      kind: fact.kind,
       content: fact.content,
       occurred_at: fact.occurred_at,
       created_at: fact.created_at,
@@ -62,6 +71,8 @@ export async function oldestGistGroup(
   const sources = rows
     .map((r) => ({
       id: r.id,
+      subject: r.subject,
+      kind: r.kind,
       content: r.content,
       occurred_at: r.occurred_at ?? r.created_at,
       salience: r.salience,

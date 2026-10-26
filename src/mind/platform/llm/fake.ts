@@ -110,7 +110,10 @@ export class FakeLLMProvider implements LLMProvider {
     // Deterministic: the week's memories in one line, so a canary in a source carries through.
     user_consolidate: (input: string) => {
       const ctx = JSON.parse(input) as { sources: { content: string }[] };
-      return { gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280) };
+      return {
+        gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280),
+        times: [],
+      };
     },
     // Deterministic: a read built from the first new memory, and one belief about it that
     // replaces the first belief it was shown, so supersede runs too.

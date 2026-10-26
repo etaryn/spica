@@ -26,8 +26,15 @@ import { nowLine, written } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import {
-  memoryLines,
-  shownDates,
+  noteRefs,
+  noteTimesSchema,
+  onlyHers,
+  withNoteRules,
+  writeNote,
+} from "@/mind/platform/notes";
+import {
+  citables,
+  earlierMemories,
   stampedNote,
   triggerText,
   visible,
@@ -63,6 +70,7 @@ export async function userModel(
       : await liveModel(db, userId);
     const beliefs = visible(inputs, await liveBeliefs(db, userId, settings.belief_context));
     const previousRead = previous ? modelPayload.safeParse(previous.payload).data : undefined;
+    const beliefFields = Array.from({ length: settings.max_beliefs }, (_, i) => `belief_${i + 1}`);
     const Output = z.object({
       how_they_are: fitText(settings.max_chars),
       what_they_want: fitText(settings.max_chars),
@@ -71,111 +79,134 @@ export async function userModel(
         z.object({ text: fitText(settings.max_chars), replaces: z.string().nullable() }),
         settings.max_beliefs,
       ),
+      times: noteTimesSchema(["how_they_are", "what_they_want", "what_lands", ...beliefFields] as [
+        string,
+        ...string[],
+      ]),
     });
+    const earlierRows = await earlierMemories(
+      db,
+      userId,
+      [summary, previous, noticed, ...beliefs],
+      { exclude: inputs.facts.map((f) => f.id), clean: inputs.clean },
+    );
+    const cite = citables(inputs.facts, earlierRows, [], inputs.timezone);
+    const zone = zoneOrUtc(inputs.timezone);
     const out = await ctx.deps.llm.classifyJson({
       purpose: "user_model",
       model: "user_mind",
-      system: loadPrompt("user-mind/model", config.prompts.user_model),
+      system: withNoteRules(
+        loadPrompt("user-mind/model", config.prompts.user_model),
+        config.prompts.notes,
+      ),
       input: JSON.stringify({
-        now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now)),
+        now: nowLine(now, zone, lifeTimezone(config.life, now)),
         who_you_are: deps.snapshot,
         summary: stampedNote(summary, inputs.timezone),
         noticed: noticed?.content ?? null,
         what_happened: (run.triggers as Trigger[]).map(triggerText),
         you_and_them: await loadRelationshipSummary(deps, userId, now),
-        new_memories: memoryLines(inputs.facts, inputs.timezone),
+        new_memories: cite.new_memories,
+        earlier_memories: cite.earlier_memories,
         previous_read: previousRead
           ? {
-              written: written(previous!.created_at, zoneOrUtc(inputs.timezone)),
+              written: written(previous!.created_at, zone),
               ...previousRead,
             }
           : null,
         beliefs: beliefs.map((b) => ({ id: b.id, text: b.content })),
       }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.user_mind_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    const noteCtx = { now, zone };
+    const readNote = writeNote(
+      {
+        how_they_are: out.how_they_are,
+        what_they_want: out.what_they_want,
+        what_lands: out.what_lands,
+      },
+      out.times,
+      cite.items,
+      noteCtx,
+    );
     const read: ModelPayload = {
-      how_they_are: out.how_they_are,
-      what_they_want: out.what_they_want,
-      what_lands: out.what_lands,
+      how_they_are: readNote.fields.how_they_are!,
+      what_they_want: readNote.fields.what_they_want!,
+      what_lands: readNote.fields.what_lands!,
     };
     const content = `How they are: ${read.how_they_are} What they want: ${read.what_they_want} What lands: ${read.what_lands}`;
+    const beliefNotes = out.beliefs.map((b, i) =>
+      writeNote({ [`belief_${i + 1}`]: b.text }, out.times, cite.items, noteCtx),
+    );
     // Anything she read that a crisis touched marks what she writes from it.
     const sensitive =
-      inputs.facts.some((f) => f.sensitive) ||
+      [...inputs.facts, ...earlierRows].some((f) => f.sensitive) ||
       [summary, noticed, previous, ...beliefs].some((f) => !!f && isSensitive(f));
     const mark = sensitive ? { sensitive: true } : {};
     const [modelVec, ...beliefVecs] = await deps.embedder.embed(
-      [content, ...out.beliefs.map((b) => b.text)],
+      [content, ...beliefNotes.map((n, i) => n.fields[`belief_${i + 1}`]!)],
       "document",
     );
     const shown = new Set(beliefs.map((b) => b.id));
-    const known = shownDates(
-      inputs.facts,
-      [],
-      [summary?.content, previous?.content, noticed?.content],
-    );
     const outputs = await db.transaction(async (tx) => {
       // The lock serialises runs for one user, so two can't both leave a live read.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`user_mind:${userId}`}))`);
       const current = await liveModel(tx, userId);
-      const model = await insertFact(
-        tx,
-        userId,
-        {
-          subject: "user",
-          kind: "model",
-          content,
-          payload: { ...read, ...mark },
-          embedding: modelVec!,
-          created_at: now,
-          status: "open",
-          salience: settings.salience,
-          valence: 0,
-          confidence: settings.confidence,
-          source: "generated",
-          source_ref: `user_model:${ctx.traceId}`,
-        },
-        { known },
-      );
+      const model = await insertFact(tx, userId, {
+        subject: "user",
+        kind: "model",
+        content,
+        payload: { ...read, ...noteRefs(readNote), ...mark },
+        embedding: modelVec!,
+        created_at: now,
+        status: "open",
+        salience: settings.salience,
+        valence: 0,
+        confidence: settings.confidence,
+        source: "generated",
+        source_ref: `user_model:${ctx.traceId}`,
+      });
       if (current) await setFactStatus(tx, userId, current.id, "superseded", model.id);
       const written = {
         model_id: model.id,
         belief_ids: [] as string[],
         superseded_ids: [] as string[],
         dropped: [] as string[],
+        not_theirs: [] as string[],
       };
       for (const [i, belief] of out.beliefs.entries()) {
         const embedding = beliefVecs[i]!;
+        const beliefNote = beliefNotes[i]!;
+        const text = beliefNote.fields[`belief_${i + 1}`]!;
+        // A belief is about them; one resting only on her own life reads hers as theirs.
+        if (onlyHers(beliefNote)) {
+          written.not_theirs.push(text);
+          continue;
+        }
         // Only a belief she was shown, and still holds, can be replaced. A correction can embed
         // close to what it corrects, so that belief is no duplicate of it.
         const replaces = belief.replaces && shown.has(belief.replaces) ? belief.replaces : null;
         const near = await nearestBeliefSimilarity(tx, userId, embedding, replaces);
         if (near !== null && near > settings.dedupe_similarity) {
-          written.dropped.push(belief.text);
+          written.dropped.push(text);
           continue;
         }
-        const row = await insertFact(
-          tx,
-          userId,
-          {
-            subject: "user",
-            kind: "belief",
-            content: belief.text,
-            payload: sensitive ? mark : null,
-            embedding,
-            created_at: now,
-            status: "open",
-            salience: settings.belief_salience,
-            valence: 0,
-            confidence: settings.confidence,
-            source: "generated",
-            source_ref: `user_model:${ctx.traceId}`,
-          },
-          { known },
-        );
+        const row = await insertFact(tx, userId, {
+          subject: "user",
+          kind: "belief",
+          content: text,
+          payload: refsOrNull({ ...noteRefs(beliefNote), ...mark }),
+          embedding,
+          created_at: now,
+          status: "open",
+          salience: settings.belief_salience,
+          valence: 0,
+          confidence: settings.confidence,
+          source: "generated",
+          source_ref: `user_model:${ctx.traceId}`,
+        });
         written.belief_ids.push(row.id);
         if (replaces && (await supersedeBelief(tx, userId, replaces, row.id)))
           written.superseded_ids.push(replaces);
@@ -189,6 +220,7 @@ export async function userModel(
         previous_id: previous?.id ?? null,
         fact_ids: inputs.facts.map((f) => f.id),
         belief_ids: beliefs.map((b) => b.id),
+        earlier_ids: earlierRows.map((f) => f.id),
       },
       outputs,
       promptVersion: config.prompts.user_model,
@@ -199,3 +231,6 @@ export async function userModel(
     };
   });
 }
+
+const refsOrNull = (payload: Record<string, unknown>) =>
+  Object.keys(payload).length ? payload : null;

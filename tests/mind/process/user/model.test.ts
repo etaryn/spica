@@ -49,6 +49,7 @@ const read = (beliefs: { text: string; replaces: string | null }[] = []) => ({
   what_they_want: "Room to decide.",
   what_lands: "Dry jokes.",
   beliefs,
+  times: [],
 });
 
 test("writes one live model with three parts and up to max_beliefs beliefs", async () => {
@@ -225,4 +226,40 @@ test("outside a crisis window a sensitive belief isn't shown to the model, and n
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_model")!;
   expect(call.input).not.toContain("dark place");
   expect((await liveModel(deps.db, userId))!.payload).not.toHaveProperty("sensitive");
+});
+
+test("the read and each belief cite by id; a belief resting only on her life isn't kept", async () => {
+  const { deps, userId, run } = await setup();
+  await insertFact(deps.db, userId, {
+    subject: "self",
+    kind: "event",
+    content: "telescope booking, planned",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.01,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  const inputs = await loadRunInputs(deps, userId);
+  const theirs = inputs.facts.findIndex((f) => f.subject === "user");
+  const hers = inputs.facts.findIndex((f) => f.subject === "self");
+  deps.llm.handlers.user_model = () => ({
+    how_they_are: `Busy with [m${theirs + 1}].`,
+    what_they_want: "Rest.",
+    what_lands: "Plain warmth.",
+    beliefs: [
+      { text: `They care about [m${theirs + 1}].`, replaces: null },
+      { text: `They love [m${hers + 1}].`, replaces: null },
+    ],
+    times: [],
+  });
+  await userModel(deps, run, inputs);
+  const model = (await liveModel(deps.db, userId))!;
+  expect(model.payload).toMatchObject({ cites: [inputs.facts[theirs]!.id] });
+  expect((model.payload as { how_they_are: string }).how_they_are).toContain("(theirs)");
+  const beliefs = await liveBeliefs(deps.db, userId, 10);
+  expect(beliefs.map((b) => b.content)).toEqual([expect.stringContaining("They care about")]);
+  expect(beliefs[0]!.payload).toEqual({ cites: [inputs.facts[theirs]!.id] });
 });

@@ -130,6 +130,7 @@ export class FakeLLMProvider implements LLMProvider {
               },
             ]
           : [],
+        times: [],
       };
     },
     core_resolve: (input: string) => ({

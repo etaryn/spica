@@ -148,7 +148,7 @@ every label in `annotation`, and stores memories as code-built lines (`memory-li
 older messages is glossed from time labels; extract v11 and its anchoring are gone. Close run done
 (`evals/results/analysis-2026-10-26-phase-17b.md`); Phase 16d was settled in it (B129–B131 done,
 "since" always points back; B1 narrowed to ideate and B132 left for 17d; new B137, B138).
-**17c, turn-taking on labels, is built** (2026-10-26, branch `phase-17c`): open questions are the
+**17c, turn-taking on labels, is built** (merged 2026-10-26): open questions are the
 user's words by coordinate (`turn-taking/questions.ts`), judge v3 cites pieces and merges under the
 state lock, her reply's move closes a question (B9), bids are held to reply links.
 **Next: 17d, notes cite labels** (the phase doc's 17d row; B1, B132).

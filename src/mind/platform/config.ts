@@ -66,6 +66,9 @@ const models = z.object({
   labels_max_tokens: positiveInt,
   labels_timeout_ms: positiveInt,
   labels_cache: cacheTtl,
+  // Her user-mind loops label their own time words, which takes thinking, room and time.
+  user_mind_thinking: thinking,
+  user_mind_timeout_ms: positiveInt,
 });
 
 const embedding = z.object({

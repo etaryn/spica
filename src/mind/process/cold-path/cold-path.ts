@@ -24,15 +24,22 @@ import { getTimezone } from "@/db/repos/user/users";
 import { mergeLabels } from "@/mind/memory/user/annotations";
 import { encodeExtraction, type EncodeOutcome, type PlannedFact } from "@/mind/memory/user/encode";
 import { labelStretch } from "@/mind/memory/user/label";
-import { memoryPlans, signalsOf, type MemoryPlan } from "@/mind/memory/user/label-memory";
+import {
+  answeredBy,
+  memoryPlans,
+  signalsOf,
+  type MemoryPlan,
+} from "@/mind/memory/user/label-memory";
 import { messagesOf } from "@/mind/memory/user/layers";
-import { numberPieces } from "@/mind/memory/user/pieces";
+import { numberPieces, type Coordinate } from "@/mind/memory/user/pieces";
 import { factIdsByLocal, fromRows } from "@/mind/memory/user/stored-labels";
 import { zoneOrUtc } from "@/mind/platform/timezone";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import type { Deps } from "@/mind/platform/deps";
 import type { Trigger } from "@/db/repos/user/user-mind";
 import { detectBigEvents } from "@/mind/process/user/big-events";
+import { mutateState } from "@/mind/process/turn-taking/state";
+import * as T from "@/mind/process/turn-taking/transitions";
 import { enqueueUserMindRun, recordBigEvents } from "@/mind/process/user/run";
 import { settleHurtFacts } from "@/mind/memory/user/hurt";
 import { errorName } from "@/mind/platform/errors";
@@ -50,6 +57,8 @@ export type ColdPathOutcome = {
   applied?: EncodeOutcome;
   userMindRunId?: string | null;
   moved?: ParamName[];
+  /** The user's words her reply answered: the open questions in them close. */
+  answered?: Coordinate[];
 };
 
 type CandidateFact = { fact: MemoryPlan; source: "turn" | "inferred" };
@@ -100,6 +109,7 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
     if (labels.drops.length)
       log.info("labels dropped", { userId: job.userId, drops: labels.drops });
     const read = signalsOf(labels, all, pieces, config.extraction.quote_chars);
+    const answered = answeredBy(labels, all);
 
     // Each idea she was shown gets one chance; idempotent, so a retried job changes nothing.
     // ponytail: a cold path re-enqueued by the sweep carries no offered ideas, so they stay live until they expire
@@ -210,10 +220,20 @@ export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPat
       status: "done",
       applied,
       userMindRunId,
+      answered,
       moved: relationship ? movedParams(relationship.before.params, relationship.after.params) : [],
     };
   });
 
+  // Her reply answered these. A failure leaves them for the judge to drop; the memories are written.
+  const answered = outcome.answered ?? [];
+  if (answered.length) {
+    await mutateState(db, job.userId, clock.now(), (state) =>
+      T.closeQuestions(state, { answered, now: clock.now() }),
+    ).catch((e: unknown) =>
+      log.error("open questions not closed", { userId: job.userId, error: errorName(e) }),
+    );
+  }
   // Only after commit, so the worker never sees a run the transaction rolled back.
   if (outcome.userMindRunId) await enqueueUserMindRun(deps, outcome.userMindRunId);
   for (const f of outcome.applied?.written ?? [])

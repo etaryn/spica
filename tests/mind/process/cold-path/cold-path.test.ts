@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeEach, expect, test, vi } from "vitest";
 import { runColdPath, runColdPathJob, LockBusyError } from "@/mind/process/cold-path/cold-path";
+import { getState } from "@/db/repos/user/conversation-state";
+import { mutateState } from "@/mind/process/turn-taking/state";
 import { ScriptedEmbedder } from "@/mind/platform/embedder/scripted";
 import { getFact, insertFact } from "@/db/repos/user/facts";
 import { getParams } from "@/db/repos/user/relationship";
@@ -719,4 +721,29 @@ test("a claim that grounds on something deeper than she was shown records nothin
   const u = await createTestUser();
   await tell(deps, u, { open: 1, peek: 1 }, 0);
   expect(await ledgerOf(u)).toEqual([]);
+});
+
+test("her reply's move to their question closes it; nothing else open changes", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const { ut, job } = await exchange(u, "did you finish the book?", "yes finally, last night", 0);
+  const other = { coords: [{ turnId: randomUUID(), start: 0, end: 4 }] };
+  await mutateState(deps.db, u, at(0), () => ({
+    patch: { open_questions: [{ coords: [{ turnId: ut.id, start: 0, end: 24 }] }, other] },
+    result: null,
+  }));
+  script({ replies: [{ said: "yes finally", to: "did you finish the book" }] })(deps);
+  expect((await runColdPath(deps, job)).status).toBe("done");
+  expect((await getState(getTestDb(), u))!.open_questions).toEqual([other]);
+});
+
+test("her reply that points at nothing leaves their question open", async () => {
+  const deps = makeTestDeps();
+  const u = await createTestUser();
+  const { ut, job } = await exchange(u, "did you finish the book?", "anyway, guess what", 0);
+  const open = [{ coords: [{ turnId: ut.id, start: 0, end: 24 }] }];
+  await mutateState(deps.db, u, at(0), () => ({ patch: { open_questions: open }, result: null }));
+  script({})(deps);
+  await runColdPath(deps, job);
+  expect((await getState(getTestDb(), u))!.open_questions).toEqual(open);
 });

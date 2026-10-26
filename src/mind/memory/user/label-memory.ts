@@ -19,7 +19,7 @@ import type { Intimacy } from "@/mind/state/user/relationship/types";
 import type { CheckedLabels, CheckedMove } from "./annotations";
 import type { IdiolectPayload } from "./idiolect";
 import { embedText, memoryLine, moveText, quoted, type LineMove } from "./memory-line";
-import type { Piece } from "./pieces";
+import type { Coordinate, Piece } from "./pieces";
 
 export type MemoryPlan = {
   /** The proposition's or idiolect label's id in this conversation; null for her hurt. */
@@ -118,6 +118,16 @@ export function hurtCause(
     hurting.map((m) => ({ speaker: m.speaker, act: "states" as const, text: moveText(m, pieces) })),
     quoteChars,
   );
+}
+
+/** The user's moves one of her new moves replies to: whatever they asked there is answered. */
+export function answeredBy(labels: CheckedLabels, all: CheckedLabels): Coordinate[] {
+  const byId = new Map(all.moves.map((m) => [m.id, m]));
+  return labels.moves.flatMap((m) => {
+    if (m.speaker !== "spica" || m.context || !m.repliesTo) return [];
+    const target = byId.get(m.repliesTo);
+    return target?.speaker === "user" ? target.coords : [];
+  });
 }
 
 /** The relationship, intimacy and bid blocks in the shapes the relationship update reads. */

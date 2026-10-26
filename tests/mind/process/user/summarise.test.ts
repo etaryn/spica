@@ -131,6 +131,7 @@ test("overlong parts are fitted; empty output fails and keeps the old summary", 
     where_things_stand: "x".repeat(900),
     whats_live: "a",
     how_i_feel: "b",
+    times: [],
   });
   expect(
     await userSummarise(deps, await run("exchange:a"), await loadRunInputs(deps, userId)),
@@ -143,6 +144,7 @@ test("overlong parts are fitted; empty output fails and keeps the old summary", 
     where_things_stand: "",
     whats_live: "",
     how_i_feel: "",
+    times: [],
   });
   expect(
     await userSummarise(deps, await run("exchange:b"), await loadRunInputs(deps, userId)),
@@ -168,7 +170,7 @@ test("a thread whose latest memory is sensitive stays out of the summary", async
   const input = JSON.parse(
     deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!.input,
   );
-  expect(input.open_threads).toEqual(["The Osaka move"]);
+  expect(input.open_threads).toEqual([{ id: "t1", thread: "The Osaka move" }]);
 });
 
 test("a memory committed after a summary but dated before it is still summarised, once", async () => {
@@ -296,63 +298,67 @@ test("summarise reads a stamped previous note and dated threads; no zone means U
   // Her old note's "tomorrow" was stored as the day it meant.
   expect(tokenDates(input.previous.whats_live)).toHaveLength(1);
   // No memory on the thread yet, so only when to ask shows.
-  expect(input.open_threads).toContain(`sister's visit (ask after ${sat})`);
+  expect(input.open_threads).toContainEqual({
+    id: "t1",
+    thread: `sister's visit (ask after ${sat})`,
+  });
 });
 
-test("a summary's relative words are stored as the day they meant", async () => {
-  const { deps, userId, run } = await setup();
+test("a summary cites a memory by id and labels its own time words", async () => {
+  const { deps, userId, fact, run } = await setup();
+  const interview = await fact('design interview, planned — the user said "thursday"', 0.9);
   deps.llm.handlers.user_summarise = () => ({
-    where_things_stand: "Fine.",
-    whats_live: "Their sister visits tomorrow.",
-    how_i_feel: "Glad.",
+    where_things_stand: "They have [m1] coming up.",
+    whats_live: "Check in tonight.",
+    how_i_feel: "Fond of them.",
+    times: [
+      {
+        field: "whats_live",
+        words: "tonight",
+        from: "",
+        unit: "day",
+        shift: 0,
+        weekday: null,
+        month: null,
+        day_of_month: null,
+        part: "night",
+        clock: "",
+        span: "at",
+        rough: false,
+      },
+    ],
   });
-  await insertFact(deps.db, userId, {
-    subject: "user",
-    kind: "event",
-    content: "Their sister is visiting.",
-    embedding: vec(),
-    created_at: deps.clock.now(),
-    status: "open",
-    salience: 0.8,
-    valence: 0.3,
-    confidence: 0.9,
-    source: "turn",
+  await userSummarise(deps, await run("exchange:c"), await loadRunInputs(deps, userId));
+  const s = (await liveSummary(deps.db, userId))!;
+  expect(s.payload).toMatchObject({
+    where_things_stand: "They have design interview, planned (theirs) coming up.",
+    whats_live: "Check in ⟦2026-01-05|night|UTC|tonight⟧.",
+    cites: [interview.id],
   });
-  expect(
-    await userSummarise(deps, await run("exchange:u"), await loadRunInputs(deps, userId)),
-  ).toBe("done");
-  const live = (await liveSummary(deps.db, userId))!;
-  expect(live.content).not.toContain("tomorrow");
-  const tomorrow = new Date(deps.clock.now().getTime() + 86_400_000);
-  expect(tokenDates(live.content)[0]!.toISOString().slice(0, 10)).toBe(
-    tomorrow.toISOString().slice(0, 10),
-  );
+  expect(s.content).toContain("(theirs)");
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
+  expect(JSON.parse(call.input).new_memories[0].id).toBe("m1");
+  expect(call.system).toContain("## Citing and times");
 });
 
-test("a weekday in the summary takes the date of the memory it was shown", async () => {
-  const { deps, userId, run } = await setup();
-  // Last Sunday's race: read forward, "Sunday" would be the coming one.
-  const race = new Date(deps.clock.now().getTime() - 86_400_000);
-  await insertFact(deps.db, userId, {
-    subject: "user",
-    kind: "event",
-    content: "The user ran a half marathon.",
-    embedding: vec(),
-    created_at: deps.clock.now(),
-    occurred_at: race,
-    status: "open",
-    salience: 0.8,
-    valence: 0.3,
-    confidence: 0.9,
-    source: "turn",
-  });
+test("the next summary is shown what the last one cited, by id", async () => {
+  const { deps, userId, fact, run } = await setup();
+  await fact("design interview, planned", 0.9);
   deps.llm.handlers.user_summarise = () => ({
-    where_things_stand: "Fine.",
-    whats_live: "The race Sunday.",
-    how_i_feel: "Glad.",
+    where_things_stand: "They have [m1].",
+    whats_live: "Nothing open.",
+    how_i_feel: "Fond.",
+    times: [],
   });
-  await userSummarise(deps, await run("exchange:w"), await loadRunInputs(deps, userId));
-  const live = (await liveSummary(deps.db, userId))!;
-  const [date] = tokenDates((live.payload as { whats_live: string }).whats_live);
-  expect(date!.toISOString().slice(0, 10)).toBe(race.toISOString().slice(0, 10));
+  await userSummarise(deps, await run("exchange:d"), await loadRunInputs(deps, userId));
+  await fact("they bought a plant", 0.5);
+  await userSummarise(deps, await run("exchange:e"), await loadRunInputs(deps, userId));
+  const second = deps.llm.structuredCalls.filter((c) => c.purpose === "user_summarise")[1]!;
+  const input = JSON.parse(second.input);
+  expect(input.new_memories.map((m: { content: string }) => m.content)).toEqual([
+    "they bought a plant",
+  ]);
+  expect(input.earlier_memories).toEqual([
+    expect.objectContaining({ id: "m2", content: "design interview, planned" }),
+  ]);
 });

@@ -86,6 +86,7 @@ export class FakeLLMProvider implements LLMProvider {
             .join(" ")
             .slice(0, 280) || "Nothing open.",
         how_i_feel: "I feel the same about them.",
+        times: [],
       };
     },
     // Deterministic: a reflection on the first new memory, none without one.

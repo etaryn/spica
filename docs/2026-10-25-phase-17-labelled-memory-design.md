@@ -105,8 +105,8 @@ reader can read would need a shim, which the replace-from-the-ground-up rule rul
 
 **17c is built (2026-10-26)** on branch `phase-17c`. Open questions are held as the user's words
 by coordinate; judge v3 cites pieces; her reply's move closes a question (B9); bids are held to
-reply links. The code-made layers needed no new storage. Slice doc
-`docs/2026-10-26-phase-17c-turn-taking-on-labels-design.md`.
+reply links. The code-made layers needed no new storage. History row in
+`docs/spec-v3-history.md`.
 
 ## Scope
 

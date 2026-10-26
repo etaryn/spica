@@ -263,3 +263,35 @@ test("the read and each belief cite by id; a belief resting only on her life isn
   expect(beliefs.map((b) => b.content)).toEqual([expect.stringContaining("They care about")]);
   expect(beliefs[0]!.payload).toEqual({ cites: [inputs.facts[theirs]!.id] });
 });
+
+test("what the read and its beliefs dropped is traced", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_model = () => ({
+    ...read([{ text: "They like plans.", replaces: null }]),
+    how_they_are: "Tired, ask about [m9].",
+    times: [
+      {
+        field: "belief_1",
+        words: "tomorrow",
+        from: "",
+        unit: "day",
+        shift: 1,
+        weekday: null,
+        month: null,
+        day_of_month: null,
+        part: null,
+        clock: "",
+        span: "at",
+        rough: false,
+      },
+    ],
+  });
+  await userModel(deps, run, await loadRunInputs(deps, userId));
+  const res = await getTestDb().execute(
+    sql`SELECT outputs FROM user_loop_trace WHERE loop = 'user_model' ORDER BY created_at DESC LIMIT 1`,
+  );
+  expect((res.rows[0]!.outputs as { dropped_labels: unknown }).dropped_labels).toEqual([
+    { what: "[m9]", reason: "bad_cite" },
+    { what: "tomorrow", reason: "words_missing" },
+  ]);
+});

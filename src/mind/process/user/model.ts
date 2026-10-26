@@ -222,7 +222,11 @@ export async function userModel(
         belief_ids: beliefs.map((b) => b.id),
         earlier_ids: earlierRows.map((f) => f.id),
       },
-      outputs,
+      outputs: {
+        ...outputs,
+        // What citations and time labels the read and its beliefs lost.
+        dropped_labels: [readNote, ...beliefNotes].flatMap((n) => n.dropped),
+      },
       promptVersion: config.prompts.user_model,
       written: [
         { id: outputs.model_id, kind: "model" },

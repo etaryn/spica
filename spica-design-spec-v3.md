@@ -336,8 +336,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   distance only where a prompt reaches a model; Built 16c: anchoring reads one clause at a time
   and anchors a span only when one rule reads all of it, so no word is lost; ISO dates anchor; a
   relative day beside its written-out date is one token, the written-out date winning when they
-  disagree; the row's own `occurred_at` counts as a date its words were shown), `payload` (its
-  top-level strings anchored too),
+  disagree; the row's own `occurred_at` counts as a date its words were shown; **Changes in 17d:**
+  `insertFact` no longer anchors, so stored words are kept as given and dates arrive as tokens
+  already: labels for memories, `writeNote` for her notes), `payload`,
   `embedding`,
   `entity_refs`, `thread_id`, `occurred_at`, `stale_after` (Built 16, migration `0041`: past it
   the item is no longer worth raising and the day sweep retires it; null is no expiry; set on
@@ -377,6 +378,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
     A `model` (`user`, payload `how_they_are`, `what_they_want`, `what_lands`) is her live read
     on them: one at a time, superseding the last, read only through its own reply slot (§10.3),
     left out of retrieval, reconcile and decay. A gisted source carries `payload.gisted_into`.
+    **Changes in 17d:** her notes (summary, model, reflection, belief, idea, episode) keep what
+    they cite in `payload.cites` (memory ids) and `payload.cites_threads` (thread ids); an idea's
+    subject is whose it is (`user`, `self`, `shared`), no longer always `shared`.
     **Built 10c:** `idiolect` (migration 0029), always `shared`, extracted from a turn, with
     `payload.idiolect = { type: joke | nickname | ritual | reference, started_by: user |
     spica, established_at }`. It starts as a candidate (`established_at` null) and is
@@ -1192,23 +1196,22 @@ is `done`.
   does not repeat herself), the phrased relationship line, the triggers in
   words, the snapshot. Output `{reflection: string | null, subject: "user" |
   "shared"}`, text fitted to `user_mind.reflect.max_chars` (300), capped at
-  `max_tokens` 384. Non-null writes one `reflection` fact (salience 0.5,
+  `max_tokens` 384 (8000 since 17d). Non-null writes one `reflection` fact (salience 0.5,
   confidence 0.6, `source_ref` `user_reflect:<traceId>`).
 - **`user_ideate`** (`prompts/user-mind/ideate/v2.md`, `prompts.user_ideate`
   v2 since 9d). Inputs: the live summary, this run's reflection if reflect wrote one,
   the same new memories, open non-sensitive threads, her live ideas for this
   user (at most `user_mind.ideate.max_planned` (20), so she does not repeat
   one), the snapshot. Output `{idea: string | null}`, fitted to
-  `max_chars` (200), `max_tokens` 256, at most one idea per run. Non-null
+  `max_chars` (200), `max_tokens` 256 (8000 since 17d), at most one idea per run. Non-null
   writes one `idea` fact (`shared`, salience 0.5, confidence 0.6). An idea is
   live while `open` and before its `stale_after` (Built 16): the end of the local day, in their
   zone, of the latest dated source on or after the day it's written, never later than `ttl_days`
   (3) after it; with no such source, `ttl_days` (an idea from past events, "how did it go", isn't
   born stale). The daily `decay_pass` marks open facts past `stale_after` `stale`, and readers
-  skip them between sweeps. The idea keeps the run's dated, non-sensitive facts it is
-  about (`payload.from`: those at least `user_mind.ideate.source_similarity` (0.3)
-  similar to the idea, closest first, at most `user_mind.ideate.dated_facts` (3)), so
-  a reach-out carrying it gets their dates as notes and no unrelated date (2026-10-21).
+  skip them between sweeps. Since 17d the idea keeps the memories it cites
+  (`payload.cites`), so a reach-out carrying it gets their dates as notes and no unrelated date;
+  the 2026-10-21 similarity pick (`payload.from`) is deleted.
 
 Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
 
@@ -1252,7 +1255,7 @@ model output, is traced `failed`; the next still runs).
   `who_you_are` is her snapshot headed by its night. Prompts summarise v4, reflect v4, model v4,
   ideate v6 say what they write is read on later days: dates, never relative words. Slips
   (here and in extract) are logged, never retried.
-- **Built 16b: time anchors.** Each loop's `now` is `nowLine` (their time, and hers when it reads
+- **Built 16b: time anchors** (the anchoring of her notes is replaced in 17d, below). Each loop's `now` is `nowLine` (their time, and hers when it reads
   differently); memories, notes and threads carry date tokens in their zone. What a loop writes is
   anchored on insert, and a bare weekday takes the nearest date it was shown (`shownDates`: its
   facts' `occurred_at`, threads' `next_checkpoint`, the dates in the notes it read; consolidate

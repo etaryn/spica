@@ -225,7 +225,10 @@ test("the idea is offered in one reply, then retired", async () => {
 
 test("null writes nothing; a failing reflect still runs ideate", async () => {
   const d = deps();
-  d.llm.handlers.user_reflect = sequence({ reflection: null, subject: "user" }, new Error("boom"));
+  d.llm.handlers.user_reflect = sequence(
+    { reflection: null, subject: "user", times: [] },
+    new Error("boom"),
+  );
   const u = await newUser(d);
   const before = await coreDump();
 

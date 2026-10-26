@@ -1,5 +1,6 @@
 /** Her notes as code keeps them: citations become their own lines, her own time words dates. */
 import { expect, test } from "vitest";
+import { fitChars } from "@/mind/platform/llm/fit";
 import {
   noteTimesSchema,
   onlyHers,
@@ -141,4 +142,29 @@ test("the times schema takes only the fields it was built for", () => {
   const schema = noteTimesSchema(["idea"]);
   expect(schema.safeParse([time({})]).success).toBe(true);
   expect(schema.safeParse([time({ field: "other" })]).success).toBe(false);
+});
+
+test("a citation the length fit cut, ellipsis and all, is stripped", () => {
+  const cut = fitChars("Ask how [m12] went", 11);
+  expect(cut).toBe("Ask how [m…");
+  expect(writeNote({ idea: cut }, [], [interview], ctx).fields.idea).toBe("Ask how");
+});
+
+test("a list of ids renders each; any other bracket shape is removed and reported", () => {
+  const note = writeNote(
+    { a: "Both [m1, m2] matter.", b: "Not [M1] or [m1-m2] or [t9 x]." },
+    [],
+    [interview, telescope],
+    ctx,
+  );
+  expect(note.fields.a).toBe(
+    "Both design interview, planned ⟦2026-01-08|day|UTC⟧ (theirs), telescope booking, planned (yours) matter.",
+  );
+  expect(note.fields.b).toBe("Not or or.");
+  expect(note.dropped.map((d) => [d.what, d.reason])).toEqual([
+    ["[M1]", "bad_cite"],
+    ["[m1-m2]", "bad_cite"],
+    ["[t9 x]", "bad_cite"],
+  ]);
+  expect(note.memories).toEqual(["fact-interview", "fact-telescope"]);
 });

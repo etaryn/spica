@@ -32,9 +32,13 @@ export type Citable = {
   at: Date | null;
 };
 
-const CITE = /\[([mt]\d+)\]/g;
-// The length fit can cut a citation off at the end.
-const CUT_CITE = /\s*\[[mt]?\d*$/;
+// One id or a list of them: "[m3]", "[m1, m3]".
+const CITE = /\[([mt]\d+(?:\s*,\s*[mt]\d+)*)\]/g;
+// Any other bracket that looks like an id ("[M1]", "[m1-m2]") is not a citation, so it never
+// reaches stored text as one.
+const STRAY = /\[[mt]\d+[^\]]*\]/gi;
+// The length fit can cut a citation off at the end, leaving its ellipsis.
+const CUT_CITE = /\s*\[[mt]?\d*…?$/;
 // A citation or a token already placed: neither is the note's own words.
 const KEPT = /\[[mt]\d+\]|⟦[^⟧]*⟧/g;
 
@@ -103,14 +107,25 @@ export function writeNote(
       resolved.push(r);
     }
     out[name] = text
-      .replace(CITE, (_m, id: string) => {
-        const c = byId.get(id);
-        if (!c) {
-          dropped.push({ what: `[${id}]`, reason: "bad_cite" });
-          return "";
-        }
-        cited.set(id, c);
-        return c.owner ? `${c.text} (${c.owner})` : c.text;
+      .replace(CITE, (_m, list: string) =>
+        list
+          .split(",")
+          .map((raw) => {
+            const id = raw.trim();
+            const c = byId.get(id);
+            if (!c) {
+              dropped.push({ what: `[${id}]`, reason: "bad_cite" });
+              return "";
+            }
+            cited.set(id, c);
+            return c.owner ? `${c.text} (${c.owner})` : c.text;
+          })
+          .filter(Boolean)
+          .join(", "),
+      )
+      .replace(STRAY, (m) => {
+        dropped.push({ what: m, reason: "bad_cite" });
+        return "";
       })
       .replace(/\s+([.,;:!?])/g, "$1")
       .replace(/\s{2,}/g, " ")

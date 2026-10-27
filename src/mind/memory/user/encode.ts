@@ -260,7 +260,7 @@ async function encodeFacts(
     const insert = (extra: {
       status: "open" | "resolved" | "superseded";
       superseded_by?: string;
-    }) => insertFact(db, userId, { ...row, ...extra }, { asSaid: true });
+    }) => insertFact(db, userId, { ...row, ...extra });
     const news = { subject: plan.subject, salience: plan.salience, content: plan.content };
 
     let target = planned.decision.targetId

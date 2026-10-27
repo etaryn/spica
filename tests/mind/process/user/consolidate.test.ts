@@ -56,8 +56,8 @@ function memory(
 test("folds the oldest old-enough week into one gist and weighs its sources down once", async () => {
   const { deps, userId, run } = await setup();
   deps.llm.handlers.user_consolidate = sequence(
-    { gist: "The week they started packing." },
-    { gist: "The week of the farewells." },
+    { gist: "The week they started packing.", times: [] },
+    { gist: "The week of the farewells.", times: [] },
   );
   const a = await memory(deps, userId, "They bought boxes.", "2025-12-16T10:00:00Z");
   const b = await memory(deps, userId, "They felt torn.", "2025-12-17T10:00:00Z", {
@@ -131,7 +131,7 @@ test("too recent, sensitive, on an open storyline, already gisted, wrong kind or
 
   // Once the storyline closes, its memory is history and the week has three.
   await resolveThread(deps.db, userId, thread.id, deps.clock.now());
-  deps.llm.handlers.user_consolidate = sequence({ gist: "The audition week." });
+  deps.llm.handlers.user_consolidate = sequence({ gist: "The audition week.", times: [] });
   expect(await userConsolidate(deps, run)).toBe("done");
   const input = JSON.parse(
     deps.llm.structuredCalls.find((c) => c.purpose === "user_consolidate")!.input,
@@ -158,7 +158,7 @@ test("weeks and the cutoff follow the user's timezone, and UTC when it is invali
   const { deps: d2, userId: u2, run: r2 } = await setup();
   await setTimezone(d2.db, u2, "Not/AZone");
   for (const content of ["A.", "B.", "C."]) await memory(d2, u2, content, "2025-12-21T12:00:00Z");
-  d2.llm.handlers.user_consolidate = sequence({ gist: "Gist." });
+  d2.llm.handlers.user_consolidate = sequence({ gist: "Gist.", times: [] });
   expect(await userConsolidate(d2, r2)).toBe("done");
   const input = JSON.parse(d2.llm.structuredCalls.at(-1)!.input);
   expect(input.week).toBe("2025-12-15");
@@ -173,7 +173,7 @@ test("at most max_sources, the most salient; a group that changed while she wrot
   deps.llm.handlers.user_consolidate = async () => {
     // Reconcile supersedes a source while the model writes.
     await setFactStatus(deps.db, userId, rows[1]!.id, "superseded");
-    return { gist: "A week." };
+    return { gist: "A week.", times: [] };
   };
   expect(await userConsolidate(deps, run)).toBe("done");
   const input = JSON.parse(deps.llm.structuredCalls.at(-1)!.input);
@@ -187,8 +187,25 @@ test("empty output fails the loop and writes nothing", async () => {
   const { deps, userId, run } = await setup();
   for (const d of ["2025-12-22", "2025-12-23", "2025-12-24"])
     await memory(deps, userId, `On ${d}.`, `${d}T10:00:00Z`);
-  deps.llm.handlers.user_consolidate = sequence({ gist: "" });
+  deps.llm.handlers.user_consolidate = sequence({ gist: "", times: [] });
   expect(await userConsolidate(deps, run)).toBe("failed");
   const gists = await deps.db.execute(sql`SELECT id FROM fact WHERE kind = 'episode'`);
   expect(gists.rows).toHaveLength(0);
+});
+
+test("a gist cites its sources by id and keeps them", async () => {
+  const { deps, userId, run } = await setup();
+  const a = await memory(deps, userId, "They bought boxes.", "2025-12-16T10:00:00Z");
+  await memory(deps, userId, "They felt torn.", "2025-12-17T10:00:00Z", { kind: "feeling" });
+  await memory(deps, userId, "They packed books.", "2025-12-18T10:00:00Z");
+  deps.llm.handlers.user_consolidate = () => ({ gist: "The week of [m1].", times: [] });
+  await userConsolidate(deps, run);
+  const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_consolidate")!;
+  expect(JSON.parse(call.input).sources[0]).toMatchObject({ id: "m1", subject: "user" });
+  const gists = await deps.db.execute(sql`SELECT * FROM fact WHERE kind = 'episode'`);
+  const gist = gists.rows[0]!;
+  expect(gist.payload).toMatchObject({ cites: [a.id] });
+  expect(String(gist.content)).toBe(
+    "The week of (They bought boxes. ⟦2025-12-16|day|UTC⟧, theirs).",
+  );
 });

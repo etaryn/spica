@@ -10,7 +10,9 @@ import { gistFacts, oldestGistGroup } from "@/db/repos/user/gist";
 import { getTimezone } from "@/db/repos/user/users";
 import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
+import { noteRefs, noteTimesSchema, withNoteRules, writeNote } from "@/mind/platform/notes";
 import { isValidTimeZone, localDateString, shiftLocalDate } from "@/mind/platform/timezone";
+import { citables } from "./inputs";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
 export async function userConsolidate(
@@ -35,54 +37,52 @@ export async function userConsolidate(
     });
     if (!group) return { inputs: { week: null }, outputs: { gist_id: null }, promptVersion: null };
     const ids = group.sources.map((s) => s.id);
+    const shown = citables(group.sources, [], [], tz);
     const out = await ctx.deps.llm.classifyJson({
       purpose: "user_consolidate",
       model: "user_mind",
-      system: loadPrompt("user-mind/consolidate", config.prompts.user_consolidate),
+      system: withNoteRules(
+        loadPrompt("user-mind/consolidate", config.prompts.user_consolidate),
+        config.prompts.notes,
+      ),
       input: JSON.stringify({
         who_you_are: deps.snapshot,
         week: group.week,
-        sources: group.sources.map((s) => ({
-          content: s.content,
-          when: localDateString(s.occurred_at, tz),
-        })),
+        sources: shown.new_memories,
       }),
-      schema: z.object({ gist: fitText(settings.max_chars) }),
-      timeoutMs: config.models.structured_timeout_ms,
+      schema: z.object({ gist: fitText(settings.max_chars), times: noteTimesSchema(["gist"]) }),
+      timeoutMs: config.models.user_mind_timeout_ms,
       maxTokens: settings.max_tokens,
     });
-    const [embedding] = await deps.embedder.embed([out.gist], "document");
+    const note = writeNote({ gist: out.gist }, out.times, shown.items, { now, zone: tz });
+    const gist = note.fields.gist!;
+    const [embedding] = await deps.embedder.embed([gist], "document");
     const gistId = randomUUID();
     const written = await db.transaction(async (tx) => {
       // Sources merged, superseded or folded by another run while she wrote void this gist.
       if (!(await gistFacts(tx, userId, ids, gistId, settings.gist_source_factor, window)))
         return false;
-      await insertFact(
-        tx,
-        userId,
-        {
-          id: gistId,
-          subject: "shared",
-          kind: "episode",
-          content: out.gist,
-          payload: { gist_of: ids },
-          embedding: embedding!,
-          occurred_at: group.sources[0]!.occurred_at,
-          created_at: now,
-          status: "recurring",
-          salience: Math.max(...group.sources.map((s) => s.salience)),
-          valence: 0,
-          confidence: settings.confidence,
-          source: "generated",
-          source_ref: `user_consolidate:${ctx.traceId}`,
-        },
-        { known: group.sources.map((s) => s.occurred_at) },
-      );
+      await insertFact(tx, userId, {
+        id: gistId,
+        subject: "shared",
+        kind: "episode",
+        content: gist,
+        payload: { gist_of: ids, ...noteRefs(note) },
+        embedding: embedding!,
+        occurred_at: group.sources[0]!.occurred_at,
+        created_at: now,
+        status: "recurring",
+        salience: Math.max(...group.sources.map((s) => s.salience)),
+        valence: 0,
+        confidence: settings.confidence,
+        source: "generated",
+        source_ref: `user_consolidate:${ctx.traceId}`,
+      });
       return true;
     });
     return {
       inputs: { week: group.week, source_ids: ids },
-      outputs: { gist_id: written ? gistId : null },
+      outputs: { gist_id: written ? gistId : null, dropped: note.dropped },
       written: written ? [{ id: gistId, kind: "episode" }] : [],
       promptVersion: config.prompts.user_consolidate,
     };

@@ -66,6 +66,9 @@ const models = z.object({
   labels_max_tokens: positiveInt,
   labels_timeout_ms: positiveInt,
   labels_cache: cacheTtl,
+  // Her user-mind loops label their own time words, which takes thinking, room and time.
+  user_mind_thinking: thinking,
+  user_mind_timeout_ms: positiveInt,
 });
 
 const embedding = z.object({
@@ -746,6 +749,7 @@ const prompts = z.object({
   post_check: promptVersion,
   format_draft: promptVersion,
   labels: promptVersion,
+  notes: promptVersion,
   reconcile: promptVersion,
   judge_recall: promptVersion,
   judge_false_recall: promptVersion,
@@ -817,8 +821,6 @@ const userMind = z.object({
     recent_days: positiveInt,
     max_planned: positiveInt,
     slot_max: countFromZero,
-    dated_facts: countFromZero,
-    source_similarity: unit,
   }),
   consolidate: z.object({
     gist_after_days: positiveInt,

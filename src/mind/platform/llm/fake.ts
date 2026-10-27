@@ -86,6 +86,7 @@ export class FakeLLMProvider implements LLMProvider {
             .join(" ")
             .slice(0, 280) || "Nothing open.",
         how_i_feel: "I feel the same about them.",
+        times: [],
       };
     },
     // Deterministic: a reflection on the first new memory, none without one.
@@ -95,18 +96,24 @@ export class FakeLLMProvider implements LLMProvider {
       return {
         reflection: first ? `What stays with me: ${first}`.slice(0, 280) : null,
         subject: "user",
+        times: [],
       };
     },
-    // Deterministic: an idea about the first new memory, none without one.
+    // Deterministic: an idea about the first new memory, none without one; whose it is follows it.
     user_ideate: (input: string) => {
-      const ctx = JSON.parse(input) as { new_memories: { content: string }[] };
-      const first = ctx.new_memories[0]?.content;
-      return { idea: first ? `Ask about: ${first}`.slice(0, 190) : null };
+      const ctx = JSON.parse(input) as { new_memories: { content: string; subject: string }[] };
+      const first = ctx.new_memories[0];
+      const about =
+        first?.subject === "self" ? "you" : first?.subject === "shared" ? "both" : "them";
+      return { idea: first ? `Ask about: ${first.content}`.slice(0, 190) : null, about, times: [] };
     },
     // Deterministic: the week's memories in one line, so a canary in a source carries through.
     user_consolidate: (input: string) => {
       const ctx = JSON.parse(input) as { sources: { content: string }[] };
-      return { gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280) };
+      return {
+        gist: `That week: ${ctx.sources.map((s) => s.content).join(" ")}`.slice(0, 280),
+        times: [],
+      };
     },
     // Deterministic: a read built from the first new memory, and one belief about it that
     // replaces the first belief it was shown, so supersede runs too.
@@ -128,6 +135,7 @@ export class FakeLLMProvider implements LLMProvider {
               },
             ]
           : [],
+        times: [],
       };
     },
     core_resolve: (input: string) => ({

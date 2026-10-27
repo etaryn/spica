@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
+import { and, desc, eq } from "drizzle-orm";
+import { user_loop_trace } from "@/db/schema";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertRun, recentReflections } from "@/db/repos/user/user-mind";
 import { loadRunInputs } from "@/mind/process/user/inputs";
@@ -41,6 +43,7 @@ test("writes one reflection from the run's memories, fitted, with her chosen sub
   deps.llm.handlers.user_reflect = sequence({
     reflection: "They walk away from things right before they matter. ".repeat(20),
     subject: "user",
+    times: [],
   });
   expect(await userReflect(deps, run, await loadRunInputs(deps, userId))).toBe("done");
   const [r] = await recentReflections(deps.db, userId, 5);
@@ -55,8 +58,8 @@ test("writes one reflection from the run's memories, fitted, with her chosen sub
 test("null writes nothing and is still done; earlier reflections are passed back", async () => {
   const { deps, userId, run } = await setup();
   deps.llm.handlers.user_reflect = sequence(
-    { reflection: "They hide hurt behind jokes.", subject: "user" },
-    { reflection: null, subject: "user" },
+    { reflection: "They hide hurt behind jokes.", subject: "user", times: [] },
+    { reflection: null, subject: "user", times: [] },
   );
   const inputs = await loadRunInputs(deps, userId);
   await userReflect(deps, run, inputs);
@@ -90,8 +93,8 @@ test("a reflection that read a sensitive memory is marked; one that didn't is no
   const { deps, userId, run } = await setup();
   await openCrisisWindow(userId, new Date(deps.clock.now().getTime() + 3_600_000));
   deps.llm.handlers.user_reflect = sequence(
-    { reflection: "They quit things before they matter.", subject: "user" },
-    { reflection: "They carry more than they show.", subject: "user" },
+    { reflection: "They quit things before they matter.", subject: "user", times: [] },
+    { reflection: "They carry more than they show.", subject: "user", times: [] },
   );
   await userReflect(deps, run, await loadRunInputs(deps, userId));
   expect((await recentReflections(deps.db, userId, 1))[0]!.payload).toBeNull();
@@ -110,6 +113,7 @@ test("a reflection that read a sensitive earlier reflection is marked too", asyn
   deps.llm.handlers.user_reflect = sequence({
     reflection: "They keep going quiet.",
     subject: "user",
+    times: [],
   });
   await insertFact(deps.db, userId, {
     subject: "user",
@@ -136,6 +140,7 @@ test("outside a crisis window a sensitive earlier reflection isn't shown, and no
   deps.llm.handlers.user_reflect = sequence({
     reflection: "They keep going quiet.",
     subject: "user",
+    times: [],
   });
   await insertFact(deps.db, userId, {
     subject: "user",
@@ -155,4 +160,54 @@ test("outside a crisis window a sensitive earlier reflection isn't shown, and no
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_reflect")!;
   expect(call.input).not.toContain("dark place");
   expect((await recentReflections(deps.db, userId, 1))[0]!.payload).toBeNull();
+});
+
+const latestTrace = async (deps: ReturnType<typeof makeTestDeps>, u: string, loop: string) =>
+  (
+    await deps.db
+      .select()
+      .from(user_loop_trace)
+      .where(and(eq(user_loop_trace.user_id, u), eq(user_loop_trace.loop, loop)))
+      .orderBy(desc(user_loop_trace.created_at))
+      .limit(1)
+  )[0];
+
+test("a reflection about them that cites only her own life isn't written", async () => {
+  const { deps, userId, run } = await setup();
+  await insertFact(deps.db, userId, {
+    subject: "self",
+    kind: "event",
+    content: "telescope booking, planned",
+    embedding: vec(),
+    created_at: deps.clock.now(),
+    status: "open",
+    salience: 0.99,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
+  });
+  deps.llm.handlers.user_reflect = () => ({
+    reflection: "They seem really into [m1].",
+    subject: "user",
+    times: [],
+  });
+  await userReflect(deps, run, await loadRunInputs(deps, userId));
+  expect(await recentReflections(deps.db, userId, 5)).toEqual([]);
+  const trace = await latestTrace(deps, userId, "user_reflect");
+  expect(trace!.outputs).toMatchObject({ reflection_id: null, not_written: "subject_mismatch" });
+});
+
+test("an uncited reflection is written; a cited one keeps its cites", async () => {
+  const { deps, userId, run } = await setup();
+  deps.llm.handlers.user_reflect = sequence(
+    { reflection: "I get the sense they like plans.", subject: "user", times: [] },
+    { reflection: "They light up about [m1].", subject: "user", times: [] },
+  );
+  const inputs = await loadRunInputs(deps, userId);
+  await userReflect(deps, run, inputs);
+  await userReflect(deps, run, inputs);
+  const rows = await recentReflections(deps.db, userId, 5);
+  expect(rows.map((r) => r.payload)).toEqual(
+    expect.arrayContaining([null, { cites: [inputs.facts[0]!.id] }]),
+  );
 });

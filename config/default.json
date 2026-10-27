@@ -26,7 +26,9 @@
     "labels_thinking": "adaptive",
     "labels_max_tokens": 16000,
     "labels_timeout_ms": 180000,
-    "labels_cache": "5m"
+    "labels_cache": "5m",
+    "user_mind_thinking": "adaptive",
+    "user_mind_timeout_ms": 90000
   },
   "embedding": {
     "provider": "voyage",
@@ -218,6 +220,7 @@
     "sim_user": "v2",
     "persona": "v7",
     "labels": "v1",
+    "notes": "v2",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",
@@ -245,11 +248,11 @@
     "core_consolidate": "v2",
     "core_resolve": "v1",
     "reach_out": "v4",
-    "user_summarise": "v5",
-    "user_reflect": "v5",
-    "user_ideate": "v7",
-    "user_consolidate": "v1",
-    "user_model": "v5",
+    "user_summarise": "v6",
+    "user_reflect": "v6",
+    "user_ideate": "v8",
+    "user_consolidate": "v2",
+    "user_model": "v6",
     "post_draft": "v2",
     "post_check": "v3",
     "format_draft": "v1"
@@ -765,28 +768,26 @@
       "max_threads": 5,
       "unread_days": 14,
       "max_chars": 300,
-      "max_tokens": 512,
+      "max_tokens": 8000,
       "salience": 0.6,
       "confidence": 0.7
     },
     "reflect": {
       "recent": 5,
       "max_chars": 300,
-      "max_tokens": 384,
+      "max_tokens": 8000,
       "salience": 0.5,
       "confidence": 0.6
     },
     "ideate": {
       "max_chars": 200,
-      "max_tokens": 256,
+      "max_tokens": 8000,
       "salience": 0.5,
       "confidence": 0.6,
       "ttl_days": 3,
       "recent_days": 14,
       "max_planned": 20,
-      "slot_max": 1,
-      "dated_facts": 3,
-      "source_similarity": 0.3
+      "slot_max": 1
     },
     "consolidate": {
       "gist_after_days": 7,
@@ -794,12 +795,12 @@
       "max_sources": 12,
       "gist_source_factor": 0.5,
       "max_chars": 300,
-      "max_tokens": 512,
+      "max_tokens": 8000,
       "confidence": 0.6
     },
     "model": {
       "max_chars": 300,
-      "max_tokens": 512,
+      "max_tokens": 8000,
       "max_beliefs": 2,
       "belief_context": 10,
       "dedupe_similarity": 0.92,

@@ -51,3 +51,15 @@ test("what gets embedded: the label and the words, no dates", () => {
     embedText("job interview", [{ speaker: "user", act: "answers", text: "it went well" }], 160),
   ).toBe("job interview: it went well");
 });
+
+test("one day said three times is one date", () => {
+  expect(
+    memoryLine(
+      { label: "half marathon", status: "happened" },
+      [],
+      [interview, interview, interview],
+      "UTC",
+      160,
+    ),
+  ).toBe("half marathon, happened ⟦2026-01-08|day|UTC⟧ — ");
+});

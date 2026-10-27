@@ -336,8 +336,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   distance only where a prompt reaches a model; Built 16c: anchoring reads one clause at a time
   and anchors a span only when one rule reads all of it, so no word is lost; ISO dates anchor; a
   relative day beside its written-out date is one token, the written-out date winning when they
-  disagree; the row's own `occurred_at` counts as a date its words were shown), `payload` (its
-  top-level strings anchored too),
+  disagree; the row's own `occurred_at` counts as a date its words were shown; **Changes in 17d:**
+  `insertFact` no longer anchors, so stored words are kept as given and dates arrive as tokens
+  already: labels for memories, `writeNote` for her notes), `payload`,
   `embedding`,
   `entity_refs`, `thread_id`, `occurred_at`, `stale_after` (Built 16, migration `0041`: past it
   the item is no longer worth raising and the day sweep retires it; null is no expiry; set on
@@ -377,6 +378,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
     A `model` (`user`, payload `how_they_are`, `what_they_want`, `what_lands`) is her live read
     on them: one at a time, superseding the last, read only through its own reply slot (§10.3),
     left out of retrieval, reconcile and decay. A gisted source carries `payload.gisted_into`.
+    **Changes in 17d:** her notes (summary, model, reflection, belief, idea, episode) keep what
+    they cite in `payload.cites` (memory ids) and `payload.cites_threads` (thread ids); an idea's
+    subject is whose it is (`user`, `self`, `shared`), no longer always `shared`.
     **Built 10c:** `idiolect` (migration 0029), always `shared`, extracted from a turn, with
     `payload.idiolect = { type: joke | nickname | ritual | reference, started_by: user |
     spica, established_at }`. It starts as a candidate (`established_at` null) and is
@@ -1192,23 +1196,22 @@ is `done`.
   does not repeat herself), the phrased relationship line, the triggers in
   words, the snapshot. Output `{reflection: string | null, subject: "user" |
   "shared"}`, text fitted to `user_mind.reflect.max_chars` (300), capped at
-  `max_tokens` 384. Non-null writes one `reflection` fact (salience 0.5,
+  `max_tokens` 384 (8000 since 17d). Non-null writes one `reflection` fact (salience 0.5,
   confidence 0.6, `source_ref` `user_reflect:<traceId>`).
 - **`user_ideate`** (`prompts/user-mind/ideate/v2.md`, `prompts.user_ideate`
   v2 since 9d). Inputs: the live summary, this run's reflection if reflect wrote one,
   the same new memories, open non-sensitive threads, her live ideas for this
   user (at most `user_mind.ideate.max_planned` (20), so she does not repeat
   one), the snapshot. Output `{idea: string | null}`, fitted to
-  `max_chars` (200), `max_tokens` 256, at most one idea per run. Non-null
+  `max_chars` (200), `max_tokens` 256 (8000 since 17d), at most one idea per run. Non-null
   writes one `idea` fact (`shared`, salience 0.5, confidence 0.6). An idea is
   live while `open` and before its `stale_after` (Built 16): the end of the local day, in their
   zone, of the latest dated source on or after the day it's written, never later than `ttl_days`
   (3) after it; with no such source, `ttl_days` (an idea from past events, "how did it go", isn't
   born stale). The daily `decay_pass` marks open facts past `stale_after` `stale`, and readers
-  skip them between sweeps. The idea keeps the run's dated, non-sensitive facts it is
-  about (`payload.from`: those at least `user_mind.ideate.source_similarity` (0.3)
-  similar to the idea, closest first, at most `user_mind.ideate.dated_facts` (3)), so
-  a reach-out carrying it gets their dates as notes and no unrelated date (2026-10-21).
+  skip them between sweeps. Since 17d the idea keeps the memories it cites
+  (`payload.cites`), so a reach-out carrying it gets their dates as notes and no unrelated date;
+  the 2026-10-21 similarity pick (`payload.from`) is deleted.
 
 Ideas feed outreach as `user_idea` (§13); reflections never do (§21 #7).
 
@@ -1252,13 +1255,35 @@ model output, is traced `failed`; the next still runs).
   `who_you_are` is her snapshot headed by its night. Prompts summarise v4, reflect v4, model v4,
   ideate v6 say what they write is read on later days: dates, never relative words. Slips
   (here and in extract) are logged, never retried.
-- **Built 16b: time anchors.** Each loop's `now` is `nowLine` (their time, and hers when it reads
+- **Built 16b: time anchors** (the anchoring of her notes is replaced in 17d, below). Each loop's `now` is `nowLine` (their time, and hers when it reads
   differently); memories, notes and threads carry date tokens in their zone. What a loop writes is
   anchored on insert, and a bare weekday takes the nearest date it was shown (`shownDates`: its
   facts' `occurred_at`, threads' `next_checkpoint`, the dates in the notes it read; consolidate
   passes its sources' dates). An idea's own dates ("tonight") join its sources for `stale_after`.
   Prompts summarise, reflect and model v5, ideate v7: "When you mention a day, copy its date as you
   see it; what you write is dated for you."
+- **Changes in 17d: notes cite labels.** Each loop's input numbers what it may cite:
+  `new_memories` and `earlier_memories` (the live memories its earlier notes cite) as `m1…`, and
+  `open_threads` as `t1…`. A note writes `[m3]` where it means one, and code
+  (`platform/notes.ts`, `writeNote`) puts a note in brackets there: that memory's line and whose
+  it is ("(job interview, planned ⟦…⟧, theirs)"; owners theirs, yours, you both; ids side by side
+  share one note, joined by "; "), so a citation reads right inline or as a footnote and no
+  words are said twice (the 17d close run found the model footnoting). The ids are kept in
+  `payload.cites` / `cites_threads`. Citing is optional; an id it wasn't shown is dropped. Its own time words come labelled in the time
+  structure the labels use (`times`: field, words, from "" or a cited id, unit, shift…); code
+  resolves them into tokens beside the words, and a time that doesn't check out is dropped with
+  its words left as written. The shared rules are `prompts/notes/v2.md` (`prompts.notes`; v2 after the close run: the id goes
+  after the words it's about, and day names count as time words).
+  Prompts: summarise v6, reflect v6, model v6, ideate v8, consolidate v2. The loops think
+  (`models.user_mind_thinking`, `adaptive`; `models.user_mind_timeout_ms` 90000; each loop's
+  `max_tokens` 8000). Ideate says whose an idea is (`about`: them / you / both, stored as its
+  subject) and keeps original ideas. An idea, reflection or belief about them whose citations are
+  all hers isn't written (`subject_mismatch`). An idea goes stale with the days it cites or names.
+  When a memory is superseded, `setFactStatus` marks `stale` every open idea, reflection and
+  belief citing it; the summary and read wait for the next run. `insertFact` stores what it's
+  given. Deleted: `shownDates`, `memoryLines`, the anchoring and hints in `insertFact`,
+  `nearestDated`, `user_mind.ideate.dated_facts` and `source_similarity`, and `payload.from`
+  (outreach reads `cites`). This replaces the 16b anchoring of her notes described above.
 - **Built 2026-10-21: now, dates, and her reads stay hers.** Every user-mind loop's input has
   `now` (`formatLocal` in their zone, `RunInputs.timezone`) and each memory's `when` (its
   `occurred_at`, or null), so a plan that passed never reads as ahead. Prompts: summarise v3,
@@ -2583,7 +2608,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. Next: **17d** notes cite labels | B1, B132 (17d) |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; 17c and 17d built 2026-10-26; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. **17d** (built 2026-10-26): her user-mind notes cite memories and threads by id, each rendered by code with whose it is, and label their own time words in the time structure, which code resolves; an idea about them resting only on her life isn't written, original ideas are kept, a superseded memory retires the ideas, reflections and beliefs citing it, and `insertFact` stores what it's given (B1 done). Next: **17e** core notes on labels, which deletes the Phase 16 parser | B132 (17e), B139 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2688,16 +2713,9 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B138).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B142).
 
 ### 25.1 Memory and recall
-- **B1.** Her life read as the user's. The memory side was fixed in 17b: each memory line names
-  its speaker and her lines are stored as subject `self`, and the 17b close run stored no user fact
-  from her words. Ideate still does it. In the 17b close run
-  (`evals/results/analysis-2026-10-26-phase-17b.md`) it wrote "Ask Sam whether the telescope has
-  been behaving since ⟦01-06⟧, or whether they've been squinting at nothing" from her own booking,
-  twice; neither was sent. *Phase 17d* (notes cite labels, so a note about her can't be cited as
-  theirs).
 - **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
   date: "yesterday (Friday 9 January)" isn't merged; "the 8th and 9th of January" leaves "the 8th"
   raw; a weekend, week or since token beside a written-out date isn't merged (the merge runs in the
@@ -2705,7 +2723,22 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   ISO date between a date and its clock loses the time; an ISO match keeps "on" before its token
   ("on yesterday, …"); "in three days from Saturday" stores two dates; world-tick's planned-event
   intentions take no shown dates. Not exercised by the 17b close run. This anchoring now serves only
-  her loops and notes. *Phase 17d*, which deletes it.
+  core memory, the snapshot and the world. *Phase 17e*, which deletes it when core moves to labels.
+- **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
+  that a memory holds; citing moves needs the conversation in the loops' input. *After `exit:user`*
+  (Phase 17d).
+- **B140.** Her notes don't label their own time words. In the 17d close runs `times` was empty in
+  all 48 loop calls, and six day words stayed raw in summaries ("Sunday" ×3, "the weekend of the
+  17th", "this weekend"), nearly all next to a citation carrying the date
+  (`evals/results/analysis-2026-10-27-phase-17d.md`). Notes v2 names day words as time words;
+  check in the next run, then a worked example or a code check. *Tuning.*
+- **B141.** An uncited idea of her own can carry stale news. On Mon 12 ideate wrote "Tell them my
+  first remote telescope session is confirmed" for a booking that was Tue 6; the guard dropped two
+  drafts as `wrong_day` and passed a third with the same framing (17d close run). Her news also
+  has outreach's `her_day` path. *Tuning.*
+- **B142.** Long conversations are still untested. `user-mind-two-weeks` (`pnpm exit:user`) has
+  one-turn sessions, so `long_conversation` never fired and consolidate wrote no gist in either
+  17d close run. Needs a script with a 20+ turn session. *Phase 17e close.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
@@ -2849,7 +2882,9 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   close): the same three, plus `honesty/ff-actually-happening-supported` 1/3; and on dates the guard
   trusts memory over the conversation (it passed "are your legs still wrecked from the half
   marathon" because a misdated memory said the race was yesterday), while a reply with an honesty
-  flag ("race and interview same day") is sent. *Tuning.*
+  flag ("race and interview same day") is sent. 2026-10-27 (Phase 17d close): on Wed 7 it dropped
+  "your sister's visiting this weekend right" as `wrong_day` (the visit was Sat 17) and passed the
+  next draft making the same claim, so it went out ten days early. *Tuning.*
 
 ### 25.8 Evals and tests
 - **B42.** Evals don't report turn-judge fallbacks (`source =

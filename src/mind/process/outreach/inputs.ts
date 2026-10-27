@@ -6,7 +6,7 @@
  */
 import type { Db } from "@/db/client";
 import { getState, type ConvState } from "@/db/repos/user/conversation-state";
-import { datedFactsByIds, getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
+import { datedFactsByIds, factCites, getFact, listOutreachUserEvents } from "@/db/repos/user/facts";
 import { lastSentKind, sentReachOutTimes, usedTopics } from "@/db/repos/user/reach-out";
 import { getParams, getRelationshipRow, type Cadence } from "@/db/repos/user/relationship";
 import { latestFlaggedTurnAt } from "@/db/repos/user/session-log";
@@ -85,7 +85,7 @@ export async function loadCandidateInputs(
       content: idea.content,
       salience: idea.salience,
       // The dated facts behind an idea keep "after thursday" from reading as "thursday's over".
-      notes: (await datedFactsByIds(db, userId, ideaSources(idea.payload))).map((f) => ({
+      notes: (await datedFactsByIds(db, userId, factCites(idea.payload))).map((f) => ({
         text: f.content,
         at: f.occurred_at.toISOString(),
         dated: true,
@@ -143,12 +143,6 @@ export async function loadCandidateInputs(
 
 const kindOf = (k: string | null): CandidateKind | null =>
   k && (KIND_ORDER as readonly string[]).includes(k) ? (k as CandidateKind) : null;
-
-/** The fact ids an idea came from (`payload.from`); none for an idea written before they were kept. */
-const ideaSources = (payload: unknown): string[] => {
-  const from = (payload as { from?: unknown } | null)?.from;
-  return Array.isArray(from) ? from.filter((x): x is string => typeof x === "string") : [];
-};
 
 /**
  * An anticipation is about its plan: once the plan's time has passed it's no longer news, whatever

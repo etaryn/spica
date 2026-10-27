@@ -1,13 +1,15 @@
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { fact, user } from "@/db/schema";
-import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
+import { fact } from "@/db/schema";
 import {
   candidateFacts,
+  factCites,
   getFact,
   insertFact,
   listUnreadFacts,
+  liveFactsByIds,
   nearFacts,
+  setFactStatus,
 } from "@/db/repos/user/facts";
 import { adminDecayFacts } from "@/db/repos/admin/decay";
 import { setTimezone } from "@/db/repos/user/users";
@@ -29,6 +31,7 @@ import {
   type Trigger,
 } from "@/db/repos/user/user-mind";
 import { adminStalePendingRuns } from "@/db/repos/admin/user-mind";
+import { earlierMemories } from "@/mind/process/user/inputs";
 import { closeTestDb, createTestUser, getTestDb, resetDb, vec } from "../helpers/db";
 
 beforeEach(resetDb);
@@ -332,32 +335,6 @@ const summaryRow = (content: string, at: Date) => ({
   source: "generated" as const,
 });
 
-test("insertFact anchors content and payload strings in the user's zone; no or a bad zone is UTC", async () => {
-  const u = await createTestUser();
-  const at = new Date("2026-01-12T23:30:00Z"); // Monday 23:30 UTC, Tuesday 07:30 in Singapore
-  const utc = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
-  expect(tokenDates(utc.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
-  expect((utc.payload as { whats_live: string }).whats_live).toBe(utc.content);
-  expect((utc.payload as { sensitive: boolean }).sensitive).toBe(true);
-  await setTimezone(getTestDb(), u, "Asia/Singapore");
-  const sg = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
-  expect(renderTimes(sg.content, at, 6)).toBe("Sister visits tomorrow, Wednesday 14 January.");
-  await getTestDb().update(user).set({ timezone: "Mars/Olympus" }).where(eq(user.id, u));
-  const bad = await insertFact(getTestDb(), u, summaryRow("Sister visits tomorrow.", at));
-  expect(tokenDates(bad.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-13");
-});
-
-test("insertFact takes hints: a weekday matches a shown date", async () => {
-  const u = await createTestUser();
-  const row = await insertFact(
-    getTestDb(),
-    u,
-    summaryRow("Race Sunday.", new Date("2026-01-14T09:00:00Z")), // Wednesday
-    { known: [new Date("2026-01-11T08:00:00Z")] },
-  );
-  expect(tokenDates(row.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
-});
-
 test("an inside joke or ritual is stored as said, never dated", async () => {
   const u = await createTestUser();
   const content = "Their goodnight ritual is saying see you tomorrow, same time.";
@@ -369,19 +346,97 @@ test("an inside joke or ritual is stored as said, never dated", async () => {
   expect(row.content).toBe(content);
 });
 
-test("a row's own date is a date its words were shown (the 16b seed)", async () => {
+test("a note's cites are read from payload.cites; an older note cites nothing", () => {
+  expect(factCites({ cites: ["a", 3, "b"] })).toEqual(["a", "b"]);
+  expect(factCites({ from: ["a"] })).toEqual([]);
+  expect(factCites(null)).toEqual([]);
+});
+
+test("earlier memories: live ones her notes cite, minus the run's; clean runs skip sensitive", async () => {
+  const db = getTestDb();
   const u = await createTestUser();
-  const sunday = new Date("2026-01-04T10:00:00Z");
-  const race = await insertFact(getTestDb(), u, {
-    ...summaryRow("The user is running a half marathon on Sunday morning.", sunday),
+  const row = (content: string, extra: object = {}) =>
+    insertFact(db, u, {
+      subject: "user",
+      kind: "event",
+      content,
+      embedding: vec(),
+      created_at: now,
+      status: "open",
+      salience: 0.5,
+      valence: 0,
+      confidence: 0.9,
+      source: "turn",
+      ...extra,
+    });
+  const kept = await row("kept");
+  const fresh = await row("fresh");
+  const secret = await row("secret", { payload: { sensitive: true } });
+  const gone = await row("gone", { status: "superseded" });
+  const notes = [{ payload: { cites: [kept.id, fresh.id, secret.id, gone.id] } }, null];
+  const clean = await earlierMemories(db, u, notes, { exclude: [fresh.id], clean: true });
+  expect(clean.map((f) => f.content)).toEqual(["kept"]);
+  const open = await earlierMemories(db, u, notes, { exclude: [fresh.id], clean: false });
+  expect(open.map((f) => f.content).sort()).toEqual(["kept", "secret"]);
+  expect(await liveFactsByIds(db, u, ["not-a-uuid"], true)).toEqual([]);
+});
+
+test("insertFact stores the words as given: no date is read from them", async () => {
+  const u = await createTestUser();
+  const row = await insertFact(getTestDb(), u, {
+    subject: "user",
     kind: "event",
-    occurred_at: new Date("2026-01-11T09:00:00Z"),
+    content: "see you tomorrow at the market on Friday",
+    payload: { note: "tonight" },
+    embedding: vec(),
+    created_at: now,
+    status: "open",
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.9,
+    source: "turn",
   });
-  expect(tokenDates(race.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-11");
-  const sister = await insertFact(getTestDb(), u, {
-    ...summaryRow("The user's sister is visiting on the weekend.", sunday),
-    kind: "event",
-    occurred_at: new Date("2026-01-17T12:00:00Z"),
+  expect(row.content).toBe("see you tomorrow at the market on Friday");
+  expect(row.payload).toEqual({ note: "tonight" });
+});
+
+test("superseding a memory retires the ideas, reflections and beliefs citing it, not the summary", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const base = {
+    subject: "user" as const,
+    embedding: vec(),
+    created_at: now,
+    status: "open" as const,
+    salience: 0.5,
+    valence: 0,
+    confidence: 0.9,
+    source: "generated" as const,
+  };
+  const event = (content: string) =>
+    insertFact(db, u, { ...base, kind: "event", content, source: "turn" });
+  const memory = await event("interview");
+  const other = await event("plant");
+  const notes = await Promise.all(
+    (["idea", "reflection", "belief", "summary", "model"] as const).map((kind) =>
+      insertFact(db, u, { ...base, kind, content: kind, payload: { cites: [memory.id] } }),
+    ),
+  );
+  const unrelated = await insertFact(db, u, {
+    ...base,
+    kind: "idea",
+    content: "unrelated",
+    payload: { cites: [other.id] },
   });
-  expect(tokenDates(sister.content)[0]!.toISOString().slice(0, 10)).toBe("2026-01-17");
+  const replacement = await event("moved");
+  await setFactStatus(db, u, memory.id, "superseded", replacement.id);
+  const status = async (id: string) => (await getFact(db, u, id))!.status;
+  expect(await Promise.all(notes.map((n) => status(n.id)))).toEqual([
+    "stale",
+    "stale",
+    "stale",
+    "open",
+    "open",
+  ]);
+  expect(await status(unrelated.id)).toBe("open");
 });

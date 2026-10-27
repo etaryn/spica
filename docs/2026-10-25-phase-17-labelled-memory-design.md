@@ -63,6 +63,7 @@ The layers built here are a first set; the infrastructure is the point, and laye
 | **17b. Labels as memory** | v12 live in the cold path. Stand-off storage: an `annotation` table for the text layers; `fact` as the proposition layer; coordinates into `session_log`. Every reader shows words with code-rendered dates: reply, user-mind inputs, outreach, guard, retrieval. Reconcile through ids; threads hold their event's date apart from the check-in; the input's window and cache layout. **Deletes** v11, the stored-text anchoring for extracted facts, `when_direction`, and what reconcile no longer needs | Exit test with the leak canary and the side-channel test; close run `review:world-outreach` |
 | **17c. Turn-taking on labels** | The code-made layers written as the system runs. The turn judge cites piece ids for open questions instead of rewriting them; a question closes when a move replies to it (B9). Bid responses come from replies (`bidAfter`) | Exit test |
 | **17d. Notes cite labels** | Summarise, model, reflect and ideate cite propositions and moves by id and never write dates; code renders what they cite; a note resting on a superseded label is retired. **Deletes** the remaining stored-text anchoring (`shownDates`, anchoring in `insertFact`, the merge, ISO and clause rules) | Exit test; close run `review:world-outreach`, plus `exit:user` (never run yet) for long conversations |
+| **17e. Core notes on labels** | Core loops, the snapshot and the world's planned-event intentions write through `platform/notes.ts`: they cite core memories and label their own time words. **Deletes** `anchorTimes`, `anchorFields`, chrono, `relativeWords` and the core "copy its date" prompt lines (B132 goes with them) | Exit test with the leak canary; close run `review:world-outreach` |
 
 **17a is built (2026-10-25).** What it settled for 17b:
 - **Exchange mode** (Ethan).
@@ -75,9 +76,10 @@ The layers built here are a first set; the infrastructure is the point, and laye
 Results, open items and the analysis: §20 row, §25 B133–B136,
 `evals/results/analysis-2026-10-25-phase-17a.md`.
 
-The order is fixed by dependency: 17b needs 17a's format, 17c needs 17b's storage, and 17d needs
-labels in storage to cite. Storage and readers land together in 17b, since writing a format no
-reader can read would need a shim, which the replace-from-the-ground-up rule rules out.
+The order is fixed by dependency: 17b needs 17a's format, 17c needs 17b's storage, 17d needs
+labels in storage to cite, and 17e reuses 17d's note mechanism. Storage and readers land
+together in 17b, since writing a format no reader can read would need a shim, which the
+replace-from-the-ground-up rule rules out.
 
 ## What happens to Phase 16
 
@@ -108,6 +110,11 @@ by coordinate; judge v3 cites pieces; her reply's move closes a question (B9); b
 reply links. The code-made layers needed no new storage. History row in
 `docs/spec-v3-history.md`.
 
+**17d is built (2026-10-26)** on branch `phase-17d`: her notes cite memories and threads by id,
+each with whose it is, label their own time words, and are retired when a memory they cite is
+superseded. Ethan wants
+Phase 16's anchoring replaced on principle, so core follows in **17e**, which closes the phase.
+
 ## Scope
 
 - All of it is user scope. Core loops never read user data; core's own loops show the same pattern
@@ -123,7 +130,8 @@ reply links. The code-made layers needed no new storage. History row in
   - 17a: §20 and §10.4 (v12 exists, replay only);
   - 17b: §6.1, §10.4, §12;
   - 17c: §10.1;
-  - 17d: §9.5.
+  - 17d: §9.5;
+  - 17e: §8.
 - **At 17a's close:** CLAUDE.md's current phase.
 - **At the phase close:** `docs/spec-v3-history.md` gets the full row.
 

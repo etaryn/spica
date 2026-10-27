@@ -272,3 +272,9 @@ code itself.
 | 2026-10-26 | The open-question cap applies under the state lock, oldest first; the judge's verdict is uncapped | The cap must hold against what is open at write time, not what the judge read. |
 | 2026-10-26 | The judge's keyword fallback keeps every shown question and asks each new piece ending in "?" | Without a model nothing can tell a question was answered or withdrawn. |
 | 2026-10-26 | `questions.ts` takes its coordinate type from `OpenQuestion["coords"]` | One shape, without turn-taking importing the memory engine for a type. |
+| 2026-10-26 | Onboarding facts and settled-hurt copies lose insert-time anchoring and store as written | Onboarding text is code-built from quiz answers and hurt copies come from labelled memories, so neither has time words of its own to resolve. |
+| 2026-10-26 | Ideas holding `payload.from` aren't migrated to `payload.cites` | Ideas live at most `ttl_days` (3) and only the dev DB has them. |
+| 2026-10-26 | A cited memory renders as its line head plus the owner in brackets after it | The label's end can't be found reliably inside a code-built line, and the head already carries its dates as tokens. |
+| 2026-10-26 | A note's time words are matched case-insensitively, first plain occurrence in their field, never inside a citation or token | The model labels words it wrote; the first match is what it means in the usual case, and a citation's words are never its own. |
+| 2026-10-26 | Settling a hurt (its memory superseded by a resolved copy) retires the ideas, reflections and beliefs citing the hurt | What a repair says is over is dropped, as her loops already do; a note resting on the open hurt would carry it past the make-up. |
+| 2026-10-26 | `user_model` traces what its notes dropped as `dropped_labels` | Its `dropped` key already lists the beliefs deduplicated away. |

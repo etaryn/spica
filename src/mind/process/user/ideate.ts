@@ -5,7 +5,7 @@
  * never reads anything a crisis touched.
  */
 import { z } from "zod";
-import { insertFact, nearestDated } from "@/db/repos/user/facts";
+import { insertFact } from "@/db/repos/user/facts";
 import { listOpenThreads } from "@/db/repos/user/threads";
 import {
   latestNonSensitiveModel,
@@ -19,9 +19,17 @@ import { fitText } from "@/mind/platform/llm/fit";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { DAY } from "@/mind/platform/time";
 import { localDateString, localMidnight, nextLocalDate, zoneOrUtc } from "@/mind/platform/timezone";
-import { anchorTimes, nowLine, tokenDates, written } from "@/mind/platform/time-anchors";
+import {
+  noteRefs,
+  noteTimesSchema,
+  onlyHers,
+  withNoteRules,
+  writeNote,
+} from "@/mind/platform/notes";
+import { nowLine, written } from "@/mind/platform/time-anchors";
+import { labelInstant } from "@/mind/platform/time-labels";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { memoryLines, shownDates, threadLines, stampedNote, type RunInputs } from "./inputs";
+import { citables, earlierMemories, stampedNote, type RunInputs } from "./inputs";
 import { modelPayload } from "./model";
 import { runUserLoop, type UserLoopDeps } from "./runner";
 
@@ -48,6 +56,8 @@ export function ideaStaleAfter(
   const end = localMidnight(nextLocalDate(last), tz);
   return end < chance ? end : chance;
 }
+
+const SUBJECT = { them: "user", you: "self", both: "shared" } as const;
 
 export async function userIdeate(
   deps: UserLoopDeps,
@@ -82,56 +92,63 @@ export async function userIdeate(
     // Ideas become reach-outs and push notifications, so a read a crisis touched stays out.
     const readRow = await latestNonSensitiveModel(db, userId);
     const read = readRow ? (modelPayload.safeParse(readRow.payload).data ?? null) : null;
-    const Output = z.object({ idea: fitText(settings.max_chars).nullable() });
+    const Output = z.object({
+      idea: fitText(settings.max_chars).nullable(),
+      about: z.enum(["them", "you", "both"]),
+      times: noteTimesSchema(["idea"]),
+    });
+    // Ideas become reach-outs, so even an older memory her notes cite stays out if a crisis
+    // touched it.
+    const earlier = await earlierMemories(db, userId, [summary, readRow, noticed, ...planned], {
+      exclude: facts.map((f) => f.id),
+      clean: true,
+    });
+    const shown = citables(facts, earlier, threads, inputs.timezone);
+    const zone = zoneOrUtc(inputs.timezone);
     const out = await ctx.deps.llm.classifyJson({
       purpose: "user_ideate",
       model: "user_mind",
-      system: loadPrompt("user-mind/ideate", config.prompts.user_ideate),
+      system: withNoteRules(
+        loadPrompt("user-mind/ideate", config.prompts.user_ideate),
+        config.prompts.notes,
+      ),
       input: JSON.stringify({
-        now: nowLine(now, zoneOrUtc(inputs.timezone), lifeTimezone(config.life, now)),
+        now: nowLine(now, zone, lifeTimezone(config.life, now)),
         who_you_are: deps.snapshot,
         summary: stampedNote(summary, inputs.timezone),
         noticed: noticed?.content ?? null,
-        your_read_on_them: read
-          ? { written: written(readRow!.created_at, zoneOrUtc(inputs.timezone)), ...read }
-          : null,
-        new_memories: memoryLines(facts, inputs.timezone),
-        open_threads: threadLines(threads, inputs.timezone),
+        your_read_on_them: read ? { written: written(readRow!.created_at, zone), ...read } : null,
+        new_memories: shown.new_memories,
+        earlier_memories: shown.earlier_memories,
+        open_threads: shown.open_threads,
         already_planned: planned.map((i) => i.content),
       }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.user_mind_timeout_ms,
       maxTokens: settings.max_tokens,
     });
+    const note = out.idea
+      ? writeNote({ idea: out.idea }, out.times, shown.items, { now, zone })
+      : null;
+    // Her own life cited as theirs is the misreading citations exist to catch.
+    const mismatch = !!note && out.about === "them" && onlyHers(note);
     let ideaId: string | null = null;
-    if (out.idea) {
-      const [embedding] = await deps.embedder.embed([out.idea], "document");
-      const from = await nearestDated(
-        db,
-        userId,
-        facts.filter((f) => f.occurred_at !== null).map((f) => f.id),
-        embedding!,
-        settings.source_similarity,
-        settings.dated_facts,
-      );
-      // Dated here, not on insert, so its own days ("tonight") set when it stops being worth raising.
-      const zone = zoneOrUtc(inputs.timezone);
-      const content = anchorTimes(out.idea, {
-        at: now,
-        zone,
-        known: shownDates(facts, threads, [summary?.content, readRow?.content]),
-      });
+    if (note && !mismatch) {
+      const content = note.fields.idea!;
+      const [embedding] = await deps.embedder.embed([content], "document");
+      const refs = noteRefs(note);
       const row = await insertFact(db, userId, {
-        subject: "shared",
+        subject: SUBJECT[out.about],
         kind: "idea",
         content,
         embedding: embedding!,
         created_at: now,
+        // The days it's about, cited or its own ("tonight"), set when it stops being worth raising.
         stale_after: ideaStaleAfter(
           now,
           [
-            ...facts.filter((f) => from.includes(f.id)).map((f) => f.occurred_at!),
-            ...tokenDates(content),
+            ...note.cited.flatMap((c) => (c.at ? [c.at] : [])),
+            ...note.times.map((t) => labelInstant(t, zone)),
           ],
           settings.ttl_days,
           zone,
@@ -142,9 +159,8 @@ export async function userIdeate(
         confidence: settings.confidence,
         source: "generated",
         source_ref: `user_ideate:${ctx.traceId}`,
-        // The dated facts it's about, so a reach-out carrying it knows their dates; a date it
-        // isn't about would ride along into the message.
-        payload: { from },
+        // What it cites, so a reach-out carrying it knows their dates.
+        payload: Object.keys(refs).length ? refs : null,
       });
       ideaId = row.id;
     }
@@ -155,8 +171,13 @@ export async function userIdeate(
         model_id: readRow?.id ?? null,
         fact_ids: facts.map((f) => f.id),
         planned_ids: planned.map((i) => i.id),
+        earlier_ids: earlier.map((f) => f.id),
       },
-      outputs: { idea_id: ideaId },
+      outputs: {
+        idea_id: ideaId,
+        not_written: mismatch ? "subject_mismatch" : null,
+        dropped: note?.dropped ?? [],
+      },
       written: ideaId ? [{ id: ideaId, kind: "idea" }] : [],
       promptVersion: config.prompts.user_ideate,
     };

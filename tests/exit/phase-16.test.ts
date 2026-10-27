@@ -71,7 +71,12 @@ test("2: an idea for tonight retires after tonight and never reaches a reach-out
     confidence: 0.9,
     source: "turn",
   });
-  d.llm.handlers.user_ideate = () => ({ idea: "Ask if they saw Orion with the clear sky." });
+  // Her tip, their sky: about the two of them, and its day comes from the memory it cites.
+  d.llm.handlers.user_ideate = () => ({
+    idea: "Ask if they saw Orion after [m1].",
+    about: "both",
+    times: [],
+  });
   const run = await ideaRun(d, u, "exchange:a");
   expect(await userIdeate(loopDeps(d), run, await loadRunInputs(d, u))).toBe("done");
   const [idea] = await liveIdeas(d.db, u, tue, 5);
@@ -152,10 +157,14 @@ test("6: leak canary: A's idea never reaches B; an idea run and the sweep leave 
   await fact(a, `The user's gig code is ${TOKEN}.`);
   await fact(b, "The user has a gig at the Lexington.");
   const before = await coreDump();
-  d.llm.handlers.user_ideate = () => ({ idea: `Ask about the gig, ${TOKEN}.` });
+  d.llm.handlers.user_ideate = () => ({
+    idea: `Ask about the gig, ${TOKEN}.`,
+    about: "them",
+    times: [],
+  });
   await userIdeate(loopDeps(d), await ideaRun(d, a, "exchange:c"), await loadRunInputs(d, a));
   const bStart = d.llm.structuredCalls.length;
-  d.llm.handlers.user_ideate = () => ({ idea: null });
+  d.llm.handlers.user_ideate = () => ({ idea: null, about: "them", times: [] });
   await userIdeate(loopDeps(d), await ideaRun(d, b, "exchange:d"), await loadRunInputs(d, b));
   const bCalls = d.llm.structuredCalls.slice(bStart);
   expect(bCalls.length).toBeGreaterThan(0);

@@ -2,9 +2,6 @@
  * One user's memories (the `fact` table): insert, reconcile neighbours, ranked retrieval
  * candidates, recall write-back, the preoccupation, and the queries outreach and the memory view use.
  */
-import { anchorFields, anchorTimes, type AnchorHints } from "@/mind/platform/time-anchors";
-import { zoneOrUtc } from "@/mind/platform/timezone";
-import { getTimezone } from "./users";
 import { and, asc, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Neighbor, RecalledFact } from "@/mind/memory/shared/types";
@@ -143,36 +140,12 @@ export async function nearFacts(
   });
 }
 
-/**
- * Stored text keeps the date each time phrase meant: content and a summary's or read's parts are
- * anchored from the moment written, in the user's zone, so they read right on any later day.
- */
-export async function insertFact(
-  db: Db,
-  userId: string,
-  row: NewFact,
-  hints: AnchorHints = {},
-): Promise<FactRow> {
-  // Every caller passes a Date: the moment it was written is the moment its words mean.
-  const at = row.created_at as Date;
-  const ctx = {
-    at,
-    zone: zoneOrUtc(await getTimezone(db, userId)),
-    ...hints,
-    // The date the row carries is the one its words mean.
-    known: [...(hints.known ?? []), ...(row.occurred_at ? [row.occurred_at as Date] : [])],
-  };
-  // An inside joke or ritual is the words themselves: "see you tomorrow" there is no date.
-  const asSaid = hints.asSaid === true || row.kind === "idiolect";
+/** A memory or note as given: what its words mean was settled before it got here. */
+export async function insertFact(db: Db, userId: string, row: NewFact): Promise<FactRow> {
   return one(
     await db
       .insert(fact)
-      .values({
-        ...row,
-        content: asSaid ? row.content : anchorTimes(row.content, ctx),
-        payload: asSaid ? row.payload : anchorFields(row.payload, ctx),
-        user_id: userId,
-      })
+      .values({ ...row, user_id: userId })
       .returning(),
   );
 }
@@ -252,6 +225,25 @@ export async function setFactStatus(
     .update(fact)
     .set({ status, ...(supersededBy ? { superseded_by: supersededBy } : {}) })
     .where(and(eq(fact.user_id, userId), eq(fact.id, id)));
+  // Her ideas, reflections and beliefs resting on a memory she no longer holds go with it; her
+  // summary and read are rewritten whole by the next run.
+  if (status === "superseded") await retireNotesCiting(db, userId, id);
+}
+
+// ponytail: a jsonb scan over one user's open notes; index payload->'cites' if a user's notes
+// grow large
+async function retireNotesCiting(db: Db, userId: string, id: string): Promise<void> {
+  await db
+    .update(fact)
+    .set({ status: "stale" })
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        eq(fact.status, "open"),
+        inArray(fact.kind, ["idea", "reflection", "belief"]),
+        sql`${fact.payload}->'cites' @> ${JSON.stringify([id])}::jsonb`,
+      ),
+    );
 }
 
 /**
@@ -259,6 +251,18 @@ export async function setFactStatus(
  * same chain read (clean runs count only clean summaries), the weightiest first. A fact a busy
  * run left out stays unread for the next one. Her own generated kinds are never read back.
  */
+// What a loop reads of a memory.
+const LOOP_COLUMNS = {
+  id: fact.id,
+  subject: fact.subject,
+  kind: fact.kind,
+  content: fact.content,
+  salience: fact.salience,
+  occurred_at: fact.occurred_at,
+  created_at: fact.created_at,
+  sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
+};
+
 export async function listUnreadFacts(
   db: Db,
   userId: string,
@@ -276,16 +280,7 @@ export async function listUnreadFacts(
       AND t.created_at > ${since}::timestamptz ${cleanOnly}
   )`;
   return db
-    .select({
-      id: fact.id,
-      subject: fact.subject,
-      kind: fact.kind,
-      content: fact.content,
-      salience: fact.salience,
-      occurred_at: fact.occurred_at,
-      created_at: fact.created_at,
-      sensitive: sql<boolean>`COALESCE((${fact.payload}->>'sensitive')::boolean, false)`,
-    })
+    .select(LOOP_COLUMNS)
     .from(fact)
     .where(
       and(
@@ -304,6 +299,34 @@ export async function listUnreadFacts(
     .limit(a.limit);
 }
 export type UnreadFact = Awaited<ReturnType<typeof listUnreadFacts>>[number];
+
+/** The memory ids a note cites (`payload.cites`); none for a note written before notes cited. */
+export function factCites(payload: unknown): string[] {
+  const cites = (payload as { cites?: unknown } | null)?.cites;
+  return Array.isArray(cites) ? cites.filter((x): x is string => typeof x === "string") : [];
+}
+
+/** The live memories among `ids`; outside a crisis window, none a crisis touched. */
+export async function liveFactsByIds(
+  db: Db,
+  userId: string,
+  ids: string[],
+  clean: boolean,
+): Promise<UnreadFact[]> {
+  const valid = ids.filter((id) => z.uuid().safeParse(id).success);
+  if (!valid.length) return [];
+  return db
+    .select(LOOP_COLUMNS)
+    .from(fact)
+    .where(
+      and(
+        eq(fact.user_id, userId),
+        inArray(fact.id, valid),
+        notInArray(fact.status, [...INACTIVE]),
+        clean ? sql`COALESCE((${fact.payload}->>'sensitive')::boolean, false) = false` : undefined,
+      ),
+    );
+}
 
 /**
  * Cold-path recall write-back. Every recalled fact that still exists gets a retrieval_trace row;
@@ -445,31 +468,4 @@ export async function datedFactsByIds(
     );
   const byId = new Map(rows.map((r) => [r.id, { ...r, occurred_at: r.occurred_at! }]));
   return valid.flatMap((id) => byId.get(id) ?? []);
-}
-
-/** Of `ids`, the dated facts at least `minSim` similar to `vec`, closest first. */
-export async function nearestDated(
-  db: Db,
-  userId: string,
-  ids: string[],
-  vec: number[],
-  minSim: number,
-  limit: number,
-): Promise<string[]> {
-  if (!ids.length || limit < 1) return [];
-  const q = vecLiteral(vec);
-  const rows = await db
-    .select({ id: fact.id })
-    .from(fact)
-    .where(
-      and(
-        eq(fact.user_id, userId),
-        inArray(fact.id, ids),
-        sql`${fact.occurred_at} IS NOT NULL`,
-        sql`(1 - (${fact.embedding} <=> ${q}::vector)) >= ${minSim}`,
-      ),
-    )
-    .orderBy(sql`${fact.embedding} <=> ${q}::vector`)
-    .limit(limit);
-  return rows.map((r) => r.id);
 }

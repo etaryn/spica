@@ -151,7 +151,8 @@ older messages is glossed from time labels; extract v11 and its anchoring are go
 **17c, turn-taking on labels, is built** (merged 2026-10-26): open questions are the
 user's words by coordinate (`turn-taking/questions.ts`), judge v3 cites pieces and merges under the
 state lock, her reply's move closes a question (B9), bids are held to reply links.
-**17d, notes cite labels, is built** (2026-10-26, branch `phase-17d`): her user-mind notes cite
+**17d, notes cite labels, is built** (merged 2026-10-28, close runs done:
+`evals/results/analysis-2026-10-27-phase-17d.md`): her user-mind notes cite
 memories and threads by id with whose each is, label their own time words, and are retired when a
 memory they cite is superseded (`platform/notes.ts`). **Next: 17e, core notes on labels**, which
 deletes the Phase 16 parser.

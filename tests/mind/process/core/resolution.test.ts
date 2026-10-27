@@ -359,3 +359,39 @@ test("overlapping ticks apply one replacement and one episode", async () => {
     (await deps.db.select().from(core_memory)).filter((m) => m.kind === "episode"),
   ).toHaveLength(1);
 });
+
+test("a resolution labels its own time words, counted from the plan it replaces", async () => {
+  const deps = makeTestDeps({ ...quietGeneration, life: { timezone: "UTC" } });
+  const { id } = await plan(deps, true);
+  deps.llm.handlers.core_resolve = () => ({
+    content: "Spica moved Solaris [m1] to the next day.",
+    valence: -0.2,
+    stakes: "low",
+    times: [
+      {
+        field: "content",
+        words: "the next day",
+        from: "m1",
+        unit: "day",
+        shift: 1,
+        weekday: null,
+        month: null,
+        day_of_month: null,
+        part: null,
+        clock: "",
+        span: "at",
+        rough: false,
+      },
+    ],
+  });
+  await coreWorldTick(coreDepsOf(deps), now);
+  const [replacement] = await deps.db
+    .select()
+    .from(world_event)
+    .where(eq(world_event.plan_ref, id));
+  expect(replacement!.content).toBe(
+    "Spica moved Solaris (⟦2026-01-05|day|UTC⟧) to ⟦2026-01-06|day|UTC|the next day⟧.",
+  );
+  const input = deps.llm.structuredCalls.find((c) => c.purpose === "core_resolve")!.input;
+  expect(input).toContain("What she expected: [m1] Spica expects to see Solaris with Alcor.");
+});

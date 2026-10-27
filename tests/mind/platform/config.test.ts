@@ -92,7 +92,7 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.availability.override_closeness).toBe(0.8);
   expect(c.models.life).toBe("claude-haiku-5-5");
   expect(c.prompts.life_plan).toBe("v5");
-  expect(c.prompts.life_event).toBe("v7");
+  expect(c.prompts.life_event).toBe("v8");
   expect(c.prompts.post_check).toBe("v3");
 });
 

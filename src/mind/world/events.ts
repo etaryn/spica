@@ -14,7 +14,15 @@ import type { CoreDeps } from "@/mind/platform/deps";
 import type { CoreGoal, CoreNeeds } from "@/mind/state/core/types";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { dateToken } from "@/mind/platform/time-anchors";
+import { nowLine } from "@/mind/platform/time-anchors";
+import { coreCitables, lineText, type CoreLine } from "@/mind/memory/core/citables";
+import {
+  noteTimesSchema,
+  withNoteRules,
+  writeNote,
+  type Citable,
+  type Dropped,
+} from "@/mind/platform/notes";
 import { seededUnit } from "@/mind/platform/seeded-random";
 import { lifeInstant, lifeTimezone } from "@/mind/world/her-clock";
 import { DAY } from "@/mind/platform/time";
@@ -30,8 +38,10 @@ const EventSchema = z.object({
   entity_names: z.array(z.string()),
   kind: z.enum(["planned", "spontaneous"]),
   thought: z.string().nullable(),
+  times: noteTimesSchema(["content", "thought"]).default([]),
 });
-export type EventCandidate = z.infer<typeof EventSchema>;
+/** An event as code keeps it; its time labels are spent when its words are written. */
+export type EventCandidate = Omit<z.infer<typeof EventSchema>, "times">;
 /** An eval's scripted event: spontaneous with no thought unless it says otherwise. */
 export type InjectedEvent = {
   content: string;
@@ -67,10 +77,13 @@ export type AcceptedEvent = {
   subject: string | null;
   resolvesMemoryId: string | null;
   fallthrough: boolean | null;
+  /** The memories its words cite. */
+  cites: string[];
 };
 export type CoreEventContext = {
   plan: LifePlan | null;
-  episodes: { content: string; when: Date }[];
+  /** Her recent episodes, numbered so the event can cite one. */
+  recent: { lines: CoreLine[]; items: Citable[] };
   people: string[];
   subject: EventSubject;
   needs: CoreNeeds;
@@ -152,7 +165,7 @@ async function coreEventContext(
   const known = (await deps.core.memory.entities()).map((e) => e.name);
   return {
     plan: await deps.core.world.plan(day),
-    episodes: episodes.map((e) => ({ content: e.content, when: e.occurred_at ?? e.created_at })),
+    recent: coreCitables(episodes, lifeTimezone(deps.config.life, now)),
     people: [...new Set([...cfg.canon_entities, ...known])],
     subject,
     needs: (await deps.core.state.get())?.needs ?? {
@@ -169,15 +182,15 @@ export function buildEventInput(
   tz: string,
   targetChars: number,
 ): string {
-  const parts = [`Today is ${day} in her zone.`];
+  const parts = [`${nowLine(now, tz, tz)} Today is ${day} in her zone.`];
   parts.push(
     ctx.plan
       ? `Her plan today:\n${ctx.plan.blocks.map((b) => `- ${b.start}-${b.end} ${b.kind}: ${b.label}`).join("\n")}`
       : "Her plan today: unknown, keep the event generic.",
   );
   parts.push(
-    ctx.episodes.length
-      ? `What has happened in her life lately (never contradict):\n${ctx.episodes.map((e) => `- ${e.content} (${dateToken(e.when, tz)})`).join("\n")}`
+    ctx.recent.lines.length
+      ? `What has happened in her life lately (never contradict):\n${ctx.recent.lines.map((l) => `- ${lineText(l)}`).join("\n")}`
       : "What has happened in her life lately: nothing yet.",
   );
   parts.push(`People she knows: ${ctx.people.join(", ") || "none"}.`);
@@ -248,7 +261,12 @@ export async function generateCoreEvents(
   now: Date,
   canCall: () => boolean,
   inject?: (day: string) => InjectedEvent | null,
-): Promise<{ accepted: AcceptedEvent[]; attempts: EventAttempt[]; budgetExhausted: boolean }> {
+): Promise<{
+  accepted: AcceptedEvent[];
+  attempts: EventAttempt[];
+  budgetExhausted: boolean;
+  dropped: Dropped[];
+}> {
   const { config, llm, embedder } = deps;
   const cfg = config.core.world;
   const injected = inject?.(day) ?? null;
@@ -259,7 +277,8 @@ export async function generateCoreEvents(
   );
   const accepted: AcceptedEvent[] = [];
   const attempts: EventAttempt[] = [];
-  if (!draws.some(Boolean)) return { accepted, attempts, budgetExhausted: false };
+  const dropped: Dropped[] = [];
+  if (!draws.some(Boolean)) return { accepted, attempts, budgetExhausted: false, dropped };
 
   const subject = selectEventSubject(
     {
@@ -289,15 +308,19 @@ export async function generateCoreEvents(
   const system = [
     persona.coreValues,
     self,
-    loadPrompt("life/event", config.prompts.life_event),
+    withNoteRules(
+      loadPrompt("life/event", config.prompts.life_event),
+      config.prompts.core_notes,
+      "core/notes",
+    ),
   ].join("\n\n");
 
   for (const [i, kept] of draws.entries()) {
     if (!kept) continue;
     const key = `${i}`;
     const useInjected = !!injected && i === 0;
-    if (!useInjected && !canCall()) return { accepted, attempts, budgetExhausted: true };
-    const raw: EventCandidate = useInjected
+    if (!useInjected && !canCall()) return { accepted, attempts, budgetExhausted: true, dropped };
+    const raw: z.infer<typeof EventSchema> = useInjected
       ? {
           content: injected!.content,
           at: cfg.injected_event_at,
@@ -306,6 +329,7 @@ export async function generateCoreEvents(
           entity_names: [],
           kind: injected!.kind ?? "spontaneous",
           thought: injected!.thought ?? null,
+          times: [],
         }
       : await llm.classifyJson({
           purpose: "life_event",
@@ -331,6 +355,16 @@ export async function generateCoreEvents(
       reject("invalid");
       continue;
     }
+    // Its own time words become the days they mean before anything checks, embeds or stores them.
+    const note = writeNote(
+      { content: c.content, ...(c.thought !== null ? { thought: c.thought } : {}) },
+      raw.times,
+      ctx.recent.items,
+      { now, zone: lifeTimezone(config.life, now) },
+    );
+    dropped.push(...note.dropped);
+    c.content = note.fields.content!;
+    if (c.thought !== null) c.thought = note.fields.thought!;
     const rule = checkRules(c, { known, lastNewEntityAt, lastHighStakesAt }, now, cfg);
     if (rule) {
       reject(rule);
@@ -343,7 +377,8 @@ export async function generateCoreEvents(
       config.reconcile.neighbor_k,
       config.reconcile.contradiction_similarity,
     );
-    if (neighbors.length && !canCall()) return { accepted, attempts, budgetExhausted: true };
+    if (neighbors.length && !canCall())
+      return { accepted, attempts, budgetExhausted: true, dropped };
     const decision = await reconcileAgainstNeighbours(
       deps,
       { label: "episode", content: c.content },
@@ -375,6 +410,7 @@ export async function generateCoreEvents(
       subject: useInjected ? null : subjectKey(subject),
       resolvesMemoryId: decision.relation === "resolves" ? decision.targetId : null,
       fallthrough: useInjected ? (injected!.fallthrough ?? null) : null,
+      cites: note.memories,
     });
     if (c.entity_names.some((name) => !known.has(normalizeName(name)))) {
       lastNewEntityAt = now;
@@ -382,5 +418,5 @@ export async function generateCoreEvents(
     }
     if (c.stakes === "high") lastHighStakesAt = now;
   }
-  return { accepted, attempts, budgetExhausted: false };
+  return { accepted, attempts, budgetExhausted: false, dropped };
 }

@@ -15,7 +15,9 @@ import { errorName } from "@/mind/platform/errors";
 import { fitChars } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
-import { tokenDates } from "@/mind/platform/time-anchors";
+import { nowLine } from "@/mind/platform/time-anchors";
+import { coreCitables, lineText } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules, writeNote, type Dropped } from "@/mind/platform/notes";
 import { applyEvent, moodOf } from "@/mind/state/core/core-state";
 import type { CoreNeeds, CoreStatePatch } from "@/mind/state/core/types";
 import type { LoopContext } from "./runner";
@@ -44,6 +46,7 @@ export const AppraisalSchema = z.object({
   need_effects: z.object({ autonomy: z.number(), competence: z.number() }),
   // Required for the model; fixtures without it read as null and take the kind default.
   depth: DepthLabel.nullable().default(null),
+  times: noteTimesSchema(["episode"]).default([]),
 });
 export type RawAppraisal = z.infer<typeof AppraisalSchema>;
 export type Appraisal = {
@@ -54,8 +57,10 @@ export type Appraisal = {
   goalEffects: { goalId: string; delta: number }[];
   needEffects: CoreNeeds;
   depth: number;
-  /** Dates in the input it was written from. */
-  shown?: Date[];
+  /** The memories its episode's words cite. */
+  cites?: string[];
+  /** Citations and time labels its words couldn't use. */
+  dropped?: Dropped[];
 };
 export type LandingEvent = {
   worldEventId: string;
@@ -136,17 +141,20 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
   if (!ctx.canCall()) return codeAppraisal(event, config.core);
   const persona = loadPersona(config);
   const now = deps.clock.now();
-  const self = await latestSelf(core.memory, persona.seedSelf, lifeTimezone(config.life, now));
+  const tz = lifeTimezone(config.life, now);
+  const self = await latestSelf(core.memory, persona.seedSelf, tz);
   const expected = await core.memory.bySourceRef(
     "intention",
     eventRef(event.intentionEventId ?? event.worldEventId),
   );
   const state = await core.state.get();
   const goals = await core.goals.active();
+  const cite = coreCitables(expected ? [expected] : [], tz);
   const input = [
+    nowLine(now, tz, tz),
     `Event (${event.kind}, ${event.stakes} stakes): ${event.content}`,
     `How it went on the surface: valence ${event.valence.toFixed(2)}`,
-    `What she expected: ${expected?.content ?? "nothing; she didn't see it coming"}`,
+    `What she expected: ${cite.lines[0] ? lineText(cite.lines[0]) : "nothing; she didn't see it coming"}`,
     state
       ? `How she is right now: mood ${state.mood_valence.toFixed(2)}, energy ${state.energy.toFixed(2)}, autonomy ${state.needs.autonomy.toFixed(2)}, competence ${state.needs.competence.toFixed(2)}${state.emotion ? `, feeling ${state.emotion.label}` : ""}`
       : "How she is right now: unknown",
@@ -157,7 +165,11 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
   const system = [
     persona.coreValues,
     self,
-    loadPrompt("core/appraise", config.prompts.core_appraise),
+    withNoteRules(
+      loadPrompt("core/appraise", config.prompts.core_appraise),
+      config.prompts.core_notes,
+      "core/notes",
+    ),
   ].join("\n\n");
   try {
     const raw = await deps.llm.classifyJson({
@@ -170,7 +182,18 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
       maxTokens: config.core.appraise.max_tokens,
     });
     const bounded = boundAppraisal(raw, new Set(goals.map((g) => g.id)), config.core);
-    if (bounded) return { ...bounded, shown: tokenDates(`${system}\n${input}`) };
+    if (bounded) {
+      const note = writeNote({ episode: bounded.episode }, raw.times, cite.items, {
+        now,
+        zone: tz,
+      });
+      return {
+        ...bounded,
+        episode: note.fields.episode!,
+        cites: note.memories,
+        dropped: note.dropped,
+      };
+    }
     log.error("core appraisal unusable", { worldEventId: event.worldEventId });
   } catch (error) {
     log.error("core appraisal failed", {
@@ -193,26 +216,23 @@ export async function applyAppraisal(
   const { world, state } = deps.config.core;
   const ref = eventRef(event.worldEventId);
   const intentionRef = eventRef(event.intentionEventId ?? event.worldEventId);
-  const episodeId = await core.memory.insert(
-    {
-      kind: "episode",
-      content: a.episode,
-      payload: { appraisal_emotion: a.emotion },
-      embedding,
-      entity_refs: event.agents,
-      occurred_at: event.at,
-      created_at: now,
-      // A big event stays open until its story resolves; a small one is over when it happens.
-      status: event.stakes === "high" ? "open" : "resolved",
-      salience: a.salience,
-      valence: a.emotion.valence,
-      confidence: world.event_confidence,
-      depth: a.depth,
-      source: "world",
-      source_ref: ref,
-    },
-    { known: a.shown ?? [] },
-  );
+  const episodeId = await core.memory.insert({
+    kind: "episode",
+    content: a.episode,
+    payload: { appraisal_emotion: a.emotion, ...(a.cites?.length ? { cites: a.cites } : {}) },
+    embedding,
+    entity_refs: event.agents,
+    occurred_at: event.at,
+    created_at: now,
+    // A big event stays open until its story resolves; a small one is over when it happens.
+    status: event.stakes === "high" ? "open" : "resolved",
+    salience: a.salience,
+    valence: a.emotion.valence,
+    confidence: world.event_confidence,
+    depth: a.depth,
+    source: "world",
+    source_ref: ref,
+  });
   // Once it has happened the episode speaks for it; the plan stays only as history.
   const intention = await core.memory.bySourceRef("intention", intentionRef);
   if (intention) await core.memory.setStatus(intention.id, "resolved");

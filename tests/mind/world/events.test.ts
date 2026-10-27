@@ -19,6 +19,8 @@ import type { CoreGoal } from "@/mind/state/core/types";
 import { closeTestDb, resetDb, vec } from "../../helpers/db";
 import { makeTestDeps } from "../../helpers/deps";
 import { sequence } from "../../helpers/llm";
+import { coreCitables } from "@/mind/memory/core/citables";
+import type { CoreMemoryItem } from "@/mind/memory/core/types";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -47,6 +49,22 @@ const raw = (extra: object = {}) => ({
   ...extra,
 });
 const always = { core: { world: { event_probability: 1, events_per_day_max: 1 } } };
+const episodeItem = (content: string, ms: number): CoreMemoryItem => ({
+  id: "ep-1",
+  kind: "episode",
+  content,
+  payload: null,
+  entity_refs: [],
+  occurred_at: new Date(ms),
+  created_at: new Date(ms),
+  last_recalled_at: null,
+  status: "resolved",
+  salience: 0.5,
+  valence: 0,
+  depth: 2,
+  source: "world",
+  source_ref: null,
+});
 
 test("checkEvent rejects bad times and empty content, clamps valence", () => {
   expect(checkEvent(raw({ content: " " }), 300)).toBeNull();
@@ -110,7 +128,7 @@ test("buildEventInput shows her plan, her recent life and her people", () => {
       plan: {
         blocks: [{ start: "09:00", end: "12:00", kind: "busy", label: "reading", busy: 0.6 }],
       },
-      episodes: [{ content: "She rewatched Solaris.", when: new Date(now.getTime() - DAY) }],
+      recent: coreCitables([episodeItem("She rewatched Solaris.", now.getTime() - DAY)], "UTC"),
       people: ["Alcor"],
       subject: { kind: "everyday" },
       needs: { autonomy: 0.3, competence: 0.7 },
@@ -122,13 +140,14 @@ test("buildEventInput shows her plan, her recent life and her people", () => {
   );
   expect(input).toContain("09:00-12:00 busy: reading");
   expect(input).toContain("What has happened in her life lately (never contradict):");
-  expect(input).toContain("She rewatched Solaris.");
+  expect(input).toContain("- [m1] She rewatched Solaris. (⟦2026-01-04|day|UTC⟧)");
+  expect(input.startsWith("It's Monday 5 January, 09:00. Today is 2026-01-05")).toBe(true);
   expect(input).toContain("People she knows: Alcor.");
 
   const empty = buildEventInput(
     {
       plan: null,
-      episodes: [],
+      recent: { lines: [], items: [] },
       people: [],
       subject: { kind: "everyday" },
       needs: { autonomy: 0.6, competence: 0.6 },
@@ -345,7 +364,7 @@ test("a planned event carries its thought's embedding; a planned one without a t
 
 test("the generator's prompt is life/event v7: both kinds, the subject, and she lives online", async () => {
   const deps = makeTestDeps(always);
-  expect(deps.config.prompts.life_event).toBe("v7");
+  expect(deps.config.prompts.life_event).toBe("v8");
   await generateCoreEvents(coreDepsOf(deps), day, now, () => true);
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "life_event")!;
   expect(call.system).toContain("planned");
@@ -533,7 +552,7 @@ test("the input names the subject and the target length", () => {
   const input = buildEventInput(
     {
       plan: null,
-      episodes: [],
+      recent: { lines: [], items: [] },
       people: ["Alcor"],
       subject: { kind: "person", name: "Alcor" },
       needs: { autonomy: 0.6, competence: 0.6 },
@@ -596,4 +615,37 @@ test("budget exhaustion before a later event retains the earlier accepted ones",
   expect(out.accepted.map((event) => event.candidate.content)).toEqual(["Spica found a film."]);
   expect(out.attempts.map((attempt) => attempt.decision)).toEqual(["accepted"]);
   expect(out.budgetExhausted).toBe(true);
+});
+
+test("a planned event's thought labels its own time words; its content keeps its words", async () => {
+  const all = makeTestDeps({ ...always, life: { timezone: "UTC" } });
+  all.llm.handlers.life_event = () =>
+    ev("Spica rewatched Solaris.", {
+      kind: "planned",
+      at: "20:00",
+      thought: "Spica is thinking of rewatching Solaris tonight.",
+      times: [
+        {
+          field: "thought",
+          words: "tonight",
+          from: "",
+          unit: "day",
+          shift: 0,
+          weekday: null,
+          month: null,
+          day_of_month: null,
+          part: "night",
+          clock: "",
+          span: "at",
+          rough: false,
+        },
+      ],
+    });
+  const out = await generateCoreEvents(coreDepsOf(all), day, now, () => true);
+  expect(out.accepted).toHaveLength(1);
+  expect(out.accepted[0]!.candidate.thought).toBe(
+    "Spica is thinking of rewatching Solaris ⟦2026-01-05|night|UTC|tonight⟧.",
+  );
+  expect(out.accepted[0]!.candidate.content).toBe("Spica rewatched Solaris.");
+  expect(out.dropped).toEqual([]);
 });

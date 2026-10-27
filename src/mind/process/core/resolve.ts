@@ -9,17 +9,23 @@ import type { LoopContext } from "./runner";
 import { eventRef } from "./appraise";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
+import { coreCitables, lineText } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules, writeNote, type Dropped } from "@/mind/platform/notes";
+import { nowLine } from "@/mind/platform/time-anchors";
 
 const ResolutionSchema = z.object({
   content: z.string(),
   valence: z.number(),
   stakes: z.enum(["low", "high"]),
+  times: noteTimesSchema(["content"]).default([]),
 });
 
 export type ResolutionProposal = {
   content: string;
   valence: number;
   stakes: "low" | "high";
+  /** Citations and time labels its words couldn't use. */
+  dropped: Dropped[];
 };
 
 export async function proposeResolution(
@@ -31,13 +37,20 @@ export async function proposeResolution(
 
   const persona = loadPersona(config);
   const now = ctx.deps.clock.now();
-  const self = await latestSelf(core.memory, persona.seedSelf, lifeTimezone(config.life, now));
+  const tz = lifeTimezone(config.life, now);
+  const self = await latestSelf(core.memory, persona.seedSelf, tz);
   const intention = await core.memory.bySourceRef("intention", eventRef(event.id));
-  const prompt = loadPrompt("core/resolve", config.prompts.core_resolve);
+  const cite = coreCitables(intention ? [intention] : [], tz);
+  const prompt = withNoteRules(
+    loadPrompt("core/resolve", config.prompts.core_resolve),
+    config.prompts.core_notes,
+    "core/notes",
+  );
   const input = [
+    nowLine(now, tz, tz),
     `Planned event (${event.stakes} stakes): ${event.content}`,
     `Expected feeling: valence ${event.valence.toFixed(2)}`,
-    `What she expected: ${intention?.content ?? "no recorded intention"}`,
+    `What she expected: ${cite.lines[0] ? lineText(cite.lines[0]) : "no recorded intention"}`,
   ].join("\n\n");
 
   try {
@@ -55,7 +68,13 @@ export async function proposeResolution(
       config.core.world.event_max_chars,
     );
     if (content && Number.isFinite(raw.valence)) {
-      return { content, valence: Math.max(-1, Math.min(1, raw.valence)), stakes: raw.stakes };
+      const note = writeNote({ content }, raw.times, cite.items, { now, zone: tz });
+      return {
+        content: note.fields.content!,
+        valence: Math.max(-1, Math.min(1, raw.valence)),
+        stakes: raw.stakes,
+        dropped: note.dropped,
+      };
     }
     log.error("core resolution unusable", { worldEventId: event.id });
   } catch (error) {

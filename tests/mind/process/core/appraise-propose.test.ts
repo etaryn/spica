@@ -42,6 +42,7 @@ const raw = (over: Partial<RawAppraisal> = {}): RawAppraisal => ({
   goal_effects: [],
   need_effects: { autonomy: 1, competence: 0 },
   depth: null,
+  times: [],
   ...over,
 });
 
@@ -200,15 +201,15 @@ test("the judged depth is kept; a missing one, or the code fallback, takes the e
   expect(codeAppraisal(event, cfg).depth).toBe(cfg.depth.by_kind.episode);
 });
 
-test("a model appraisal carries the dates its input showed", async () => {
-  const deps = makeTestDeps();
+test("a model appraisal labels its own time words and may cite what she expected", async () => {
+  const deps = makeTestDeps({ life: { timezone: "UTC" } });
   await deps.core.state.ensure(deps.config.core.state.baseline, { autonomy: 0.6, competence: 0.6 });
-  await deps.core.memory.insert({
+  const intention = await deps.core.memory.insert({
     kind: "intention",
-    content: "Spica booked the telescope ⟦2025-12-30|day|UTC⟧ for these images.",
+    content: "Spica booked the telescope for these images.",
     embedding: vec(),
-    occurred_at: now,
-    created_at: now,
+    occurred_at: new Date("2026-01-02T12:00:00Z"),
+    created_at: new Date("2026-01-02T12:00:00Z"),
     status: "open",
     salience: 0.4,
     valence: 0.6,
@@ -216,7 +217,33 @@ test("a model appraisal carries the dates its input showed", async () => {
     source: "world",
     source_ref: `world_event:${event.worldEventId}`,
   });
-  deps.llm.handlers.core_appraise = sequence(raw());
+  deps.llm.handlers.core_appraise = sequence(
+    raw({
+      episode: "The booking [m1] paid off tonight.",
+      times: [
+        {
+          field: "episode",
+          words: "tonight",
+          from: "",
+          unit: "day",
+          shift: 0,
+          weekday: null,
+          month: null,
+          day_of_month: null,
+          part: "night",
+          clock: "",
+          span: "at",
+          rough: false,
+        },
+      ],
+    }),
+  );
   const a = await propose(deps);
-  expect(a.shown?.map((d) => d.toISOString().slice(0, 10))).toContain("2025-12-30");
+  expect(a.episode).toBe(
+    "The booking (⟦2026-01-02|day|UTC⟧) paid off ⟦2026-01-05|night|UTC|tonight⟧.",
+  );
+  expect(a.cites).toEqual([intention]);
+  const input = deps.llm.structuredCalls.at(-1)!.input;
+  expect(input.startsWith("It's ")).toBe(true);
+  expect(input).toContain("What she expected: [m1] Spica booked the telescope for these images.");
 });

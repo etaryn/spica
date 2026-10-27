@@ -223,6 +223,7 @@
     "persona": "v7",
     "labels": "v1",
     "notes": "v2",
+    "core_notes": "v1",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",

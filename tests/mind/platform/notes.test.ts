@@ -7,6 +7,7 @@ import {
   writeNote,
   type Citable,
   type NoteTime,
+  withNoteRules,
 } from "@/mind/platform/notes";
 
 const now = new Date("2026-01-05T09:00:00Z"); // Monday
@@ -179,4 +180,9 @@ test("a citation written as a footnote reads as a note on the words before it", 
   expect(note.fields.idea).toBe(
     "Interview coming up (design interview, planned ⟦2026-01-08|day|UTC⟧, theirs; telescope booking, planned, yours).",
   );
+});
+
+test("core loops load their own note rules", () => {
+  expect(withNoteRules("SYS", "v1", "core/notes")).toContain("## Citing and times");
+  expect(withNoteRules("SYS", "v1", "core/notes")).not.toContain("theirs");
 });

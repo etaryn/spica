@@ -3,7 +3,7 @@
  * it was shown ("[m3]"), and code puts that memory's or thread's own line there, with whose it is.
  * The time words a note uses itself come labelled with what they mean, and code counts the day,
  * as it does for the user's words: no code reads a note for dates, and no model works one out.
- * It holds no one's data, so both minds write through it.
+ * It holds no one's data, so both minds write through it, each with its own rules.
  */
 import { z } from "zod";
 import { loadPrompt } from "./prompts";
@@ -161,8 +161,8 @@ export function noteRefs(note: WrittenNote): { cites?: string[]; cites_threads?:
 }
 
 /** A loop's prompt with the shared rules for citing and for labelling its own time words. */
-export function withNoteRules(system: string, version: string): string {
-  return `${system}\n\n${loadPrompt("notes", version)}`;
+export function withNoteRules(system: string, version: string, name = "notes"): string {
+  return `${system}\n\n${loadPrompt(name, version)}`;
 }
 
 function dayOf(c: Citable | undefined, zone: string): string | null {

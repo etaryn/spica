@@ -16,7 +16,9 @@ import { seededUnit } from "@/mind/platform/seeded-random";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { latestSelf } from "@/mind/memory/core/self";
-import { dateToken } from "@/mind/platform/time-anchors";
+import { coreCitables, lineText } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules } from "@/mind/platform/notes";
+import { nowLine } from "@/mind/platform/time-anchors";
 import { budgetDayStart, runCoreLoop } from "./runner";
 import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./thoughts";
 import type { ApplyOutput, ThinkingResult } from "./thoughts";
@@ -33,6 +35,7 @@ const Output = z.object({
       }),
     )
     .min(1),
+  times: noteTimesSchema(["item_1", "item_2"]).default([]),
 });
 
 async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope }, now: Date) {
@@ -193,12 +196,12 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
     const persona = loadPersona(config);
     const tz = lifeTimezone(config.life, now);
     const self = await latestSelf(core.memory, persona.seedSelf, tz);
-    const dated = (m: CoreMemoryItem) =>
-      `${m.content} (${dateToken(m.occurred_at ?? m.created_at, tz)})`;
+    const cite = coreCitables([seed, ...chain], tz);
     const goals = await core.goals.active();
     const input = [
-      `Seed memory: ${dated(seed)}`,
-      `Associated memories: ${chain.length ? chain.map(dated).join("\n") : "none"}`,
+      nowLine(now, tz, tz),
+      `Seed memory: ${lineText(cite.lines[0]!)}`,
+      `Associated memories: ${cite.lines.slice(1).map(lineText).join("\n") || "none"}`,
       state
         ? `Mood: ${state.mood_valence.toFixed(2)}; energy: ${state.energy.toFixed(2)}; needs: autonomy ${state.needs.autonomy.toFixed(2)}, competence ${state.needs.competence.toFixed(2)}`
         : "Mood, energy and needs: unknown",
@@ -210,17 +213,25 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
       system: [
         persona.coreValues,
         self,
-        loadPrompt("core/wander", config.prompts.core_wander),
+        withNoteRules(
+          loadPrompt("core/wander", config.prompts.core_wander),
+          config.prompts.core_notes,
+          "core/notes",
+        ),
       ].join("\n\n"),
       input,
       schema: Output,
       timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });
-    const prepared = await prepareThoughts(
-      ctx.deps,
-      raw.items.slice(0, config.core.wander.max_items),
-    );
+    const items = raw.items.slice(0, config.core.wander.max_items);
+    const prepared = await prepareThoughts(ctx.deps, items, {
+      times: raw.times,
+      citables: cite.items,
+      now,
+      zone: tz,
+      fields: items.map((_, i) => `item_${i + 1}`),
+    });
     return ctx.commit<ApplyOutput>(async (tx) => {
       await tx.lock(WORLD_LOCK);
       if (!(await eligibility({ ...ctx.deps, core: tx }, now))) {
@@ -250,7 +261,12 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
       }
       return {
         inputs: { seed: seed.id, chain: chain.map((item) => item.id) },
-        outputs: { applied: true, ids, dropped: traceDrops(dropped) },
+        outputs: {
+          applied: true,
+          ids,
+          dropped: traceDrops(dropped),
+          note_dropped: prepared.flatMap((p) => p.dropped ?? []),
+        },
         promptVersion: config.prompts.core_wander,
       };
     });

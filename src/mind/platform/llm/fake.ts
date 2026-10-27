@@ -158,7 +158,11 @@ export class FakeLLMProvider implements LLMProvider {
       };
     },
     core_ruminate: (input: string) => {
-      const episode = /^Landed episode: (.*)$/m.exec(input)?.[1] ?? "an episode";
+      // The memory's id is the loop's to cite, not words of hers.
+      const episode = (/^Landed episode: (.*)$/m.exec(input)?.[1] ?? "an episode").replace(
+        /^\[m\d+\] /,
+        "",
+      );
       const prefix = "She keeps thinking about ";
       const available = defaults.core.loops.max_chars - prefix.length - 1;
       return {
@@ -170,7 +174,10 @@ export class FakeLLMProvider implements LLMProvider {
       };
     },
     core_wander: (input: string) => {
-      const seed = /^Seed memory: (.*)$/m.exec(input)?.[1] ?? "her own day";
+      const seed = (/^Seed memory: (.*)$/m.exec(input)?.[1] ?? "her own day").replace(
+        /^\[m\d+\] /,
+        "",
+      );
       const prefix = "She finds herself thinking again about ";
       const available = defaults.core.loops.max_chars - prefix.length - 1;
       return {

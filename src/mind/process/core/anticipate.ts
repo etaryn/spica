@@ -20,7 +20,9 @@ import { HOUR } from "@/mind/platform/time";
 import { clamp } from "@/mind/platform/math";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { dateToken } from "@/mind/platform/time-anchors";
+import { dateToken, nowLine } from "@/mind/platform/time-anchors";
+import { coreCitables, lineText } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules } from "@/mind/platform/notes";
 
 const Output = z.object({
   thought: z.object({
@@ -35,6 +37,7 @@ const Output = z.object({
     arousal: z.number(),
     about: z.string(),
   }),
+  times: noteTimesSchema(["thought"]).default([]),
 });
 
 function eligible(item: CoreMemoryItem | null, now: Date, until: Date): item is CoreMemoryItem {
@@ -71,10 +74,12 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
     const self = await latestSelf(core.memory, persona.seedSelf, tz);
     const state = await core.state.get();
     const goal = event.goal_ref ? await core.goals.get(event.goal_ref) : null;
+    const cite = coreCitables([intention], tz);
     const input = [
+      nowLine(now, tz, tz),
       `Upcoming plan: ${event.content}`,
       `When: ${dateToken(event.at, tz, "time")}`,
-      `Her intention: ${intention.content}`,
+      `Her intention: ${lineText(cite.lines[0]!)}`,
       `People: ${event.agent_names.length ? event.agent_names.join(", ") : "none named"}`,
       goal ? `Related goal: ${goal.title} (${goal.why})` : "Related goal: none",
       moodLine(state),
@@ -85,7 +90,11 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
       system: [
         persona.coreValues,
         self,
-        loadPrompt("core/anticipate", config.prompts.core_anticipate),
+        withNoteRules(
+          loadPrompt("core/anticipate", config.prompts.core_anticipate),
+          config.prompts.core_notes,
+          "core/notes",
+        ),
       ].join("\n\n"),
       input,
       schema: Output,
@@ -103,7 +112,13 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
       arousal: clamp(raw.emotion.arousal, 0, 1),
       phrase,
     };
-    const prepared = await prepareThoughts(ctx.deps, [raw.thought]);
+    const prepared = await prepareThoughts(ctx.deps, [raw.thought], {
+      times: raw.times,
+      citables: cite.items,
+      now,
+      zone: tz,
+      fields: ["thought"],
+    });
     return ctx.commit<ApplyOutput>(async (tx) => {
       await tx.lock(WORLD_LOCK);
       const current = await tx.memory.get(intention.id);
@@ -149,6 +164,7 @@ export async function coreAnticipate(deps: CoreDeps, now: Date): Promise<Thinkin
           applied: stored.ids.length > 0,
           ids: stored.ids,
           dropped: traceDrops(stored.dropped),
+          note_dropped: prepared.flatMap((p) => p.dropped ?? []),
         },
         promptVersion: config.prompts.core_anticipate,
       };

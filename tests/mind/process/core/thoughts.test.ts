@@ -173,3 +173,50 @@ test("a thought keeps its judged depth; without one it takes its kind's default"
   expect((await deps.core.memory.get(ids[0]!))!.depth).toBe(3);
   expect((await deps.core.memory.get(ids[1]!))!.depth).toBe(all.config.core.depth.by_kind.thought);
 });
+
+const tomorrowNight = {
+  field: "thought",
+  words: "tomorrow night",
+  from: "",
+  unit: "day" as const,
+  shift: 1,
+  weekday: null,
+  month: null,
+  day_of_month: null,
+  part: "night" as const,
+  clock: "",
+  span: "at" as const,
+  rough: false,
+};
+
+test("a thought's time words and citation become tokens, and a full-length thought is never cut after", async () => {
+  const all = makeTestDeps();
+  const deps = coreDepsOf(all);
+  const max = deps.config.core.loops.max_chars;
+  const cited = {
+    id: "m1",
+    ref: "mem-1",
+    kind: "memory" as const,
+    text: "⟦2026-01-03|day|UTC⟧",
+    owner: null,
+    at: new Date("2026-01-03T12:00:00Z"),
+  };
+  const long = `Solaris [m1] again tomorrow night ${"x".repeat(max)}`;
+  const [prepared] = await prepareThoughts(
+    deps,
+    [{ kind: "thought", content: long, salience: "low" }],
+    { times: [tomorrowNight], citables: [cited], now, zone: "UTC", fields: ["thought"] },
+  );
+  // Monday the 5th: "tomorrow night" said with its words kept is Tuesday's night.
+  expect(
+    prepared!.item.content.startsWith(
+      "Solaris (⟦2026-01-03|day|UTC⟧) again ⟦2026-01-06|night|UTC|tomorrow night⟧",
+    ),
+  ).toBe(true);
+  expect(prepared!.item.content.length).toBeGreaterThan(max);
+  expect(prepared!.cites).toEqual(["mem-1"]);
+  const { ids } = await deps.core.transaction((tx) => storeThoughts(tx, deps, [prepared!], meta));
+  const row = await deps.core.memory.get(ids[0]!);
+  expect(row!.content).toBe(prepared!.item.content);
+  expect(row!.payload).toEqual({ seed: "a-memory", cites: ["mem-1"] });
+});

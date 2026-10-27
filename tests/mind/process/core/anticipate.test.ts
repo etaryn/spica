@@ -281,3 +281,38 @@ test("landing while the model is in flight wins and prevents all anticipation wr
     emotion: null,
   });
 });
+
+test("her anticipation cites the intention as its plan's moment and labels her own words", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  const plan = await seed(deps, 6);
+  all.llm.handlers.core_anticipate = () => ({
+    thought: { kind: "thought", content: "the film [m1], can't wait for tonight", salience: "low" },
+    emotion: { label: "hopeful", valence: 0.6, arousal: 0.8, about: "the screening" },
+    times: [
+      {
+        field: "thought",
+        words: "tonight",
+        from: "",
+        unit: "day",
+        shift: 0,
+        weekday: null,
+        month: null,
+        day_of_month: null,
+        part: "night",
+        clock: "",
+        span: "at",
+        rough: false,
+      },
+    ],
+  });
+  const result = await coreAnticipate(deps, now);
+  expect(result.status).toBe("done");
+  const { thoughts } = await rows(all);
+  expect(thoughts[0]!.content).toBe(
+    "the film (⟦2026-01-05T15:00|time|UTC⟧), can't wait for ⟦2026-01-05|night|UTC|tonight⟧",
+  );
+  expect(thoughts[0]!.payload).toEqual({ anticipates: plan.id, cites: [plan.id] });
+  const input = all.llm.structuredCalls.at(-1)!.input;
+  expect(input.startsWith("It's ")).toBe(true);
+  expect(input).toContain("Her intention: [m1] Spica is thinking about the film.");
+});

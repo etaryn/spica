@@ -20,7 +20,9 @@ import { HOUR } from "@/mind/platform/time";
 import { clamp } from "@/mind/platform/math";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
-import { dateToken } from "@/mind/platform/time-anchors";
+import { nowLine } from "@/mind/platform/time-anchors";
+import { coreCitables, lineText } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules } from "@/mind/platform/notes";
 
 const Output = z.object({
   thought: z.object({
@@ -29,6 +31,7 @@ const Output = z.object({
     salience: z.enum(["low", "medium"]),
     depth: DepthLabel.nullable().default(null),
   }),
+  times: noteTimesSchema(["thought"]).default([]),
 });
 const HistoricalEmotion = z.object({
   label: z.string().min(1),
@@ -85,8 +88,10 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
     const event = sourceEventId ? await core.world.getEvent(sourceEventId) : null;
     const goal = event?.goal_ref ? await core.goals.get(event.goal_ref) : null;
     const state = await core.state.get();
+    const cite = coreCitables([episode], tz);
     const input = [
-      `Landed episode: ${episode.content} (${dateToken(episode.occurred_at ?? episode.created_at, tz)})`,
+      nowLine(now, tz, tz),
+      `Landed episode: ${lineText(cite.lines[0]!)}`,
       `Its valence: ${episode.valence.toFixed(2)}`,
       `Historical emotion: ${historical.success ? `${historical.data.label} (valence ${historical.data.valence.toFixed(2)}, arousal ${historical.data.arousal.toFixed(2)}${historical.data.phrase ? `, about ${historical.data.phrase}` : ""})` : "absent"}`,
       `People: ${people.length ? people.map((person) => person.name).join(", ") : "none named"}`,
@@ -99,14 +104,24 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
       system: [
         persona.coreValues,
         self,
-        loadPrompt("core/ruminate", config.prompts.core_ruminate),
+        withNoteRules(
+          loadPrompt("core/ruminate", config.prompts.core_ruminate),
+          config.prompts.core_notes,
+          "core/notes",
+        ),
       ].join("\n\n"),
       input,
       schema: Output,
       timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });
-    const prepared = await prepareThoughts(ctx.deps, [raw.thought]);
+    const prepared = await prepareThoughts(ctx.deps, [raw.thought], {
+      times: raw.times,
+      citables: cite.items,
+      now,
+      zone: tz,
+      fields: ["thought"],
+    });
     return ctx.commit<ApplyOutput>(async (tx) => {
       await tx.lock(WORLD_LOCK);
       const current = await tx.memory.get(episode.id);
@@ -148,6 +163,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
           applied: stored.ids.length > 0,
           ids: stored.ids,
           dropped: traceDrops(stored.dropped),
+          note_dropped: prepared.flatMap((p) => p.dropped ?? []),
         },
         promptVersion: config.prompts.core_ruminate,
       };

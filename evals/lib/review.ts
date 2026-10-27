@@ -1,5 +1,6 @@
 import type { Phrases } from "@/mind/platform/phrases";
-import { relativeWords, renderAbsolute } from "@/mind/platform/time-anchors";
+import { renderAbsolute } from "@/mind/platform/time-anchors";
+import { relativeWords } from "./relative-words";
 import type { GroundedClaim } from "@/mind/process/guard/self-claims";
 import type { Candidate, GateResult } from "@/mind/process/outreach/types";
 import type { OutreachSnapshot } from "./outreach-check";
@@ -255,8 +256,14 @@ export function renderReview(runs: ReviewRun[], meta: ReviewMeta): string {
           "",
         );
     }
+    // A word the output labelled in its `times` became a date; only the rest are slips.
     const loopSlips = calls
-      .map((c) => ({ purpose: c.purpose, words: relativeWords(JSON.stringify(c.output)) }))
+      .map((c) => {
+        const { times, ...rest } = (c.output ?? {}) as { times?: { words?: string }[] };
+        const labelled = new Set((times ?? []).flatMap((t) => relativeWords(t.words ?? "")));
+        const words = relativeWords(JSON.stringify(rest)).filter((w) => !labelled.has(w));
+        return { purpose: c.purpose, words };
+      })
       .filter((s) => s.words.length);
     if (loopSlips.length)
       out.push(

@@ -443,10 +443,8 @@ test("a planned event's thought is on her mind at once: retrievable and outreach
   const [intention] = await memories(deps);
   expect(intention).toMatchObject({
     kind: "intention",
-    // Her "tonight" is stored as the night it meant.
-    content: expect.stringMatching(
-      /^Spica is thinking of rewatching Solaris with Alcor ⟦[^⟧]+\|night\|/,
-    ),
+    // Nothing reads her words for dates: an unlabelled "tonight" is kept as written.
+    content: "Spica is thinking of rewatching Solaris with Alcor tonight.",
     status: "open",
     valence: 0.3,
     salience: deps.config.core.world.event_salience,

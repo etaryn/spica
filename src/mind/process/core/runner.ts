@@ -14,7 +14,6 @@ import type { CoreScope } from "@/mind/platform/core";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { meterLlm, spend } from "@/mind/platform/llm/meter";
-import { tokenDates } from "@/mind/platform/time-anchors";
 import { localMidnight } from "@/mind/platform/timezone";
 import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 
@@ -25,8 +24,6 @@ export type LoopContext = {
   traceId: string;
   /** Whether one more model call fits today's budget for this loop's tier. */
   canCall(): boolean;
-  /** Dates in the inputs this run sent the model. */
-  shown(): Date[];
   /** Apply writes and record successful completion in the same core transaction. */
   commit<T>(apply: (tx: CoreScope) => Promise<LoopResult<T>>): Promise<LoopResult<T>>;
 };
@@ -71,13 +68,6 @@ export async function runCoreLoop<T>(
     maxRetries: config.core.max_retries,
   });
   const canCall = () => spent + meter.calls() < limit;
-  const shown: Date[] = [];
-  // The dates in what she was shown: a bare weekday she writes back takes the day she saw.
-  const llm = Object.create(meter.llm) as typeof meter.llm;
-  llm.classifyJson = (req) => {
-    shown.push(...tokenDates(`${req.system}\n${req.input}`));
-    return meter.llm.classifyJson(req);
-  };
   const traceId = randomUUID();
   const trace = (fields: Partial<NewCoreLoopTrace> & Pick<NewCoreLoopTrace, "status">) =>
     core.traces.insert({
@@ -105,10 +95,7 @@ export async function runCoreLoop<T>(
     if (commitStarted) throw new Error("core loop already committed");
     commitStarted = true;
     const applied = await core.transaction(async (tx) => {
-      const memory = Object.create(tx.memory) as typeof tx.memory;
-      memory.insert = (item, hints = {}) =>
-        tx.memory.insert(item, { ...hints, known: [...shown, ...(hints.known ?? [])] });
-      const value = await apply({ ...tx, memory });
+      const value = await apply(tx);
       await tx.traces.insert({
         id: traceId,
         loop: name,
@@ -128,10 +115,9 @@ export async function runCoreLoop<T>(
   };
   try {
     result = await fn({
-      deps: { ...deps, llm },
+      deps: { ...deps, llm: meter.llm },
       traceId,
       canCall,
-      shown: () => [...shown],
       commit,
     });
   } catch (error) {

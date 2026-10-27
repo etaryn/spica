@@ -738,6 +738,7 @@ test("a time word is labelled only in the field its label names", async () => {
   });
   expect(await coreReflect(deps, now)).toBe("done");
   const rows = await all.db.select().from(core_memory);
+  expect(rows.find((m) => m.kind === "insight")!.content).toBe("it ends tomorrow");
   expect(rows.find((m) => m.kind === "opinion")!.content).toBe(
     "endings: better ⟦2026-01-06|day|UTC|tomorrow⟧",
   );

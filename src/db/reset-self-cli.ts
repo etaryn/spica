@@ -23,7 +23,7 @@ const embedder = new VoyageEmbedder({
 });
 const n = await adminResetSelf(db);
 await seedCore({
-  core: createCoreLayer(db, config.life.timezone),
+  core: createCoreLayer(db),
   clock: systemClock,
   config,
   embedder,

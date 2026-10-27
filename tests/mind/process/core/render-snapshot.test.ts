@@ -334,6 +334,7 @@ test("a time word is labelled only in the line its label names", async () => {
   });
   expect(await coreRenderSnapshot(deps, now)).toBe("done");
   const snapshot = (await deps.core.memory.latestSnapshot())!;
+  expect(snapshot.sections.Lately).toBe("- Rest on Sunday");
   expect(snapshot.sections.Opinions).toBe("- Films land better ⟦2026-01-11|day|UTC|on Sunday⟧");
 });
 

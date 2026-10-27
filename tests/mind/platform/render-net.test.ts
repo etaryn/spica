@@ -4,15 +4,12 @@ import { z } from "zod";
 import { SimClock } from "@/mind/platform/clock";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { withTimeRendering } from "@/mind/platform/llm/render-net";
-import { anchorTimes } from "@/mind/platform/time-anchors";
+import { dateToken } from "@/mind/platform/time-anchors";
 
 test("reply and structured prompts are rendered at the clock's now; the inner provider records them", async () => {
   const fake = new FakeLLMProvider();
   const llm = withTimeRendering(fake, new SimClock(new Date("2026-01-13T09:00:00Z")), 6);
-  const note = anchorTimes("the race was yesterday", {
-    at: new Date("2026-01-12T09:00:00Z"),
-    zone: "UTC",
-  });
+  const note = `the race was ${dateToken(new Date("2026-01-11T12:00:00Z"), "UTC")}`;
   fake.replies.push("ok");
   await llm.generateReply({
     system: [{ text: note, cache: true }],

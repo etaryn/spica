@@ -329,11 +329,11 @@ test("a summary cites a memory by id and labels its own time words", async () =>
   await userSummarise(deps, await run("exchange:c"), await loadRunInputs(deps, userId));
   const s = (await liveSummary(deps.db, userId))!;
   expect(s.payload).toMatchObject({
-    where_things_stand: "They have design interview, planned (theirs) coming up.",
+    where_things_stand: "They have (design interview, planned, theirs) coming up.",
     whats_live: "Check in ⟦2026-01-05|night|UTC|tonight⟧.",
     cites: [interview.id],
   });
-  expect(s.content).toContain("(theirs)");
+  expect(s.content).toContain(", theirs)");
   const call = deps.llm.structuredCalls.find((c) => c.purpose === "user_summarise")!;
   expect(JSON.parse(call.input).new_memories[0].id).toBe("m1");
   expect(call.system).toContain("## Citing and times");

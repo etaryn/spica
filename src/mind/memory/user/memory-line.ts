@@ -28,7 +28,8 @@ export function memoryLine(
   quoteChars: number,
 ): string {
   const head = [p.label, p.status].filter(Boolean).join(", ");
-  const dates = times.map((t) => labelToken(t, zone)).join(", ");
+  // The same day said twice is one date.
+  const dates = [...new Set(times.map((t) => labelToken(t, zone)))].join(", ");
   return `${head}${dates ? ` ${dates}` : ""} — ${quoted(moves, quoteChars)}`;
 }
 

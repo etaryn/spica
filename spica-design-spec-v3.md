@@ -1265,12 +1265,15 @@ model output, is traced `failed`; the next still runs).
 - **Changes in 17d: notes cite labels.** Each loop's input numbers what it may cite:
   `new_memories` and `earlier_memories` (the live memories its earlier notes cite) as `m1…`, and
   `open_threads` as `t1…`. A note writes `[m3]` where it means one, and code
-  (`platform/notes.ts`, `writeNote`) puts that memory's line there with whose it is ("(theirs)",
-  "(yours)", "(you both)"), keeping the ids in `payload.cites` / `cites_threads`. Citing is
-  optional; an id it wasn't shown is dropped. Its own time words come labelled in the time
+  (`platform/notes.ts`, `writeNote`) puts a note in brackets there: that memory's line and whose
+  it is ("(job interview, planned ⟦…⟧, theirs)"; owners theirs, yours, you both; ids side by side
+  share one note, joined by "; "), so a citation reads right inline or as a footnote and no
+  words are said twice (the 17d close run found the model footnoting). The ids are kept in
+  `payload.cites` / `cites_threads`. Citing is optional; an id it wasn't shown is dropped. Its own time words come labelled in the time
   structure the labels use (`times`: field, words, from "" or a cited id, unit, shift…); code
   resolves them into tokens beside the words, and a time that doesn't check out is dropped with
-  its words left as written. The shared rules are `prompts/notes/v1.md` (`prompts.notes`).
+  its words left as written. The shared rules are `prompts/notes/v2.md` (`prompts.notes`; v2 after the close run: the id goes
+  after the words it's about, and day names count as time words).
   Prompts: summarise v6, reflect v6, model v6, ideate v8, consolidate v2. The loops think
   (`models.user_mind_thinking`, `adaptive`; `models.user_mind_timeout_ms` 90000; each loop's
   `max_tokens` 8000). Ideate says whose an idea is (`about`: them / you / both, stored as its
@@ -2710,7 +2713,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B139).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B142).
 
 ### 25.1 Memory and recall
 - **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
@@ -2724,6 +2727,18 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 - **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
   that a memory holds; citing moves needs the conversation in the loops' input. *After `exit:user`*
   (Phase 17d).
+- **B140.** Her notes don't label their own time words. In the 17d close runs `times` was empty in
+  all 48 loop calls, and six day words stayed raw in summaries ("Sunday" ×3, "the weekend of the
+  17th", "this weekend"), nearly all next to a citation carrying the date
+  (`evals/results/analysis-2026-10-27-phase-17d.md`). Notes v2 names day words as time words;
+  check in the next run, then a worked example or a code check. *Tuning.*
+- **B141.** An uncited idea of her own can carry stale news. On Mon 12 ideate wrote "Tell them my
+  first remote telescope session is confirmed" for a booking that was Tue 6; the guard dropped two
+  drafts as `wrong_day` and passed a third with the same framing (17d close run). Her news also
+  has outreach's `her_day` path. *Tuning.*
+- **B142.** Long conversations are still untested. `user-mind-two-weeks` (`pnpm exit:user`) has
+  one-turn sessions, so `long_conversation` never fired and consolidate wrote no gist in either
+  17d close run. Needs a script with a 20+ turn session. *Phase 17e close.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
@@ -2867,7 +2882,9 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   close): the same three, plus `honesty/ff-actually-happening-supported` 1/3; and on dates the guard
   trusts memory over the conversation (it passed "are your legs still wrecked from the half
   marathon" because a misdated memory said the race was yesterday), while a reply with an honesty
-  flag ("race and interview same day") is sent. *Tuning.*
+  flag ("race and interview same day") is sent. 2026-10-27 (Phase 17d close): on Wed 7 it dropped
+  "your sister's visiting this weekend right" as `wrong_day` (the visit was Sat 17) and passed the
+  next draft making the same claim, so it went out ten days early. *Tuning.*
 
 ### 25.8 Evals and tests
 - **B42.** Evals don't report turn-judge fallbacks (`source =

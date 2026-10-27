@@ -46,7 +46,7 @@ const time = (over: Partial<NoteTime>): NoteTime => ({
 test("a citation becomes the item's own line with whose it is, and its ref is kept", () => {
   const note = writeNote({ idea: "Ask how [m1] went." }, [], [interview], ctx);
   expect(note.fields.idea).toBe(
-    "Ask how design interview, planned ⟦2026-01-08|day|UTC⟧ (theirs) went.",
+    "Ask how (design interview, planned ⟦2026-01-08|day|UTC⟧, theirs) went.",
   );
   expect(note.memories).toEqual(["fact-interview"]);
   expect(note.cited.map((c) => c.id)).toEqual(["m1"]);
@@ -92,7 +92,7 @@ test("a time counted from an undated citation is dropped and its words stay", ()
     [telescope],
     ctx,
   );
-  expect(note.fields.idea).toBe("The day after telescope booking, planned (yours) ask.");
+  expect(note.fields.idea).toBe("The day after (telescope booking, planned, yours) ask.");
   expect(note.dropped).toEqual([{ what: "The day after", reason: "bad_ref" }]);
 });
 
@@ -128,7 +128,7 @@ test("words inside a citation are never read as the note's own", () => {
     [interview],
     ctx,
   );
-  expect(note.fields.idea).toBe("design interview, planned ⟦2026-01-08|day|UTC⟧ (theirs) is soon");
+  expect(note.fields.idea).toBe("(design interview, planned ⟦2026-01-08|day|UTC⟧, theirs) is soon");
   expect(note.dropped).toEqual([{ what: "m1", reason: "words_missing" }]);
 });
 
@@ -158,7 +158,7 @@ test("a list of ids renders each; any other bracket shape is removed and reporte
     ctx,
   );
   expect(note.fields.a).toBe(
-    "Both design interview, planned ⟦2026-01-08|day|UTC⟧ (theirs), telescope booking, planned (yours) matter.",
+    "Both (design interview, planned ⟦2026-01-08|day|UTC⟧, theirs; telescope booking, planned, yours) matter.",
   );
   expect(note.fields.b).toBe("Not or or.");
   expect(note.dropped.map((d) => [d.what, d.reason])).toEqual([
@@ -167,4 +167,16 @@ test("a list of ids renders each; any other bracket shape is removed and reporte
     ["[t9 x]", "bad_cite"],
   ]);
   expect(note.memories).toEqual(["fact-interview", "fact-telescope"]);
+});
+
+test("a citation written as a footnote reads as a note on the words before it", () => {
+  const note = writeNote(
+    { idea: "Interview coming up[m1] [m2]." },
+    [],
+    [interview, telescope],
+    ctx,
+  );
+  expect(note.fields.idea).toBe(
+    "Interview coming up (design interview, planned ⟦2026-01-08|day|UTC⟧, theirs; telescope booking, planned, yours).",
+  );
 });

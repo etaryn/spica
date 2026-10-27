@@ -34,6 +34,7 @@ export type Citable = {
 
 // One id or a list of them: "[m3]", "[m1, m3]".
 const CITE = /\[([mt]\d+(?:\s*,\s*[mt]\d+)*)\]/g;
+const ADJACENT = /\]\s*\[(?=[mt]\d)/g;
 // Any other bracket that looks like an id ("[M1]", "[m1-m2]") is not a citation, so it never
 // reaches stored text as one.
 const STRAY = /\[[mt]\d+[^\]]*\]/gi;
@@ -107,8 +108,12 @@ export function writeNote(
       resolved.push(r);
     }
     out[name] = text
-      .replace(CITE, (_m, list: string) =>
-        list
+      // Ids side by side are one citation: "[m1][m3]" reads as "[m1, m3]".
+      .replace(ADJACENT, ", ")
+      // A citation reads as a note on the words before it, so the model may put it inline or as a
+      // footnote and the words are never said twice.
+      .replace(CITE, (_m, list: string) => {
+        const parts = list
           .split(",")
           .map((raw) => {
             const id = raw.trim();
@@ -118,11 +123,11 @@ export function writeNote(
               return "";
             }
             cited.set(id, c);
-            return c.owner ? `${c.text} (${c.owner})` : c.text;
+            return c.owner ? `${c.text}, ${c.owner}` : c.text;
           })
-          .filter(Boolean)
-          .join(", "),
-      )
+          .filter(Boolean);
+        return parts.length ? ` (${parts.join("; ")})` : "";
+      })
       .replace(STRAY, (m) => {
         dropped.push({ what: m, reason: "bad_cite" });
         return "";

@@ -237,7 +237,7 @@ test("an idea cites the memory it's about, keeps it, and goes stale with its day
   const [idea] = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   expect(idea).toMatchObject({ subject: "user", payload: { cites: [interview.id] } });
   expect(idea!.content).toBe(
-    "Ask how design interview, planned ⟦2026-01-07|day|UTC⟧ (theirs) goes.",
+    "Ask how (design interview, planned ⟦2026-01-07|day|UTC⟧, theirs) goes.",
   );
   expect(idea!.stale_after).toEqual(new Date("2026-01-08T00:00:00Z"));
 });
@@ -265,7 +265,7 @@ test("an idea about them resting only on her own life isn't written; an uncited 
   for (let i = 0; i < 3; i++) await userIdeate(deps, run, inputs);
   const ideas = await liveIdeas(deps.db, userId, deps.clock.now(), 5);
   expect(ideas.map((i) => [i.subject, i.content.slice(0, 20)]).sort()).toEqual([
-    ["self", "Tell them telescope "],
+    ["self", "Tell them (telescope"],
     ["user", "Ask what they're rea"],
   ]);
   const uncited = ideas.find((i) => i.subject === "user")!;

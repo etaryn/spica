@@ -76,7 +76,7 @@ test("1: a summary cites a memory with whose it is, and her 'tonight' is a token
   await run(d, u, "exchange:1");
   const s = (await liveSummary(d.db, u))!;
   expect(s.payload).toMatchObject({
-    where_things_stand: "They have design interview, planned ⟦2026-01-08|day|UTC⟧ (theirs).",
+    where_things_stand: "They have (design interview, planned ⟦2026-01-08|day|UTC⟧, theirs).",
     whats_live: "Check in ⟦2026-01-05|night|UTC|tonight⟧.",
     cites: [interview.id],
   });

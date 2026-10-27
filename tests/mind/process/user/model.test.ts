@@ -258,7 +258,7 @@ test("the read and each belief cite by id; a belief resting only on her life isn
   await userModel(deps, run, inputs);
   const model = (await liveModel(deps.db, userId))!;
   expect(model.payload).toMatchObject({ cites: [inputs.facts[theirs]!.id] });
-  expect((model.payload as { how_they_are: string }).how_they_are).toContain("(theirs)");
+  expect((model.payload as { how_they_are: string }).how_they_are).toContain(", theirs)");
   const beliefs = await liveBeliefs(deps.db, userId, 10);
   expect(beliefs.map((b) => b.content)).toEqual([expect.stringContaining("They care about")]);
   expect(beliefs[0]!.payload).toEqual({ cites: [inputs.facts[theirs]!.id] });

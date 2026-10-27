@@ -206,6 +206,6 @@ test("a gist cites its sources by id and keeps them", async () => {
   const gist = gists.rows[0]!;
   expect(gist.payload).toMatchObject({ cites: [a.id] });
   expect(String(gist.content)).toBe(
-    "The week of They bought boxes. ⟦2025-12-16|day|UTC⟧ (theirs).",
+    "The week of (They bought boxes. ⟦2025-12-16|day|UTC⟧, theirs).",
   );
 });

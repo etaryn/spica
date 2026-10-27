@@ -242,3 +242,45 @@ test("a gist with no judged depth is as deep as its deepest source; a judged one
   )!;
   expect(judged.depth).toBe(1);
 });
+
+test("a gist counts a day inside its week from the source it cites, not from today", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  const ids = [
+    await item(deps, "She watched Solaris."),
+    await item(deps, "She watched Stalker.", { at: new Date("2026-01-06T09:00:00Z") }),
+    await item(deps, "She watched Mirror.", { at: new Date("2026-01-10T09:00:00Z") }),
+  ];
+  all.llm.handlers.core_consolidate = (input: string) => {
+    expect(JSON.parse(input).sources[2]).toMatchObject({
+      id: "m3",
+      content: "She watched Mirror.",
+    });
+    return {
+      gist: "A week of Tarkovsky, ending with Mirror [m3] that Saturday.",
+      times: [
+        {
+          field: "gist",
+          words: "that Saturday",
+          from: "m3",
+          unit: "day",
+          shift: 0,
+          weekday: null,
+          month: null,
+          day_of_month: null,
+          part: null,
+          clock: "",
+          span: "at",
+          rough: false,
+        },
+      ],
+    };
+  };
+  expect(await coreConsolidate(deps, now)).toBe("done");
+  const gist = (await all.db.select().from(core_memory)).find((m) =>
+    m.source_ref?.startsWith("core_consolidate"),
+  )!;
+  expect(gist.content).toBe(
+    "A week of Tarkovsky, ending with Mirror (⟦2026-01-10|day|UTC⟧) ⟦2026-01-10|day|UTC|that Saturday⟧.",
+  );
+  expect(gist.payload).toEqual({ gist_of: ids, cites: [ids[2]] });
+});

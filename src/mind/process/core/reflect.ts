@@ -11,8 +11,12 @@ import { cosine } from "@/mind/platform/math";
 import { DAY } from "@/mind/platform/time";
 import { isCraftGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
-import { dateToken, stamped } from "@/mind/platform/time-anchors";
+import { nowLine, stamped } from "@/mind/platform/time-anchors";
+import { coreCitables } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules, writeNote, type Dropped } from "@/mind/platform/notes";
 import { lifeTimezone } from "@/mind/world/her-clock";
+
+const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 const active = (item: CoreMemoryItem | null, kind: CoreMemoryItem["kind"]) =>
   item?.kind === kind && item.status !== "stale" && item.status !== "superseded";
@@ -46,6 +50,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           goal_ids: [],
           faded_interest_ids: [],
           dropped_goal_ids: [],
+          note_dropped: [],
         },
       };
 
@@ -64,6 +69,17 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
     const maxChars = config.core.loops.max_chars;
     const line = fitText(maxChars);
     const depth = DepthLabel.nullable().default(null);
+    // One id system for the model: what it may cite is also what it may supersede or fade.
+    const cite = coreCitables([...inputs, ...context, ...(narrative ? [narrative] : [])], tz);
+    const refOf = new Map(cite.items.map((c) => [c.id, c.ref]));
+    const maxGoals = config.core.goals.max_active;
+    const fields = [
+      ...range(bounds.max_insights).map((i) => `insight_${i}`),
+      ...range(bounds.max_opinions).map((i) => `opinion_${i}`),
+      ...range(bounds.max_interests).map((i) => `interest_${i}`),
+      "narrative",
+      ...range(maxGoals).flatMap((i) => [`goal_${i}_title`, `goal_${i}_why`]),
+    ] as [string, ...string[]];
     const Output = z.object({
       insights: fitList(z.object({ content: line, depth }), bounds.max_insights),
       opinions: fitList(
@@ -71,7 +87,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           subject: line,
           stance: line,
           confidence: z.enum(["low", "medium", "high"]),
-          supersedes: z.uuid().nullable().optional(),
+          supersedes: z.string().nullable().optional(),
           depth,
         }),
         bounds.max_opinions,
@@ -79,7 +95,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       interests: fitList(
         z.discriminatedUnion("status", [
           z.object({ status: z.literal("new"), content: line, depth }),
-          z.object({ status: z.literal("fading"), target_id: z.uuid() }),
+          z.object({ status: z.literal("fading"), target_id: z.string() }),
         ]),
         bounds.max_interests,
       ),
@@ -89,6 +105,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       }),
       // One paragraph: fitting collapses any blank lines.
       narrative: fitText(maxChars * bounds.max_inputs).nullable(),
+      times: noteTimesSchema(fields).default([]),
     });
     const result = await ctx.deps.llm.classifyJson({
       purpose: "core_reflect",
@@ -96,17 +113,17 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       system: [
         persona.coreValues,
         snapshot ? stamped(snapshot.content, snapshot.rendered_at, tz) : persona.seedSelf,
-        loadPrompt("core/reflect", config.prompts.core_reflect),
+        withNoteRules(
+          loadPrompt("core/reflect", config.prompts.core_reflect),
+          config.prompts.core_notes,
+          "core/notes",
+        ),
       ].join("\n\n"),
       input: JSON.stringify({
-        inputs: inputs.map(({ id, kind, content, occurred_at, created_at }) => ({
-          id,
-          kind,
-          content,
-          when: dateToken(occurred_at ?? created_at, tz),
-        })),
-        context: context.map(({ id, kind, content }) => ({ id, kind, content })),
-        narrative: narrative ? { id: narrative.id, content: narrative.content } : null,
+        now: nowLine(now, tz, tz),
+        inputs: cite.lines.slice(0, inputs.length),
+        context: cite.lines.slice(inputs.length, inputs.length + context.length),
+        narrative: narrative ? cite.lines.at(-1) : null,
         goals: goals.map(({ id, title, why, progress }) => ({ id, title, why, progress })),
       }),
       schema: Output,
@@ -114,38 +131,49 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
       maxTokens: bounds.max_tokens,
     });
     const byKind = config.core.depth.by_kind;
+    const dropped: Dropped[] = [];
+    // One note per field: a proposal's cites are its own words', and its times are its field's.
+    const written = (key: string, text: string) => {
+      const n = writeNote({ [key]: text }, result.times, cite.items, { now, zone: tz });
+      dropped.push(...n.dropped);
+      return { content: n.fields[key]!, cites: n.memories };
+    };
     const proposals = [
-      ...result.insights.map((item) => ({
+      ...result.insights.map((item, i) => ({
         kind: "insight" as const,
-        content: item.content,
+        ...written(`insight_${i + 1}`, item.content),
         confidence: bounds.confidence.medium,
         salience: bounds.salience.insight,
         depth: depthOf(item.depth, byKind.insight),
         target: null,
       })),
-      ...result.opinions.map((item) => ({
+      ...result.opinions.map((item, i) => ({
         kind: "opinion" as const,
-        content: `${item.subject}: ${item.stance}`,
+        ...written(`opinion_${i + 1}`, `${item.subject}: ${item.stance}`),
         confidence: bounds.confidence[item.confidence],
         salience: bounds.salience.opinion,
         depth: depthOf(item.depth, byKind.opinion),
-        target: item.supersedes ?? null,
+        target: item.supersedes ? (refOf.get(item.supersedes) ?? null) : null,
       })),
-      ...result.interests
-        .filter((item) => item.status === "new")
-        .map((item) => ({
-          kind: "interest" as const,
-          content: item.content,
-          confidence: bounds.confidence.medium,
-          salience: bounds.salience.interest,
-          depth: depthOf(item.depth, byKind.interest),
-          target: null,
-        })),
+      ...result.interests.flatMap((item, i) =>
+        item.status !== "new"
+          ? []
+          : [
+              {
+                kind: "interest" as const,
+                ...written(`interest_${i + 1}`, item.content),
+                confidence: bounds.confidence.medium,
+                salience: bounds.salience.interest,
+                depth: depthOf(item.depth, byKind.interest),
+                target: null,
+              },
+            ],
+      ),
       ...(result.narrative
         ? [
             {
               kind: "narrative" as const,
-              content: result.narrative,
+              ...written("narrative", result.narrative),
               confidence: bounds.confidence.medium,
               salience: bounds.salience.narrative,
               depth: byKind.narrative,
@@ -154,7 +182,15 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           ]
         : []),
     ];
-    const goalAdds = result.goals.add;
+    // Adds past the cap are never inserted, so their words aren't labelled.
+    const goalAdds = result.goals.add.map((goal, i) =>
+      i < maxGoals
+        ? {
+            title: written(`goal_${i + 1}_title`, goal.title).content,
+            why: written(`goal_${i + 1}_why`, goal.why).content,
+          }
+        : goal,
+    );
     const texts = [
       ...proposals.map((item) => item.content),
       ...goalAdds.map((goal) => `${goal.title}: ${goal.why}`),
@@ -191,6 +227,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           depth: proposal.depth,
           source: "loop",
           source_ref: sourceRef,
+          ...(proposal.cites.length ? { payload: { cites: proposal.cites } } : {}),
         };
         const id = await tx.memory.insert(item);
         memoryIds.push(id);
@@ -204,12 +241,10 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         }
       }
       for (const interest of result.interests) {
-        if (
-          interest.status === "fading" &&
-          active(await tx.memory.get(interest.target_id), "interest")
-        ) {
-          if (await tx.memory.scaleSalience(interest.target_id, bounds.fade_factor))
-            fadedInterestIds.push(interest.target_id);
+        const target = interest.status === "fading" ? refOf.get(interest.target_id) : undefined;
+        if (target && active(await tx.memory.get(target), "interest")) {
+          if (await tx.memory.scaleSalience(target, bounds.fade_factor))
+            fadedInterestIds.push(target);
         }
       }
       // Reflection rewords a goal it already has: the near-twin stays (with its progress), the
@@ -267,6 +302,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
           goal_ids: goalIds,
           faded_interest_ids: fadedInterestIds,
           dropped_goal_ids: droppedGoalIds,
+          note_dropped: dropped,
         },
         promptVersion: config.prompts.core_reflect,
       };

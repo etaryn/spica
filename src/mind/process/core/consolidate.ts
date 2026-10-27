@@ -11,6 +11,9 @@ import { lifeDate, lifeTimezone } from "@/mind/world/her-clock";
 import { runCoreLoop } from "./runner";
 import { DAY } from "@/mind/platform/time";
 import { shiftLocalDate } from "@/mind/platform/timezone";
+import { coreCitables } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules, writeNote } from "@/mind/platform/notes";
+import { nowLine } from "@/mind/platform/time-anchors";
 
 export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopStatus> {
   const { config, core } = deps;
@@ -56,26 +59,28 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
       const Output = z.object({
         gist: fitText(config.core.loops.max_chars),
         depth: DepthLabel.nullable().default(null),
+        times: noteTimesSchema(["gist"]).default([]),
       });
-      let gist: string;
-      let judged: z.infer<typeof Output>["depth"];
+      const cite = coreCitables(group.sources, timezone);
+      let out: z.infer<typeof Output>;
       try {
-        ({ gist, depth: judged } = await ctx.deps.llm.classifyJson({
+        out = await ctx.deps.llm.classifyJson({
           purpose: "core_consolidate",
           model: "core",
-          system: loadPrompt("core/consolidate", config.prompts.core_consolidate),
+          system: withNoteRules(
+            loadPrompt("core/consolidate", config.prompts.core_consolidate),
+            config.prompts.core_notes,
+            "core/notes",
+          ),
           input: JSON.stringify({
+            now: nowLine(now, timezone, timezone),
             week: group.week,
-            sources: group.sources.map(({ id, content, occurred_at }) => ({
-              id,
-              content,
-              occurred_at,
-            })),
+            sources: cite.lines,
           }),
           schema: Output,
           timeoutMs: config.models.core_timeout_ms,
           maxTokens: bounds.max_tokens,
-        }));
+        });
       } catch (error) {
         if (!(error instanceof ZodError)) throw error;
         return {
@@ -85,6 +90,10 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
           promptVersion: config.prompts.core_consolidate,
         };
       }
+      // A day inside the week reads from the source it cites, so the words keep the day they meant.
+      const note = writeNote({ gist: out.gist }, out.times, cite.items, { now, zone: timezone });
+      const gist = note.fields.gist!;
+      const judged = out.depth;
       const [embedding] = await deps.embedder.embed([gist], "document");
       return ctx.commit<{ gist_id: string | null; source_ids: string[] }>(async (tx) => {
         const [current] = await tx.memory.eligibleGistGroups(
@@ -107,7 +116,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
         const gistId = await tx.memory.insert({
           kind: "episode",
           content: gist,
-          payload: { gist_of: ids },
+          payload: { gist_of: ids, ...(note.memories.length ? { cites: note.memories } : {}) },
           embedding: embedding!,
           occurred_at: group.sources[0]!.occurred_at,
           created_at: now,
@@ -133,7 +142,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
           throw new Error("gist sources changed during consolidation");
         return {
           inputs: { week: group.week, source_ids: ids },
-          outputs: { gist_id: gistId, source_ids: ids },
+          outputs: { gist_id: gistId, source_ids: ids, note_dropped: note.dropped },
           promptVersion: config.prompts.core_consolidate,
         };
       });

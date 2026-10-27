@@ -73,7 +73,7 @@ export async function coreConsolidate(deps: CoreDeps, now: Date): Promise<LoopSt
             })),
           }),
           schema: Output,
-          timeoutMs: config.models.structured_timeout_ms,
+          timeoutMs: config.models.core_timeout_ms,
           maxTokens: bounds.max_tokens,
         }));
       } catch (error) {

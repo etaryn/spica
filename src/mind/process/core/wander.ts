@@ -214,7 +214,7 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
       ].join("\n\n"),
       input,
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });
     const prepared = await prepareThoughts(

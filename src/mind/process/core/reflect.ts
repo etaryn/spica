@@ -110,7 +110,7 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         goals: goals.map(({ id, title, why, progress }) => ({ id, title, why, progress })),
       }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
     const byKind = config.core.depth.by_kind;

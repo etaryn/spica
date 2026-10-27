@@ -47,7 +47,7 @@ export async function proposeResolution(
       system: [persona.coreValues, self, prompt].join("\n\n"),
       input,
       schema: ResolutionSchema,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.resolve.max_tokens,
     });
     const content = fitChars(

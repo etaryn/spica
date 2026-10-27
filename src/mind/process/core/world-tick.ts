@@ -189,7 +189,7 @@ async function applyDay(
         decision: staleGoalKeys.has(a.key) ? "stale_goal" : a.decision,
         target_memory_id: a.targetMemoryId,
         world_event_id: eventIds.get(a.key) ?? null,
-        model: a.source === "model" ? config.models.life : "injected",
+        model: a.source === "model" ? config.models.core : "injected",
         prompt_version: a.source === "model" ? config.prompts.life_event : "injected",
         created_at: now,
       })),

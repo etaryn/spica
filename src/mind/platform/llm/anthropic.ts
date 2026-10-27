@@ -79,7 +79,9 @@ export class AnthropicProvider implements LLMProvider {
         ? this.models.labels_thinking
         : model === "user_mind"
           ? this.models.user_mind_thinking
-          : this.models.structured_thinking;
+          : model === "core"
+            ? this.models.core_thinking
+            : this.models.structured_thinking;
     const cacheControl = cacheControlFor(cache);
 
     const response = await this.client.messages.parse(

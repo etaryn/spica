@@ -166,7 +166,7 @@ export async function proposeAppraisal(ctx: LoopContext, event: LandingEvent): P
       system,
       input,
       schema: AppraisalSchema,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.appraise.max_tokens,
     });
     const bounded = boundAppraisal(raw, new Set(goals.map((g) => g.id)), config.core);

@@ -64,7 +64,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
         people,
       }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
     // A night's render can come back with a section emptied; her self doesn't vanish overnight,

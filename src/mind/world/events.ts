@@ -309,7 +309,7 @@ export async function generateCoreEvents(
         }
       : await llm.classifyJson({
           purpose: "life_event",
-          model: "life",
+          model: "core",
           system,
           input: buildEventInput(
             ctx,
@@ -319,7 +319,7 @@ export async function generateCoreEvents(
             cfg.event_target_chars,
           ),
           schema: EventSchema,
-          timeoutMs: config.models.structured_timeout_ms,
+          timeoutMs: config.models.core_timeout_ms,
           maxTokens: cfg.event_max_tokens,
         });
     const source = useInjected ? ("injected" as const) : ("model" as const);

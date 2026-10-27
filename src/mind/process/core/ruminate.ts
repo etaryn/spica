@@ -103,7 +103,7 @@ export async function coreRuminate(deps: CoreDeps, now: Date): Promise<ThinkingR
       ].join("\n\n"),
       input,
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });
     const prepared = await prepareThoughts(ctx.deps, [raw.thought]);

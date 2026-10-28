@@ -319,3 +319,34 @@ test("the deterministic rumination fake bounds a long episode", async () => {
     deps.config.core.loops.max_chars,
   );
 });
+
+test("her rumination cites the episode by id and labels her own words", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  const id = await seed(deps, 3);
+  all.llm.handlers.core_ruminate = () => ({
+    thought: { kind: "thought", content: "the ending [m1] still, the day after", salience: "low" },
+    times: [
+      {
+        field: "thought",
+        words: "the day after",
+        from: "m1",
+        unit: "day",
+        shift: 1,
+        weekday: null,
+        month: null,
+        day_of_month: null,
+        part: null,
+        clock: "",
+        span: "at",
+        rough: false,
+      },
+    ],
+  });
+  expect((await ruminate(deps)).status).toBe("done");
+  const { thoughts } = await rows(all);
+  expect(thoughts[0]!.content).toBe(
+    "the ending (⟦2026-01-03|day|UTC⟧) still, ⟦2026-01-04|day|UTC|the day after⟧",
+  );
+  expect(thoughts[0]!.payload).toEqual({ ruminates: id, cites: [id] });
+  expect(all.llm.structuredCalls.at(-1)!.input).toContain("Landed episode: [m1] The film stayed");
+});

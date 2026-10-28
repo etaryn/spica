@@ -443,10 +443,8 @@ test("a planned event's thought is on her mind at once: retrievable and outreach
   const [intention] = await memories(deps);
   expect(intention).toMatchObject({
     kind: "intention",
-    // Her "tonight" is stored as the night it meant.
-    content: expect.stringMatching(
-      /^Spica is thinking of rewatching Solaris with Alcor ⟦[^⟧]+\|night\|/,
-    ),
+    // Nothing reads her words for dates: an unlabelled "tonight" is kept as written.
+    content: "Spica is thinking of rewatching Solaris with Alcor tonight.",
     status: "open",
     valence: 0.3,
     salience: deps.config.core.world.event_salience,
@@ -609,4 +607,34 @@ test("a failed appraisal call still lands the event and traces fallback", async 
     .from(core_loop_trace)
     .where(eq(core_loop_trace.loop, "core_appraise"));
   expect(trace).toMatchObject({ status: "fallback", calls: 1 });
+});
+
+test("a planned event's thought may cite her recent life, and its intention keeps the cite", async () => {
+  const deps = makeTestDeps(utc);
+  const core = coreDepsOf(deps);
+  const episodeId = await core.core.memory.insert({
+    kind: "episode",
+    content: "Spica watched Stalker.",
+    payload: {},
+    embedding: Array.from({ length: deps.config.embedding.dimensions }, () => 0.01),
+    entity_refs: [],
+    occurred_at: new Date("2026-01-03T12:00:00Z"),
+    created_at: new Date("2026-01-03T12:00:00Z"),
+    status: "resolved",
+    salience: 0.5,
+    valence: 0.3,
+    confidence: 1,
+    source: "world",
+    source_ref: null,
+  });
+  deps.llm.handlers.life_event = sequence({
+    ...planned(0.3),
+    thought: "Spica wants Solaris to land like Stalker [m1] did.",
+  });
+  await coreWorldTick(core, morning);
+  const intention = (await memories(deps)).find((m) => m.kind === "intention")!;
+  expect(intention.content).toBe(
+    "Spica wants Solaris to land like Stalker (⟦2026-01-03|day|UTC⟧) did.",
+  );
+  expect(intention.payload).toEqual({ event_at: eventTime.toISOString(), cites: [episodeId] });
 });

@@ -13,9 +13,9 @@ import { coreStateRepo } from "./state";
 import { coreTracesRepo } from "./traces";
 import { worldRepo } from "./world";
 
-function scope(db: Db, zone: string): CoreScope {
+function scope(db: Db): CoreScope {
   return {
-    memory: coreMemoryRepo(db, zone),
+    memory: coreMemoryRepo(db),
     state: coreStateRepo(db),
     goals: coreGoalsRepo(db),
     world: worldRepo(db),
@@ -39,10 +39,9 @@ function scope(db: Db, zone: string): CoreScope {
   };
 }
 
-/** `zone` is her life zone: what she writes is anchored on her calendar. */
-export function createCoreLayer(db: Db, zone = "UTC"): CoreLayer {
+export function createCoreLayer(db: Db): CoreLayer {
   return {
-    ...scope(db, zone),
-    transaction: (fn) => db.transaction((tx) => fn(scope(tx, zone))),
+    ...scope(db),
+    transaction: (fn) => db.transaction((tx) => fn(scope(tx))),
   };
 }

@@ -10,8 +10,20 @@ import { fitList, fitText } from "@/mind/platform/llm/fit";
 import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { runCoreLoop } from "./runner";
-import { anchorTimes, stamped } from "@/mind/platform/time-anchors";
+import { nowLine, stamped } from "@/mind/platform/time-anchors";
 import { lifeTimezone } from "@/mind/world/her-clock";
+import { coreCitables } from "@/mind/memory/core/citables";
+import { noteTimesSchema, withNoteRules, writeNote, type Dropped } from "@/mind/platform/notes";
+
+const SECTIONS = [
+  "Lately",
+  "Opinions",
+  "Interests",
+  "Goals",
+  "People",
+  "Habits of speech",
+] as const;
+const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
 
 export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<LoopStatus> {
   const { core, config } = deps;
@@ -35,6 +47,8 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       depth: DepthLabel.nullable().default(null),
     });
     const section = fitList(line, bounds.max_items);
+    // A line's time words are named by its section and place: "Lately 1", "Habits of speech 2".
+    const lineNames = SECTIONS.flatMap((s) => range(bounds.max_items).map((i) => `${s} ${i}`));
     const Output = z
       .object({
         Lately: section,
@@ -43,28 +57,40 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
         Goals: section,
         People: section,
         "Habits of speech": section,
+        times: noteTimesSchema(lineNames as [string, ...string[]]).default([]),
       })
       .strict();
+    const zone = lifeTimezone(config.life, now);
+    const shown = [...(narrative ? [narrative] : []), ...opinions, ...interests, ...insights];
+    const cite = coreCitables([...shown, ...notes], zone);
+    const at = (from: number, count: number) => cite.lines.slice(from, from + count);
+    const n = narrative ? 1 : 0;
     const result = await ctx.deps.llm.classifyJson({
       purpose: "core_render_snapshot",
       model: "core",
-      system: [persona.coreValues, loadPrompt("core/snapshot", config.prompts.core_snapshot)].join(
-        "\n\n",
-      ),
+      system: [
+        persona.coreValues,
+        withNoteRules(
+          loadPrompt("core/snapshot", config.prompts.core_snapshot),
+          config.prompts.core_notes,
+          "core/notes",
+        ),
+      ].join("\n\n"),
       input: JSON.stringify({
+        now: nowLine(now, zone, zone),
         previous: previous
-          ? stamped(previous.content, previous.rendered_at, lifeTimezone(config.life, now))
+          ? stamped(previous.content, previous.rendered_at, zone)
           : persona.seedSelf,
-        narrative,
-        opinions,
-        interests,
-        insights,
-        notes,
+        narrative: narrative ? cite.lines[0] : null,
+        opinions: at(n, opinions.length),
+        interests: at(n + opinions.length, interests.length),
+        insights: at(n + opinions.length + interests.length, insights.length),
+        notes: at(shown.length, notes.length),
         goals: activeGoals,
         people,
       }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: bounds.max_tokens,
     });
     // A night's render can come back with a section emptied; her self doesn't vanish overnight,
@@ -74,12 +100,17 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
     const hadDepth = new Map(
       (previous ? await core.memory.selfLines(previous.version) : []).map((l) => [l.text, l.depth]),
     );
+    // Only the lines written tonight are labelled; a kept line is copied as it was stored.
+    const fresh: Record<string, string> = {};
+    for (const name of SECTIONS)
+      result[name].forEach((item, i) => (fresh[`${name} ${i + 1}`] = item.text));
+    const note = writeNote(fresh, result.times, cite.items, { now, zone });
     const kept: Record<string, { text: string; depth: DepthLabelT | null; was?: number }[]> =
       Object.fromEntries(
-        Object.entries(result).map(([name, items]) => [
+        SECTIONS.map((name) => [
           name,
-          items.length
-            ? items
+          result[name].length
+            ? result[name].map((item, i) => ({ ...item, text: note.fields[`${name} ${i + 1}`]! }))
             : snapshotSection(before, name).map((text) => ({
                 text,
                 depth: null,
@@ -87,11 +118,6 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
               })),
         ]),
       );
-    // Dated once here, so her snapshot's text and its self lines stay the same strings.
-    const zone = lifeTimezone(config.life, now);
-    for (const items of Object.values(kept))
-      for (const item of items)
-        item.text = anchorTimes(item.text, { at: now, zone, known: ctx.shown() });
     const sections = Object.fromEntries(
       Object.entries(kept).map(([name, items]) => [
         name,
@@ -114,7 +140,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
         (item) => item.id,
       ),
     ];
-    return ctx.commit<{ version: number | null }>(async (tx) => {
+    return ctx.commit<{ version: number | null; note_dropped?: Dropped[] }>(async (tx) => {
       await tx.lock("core_render_snapshot");
       const current = await tx.memory.latestSnapshot();
       if (current?.version !== previous?.version)
@@ -148,7 +174,7 @@ export async function coreRenderSnapshot(deps: CoreDeps, now: Date): Promise<Loo
       );
       return {
         inputs: { source_ids: sourceIds },
-        outputs: { version },
+        outputs: { version, note_dropped: note.dropped },
         promptVersion: config.prompts.core_snapshot,
       };
     });

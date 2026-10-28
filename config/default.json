@@ -28,7 +28,9 @@
     "labels_timeout_ms": 180000,
     "labels_cache": "5m",
     "user_mind_thinking": "adaptive",
-    "user_mind_timeout_ms": 90000
+    "user_mind_timeout_ms": 90000,
+    "core_thinking": "adaptive",
+    "core_timeout_ms": 90000
   },
   "embedding": {
     "provider": "voyage",
@@ -221,6 +223,7 @@
     "persona": "v7",
     "labels": "v1",
     "notes": "v2",
+    "core_notes": "v1",
     "reconcile": "v2",
     "judge_recall": "v3",
     "judge_false_recall": "v9",
@@ -234,19 +237,19 @@
     "relationship_openness": "v1",
     "relationship_stage": "v1",
     "life_plan": "v5",
-    "life_event": "v7",
+    "life_event": "v8",
     "life_availability": "v2",
     "core_state_line": "v4",
     "voice_how_to_text": "v1",
-    "core_appraise": "v4",
-    "core_anticipate": "v4",
-    "core_ruminate": "v4",
-    "core_wander": "v4",
-    "core_reflect": "v4",
-    "core_snapshot": "v4",
+    "core_appraise": "v5",
+    "core_anticipate": "v5",
+    "core_ruminate": "v5",
+    "core_wander": "v5",
+    "core_reflect": "v5",
+    "core_snapshot": "v5",
     "core_drift": "v1",
-    "core_consolidate": "v2",
-    "core_resolve": "v1",
+    "core_consolidate": "v3",
+    "core_resolve": "v2",
     "reach_out": "v4",
     "user_summarise": "v6",
     "user_reflect": "v6",
@@ -498,16 +501,16 @@
         "Habits of speech": 1
       }
     },
-    "snapshot": { "max_items": 8, "max_tokens": 1024 },
+    "snapshot": { "max_items": 8, "max_tokens": 8000 },
     "loops": {
       "max_chars": 300,
-      "max_tokens": 512,
+      "max_tokens": 8000,
       "salience": { "low": 0.25, "medium": 0.4 },
       "thought_confidence": 0.6,
       "dedupe_similarity": 0.92
     },
     "appraise": {
-      "max_tokens": 800,
+      "max_tokens": 8000,
       "episode_max_chars": 400,
       "label_max_chars": 40,
       "about_max_chars": 80,
@@ -536,8 +539,8 @@
       "min_similarity": 0.3,
       "max_items": 2
     },
-    "resolve": { "max_tokens": 512 },
-    "drift": { "max_tokens": 512 },
+    "resolve": { "max_tokens": 8000 },
+    "drift": { "max_tokens": 8000 },
     "reflect": {
       "max_inputs": 30,
       "context_items": 6,
@@ -548,7 +551,7 @@
       "salience": { "insight": 0.5, "opinion": 0.5, "interest": 0.4, "narrative": 0.6 },
       "fade_factor": 0.5,
       "twin_similarity": 0.85,
-      "max_tokens": 1024
+      "max_tokens": 8000
     },
     "decay": { "grace_days": 3, "rate": 0.08, "stale_floor": 0.05 },
     "consolidate": {
@@ -556,7 +559,7 @@
       "min_group": 3,
       "max_groups": 1,
       "gist_source_factor": 0.5,
-      "max_tokens": 512
+      "max_tokens": 8000
     },
     "mind": { "tick_cron": "50 * * * *" },
     "nightly": { "tick_cron": "55 * * * *", "local_hour": 3 },
@@ -627,7 +630,7 @@
       "goal_weight_floor": 0.1,
       "event_context_items": 20,
       "event_context_days": 14,
-      "event_max_tokens": 600,
+      "event_max_tokens": 8000,
       "event_max_chars": 300,
       "injected_event_at": "12:00",
       "event_salience": 0.4,

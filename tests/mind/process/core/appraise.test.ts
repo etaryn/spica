@@ -276,16 +276,14 @@ test("appraisal goal effects skip the craft goal: her skill is set, not earned",
   expect(await deps.core.goals.get(craft)).toMatchObject({ progress: 0.2, status: "active" });
 });
 
-test("an episode's bare weekday takes the day its appraisal was shown", async () => {
+test("an episode keeps what its words cite as lineage", async () => {
   const { deps, event } = await setup();
-  const a = {
-    ...codeAppraisal(event, deps.config.core),
-    episode: "The telescope she booked on tuesday finally delivered.",
-    shown: [new Date("2025-12-30T12:00:00Z")],
-  };
+  const a = { ...codeAppraisal(event, deps.config.core), cites: ["mem-1"] };
   const out = await deps.core.transaction((tx) =>
     applyAppraisal(tx, deps, event, a, vec(0.01), now),
   );
-  const episode = (await deps.core.memory.get(out.episodeId))!;
-  expect(episode.content).toContain("⟦2025-12-30|day|UTC⟧");
+  expect((await deps.core.memory.get(out.episodeId))!.payload).toEqual({
+    appraisal_emotion: a.emotion,
+    cites: ["mem-1"],
+  });
 });

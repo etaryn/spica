@@ -6,7 +6,6 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { eq } from "drizzle-orm";
 import { core_memory, core_snapshot } from "@/db/schema";
 import { createCoreLayer } from "@/db/repos/core";
-import { renderTimes, tokenDates } from "@/mind/platform/time-anchors";
 import { closeTestDb, getTestDb, resetDb, vec } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 
@@ -907,35 +906,21 @@ test("nearActive finds the closest active goal over the line, never a dropped on
   expect(await goals.nearActive(vec(), 0.85)).toBeNull();
 });
 
-test("her memories and snapshots are anchored on her calendar", async () => {
-  const her = createCoreLayer(getTestDb(), "Asia/Singapore");
-  const written = new Date("2026-01-12T15:30:00Z"); // 23:30 Monday in Singapore
-  const id = await her.memory.insert(episode("Clear skies tonight.", 0.01, written));
-  const content = (await her.memory.get(id))!.content;
-  expect(renderTimes(content, new Date("2026-01-12T17:00:00Z"), 6)).toBe(
-    "Clear skies last night, Monday 12 January.",
-  );
-  await her.memory.insertSnapshot({
+test("her memories and snapshots are stored exactly as written", async () => {
+  const words = "Clear skies tonight, the screening on tuesday.";
+  const id = await core().memory.insert(episode(words, 0.01, now));
+  expect((await core().memory.get(id))!.content).toBe(words);
+  await core().memory.insertSnapshot({
     version: 0,
     embedding: vec(),
     content: "### Lately\n- Telescope booking tonight.",
     sections: { Lately: "- Telescope booking tonight." },
     source_ids: [],
-    rendered_at: written,
+    rendered_at: now,
     model: "m",
     prompt_version: "v",
   });
-  const snap = (await her.memory.latestSnapshot())!;
-  expect(tokenDates(snap.content)).toHaveLength(1);
-  expect(tokenDates(snap.sections.Lately!)).toHaveLength(1);
-});
-
-test("a core row's own date is a date its words were shown", async () => {
-  // Written Monday 5 January about a Tuesday it already carries: that Tuesday, not the coming one.
-  const id = await core().memory.insert({
-    ...episode("She booked the telescope for tuesday night.", 0.01, now),
-    occurred_at: new Date("2025-12-30T22:00:00Z"),
-  });
-  const row = await core().memory.get(id);
-  expect(tokenDates(row!.content)[0]!.toISOString().slice(0, 10)).toBe("2025-12-30");
+  const snap = (await core().memory.latestSnapshot())!;
+  expect(snap.content).toBe("### Lately\n- Telescope booking tonight.");
+  expect(snap.sections.Lately).toBe("- Telescope booking tonight.");
 });

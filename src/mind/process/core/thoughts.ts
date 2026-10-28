@@ -8,6 +8,7 @@ import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import type { CoreStateRow } from "@/mind/state/core/types";
 import { z } from "zod";
 import { DepthLabel, depthOf, type DepthLabelT } from "@/mind/memory/core/depth";
+import { writeNote, type Citable, type Dropped, type NoteTime } from "@/mind/platform/notes";
 
 /** Thinking takes the world tick's lock, so a thought never lands beside a half-applied event. */
 export const WORLD_LOCK = "core_world_tick";
@@ -16,6 +17,8 @@ export type ApplyOutput = {
   applied: boolean;
   ids: string[];
   dropped: ReturnType<typeof traceDrops>;
+  /** Citations and time labels her note couldn't use. */
+  note_dropped?: Dropped[];
   reason?: string;
 };
 
@@ -41,12 +44,29 @@ export type ThoughtInput = {
   depth?: DepthLabelT | null;
 };
 
-export type PreparedThought = { item: ThoughtInput; embedding: number[] };
+export type PreparedThought = {
+  item: ThoughtInput;
+  embedding: number[];
+  /** The memories its words cite, stored as `payload.cites`. */
+  cites?: string[];
+  dropped?: Dropped[];
+};
+
+/** What a loop's thoughts are labelled with: its `times`, what it may cite, and where it is. */
+export type ThoughtNote = {
+  times: NoteTime[];
+  citables: Citable[];
+  now: Date;
+  zone: string;
+  /** The `times` field each item's words are under, by position. */
+  fields: string[];
+};
 
 export const traceDrops = (dropped: string[]) =>
   dropped.map((content) => ({ content, reason: "dedupe" as const }));
 
-function validItem(item: ThoughtInput, maxChars: number): ThoughtInput {
+/** A null `maxChars` only checks: a stored thought already carries tokens a cut would split. */
+function validItem(item: ThoughtInput, maxChars: number | null): ThoughtInput {
   if (
     !item ||
     !["thought", "idea", "hypothetical"].includes(item.kind) ||
@@ -56,7 +76,7 @@ function validItem(item: ThoughtInput, maxChars: number): ThoughtInput {
   ) {
     throw new Error("invalid thought item");
   }
-  const content = fitChars(item.content.trim(), maxChars);
+  const content = maxChars === null ? item.content.trim() : fitChars(item.content.trim(), maxChars);
   if (!content) throw new Error("invalid thought content");
   return { kind: item.kind, content, salience: item.salience, depth: item.depth ?? null };
 }
@@ -76,16 +96,24 @@ function validEmbedding(embedding: number[], dimensions: number): number[] {
 export async function prepareThoughts(
   deps: CoreDeps,
   items: ThoughtInput[],
+  note?: ThoughtNote,
 ): Promise<PreparedThought[]> {
   const normalized = items.map((item) => validItem(item, deps.config.core.loops.max_chars));
   if (!normalized.length) return [];
+  // Fit first, then label: a token or citation added after the fit is never cut.
+  const written = normalized.map((item, i) => {
+    if (!note) return { item, cites: [] as string[], dropped: [] as Dropped[] };
+    const field = note.fields[i]!;
+    const n = writeNote({ [field]: item.content }, note.times, note.citables, note);
+    return { item: { ...item, content: n.fields[field]! }, cites: n.memories, dropped: n.dropped };
+  });
   const embeddings = await deps.embedder.embed(
-    normalized.map((item) => item.content),
+    written.map((w) => w.item.content),
     "document",
   );
-  if (embeddings.length !== normalized.length) throw new Error("invalid thought embedding batch");
-  return normalized.map((item, index) => ({
-    item,
+  if (embeddings.length !== written.length) throw new Error("invalid thought embedding batch");
+  return written.map((w, index) => ({
+    ...w,
     embedding: validEmbedding(embeddings[index]!, deps.config.embedding.dimensions),
   }));
 }
@@ -104,13 +132,14 @@ export async function storeThoughts(
   },
 ): Promise<{ ids: string[]; dropped: string[] }> {
   // Validate the complete batch before the first write, including callers that bypass preparation.
-  const validated = items.map(({ item, embedding }) => ({
-    item: validItem(item, deps.config.core.loops.max_chars),
+  const validated = items.map(({ item, embedding, cites }) => ({
+    item: validItem(item, null),
     embedding: validEmbedding(embedding, deps.config.embedding.dimensions),
+    cites: cites ?? [],
   }));
   const ids: string[] = [];
   const dropped: string[] = [];
-  for (const { item, embedding } of validated) {
+  for (const { item, embedding, cites } of validated) {
     const [nearest] = await tx.memory.dedupeNear(
       embedding,
       1,
@@ -124,7 +153,7 @@ export async function storeThoughts(
       await tx.memory.insert({
         kind: item.kind,
         content: item.content,
-        payload: meta.payload,
+        payload: cites.length ? { ...meta.payload, cites } : meta.payload,
         embedding,
         entity_refs: meta.entityRefs,
         occurred_at: meta.now,

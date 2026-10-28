@@ -1,0 +1,44 @@
+name: long-conversation
+description: One user's long late-night session (24 turns, a job offer, a sister's visit, a weekend plan) so long_conversation fires on the next day's trigger cap, then the sister and Osaka storylines closed and a lease signed nine days later, so consolidate can gist the first week (pnpm exit:long).
+profile: none
+life: { plan: model, inject: [], until: "day 9 20:00" }
+sessions:
+  # Late, so the quiet after it falls on day 1 and its run isn't capped by day 0's exchange runs.
+  - at: "day 0 23:35"
+    turns:
+      - "hey, long day"
+      - "work was a mess, the client changed the brief again"
+      - "third time this month"
+      - "anyway I have news"
+      - "I got an offer from the studio in Osaka"
+      - "they want me to start on the 1st"
+      - "I haven't told my manager yet"
+      - "I'm telling her tomorrow morning"
+      - "kind of dreading it honestly"
+      - "she's been good to me"
+      - "also my sister is visiting this weekend"
+      - "she lands saturday afternoon"
+      - "we're going to that ramen place on sunday"
+      - "the one with the 40 minute queue"
+      - "she doesn't know about osaka yet either"
+      - "I want to tell her in person"
+      - "do you think she'll be upset"
+      - "she always said I'd leave one day"
+      - "ok what about you, what did you do today"
+      - "that sounds nice"
+      - "I should pack soon, I have so much stuff"
+      - "like three boxes of just cables"
+      - "ok I'm fading, early start tomorrow"
+      - "night!"
+  - at: "day 3 18:00"
+    turns:
+      - "my sister left this morning, the visit was really good"
+      - "we did the ramen place, and i told her about osaka. she cried a bit but she's happy for me"
+  - at: "day 4 18:00"
+    turns:
+      - "told my manager too, she was lovely about it"
+      - "so the osaka job is fully settled now, contract signed and everything"
+  - at: "day 9 15:00"
+    turns: ["I signed the lease on a tiny place in Osaka!"]
+assertions:
+  - { type: relationship, after_session: 4, status: active }

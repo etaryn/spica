@@ -8,7 +8,7 @@ import {
 } from "@/mind/process/hot-path/assemble";
 import type { AnnotationRow } from "@/db/repos/user/annotations";
 import { systemText } from "@/mind/platform/llm/types";
-import { anchorTimes, renderTimes } from "@/mind/platform/time-anchors";
+import { formatToken, renderTimes } from "@/mind/platform/time-anchors";
 import { emptyRetrieval } from "@/mind/memory/shared/types";
 import { splitParts } from "@/mind/process/hot-path/split-parts";
 import { resolveSessionId } from "@/mind/process/receive/session";
@@ -649,7 +649,7 @@ test("their things are dated on their calendar, hers on hers, under a Now line",
 });
 
 test("a memory whose words carry its date isn't dated twice", () => {
-  const content = anchorTimes("The race is tomorrow.", { at: now, zone: "UTC" });
+  const content = `The race is ${formatToken("2026-01-13", "day", "UTC")}.`;
   const { system } = assemblePrompt({
     ...base,
     recentTurns: [],

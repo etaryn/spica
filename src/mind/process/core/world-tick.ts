@@ -100,12 +100,12 @@ async function generateIfDue(deps: CoreDeps, now: Date, opts: WorldTickOptions):
       if (error instanceof BudgetSpentError) return overBudget();
       throw error;
     }
-    const { accepted, attempts, budgetExhausted } = generated;
+    const { accepted, attempts, budgetExhausted, dropped } = generated;
     const out = await applyDay(ctx.deps, day, now, accepted, attempts);
     return {
       ...(budgetExhausted ? { status: "fallback" as const } : {}),
       inputs: { day, attempts: attempts.length },
-      outputs: out,
+      outputs: { ...out, note_dropped: dropped },
       promptVersion: config.prompts.life_event,
     };
   });
@@ -163,7 +163,7 @@ async function applyDay(
       const intentionId = await tx.memory.insert({
         kind: "intention",
         content: c.thought,
-        payload: { event_at: e.at.toISOString() },
+        payload: { event_at: e.at.toISOString(), ...(e.cites.length ? { cites: e.cites } : {}) },
         embedding: e.thoughtEmbedding,
         entity_refs: agents,
         occurred_at: now,
@@ -189,7 +189,7 @@ async function applyDay(
         decision: staleGoalKeys.has(a.key) ? "stale_goal" : a.decision,
         target_memory_id: a.targetMemoryId,
         world_event_id: eventIds.get(a.key) ?? null,
-        model: a.source === "model" ? config.models.life : "injected",
+        model: a.source === "model" ? config.models.core : "injected",
         prompt_version: a.source === "model" ? config.prompts.life_event : "injected",
         created_at: now,
       })),
@@ -222,7 +222,10 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
       return {
         status: proposal ? "done" : "fallback",
         inputs: { world_event: event.id },
-        outputs: { proposed: proposal !== null },
+        outputs: {
+          proposed: proposal !== null,
+          dropped: (proposal as ResolutionProposal | null)?.dropped ?? [],
+        },
         promptVersion: config.prompts.core_resolve,
       };
     });
@@ -294,7 +297,7 @@ async function appraiseDue(deps: CoreDeps, now: Date): Promise<number> {
     return {
       status: [...proposals.values()].some((a) => a.source === "fallback") ? "fallback" : "done",
       inputs: { world_events: pending.map((e) => e.id) },
-      outputs: out,
+      outputs: { ...out, note_dropped: [...proposals.values()].flatMap((a) => a.dropped ?? []) },
       promptVersion: config.prompts.core_appraise,
     };
   });

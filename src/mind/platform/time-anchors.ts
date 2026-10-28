@@ -1,19 +1,11 @@
 /**
- * Dates, one way. Stored text keeps the date each time phrase meant: when it is stored, each
- * phrase ("tomorrow", "on Sunday", "five days now") is resolved from the moment it was written, in
- * the writer's zone, and replaced by a token holding the day, its precision and that zone. Code
- * puts any date it already holds into a prompt as the same kind of token. A token is rendered only
- * when a prompt reaches a model, on its own calendar relative to that moment's now ("yesterday,
- * Sunday 11 January"). Only stored text and prompts carry tokens: her messages are never touched.
+ * Dates, one way. A date is stored as a token holding the day, its precision and the zone it was
+ * meant in, made by code from a date it holds or from a time label a model filled in. A token is
+ * rendered only when a prompt reaches a model, on its own calendar relative to that moment's now
+ * ("yesterday, Sunday 11 January"). Only stored text and prompts carry tokens: her messages are
+ * never touched.
  */
-import * as chrono from "chrono-node";
-import {
-  localDateString,
-  localMidnight,
-  localTime,
-  shiftLocalDate,
-  zoneOffsetMinutes,
-} from "./timezone";
+import { localDateString, localMidnight, localTime, shiftLocalDate } from "./timezone";
 
 export type Precision =
   | "day"
@@ -27,97 +19,14 @@ export type Precision =
   | "month"
   | "since";
 
-export type AnchorContext = {
-  /** The moment the text was written, or the message sent. */
-  at: Date;
-  zone: string;
-  /** Dates the writer was shown: a bare weekday takes the nearest of these on that weekday. */
-  known?: Date[];
-};
-export type AnchorHints = Omit<AnchorContext, "at" | "zone">;
-
 type Anchor = { local: string; precision: Precision; zone: string };
 
 const TOKEN = /⟦([^|⟧]+)\|([^|⟧]+)\|([^|⟧]+)(?:\|([^⟧]*))?⟧/g;
 const ONE_TOKEN = /^⟦[^⟧]+⟧$/;
 const DAY_MS = 86_400_000;
-const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-const COUNT: Record<string, number> = {
-  a: 1,
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  "a couple of": 2,
-};
-const N = "(\\d+|a couple of|a|one|two|three|four|five|six|seven|eight|nine|ten)";
-const RELATIVE_WORDS =
-  /\b(today|tonight|tomorrow|yesterday|this (?:morning|afternoon|evening|week|weekend)|last night|next week)\b/gi;
-const DURATION = new RegExp(
-  `\\b(?:it'?s been|it has been)\\s+${N}\\s+(days?|weeks?)\\b|\\b${N}\\s+(days?|weeks?)\\s+now\\b`,
-  "gi",
-);
-const WEEK =
-  /\b(?:(?:later )?this week|next week|last week|(?:by |at )?(?:the )?end of (?:the|this) week)\b/gi;
-const WEEKEND = /\b(?:(this|next|last) weekend|(?:on |over |at )?the weekend)\b/gi;
-const RELATIVE =
-  /^(today|tonight|tomorrow|yesterday)(?: (morning|afternoon|evening|night))?$|^last night$|^this (morning|afternoon|evening)$/i;
-const WEEKDAY = new RegExp(
-  `^(?:(this|next|last) )?(${WEEKDAYS.join("|")})(?: (morning|afternoon|evening|night))?$`,
-  "i",
-);
-const OFFSET = new RegExp(`^in ${N} (days?|weeks?)$|^${N} (days?|weeks?) ago$`, "i");
-const MONTH_NAMES = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
-const MONTHS =
-  "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
-// A written-out date, read whole: "the afternoon of Thursday 8 January", "Jan 8th 2026".
-const DATE_PHRASE = new RegExp(
-  `^(?:the )?(?:(morning|afternoon|evening|night) of )?(?:(?:${WEEKDAYS.join("|")}),? )?(?:the )?(?:(\\d{1,2})(?:st|nd|rd|th)? (?:of )?(${MONTHS})|(${MONTHS}) (?:the )?(\\d{1,2})(?:st|nd|rd|th)?)(?:,? (\\d{4}))?$`,
-  "i",
-);
-const ISO_DATE = new RegExp(
-  `\\b(?:(?:${WEEKDAYS.join("|")}),? )?(\\d{4})-(\\d{2})-(\\d{2})\\b`,
-  "gi",
-);
-// chrono reads across clause breaks ("…8 January, in 3 days, and they"), so it reads one clause
-// at a time.
-// A comma before a year belongs to its date ("March 3, 2025").
-const CLAUSE = /,(?!\s*\d{4}\b)\s*|;\s*|\s+(?:and|but)\s+/g;
-const ORDINAL = /^(?:the )?\d{1,2}(?:st|nd|rd|th)$/i;
-const MONTH_ONLY =
-  /^(?:(this|next|last) month|in (january|february|march|april|may|june|july|august|september|october|november|december))$/i;
-// Only what is plainly a clock: a bare number may be the day of the month ("8 January at 3pm").
-const CLOCK =
-  /\s*\b(?:at\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm)?|noon)|\d{1,2}(?::\d{2}(?:\s*(?:am|pm))?|\s*(?:am|pm))|noon)\b\s*/i;
-const LEAD = /^(?:on|at)\s+/i;
-const NOUN_AFTER =
-  /^\s+(roast|brunch|lunch|dinner|service|market|papers?|school|league|mood|best|blues|vibes|feeling)\b/i;
-const NOUN_BEFORE = /\b(black|good|easter|cyber|super|holy|ash|palm)\s+$/i;
-// "a free Friday night", "every Sunday": a habit, not a day.
-const HABIT_BEFORE = /\b(a|an|every|any|most|some)\s+(?:[a-z]+\s+)?$/i;
 const PART_HOUR: Record<string, number> = { morning: 9, afternoon: 15, evening: 19, night: 22 };
 
 // ---------- Making tokens ----------
-
-/** Anchors every time phrase in `text`; text already anchored is left exactly as it is. */
-export function anchorTimes(text: string, ctx: AnchorContext): string {
-  const passes = [durations, weeks, weekends, chronoPass];
-  return passes.reduce((t, pass) => mapPlain(t, (plain) => pass(plain, ctx)), text);
-}
-
-/** Anchors the top-level string values of a plain object (a summary's parts); others pass. */
-export function anchorFields<T>(value: T, ctx: AnchorContext): T {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => [k, typeof v === "string" ? anchorTimes(v, ctx) : v]),
-  ) as T;
-}
 
 /** The token for a date code already holds, on `zone`'s calendar. */
 export function dateToken(at: Date, zone: string, precision: "day" | "time" = "day"): string {
@@ -196,11 +105,6 @@ export function nowLine(now: Date, theirs: string, hers: string, herLabel = "for
     : `It's ${at(theirs)} where they are; ${at(hers)} ${herLabel}.`;
 }
 
-/** Relative day words left in a text, lowercased: the review counts what anchoring missed. */
-export function relativeWords(text: string): string[] {
-  return [...text.matchAll(RELATIVE_WORDS)].map((m) => m[1]!.toLowerCase());
-}
-
 // ---------- Internals ----------
 
 function instant(a: Anchor): Date {
@@ -220,24 +124,6 @@ function instant(a: Anchor): Date {
   return new Date(midnight + (PART_HOUR[a.precision] ?? 12) * 3_600_000);
 }
 
-// Quoted words are what someone said ("see you tomorrow" as a ritual, 'Taco Tuesday'), never a
-// date to fix. A straight single quote counts only at word edges, so "don't" stays plain.
-const KEPT = new RegExp(
-  `${TOKEN.source}|"[^"\\n]*"|\u201c[^\u201d\\n]*\u201d|\u2018[^\u2019\\n]*\u2019|(?<=^|[\\s(])'[^'\\n]+'(?=[\\s.,;:!?)]|$)`,
-  "g",
-);
-
-/** Runs `fn` on the text between tokens and quotes only, so neither is read again. */
-function mapPlain(text: string, fn: (plain: string) => string): string {
-  let out = "";
-  let last = 0;
-  for (const m of text.matchAll(KEPT)) {
-    out += fn(text.slice(last, m.index)) + m[0];
-    last = m.index + m[0].length;
-  }
-  return out + fn(text.slice(last));
-}
-
 /** A token in the one format every renderer reads. `said` keeps the words and glosses them. */
 export function formatToken(
   local: string,
@@ -248,246 +134,10 @@ export function formatToken(
   return `⟦${local}|${precision}|${zone}${said ? `|${said.replace(/[|⟧]/g, "")}` : ""}⟧`;
 }
 
-function token(local: string, precision: Precision, ctx: AnchorContext): string {
-  return formatToken(local, precision, ctx.zone);
-}
-
 const weekdayOf = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();
 const mondayOf = (date: string) => shiftLocalDate(date, -((weekdayOf(date) + 6) % 7));
 const dayDiff = (a: string, b: string) =>
   Math.round((Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DAY_MS);
-const count = (n: string) => COUNT[n.toLowerCase()] ?? Number(n);
-const today = (ctx: AnchorContext) => localDateString(ctx.at, ctx.zone);
-
-function durations(plain: string, ctx: AnchorContext): string {
-  return plain.replace(DURATION, (match, n1?: string, u1?: string, n2?: string, u2?: string) => {
-    const span = count((n1 ?? n2)!) * ((u1 ?? u2)!.toLowerCase().startsWith("week") ? 7 : 1);
-    return `since ${token(shiftLocalDate(today(ctx), -span), "since", ctx)}`;
-  });
-}
-
-function weeks(plain: string, ctx: AnchorContext): string {
-  const monday = mondayOf(today(ctx));
-  return plain.replace(WEEK, (match) => {
-    const m = match.toLowerCase();
-    if (m.includes("end of")) return token(shiftLocalDate(monday, 4), "day", ctx);
-    const shift = m.startsWith("next") ? 7 : m.startsWith("last") ? -7 : 0;
-    return token(shiftLocalDate(monday, shift), "week", ctx);
-  });
-}
-
-function weekends(plain: string, ctx: AnchorContext): string {
-  const day = today(ctx);
-  const wd = weekdayOf(day);
-  // The weekend under way or coming: Sunday belongs to the weekend that began on Saturday.
-  const thisSat = wd === 0 ? shiftLocalDate(day, -1) : shiftLocalDate(day, 6 - wd);
-  return plain.replace(WEEKEND, (match, which?: string) => {
-    const w = which?.toLowerCase();
-    let sat: string;
-    if (w === "this") sat = thisSat;
-    else if (w === "next") sat = shiftLocalDate(thisSat, 7);
-    else if (w === "last") sat = shiftLocalDate(thisSat, -7);
-    else {
-      const prevSat = wd === 0 || wd === 6 ? thisSat : shiftLocalDate(thisSat, -7);
-      const known = nearestKnown(ctx, [6, 0], day);
-      if (known) sat = weekdayOf(known) === 0 ? shiftLocalDate(known, -1) : known;
-      else
-        sat =
-          Math.abs(dayDiff(prevSat, day)) <= Math.abs(dayDiff(thisSat, day)) ? prevSat : thisSat;
-    }
-    return token(sat, "weekend", ctx);
-  });
-}
-
-/** The known date on one of these weekdays nearest to `day`, as a local date. */
-function nearestKnown(ctx: AnchorContext, weekdays: number[], day: string): string | null {
-  return (
-    (ctx.known ?? [])
-      .map((d) => localDateString(d, ctx.zone))
-      .filter((d) => weekdays.includes(weekdayOf(d)))
-      .sort((a, b) => Math.abs(dayDiff(a, day)) - Math.abs(dayDiff(b, day)))[0] ?? null
-  );
-}
-
-/** A bare weekday: the nearest shown date on it, else the next one to come round (0: today). */
-function pickWeekday(day: string, wd: number, ctx: AnchorContext): string {
-  return nearestKnown(ctx, [wd], day) ?? shiftLocalDate(day, (wd - weekdayOf(day) + 7) % 7);
-}
-
-function explicitWeekday(day: string, wd: number, which: string): string {
-  const back = (weekdayOf(day) - wd + 7) % 7;
-  const ahead = (wd - weekdayOf(day) + 7) % 7;
-  if (which === "last") return shiftLocalDate(day, -(back || 7));
-  if (which === "next") return shiftLocalDate(day, ahead || 7);
-  return shiftLocalDate(day, ahead);
-}
-
-type Found = { from: number; end: number; anchor: Omit<Anchor, "zone">; written: boolean };
-
-function chronoPass(plain: string, ctx: AnchorContext): string {
-  const ref = { instant: ctx.at, timezone: zoneOffsetMinutes(ctx.at, ctx.zone) };
-  const found: Found[] = [];
-  for (const m of plain.matchAll(ISO_DATE)) {
-    // A reference number shaped like a date ("2026-13-45") is not one; its token would never read.
-    const iso = `${m[1]}-${m[2]}-${m[3]}`;
-    if (isNaN(Date.parse(iso)) || new Date(iso).toISOString().slice(0, 10) !== iso) continue;
-    found.push({
-      from: m.index,
-      end: m.index + m[0].length,
-      anchor: { local: iso, precision: "day" },
-      written: true,
-    });
-  }
-  let start = 0;
-  for (const sep of [...plain.matchAll(CLAUSE), null]) {
-    const end = sep ? sep.index : plain.length;
-    const clause = plain.slice(start, end);
-    for (const r of chrono.casual.parse(clause, ref)) {
-      const at = start + r.index;
-      if (found.some((f) => at < f.end && at + r.text.length > f.from)) continue;
-      const lead = LEAD.exec(r.text)?.[0] ?? "";
-      const words = r.text.slice(lead.length).replace(/[\s,.;:!?]+$/, "");
-      const anchor = classify(words, clause, r, ctx);
-      if (!anchor) continue;
-      // "the afternoon of …" renders with its own "the".
-      const the = /\bthe\s+$/i.test(clause.slice(0, r.index)) && / of /i.test(words) ? 4 : 0;
-      found.push({
-        // Her own notes drop "on"/"at".
-        from: at - the,
-        end: at + lead.length + words.length,
-        anchor,
-        written: DATE_PHRASE.test(words.replace(CLOCK, " ").trim()),
-      });
-    }
-    if (sep) start = sep.index + sep[0].length;
-  }
-  let out = plain;
-  // From the end backwards, so earlier indices stay valid while the text changes.
-  for (const f of merged(found, plain).sort((a, b) => b.from - a.from))
-    out = out.slice(0, f.from) + token(f.anchor.local, f.anchor.precision, ctx) + out.slice(f.end);
-  return out;
-}
-
-const FINER: Precision[] = ["time", "morning", "afternoon", "evening", "night", "day"];
-
-/**
- * Two anchors with only a comma, space or bracket between them are one date said twice
- * ("yesterday, Thursday 8 January"): one token, at the finer precision. When they disagree,
- * the written-out date wins; two different written-out dates stay two.
- */
-function merged(found: Found[], plain: string): Found[] {
-  const out: Found[] = [];
-  for (const f of [...found].sort((a, b) => a.from - b.from)) {
-    const prev = out.at(-1);
-    const gap = prev ? plain.slice(prev.end, f.from) : "";
-    if (prev && /^[\s,;(]*$/.test(gap)) {
-      const same = prev.anchor.local.slice(0, 10) === f.anchor.local.slice(0, 10);
-      if (same || prev.written !== f.written) {
-        const keep = same
-          ? FINER.indexOf(f.anchor.precision) < FINER.indexOf(prev.anchor.precision)
-            ? f
-            : prev
-          : prev.written
-            ? prev
-            : f;
-        const close = gap.includes("(") && plain[f.end] === ")" ? 1 : 0;
-        out[out.length - 1] = { ...keep, from: prev.from, end: f.end + close };
-        continue;
-      }
-    }
-    out.push(f);
-  }
-  return out;
-}
-
-function classify(
-  words: string,
-  plain: string,
-  r: chrono.ParsedResult,
-  ctx: AnchorContext,
-): Omit<Anchor, "zone"> | null {
-  // A clock time rides on a day ("tomorrow at 3pm"); a bare clock time ("at 8") anchors nothing.
-  if (!r.start.isCertain("hour")) return classifyDay(words, plain, r, ctx);
-  const rest = words.replace(CLOCK, " ").trim();
-  if (!rest || rest === words) return null;
-  const dated = classifyDay(rest, plain, r, ctx);
-  // A clock time sits on a day or a part of one ("tonight at 20:45"); the clock is the finer.
-  if (!dated || !["day", "morning", "afternoon", "evening", "night"].includes(dated.precision))
-    return null;
-  const hh = String(r.start.get("hour")).padStart(2, "0");
-  const mm = String(r.start.get("minute") ?? 0).padStart(2, "0");
-  return { local: `${dated.local}T${hh}:${mm}`, precision: "time" };
-}
-
-function classifyDay(
-  words: string,
-  plain: string,
-  r: chrono.ParsedResult,
-  ctx: AnchorContext,
-): Omit<Anchor, "zone"> | null {
-  const day = today(ctx);
-  const w = words.toLowerCase();
-  if (!w || /^(right )?now$/.test(w)) return null;
-  let m: RegExpExecArray | null;
-  if ((m = RELATIVE.exec(w))) {
-    const shift =
-      w.startsWith("yesterday") || w === "last night" ? -1 : w.startsWith("tomorrow") ? 1 : 0;
-    const part = (m[2] ?? m[3] ?? (/night/.test(w) ? "night" : null)) as Precision | null;
-    return { local: shiftLocalDate(day, shift), precision: part ?? "day" };
-  }
-  if ((m = WEEKDAY.exec(w))) {
-    // What comes right before the weekday word itself, not before chrono's "on".
-    const before = plain.slice(0, r.index + Math.max(0, r.text.indexOf(words)));
-    const after = plain.slice(r.index + r.text.length);
-    if (!m[1] && !m[3] && (NOUN_AFTER.test(after) || NOUN_BEFORE.test(before))) return null;
-    if (!m[1] && HABIT_BEFORE.test(before)) return null;
-    const wd = WEEKDAYS.indexOf(m[2]!.toLowerCase());
-    // "since friday" always points back.
-    const which = /\bsince\s+$/i.test(before) ? "last" : m[1]?.toLowerCase();
-    const local = which ? explicitWeekday(day, wd, which) : pickWeekday(day, wd, ctx);
-    if (!local) return null;
-    return { local, precision: (m[3]?.toLowerCase() as Precision | undefined) ?? "day" };
-  }
-  if ((m = OFFSET.exec(w))) {
-    const ago = m[3] !== undefined;
-    const span = count((m[1] ?? m[3])!) * ((m[2] ?? m[4])!.startsWith("week") ? 7 : 1);
-    return { local: shiftLocalDate(day, ago ? -span : span), precision: "day" };
-  }
-  if ((m = DATE_PHRASE.exec(w))) {
-    const mo = String(MONTH_NAMES.indexOf((m[3] ?? m[4])!.slice(0, 3)) + 1).padStart(2, "0");
-    const dd = String(Number(m[2] ?? m[5])).padStart(2, "0");
-    const part = (m[1] as Precision | undefined) ?? "day";
-    if (m[6]) return { local: `${m[6]}-${mo}-${dd}`, precision: part };
-    // A date without a year is the nearest one.
-    const y = Number(day.slice(0, 4));
-    const options = [y - 1, y, y + 1].map((year) => `${year}-${mo}-${dd}`);
-    const nearest = options.sort(
-      (a, b) => Math.abs(dayDiff(a, day)) - Math.abs(dayDiff(b, day)),
-    )[0]!;
-    return { local: nearest, precision: part };
-  }
-  if (ORDINAL.test(w)) {
-    // "the 13th" is the occurrence nearest the moment it was written.
-    return { local: localDateString(r.start.date(), ctx.zone), precision: "day" };
-  }
-  // chrono reads "in october" as "october"; only with the "in" before it is it a month to come
-  // (a lone "may" stays a verb).
-  const inMonth = /\bin\s+$/i.test(plain.slice(0, r.index)) ? `in ${w}` : w;
-  if ((m = MONTH_ONLY.exec(inMonth))) {
-    const [y, mo] = day.slice(0, 7).split("-").map(Number) as [number, number];
-    if (m[1]) {
-      const shift = m[1].toLowerCase() === "next" ? 1 : m[1].toLowerCase() === "last" ? -1 : 0;
-      const local = new Date(Date.UTC(y, mo - 1 + shift, 1)).toISOString().slice(0, 7);
-      return { local, precision: "month" };
-    }
-    // "in october" said in October is this October; otherwise the next one, or the last one when
-    // it already happened.
-    const target = new Date(`${m[2]} 1, ${y} 12:00 UTC`).getUTCMonth() + 1;
-    const year = target >= mo ? y : y + 1;
-    return { local: `${year}-${String(target).padStart(2, "0")}`, precision: "month" };
-  }
-  return null;
-}
 
 function dayName(date: string, withYear: boolean): string {
   return new Intl.DateTimeFormat("en-GB", {

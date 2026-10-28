@@ -73,7 +73,7 @@ export async function draftPost(
       `Keep the caption under ${config.posts.caption_target_chars} characters: one or two short sentences.`,
     ].join("\n\n"),
     schema: DraftSchema,
-    timeoutMs: config.models.structured_timeout_ms,
+    timeoutMs: config.models.core_timeout_ms,
     maxTokens: config.core.loops.max_tokens,
     maxRetries: config.core.max_retries,
   });
@@ -103,7 +103,7 @@ export async function checkPost(
       ...shows(find),
     ].join("\n"),
     schema: CheckSchema,
-    timeoutMs: config.models.structured_timeout_ms,
+    timeoutMs: config.models.core_timeout_ms,
     maxTokens: config.core.loops.max_tokens,
     maxRetries: config.core.max_retries,
   });

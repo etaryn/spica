@@ -595,8 +595,8 @@ self's own sections are `###`, so they nest under the reply's "Who you are
 lately".
 
 Nightly rendering uses `core.snapshot.max_items` (8 per active kind) and
-`core.snapshot.max_tokens` (1024), with `prompts.core_snapshot: v3` at
-`prompts/core/snapshot/v4.md`. Its six sections are Lately, Opinions,
+`core.snapshot.max_tokens` (8000), with `prompts.core_snapshot: v5` at
+`prompts/core/snapshot/v5.md`. Its six sections are Lately, Opinions,
 Interests, Goals, People, and Habits of speech; transient mood and energy
 are excluded and speech habits carry forward unless core evidence changes
 them. Insights are selected newest-first since the previous render. The
@@ -617,7 +617,7 @@ On every new snapshot version (`core_render_snapshot`, §8.5):
    embeddings yield no distance row.
 
 The code-only diff and trend rows are written before the judge, including
-when its call is skipped for budget. `core.drift.max_tokens` is 512.
+when its call is skipped for budget. `core.drift.max_tokens` is 8000.
 
 Drift is logged for manual review and shown on the inspector's Core tab. Nothing is
 blocked automatically in the test phase. Whether a values contradiction
@@ -661,7 +661,9 @@ answers straight when sincerely asked.
   replies and outreach before it happens; it is `resolved` when the event
   lands, and a resolved intention is never recalled again (the episode
   speaks for it). A surprise leaves nothing in memory before it happens (E3:
-  plans are memory, outcomes are world).
+  plans are memory, outcomes are world). **Built 17e:** the thought labels its
+  own time words and may cite her recent life (`payload.cites`), as every core
+  writer does (§8.5).
 - **Goals and projects**: arcs lasting weeks, with progress.
 - **Thoughts (Built in 8b)**: anticipation binds a thought to an upcoming
   intention and marks that source; rumination binds one to a strong landed
@@ -769,7 +771,7 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   run), appraises each event whose `at` has passed and whose `appraised_at`
   is null, in one transaction under the tick's lock (a surprise's people are
   added to `core_entity` and its `agents` set here). **`core_appraise`**
-  (Built; Haiku, `prompts/core/appraise/v4.md`, one budgeted run per tick
+  (Built; Haiku, `prompts/core/appraise/v5.md`, one budgeted run per tick
   that has due events, before the transaction) reads each event with what
   she expected (its intention), her state, the snapshot and her goals, and
   returns the episode in its own words (E1), an emotion, a salience word,
@@ -796,7 +798,7 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   worker start, in the eval runner and by `pnpm db:reset-self`, and never
   counted by the new-entity rule). The generator writes from her core values
   plus her latest snapshot (the seed self until one exists), from
-  `prompts/life/event/v7.md` (v7, 2026-10-22: v6 without the rejected-attempts line; one plain sentence of what happened, no
+  `prompts/life/event/v8.md` (v8, 2026-10-28: v7 plus labelled times and citations; v7, 2026-10-22: v6 without the rejected-attempts line; one plain sentence of what happened, no
   feelings, under `core.world.event_target_chars` (140); appraisal adds how it
   felt; everything happens online: archives, live feeds, online screenings,
   remote telescope time, Alcor by message, never a physical place). Since episodes are only written when an event
@@ -823,8 +825,8 @@ per `small | medium | large`); a goal reaching 1 is `done`.
   before every model attempt, including reconciliation.
 - **Resolution**: a due planned event's nullable `fallthrough` overrides the
   ID-seeded roll against `core.world.fallthrough_probability` (0.15). On a
-  true roll `core_resolve` (`prompts/core/resolve/v1.md`,
-  `core.resolve.max_tokens` 512) proposes a replacement. The original becomes
+  true roll `core_resolve` (`prompts/core/resolve/v2.md`,
+  `core.resolve.max_tokens` 8000) proposes a replacement. The original becomes
   `fell_through` without an episode; a `resolution` event with its day, time,
   people, goal and target is appraised in the same transaction and resolves
   the original intention. False records `happened`. A model error, invalid
@@ -898,26 +900,26 @@ then wander. Before a loop is due it makes no model call or trace. A due
 optional loop without budget writes `skipped_budget`; one loop's failure does
 not stop the others. Successful thought, marker, state and trace writes share
 one transaction. Model and embedding work is outside it. The shared
-`core.loops` settings are `max_chars` (300), `max_tokens` (512),
+`core.loops` settings are `max_chars` (300), `max_tokens` (8000),
 `salience.low` (0.25), `salience.medium` (0.4), `thought_confidence` (0.6),
 and `dedupe_similarity` (0.92). A nearest eligible neighbour with similarity
 **greater than** 0.92 drops an item; dropped items appear in trace outputs.
 Invalid model output or embedding leaves thought and source unchanged.
 
-- `core_anticipate` (`prompts/core/anticipate/v4.md`) chooses the soonest open,
+- `core_anticipate` (`prompts/core/anticipate/v5.md`) chooses the soonest open,
   unanticipated intention in the next `core.anticipate.lead_hours` (12),
   ties by ID. Accepted thought gets `payload.anticipates`; the intention gets
   `anticipated_at`. Emotion is bounded and mood arousal moves by
   `core.anticipate.arousal_gain` (0.3) toward proposed arousal; mood valence
   stays. Landing before apply makes the proposal ineligible.
-- `core_ruminate` (`prompts/core/ruminate/v4.md`) chooses the oldest eligible
+- `core_ruminate` (`prompts/core/ruminate/v5.md`) chooses the oldest eligible
   episode, ties by ID: age 2 through 24 hours from landing, absolute valence
   at least 0.5 and `payload.ruminated` below 1. Keys are
   `core.ruminate.delay_hours`, `window_hours`, `min_valence`,
   `max_per_episode`, `gain` (0.1). Acceptance writes `payload.ruminates`,
   increments the episode marker, reinforces recall and nudges mood valence
   toward the episode's sign. An absent historical emotion stays absent.
-- `core_wander` (`prompts/core/wander/v4.md`) needs today's plan and no busy
+- `core_wander` (`prompts/core/wander/v5.md`) needs today's plan and no busy
   or offline block. Keys `core.wander.max_per_day` (2), `min_gap_hours` (3),
   `seed_limit` (50), `mood_bias` (0.5), `chain` (3),
   `min_similarity` (0.3), `max_items` (2) bound the selection and output.
@@ -942,7 +944,7 @@ and does not stop later steps. The date claim prevents a second run that
 night, including after a crash. Each loop uses the shared 24-call daily
 budget and a versioned prompt:
 
-- `core_reflect` (`prompts/core/reflect/v4.md`, `prompts.core_reflect: v4`)
+- `core_reflect` (`prompts/core/reflect/v5.md`, `prompts.core_reflect: v5`)
   reads up to `core.reflect.max_inputs` (30) new episodes, thoughts and ideas
   with `reflected_at IS NULL` and `created_at <= now`, ordered by
   `(created_at, id)`, plus `context_items` (6) active neighbours. A capped run
@@ -954,7 +956,7 @@ budget and a versioned prompt:
   she always has something to pull her events and recall.
   Confidence maps low/medium/high to 0.4/0.7/0.9; salience is
   insight/opinion/interest/narrative 0.5/0.5/0.4/0.6. Fading multiplies
-  interest salience by `fade_factor` (0.5). `max_tokens` is 1024. Empty input
+  interest salience by `fade_factor` (0.5). `max_tokens` is 8000. Empty input
   produces a zero-call successful trace and marks no memories. A new opinion
   or interest with no explicit target supersedes the nearest active one of
   its kind from before tonight at or above `core.reflect.twin_similarity`
@@ -963,8 +965,8 @@ budget and a versioned prompt:
   `core.goals.twin_similarity` (0.85) of an active goal (`CoreGoals.nearActive`) isn't
   added, and that goal isn't dropped the same night, so a rewording never replaces a goal and
   its progress; a `seed` goal younger than `core.goals.seed_keep_days` (7) can't be dropped.
-- `core_consolidate` (`prompts/core/consolidate/v2.md`,
-  `prompts.core_consolidate: v2`) applies core decay before any model call:
+- `core_consolidate` (`prompts/core/consolidate/v3.md`,
+  `prompts.core_consolidate: v3`) applies core decay before any model call:
   after `core.decay.grace_days` (3) without recall, salience becomes
   `salience * (1 - rate * (1 - salience))`, with `rate` 0.08; at or below
   `stale_floor` (0.05) it becomes stale, never deleted. Open intentions,
@@ -973,10 +975,10 @@ budget and a versioned prompt:
   ungisted episodes older than `gist_after_days` (7) local days in one
   Monday-start local week. It handles at most `max_groups` (1) per night;
   sources remain and receive `gist_source_factor` (0.5) once. `max_tokens`
-  is 512. Decay still runs on budget exhaustion or gist failure.
-- `core_render_snapshot` (`prompts/core/snapshot/v4.md`,
-  `prompts.core_snapshot: v3`) reads at most `core.snapshot.max_items` (8)
-  per active kind, with `max_tokens` 1024. It writes six sections and their
+  is 8000. Decay still runs on budget exhaustion or gist failure.
+- `core_render_snapshot` (`prompts/core/snapshot/v5.md`,
+  `prompts.core_snapshot: v5`) reads at most `core.snapshot.max_items` (8)
+  per active kind, with `max_tokens` 8000. It writes six sections and their
   embedded bullet lines in one transaction with version N+1 and its trace;
   a failed render preserves the previous version and lines. A section the
   render returns empty, which had lines last night (or in the seed self on
@@ -986,28 +988,35 @@ budget and a versioned prompt:
   goals proposed the same night are one.
 - `core_drift_watch` (`prompts/core/drift/v1.md`) writes the diagnostic
   rows described in §7.3. A finding never blocks the new snapshot.
-- **Built 16: time model.** Her loops read times through one renderer
-  (`platform/relative-date.ts`): wander's seed and chain, ruminate's episode and reflect's inputs
-  carry "Friday 9 January, 2 days ago", and anticipate's plan its day and clock ("Friday 9
-  January, in 2 days at 19:00"), on her calendar. Her snapshot reaches every loop as `latestSelf`
-  (`memory/core/self.ts`): headed "(written Thursday 8 January, yesterday)". Prompts appraise,
-  anticipate, ruminate, wander, reflect and snapshot v3 say to name the day or leave time out,
-  never today, tonight, tomorrow, yesterday or this week; a slip is logged
-  (`relative words in stored text`), never retried.
-- **Built 16b: time anchors.** Her loops' inputs carry date tokens on her calendar
-  (`platform/time-anchors.ts`: `dateToken`, `stamped`); `withTimeRendering`
-  (`platform/llm/render-net.ts`) renders every token where a prompt reaches the model, so
-  `relative-date.ts` is gone. Core `memory.insert` and `insertSnapshot` anchor what she writes in
-  her zone (`createCoreLayer(db, zone)`), so "tonight" keeps the night it meant. The snapshot render
-  anchors its item texts once, so her snapshot and self lines stay the same strings. Prompts
-  appraise, anticipate, ruminate, wander, reflect and snapshot v4: "When you mention a day, copy
-  its date as you see it; what you write is dated for you."
-- **Built 16c: shown dates.** `runCoreLoop` records the dates in every input a loop sends
-  (`LoopContext.shown()`), and every `memory.insert` in its commit takes them, as does the
-  snapshot's item anchoring, so a bare weekday she writes back ("tuesday night") takes the day
-  she saw. Appraise carries its input's dates to its episode (`Appraisal.shown`). Core
-  `memory.insert` also counts the row's own `occurred_at`. A part of the day with a clock time
-  ("tonight at 20:45", "tonight at noon") anchors as a `time` token.
+- **Built 16, replaced in 17e: time.** Her loops read times as date tokens on her calendar
+  (`platform/time-anchors.ts`: `dateToken`, `stamped`), rendered with their distance where a
+  prompt reaches the model (`withTimeRendering`, `platform/llm/render-net.ts`); her snapshot
+  reaches every loop as `latestSelf`, headed by the night it was written.
+- **Built 17e: core notes on labels.** Every core writer labels its own time words and may cite
+  her memories, through `platform/notes.ts` as her user-mind notes do; no code reads her prose for
+  dates. Each loop's input starts with `nowLine` and shows the memories it reads numbered
+  (`memory/core/citables.ts`: `[m1] words (date)`, a date shown only when the words carry none).
+  A citation is rendered as the cited memory's date token (an intention's plan moment, otherwise
+  when it happened), since every core memory is hers; the cite is kept as `payload.cites`
+  (thoughts, episodes, reflect's memories, gists, intentions) and is the base for words counted
+  from it ("the day after [m1]", `from: "m1"`). Each schema carries `times`
+  (`noteTimesSchema(...).default([])`): anticipate and ruminate `thought`, wander `item_1`/`item_2`,
+  appraise `episode`, resolve `content`, `life_event` `content` and `thought`, reflect
+  `insight_n`, `opinion_n`, `interest_n`, `narrative`, `goal_n_title`, `goal_n_why`, consolidate
+  `gist` (a day inside its week counts from the source it cites), and the snapshot one field per
+  line ("Lately 1", "Habits of speech 2"; a kept line is copied as stored). Text is fit to its
+  length before labelling, so no token is cut. Reflect's model-facing ids are m-ids, and
+  `supersedes` and a fading `target_id` are mapped back in code (an unknown id changes nothing).
+  What a note couldn't use is traced as `note_dropped`. Core memory and snapshots are stored as
+  given (`createCoreLayer(db)`); the Phase 16 parser (`anchorTimes`, `anchorFields`, chrono-node,
+  shown dates) is deleted, and `relativeWords` lives in `evals/lib/relative-words.ts` as the
+  review's count of unlabelled time words. Core-role calls think (`models.core_thinking`,
+  adaptive) with `models.core_timeout_ms` (90000) and token caps of 8000 (`core.loops`,
+  `snapshot`, `appraise`, `resolve`, `drift`, `reflect`, `consolidate`,
+  `core.world.event_max_tokens`); `life_event` runs on the `core` role. The rules live in
+  `prompts/core/notes/v1.md` (`prompts.core_notes`). Prompts: appraise, anticipate, ruminate,
+  wander, reflect and snapshot v5, consolidate v3, resolve v2, life/event v8. A core note citing a
+  memory later superseded isn't retired (B143).
 - **Built 10b: depth.** Every loop that writes memory judges each item's
   `depth` in the same call (`surface | personal | intimate`, 1–3): appraise,
   wander, ruminate, anticipate, reflect and consolidate (all prompts v2), and
@@ -2015,7 +2024,7 @@ prose: the model says what each time phrase means (unit, shift, weekday…), cod
 the send time of the message holding the words (`platform/time-labels.ts`), and the memory line
 carries it as a date token; `occurred_at` is its first time, a thread's `next_checkpoint` its
 checkpoint time. The extraction anchoring (`anchorExtraction`, `when_direction`) went with v11;
-the stored-text anchoring in `insertFact` remains for her notes only, until 17d. The labelling
+the stored-text anchoring in `insertFact` went in 17d and the last of the parser in 17e. The labelling
 input also carries her snapshot's Interests, so her own titles ("Mirror", "Stalker") read as
 films.
 
@@ -2198,9 +2207,9 @@ once, after signup; taking it before signup (as a hook) is a later decision.
   the model (fallback plan, no event that day, code appraisal, the plan
   happens) and
   the rest are skipped; each is traced (`fallback` / `skipped_budget`).
-  Phase 8b's `core_resolve` cap is 512 tokens; the three thought prompts
-  share `core.loops.max_tokens` (512). Nightly reflect and render each cap
-  output at 1024 tokens; consolidation and drift each cap at 512. A no-input
+  Since 17e every core cap is 8000 tokens, since core calls think: `core_resolve`, the three
+  thought prompts (`core.loops.max_tokens`), nightly reflect, render, consolidation and drift,
+  and `core.world.event_max_tokens`. A no-input
   reflection or no-gist consolidation records a zero-call `done` trace.
 - **User (Built 9a, 9b):** one triggered batch per big event, at most
   `user_mind.max_triggers_per_day` (3) per user per local date, so cost scales
@@ -2608,7 +2617,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
 | **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; 17c and 17d built 2026-10-26; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. **17d** (built 2026-10-26): her user-mind notes cite memories and threads by id, each rendered by code with whose it is, and label their own time words in the time structure, which code resolves; an idea about them resting only on her life isn't written, original ideas are kept, a superseded memory retires the ideas, reflections and beliefs citing it, and `insertFact` stores what it's given (B1 done). Next: **17e** core notes on labels, which deletes the Phase 16 parser | B132 (17e), B139 |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; 17c and 17d built 2026-10-26; 17e built 2026-10-28; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. **17d** (built 2026-10-26): her user-mind notes cite memories and threads by id, each rendered by code with whose it is, and label their own time words in the time structure, which code resolves; an idea about them resting only on her life isn't written, original ideas are kept, a superseded memory retires the ideas, reflections and beliefs citing it, and `insertFact` stores what it's given (B1 done). **17e** (built 2026-10-28): every core writer (`life_event`, resolve, appraise, anticipate, ruminate, wander, reflect with goals, consolidate, the snapshot) labels its own time words and may cite her memories through `platform/notes.ts`, a citation rendered as the memory's date (`memory/core/citables.ts`); core-role calls think (`models.core_thinking`); core memory and snapshots are stored as given, and the Phase 16 parser (`anchorTimes`, chrono-node, shown dates) is deleted (B132 gone with it); `pnpm exit:long` added for B142 | B139, B142, B143 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2713,17 +2722,9 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B142).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B145).
 
 ### 25.1 Memory and recall
-- **B132.** Anchoring minors from the 16c final review, each repeated or rare rather than a wrong
-  date: "yesterday (Friday 9 January)" isn't merged; "the 8th and 9th of January" leaves "the 8th"
-  raw; a weekend, week or since token beside a written-out date isn't merged (the merge runs in the
-  chrono pass only); on disagreement the merge drops the other phrase's part of the day; a comma or
-  ISO date between a date and its clock loses the time; an ISO match keeps "on" before its token
-  ("on yesterday, …"); "in three days from Saturday" stores two dates; world-tick's planned-event
-  intentions take no shown dates. Not exercised by the 17b close run. This anchoring now serves only
-  core memory, the snapshot and the world. *Phase 17e*, which deletes it when core moves to labels.
 - **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
   that a memory holds; citing moves needs the conversation in the loops' input. *After `exit:user`*
   (Phase 17d).
@@ -2738,7 +2739,27 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   has outreach's `her_day` path. *Tuning.*
 - **B142.** Long conversations are still untested. `user-mind-two-weeks` (`pnpm exit:user`) has
   one-turn sessions, so `long_conversation` never fired and consolidate wrote no gist in either
-  17d close run. Needs a script with a 20+ turn session. *Phase 17e close.*
+  17d close run. The script exists (17e): `long-conversation` (`pnpm exit:long`), one 24-turn
+  session and a lease nine days later. Its 17e close run: `long_conversation` fired but was
+  `capped` (three `param_band` runs had spent the day's `max_triggers_per_day`), and no gist,
+  since the week's memories sat in open threads. The script now starts the long session late so
+  its run falls on the next day, and closes the sister and Osaka storylines before the lease.
+  *Next `exit:long` run.*
+- **B143.** A core note citing a memory that is later superseded isn't retired, unlike her user
+  notes: core thoughts belong to their moment, and reflect already replaces twin opinions and
+  interests. Revisit if a run shows a thought resting on a replaced view. *Tuning.*
+- **B144.** Her kept time words can be copied after they've gone stale. In the 17e
+  `exit:core-day` run (`review-2026-10-28T02-39-03-790Z.md`), wander at Tuesday 00:00 read its
+  seed as "the telescope booking for tonight (that's last night, Monday 5 January)" and wrote "find
+  orion's belt tonight", labelled as Tuesday night: the stored word "tonight" with its gloss, at the
+  midnight edge. The labels resolved as given; the model copied the stale word. Options: render a
+  stale kept word as its date only, or a worked example in the core notes rules. *Tuning.*
+- **B145.** An announcement labelled as a bid loses its memory but keeps its storyline. In the 17e
+  `exit:long` run (`review-2026-10-28T03-12-02-703Z.md`) "I signed the lease on a tiny place in
+  Osaka!" was read as act `bids`; only states, answers, confirms, denies and corrects assert, so
+  its proposition was dropped as `wrong_speaker`, yet its new thread "Osaka apartment lease" opened:
+  a storyline with no memory behind it. Options: don't open a thread whose only proposition was
+  dropped, or let a bid that tells news assert. *Tuning.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

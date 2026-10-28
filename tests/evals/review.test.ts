@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { decisionLine, renderReview, signalsLine } from "../../evals/lib/review";
-import { anchorTimes } from "@/mind/platform/time-anchors";
+import { formatToken } from "@/mind/platform/time-anchors";
 import { matchesOnly } from "../../evals/lib/script";
 
 test("renders every turn, decision, fact and annotation, with no pass/fail verdict on quality", () => {
@@ -217,10 +217,7 @@ test("the review lists stored text with relative words", () => {
 });
 
 test("the review prints anchored text as plain dates", () => {
-  const content = anchorTimes("Sister visits tomorrow.", {
-    at: new Date("2026-01-12T09:00:00Z"),
-    zone: "UTC",
-  });
+  const content = `Sister visits ${formatToken("2026-01-13", "day", "UTC")}.`;
   const md = renderReview(
     [
       {
@@ -249,4 +246,34 @@ test("the review prints anchored text as plain dates", () => {
   );
   expect(md).toContain("Sister visits Tuesday 13 January 2026.");
   expect(md).not.toContain("⟦");
+});
+
+test("a loop's time word it labelled is no slip; an unlabelled one is", () => {
+  const md = (output: unknown) =>
+    renderReview(
+      [
+        {
+          script: "s",
+          attempt: 1,
+          result: {
+            name: "s",
+            status: "pass",
+            meta: { decayPasses: 0, ticks: 0, lifeHours: 0, ungroundedClaims: 0 },
+            assertions: [],
+            annotations: [],
+            trace: {
+              transcripts: {},
+              memory: {},
+              coreCalls: [{ purpose: "core_wander", input: "i", output }],
+            },
+          },
+        },
+      ],
+      { stamp: "t", real: [], annotate: false },
+    );
+  const items = [{ content: "clear tonight" }];
+  expect(md({ items, times: [{ words: "tonight" }] })).not.toContain("Relative words in her loops");
+  expect(md({ items, times: [] })).toContain(
+    "### Relative words in her loops\n\n- core_wander: tonight",
+  );
 });

@@ -173,9 +173,10 @@ test("two nights render self, track drift, gist once, decay selectively and keep
   );
   const reflectCalls = all.llm.structuredCalls.filter((call) => call.purpose === "core_reflect");
   expect(reflectCalls).toHaveLength(2);
+  // The model sees memories under m-ids, so the gist is found by its words.
   expect(
-    JSON.parse(reflectCalls[1]!.input).inputs.map((item: { id: string }) => item.id),
-  ).toContain(gists[0]!.id);
+    JSON.parse(reflectCalls[1]!.input).inputs.map((item: { content: string }) => item.content),
+  ).toContain(gists[0]!.content);
   for (const call of all.llm.structuredCalls)
     expect(`${call.system}\n${call.input}`).not.toContain(canary);
   for (const table of [

@@ -134,7 +134,9 @@ test("one accepted wander stores seed context and leaves core state and source u
   expect(await deps.core.memory.get(id)).toEqual(source);
   // The seed reaches the model with its day and how far that is from now.
   const input = all.llm.structuredCalls.find((c) => c.purpose === "core_wander")!.input;
-  expect(input).toMatch(/Seed memory: Spica found an old film\. \(⟦\d{4}-\d{2}-\d{2}\|day\|/);
+  expect(input).toMatch(
+    /Seed memory: \[m1\] Spica found an old film\. \(⟦\d{4}-\d{2}-\d{2}\|day\|/,
+  );
 });
 
 test("seed pool omits unreal, stale, superseded and resolved intentions", async () => {
@@ -473,4 +475,57 @@ test("an opinion never starts a wandering", async () => {
   expect(await coreWander(deps, now)).toMatchObject({ applied: true });
   const mine = (await thoughts(all)).filter((t) => t.source_ref?.startsWith("core_wander:"));
   expect(mine[0]?.payload).toMatchObject({ seed: episode });
+});
+
+const tonightAs = (field: string) => ({
+  field,
+  words: "tonight",
+  from: "",
+  unit: "day",
+  shift: 0,
+  weekday: null,
+  month: null,
+  day_of_month: null,
+  part: "night",
+  clock: "",
+  span: "at",
+  rough: false,
+});
+
+test("her wandering cites the seed by id and labels its own time words", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  await plan(deps);
+  const seedId = await seed(deps, "Spica found an old film.", { created: before(30) });
+  all.llm.handlers.core_wander = () => ({
+    items: [{ kind: "thought", content: "the old film [m1], again tonight", salience: "low" }],
+    times: [tonightAs("item_1")],
+  });
+  const out = await coreWander(deps, now);
+  expect(out.status).toBe("done");
+  const [row] = await thoughts(all);
+  expect(row!.content).toBe(
+    "the old film (⟦2026-01-04|day|UTC⟧), again ⟦2026-01-05|night|UTC|tonight⟧",
+  );
+  expect(row!.payload).toMatchObject({ seed: seedId, cites: [seedId] });
+  const input = all.llm.structuredCalls.at(-1)!.input;
+  expect(input.startsWith("It's ")).toBe(true);
+  expect(input).toContain("Seed memory: [m1] Spica found an old film.");
+});
+
+test("her wandering's time fields follow its configured item count", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" }, core: { wander: { max_items: 3 } } });
+  await plan(deps);
+  await seed(deps, "Spica found an old film.", { created: before(30) });
+  all.llm.handlers.core_wander = () => ({
+    items: [
+      { kind: "thought", content: "one", salience: "low" },
+      { kind: "idea", content: "two", salience: "low" },
+      { kind: "idea", content: "three, tonight", salience: "low" },
+    ],
+    times: [tonightAs("item_3")],
+  });
+  expect((await coreWander(deps, now)).status).toBe("done");
+  expect((await thoughts(all)).map((t) => t.content)).toContain(
+    "three, ⟦2026-01-05|night|UTC|tonight⟧",
+  );
 });

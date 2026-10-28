@@ -263,6 +263,29 @@ describe("judge effort and thinking", () => {
     expect(cheap).toMatchObject({ thinking: { type: "disabled" } });
   });
 
+  test("the core role thinks by its own setting; other structured calls keep theirs", async () => {
+    const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
+    const p = new AnthropicProvider(client, {
+      ...models,
+      core_thinking: "adaptive",
+      structured_thinking: "disabled",
+    });
+    const schema = z.object({ ok: z.boolean() });
+    for (const model of ["core", "life"] as const)
+      await p.classifyJson({
+        purpose: "x",
+        model,
+        system: "s",
+        input: "i",
+        schema,
+        timeoutMs: 1,
+        maxTokens: 1,
+      });
+    const [core, life] = parse.mock.calls.map((c) => c[0]);
+    expect(core).toMatchObject({ thinking: { type: "adaptive" } });
+    expect(life).toMatchObject({ thinking: { type: "disabled" } });
+  });
+
   test("the labels role has its own model and thinking; other structured calls keep theirs", async () => {
     const { client, parse } = stubClient(undefined, { parsed_output: { ok: true } });
     const p = new AnthropicProvider(client, {

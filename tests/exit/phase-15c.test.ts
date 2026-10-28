@@ -1,15 +1,14 @@
 /**
  * Phase 15c exit, all fake: a repaired hurt is a big event and turns past; her notes read nothing
- * sensitive outside a crisis window; a new user has no "usual" rate yet; dates come from the words
- * said; gender is a full-weight card fact; a distant memory can only be contradicted; the judge
- * keeps only her words; milestones skip the cap; and one user's words never reach another's notes.
+ * sensitive outside a crisis window; a new user has no "usual" rate yet; gender is a full-weight
+ * card fact; a distant memory can only be contradicted; the judge keeps only her words; milestones
+ * skip the cap; and one user's words never reach another's notes.
  */
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertFact } from "@/db/repos/user/facts";
 import { insertRun } from "@/db/repos/user/user-mind";
 import { reconcileAgainstNeighbours } from "@/mind/memory/shared/reconcile";
 import { settleHurtFacts } from "@/mind/memory/user/hurt";
-import { anchorTimes, renderAbsolute } from "@/mind/platform/time-anchors";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
 import { genderFact } from "@/mind/process/onboarding/gender";
@@ -133,13 +132,6 @@ test("3: outside a crisis window her run reads nothing sensitive; inside, it doe
   expect((await loadRunInputs(deps, u)).facts.map((f) => f.content)).toEqual([
     "Private crisis detail.",
   ]);
-});
-
-test("4: 'next monday' said on a Monday is the next week's Monday", () => {
-  const at = new Date("2026-01-05T09:00:00Z");
-  expect(renderAbsolute(anchorTimes("next monday", { at, zone: "UTC" }))).toBe(
-    "Monday 12 January 2026",
-  );
 });
 
 test("5: gender is a card line with its pronouns", () => {

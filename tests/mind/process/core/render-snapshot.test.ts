@@ -261,37 +261,40 @@ test("a kept line keeps the depth it had, so an intimate line never widens", asy
   expect(kept?.depth).toBe(3);
 });
 
-test("a Lately line's time words are dated once, the same in her snapshot and her self lines", async () => {
-  const all = makeTestDeps();
-  const deps = coreDepsOf(all);
-  await seedSnapshot(deps);
-  all.llm.handlers.core_render_snapshot = () => ({
-    Lately: [{ text: "Telescope booking tonight.", depth: null }],
-    Opinions: [],
-    Interests: [],
-    Goals: [],
-    People: [],
-    "Habits of speech": [],
-  });
-  expect(await coreRenderSnapshot(deps, now)).toBe("done");
-  const snapshot = (await deps.core.memory.latestSnapshot())!;
-  const line = (await deps.core.memory.selfLines(snapshot.version)).find((l) =>
-    l.text.startsWith("Telescope"),
-  )!;
-  expect(line.text).toMatch(/^Telescope booking ⟦2026-01-05/);
-  expect(snapshot.content).toContain(`- ${line.text}`);
+const blank = {
+  Lately: [],
+  Opinions: [],
+  Interests: [],
+  Goals: [],
+  People: [],
+  "Habits of speech": [],
+};
+const timeAs = (field: string, words: string, meaning: object = {}) => ({
+  field,
+  words,
+  from: "",
+  unit: "weekday",
+  shift: 1,
+  weekday: "sunday",
+  month: null,
+  day_of_month: null,
+  part: null,
+  clock: "",
+  span: "at",
+  rough: false,
+  ...meaning,
 });
 
-test("a Lately line's bare weekday takes the day her snapshot input showed", async () => {
-  const all = makeTestDeps();
+test("a new line's own time words and citations are dated once, the same in her snapshot and self lines", async () => {
+  const all = makeTestDeps({ life: { timezone: "UTC" } });
   const deps = coreDepsOf(all);
   await seedSnapshot(deps);
   await deps.core.memory.insert({
     kind: "interest",
-    content: "Spica booked the telescope ⟦2025-12-30|day|UTC⟧.",
+    content: "Tarkovsky screenings.",
     embedding: vec(0.01),
-    occurred_at: new Date("2025-12-30T12:00:00Z"),
-    created_at: new Date("2025-12-30T12:00:00Z"),
+    occurred_at: new Date("2026-01-02T12:00:00Z"),
+    created_at: new Date("2026-01-02T12:00:00Z"),
     status: "recurring",
     salience: 0.8,
     valence: 0.5,
@@ -300,16 +303,69 @@ test("a Lately line's bare weekday takes the day her snapshot input showed", asy
     source_ref: null,
   });
   all.llm.handlers.core_render_snapshot = () => ({
-    Lately: [{ text: "Booked the telescope on tuesday.", depth: null }],
-    Opinions: [],
-    Interests: [],
-    Goals: [],
-    People: [],
-    "Habits of speech": [],
+    ...blank,
+    Lately: [{ text: "Screenings every night [m1] until Sunday", depth: null }],
+    times: [timeAs("Lately 1", "until Sunday", { span: "until" })],
   });
   expect(await coreRenderSnapshot(deps, now)).toBe("done");
-  const call = all.llm.structuredCalls.find((c) => c.purpose === "core_render_snapshot")!;
-  expect(`${call.system}\n${call.input}`).toContain("⟦2025-12-30|day|UTC⟧");
+  const input = JSON.parse(
+    all.llm.structuredCalls.find((c) => c.purpose === "core_render_snapshot")!.input,
+  );
+  expect(input.interests[0]).toMatchObject({ id: "m1", content: "Tarkovsky screenings." });
   const snapshot = (await deps.core.memory.latestSnapshot())!;
-  expect(snapshot.content).toMatch(/Booked the telescope ⟦2025-12-30\|day\|[^⟧]+⟧\./);
+  expect(snapshot.sections.Lately).toBe(
+    "- Screenings every night (⟦2026-01-02|day|UTC⟧) ⟦2026-01-11|day|UTC|until Sunday⟧",
+  );
+  const line = (await deps.core.memory.selfLines(snapshot.version)).find((l) =>
+    l.text.startsWith("Screenings"),
+  )!;
+  expect(snapshot.content).toContain(`- ${line.text}`);
+});
+
+test("a time word is labelled only in the line its label names", async () => {
+  const all = makeTestDeps({ life: { timezone: "UTC" } });
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  all.llm.handlers.core_render_snapshot = () => ({
+    ...blank,
+    Lately: [{ text: "Rest on Sunday", depth: null }],
+    Opinions: [{ text: "Films land better on Sunday", depth: null }],
+    times: [timeAs("Opinions 1", "on Sunday")],
+  });
+  expect(await coreRenderSnapshot(deps, now)).toBe("done");
+  const snapshot = (await deps.core.memory.latestSnapshot())!;
+  expect(snapshot.sections.Lately).toBe("- Rest on Sunday");
+  expect(snapshot.sections.Opinions).toBe("- Films land better ⟦2026-01-11|day|UTC|on Sunday⟧");
+});
+
+test("an emptied section keeps last night's line byte for byte, its token too", async () => {
+  const all = makeTestDeps({ life: { timezone: "UTC" } });
+  const deps = coreDepsOf(all);
+  await seedSnapshot(deps);
+  all.llm.handlers.core_render_snapshot = () => ({
+    ...blank,
+    Interests: [{ text: "Stargazing [m1]", depth: null }],
+  });
+  await deps.core.memory.insert({
+    kind: "interest",
+    content: "Stargazing.",
+    embedding: vec(0.01),
+    occurred_at: new Date("2026-01-03T12:00:00Z"),
+    created_at: new Date("2026-01-03T12:00:00Z"),
+    status: "recurring",
+    salience: 0.8,
+    valence: 0.5,
+    confidence: 1,
+    source: "loop",
+    source_ref: null,
+  });
+  await coreRenderSnapshot(deps, now);
+  const first = (await deps.core.memory.latestSnapshot())!.sections.Interests;
+  expect(first).toBe("- Stargazing (⟦2026-01-03|day|UTC⟧)");
+  all.llm.handlers.core_render_snapshot = () => ({
+    ...blank,
+    Lately: [{ text: "new", depth: null }],
+  });
+  await coreRenderSnapshot(deps, new Date(now.getTime() + 86_400_000));
+  expect((await deps.core.memory.latestSnapshot())!.sections.Interests).toBe(first);
 });

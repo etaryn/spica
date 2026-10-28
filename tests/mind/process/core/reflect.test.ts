@@ -27,6 +27,18 @@ function setup(overrides: unknown = {}) {
   return { all, deps };
 }
 
+/** The id the model was shown for a memory, found by its words. */
+function idOf(input: string, content: string): string {
+  const x = JSON.parse(input) as {
+    inputs: { id: string; content: string }[];
+    context: { id: string; content: string }[];
+    narrative: { id: string; content: string } | null;
+  };
+  return [...x.inputs, ...x.context, ...(x.narrative ? [x.narrative] : [])].find(
+    (l) => l.content === content,
+  )!.id;
+}
+
 async function memory(
   deps: ReturnType<typeof setup>["deps"],
   kind: "episode" | "opinion" | "interest" | "narrative",
@@ -61,14 +73,15 @@ test("model input caps new experience and active context independently", async (
   for (const content of ["first", "second", "third"]) await memory(deps, "episode", content);
   await memory(deps, "opinion", "one view");
   await memory(deps, "interest", "one interest");
-  const narrativeId = await memory(deps, "narrative", "She remembers her changing taste.");
+  await memory(deps, "narrative", "She remembers her changing taste.");
   expect(await coreReflect(deps, now)).toBe("done");
   const input = JSON.parse(all.llm.structuredCalls[0]!.input);
   expect(input.inputs).toHaveLength(2);
   expect(input.context).toHaveLength(1);
   expect(input.inputs.every((item: { kind: string }) => item.kind === "episode")).toBe(true);
   expect(input.narrative).toMatchObject({
-    id: narrativeId,
+    id: "m4",
+    kind: "narrative",
     content: "She remembers her changing taste.",
   });
 });
@@ -77,8 +90,11 @@ test("overflow drains in stable timestamp and ID order across nights without dup
   const { all, deps } = setup({ core: { reflect: { max_inputs: 2 } } });
   const created = new Date(now.getTime() - 1000);
   const ids: string[] = [];
-  for (const content of ["a", "b", "c", "d", "e"])
+  const said = new Map<string, string>();
+  for (const content of ["a", "b", "c", "d", "e"]) {
     ids.push(await memory(deps, "episode", content, created));
+    said.set(ids.at(-1)!, content);
+  }
   for (let day = 0; day < 4; day++) {
     const night = new Date(now.getTime() + day * 86_400_000);
     expect(await coreReflect(deps, night)).toBe("done");
@@ -86,9 +102,9 @@ test("overflow drains in stable timestamp and ID order across nights without dup
   expect(all.llm.structuredCalls).toHaveLength(3);
   expect(
     all.llm.structuredCalls.flatMap((call) =>
-      JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+      JSON.parse(call.input).inputs.map((item: { content: string }) => item.content),
     ),
-  ).toEqual(ids.sort());
+  ).toEqual(ids.sort().map((id) => said.get(id)));
   expect((await all.db.select().from(core_loop_trace)).map((trace) => trace.calls)).toEqual([
     1, 1, 1, 0,
   ]);
@@ -102,8 +118,8 @@ test("overflow drains in stable timestamp and ID order across nights without dup
 test("zero-input success still reflects late backfill while failed runs leave inputs due", async () => {
   const { all, deps } = setup();
   expect(await coreReflect(deps, now)).toBe("done");
-  const backfill = await memory(deps, "episode", "older backfill", new Date(now.getTime() - 1000));
-  const fresh = await memory(deps, "episode", "new event", new Date(now.getTime() + 1000));
+  await memory(deps, "episode", "older backfill", new Date(now.getTime() - 1000));
+  await memory(deps, "episode", "new event", new Date(now.getTime() + 1000));
   const next = new Date(now.getTime() + 86_400_000);
   all.llm.handlers.core_reflect = () => {
     throw new Error("model failure");
@@ -121,11 +137,11 @@ test("zero-input success still reflects late backfill while failed runs leave in
   });
   expect(await coreReflect(deps, new Date(next.getTime() + 86_400_000))).toBe("done");
   const calls = all.llm.structuredCalls.map((call) =>
-    JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+    JSON.parse(call.input).inputs.map((item: { content: string }) => item.content),
   );
   expect(calls).toEqual([
-    [backfill, fresh],
-    [backfill, fresh],
+    ["older backfill", "new event"],
+    ["older backfill", "new event"],
   ]);
 });
 
@@ -169,9 +185,9 @@ test("late insert with earlier created_at remains due after the selected batch c
   expect(await coreReflect(deps, new Date(now.getTime() + 86_400_000))).toBe("done");
   expect(
     all.llm.structuredCalls.map((call) =>
-      JSON.parse(call.input).inputs.map((item: { id: string }) => item.id),
+      JSON.parse(call.input).inputs.map((item: { content: string }) => item.content),
     ),
-  ).toEqual([[selected], [afterCommit, late]]);
+  ).toEqual([["selected"], ["after commit", "late"]]);
 });
 
 test("transaction failure after marking rolls the marker and success trace back", async () => {
@@ -212,18 +228,18 @@ test("bounded proposals supersede opinions and narrative, fade interests, and ch
     target_at: null,
     embedding: apart(),
   });
-  all.llm.handlers.core_reflect = () => ({
+  all.llm.handlers.core_reflect = (input: string) => ({
     insights: [{ content: "A film can change her mind.", depth: null }],
     opinions: [
       {
         subject: "old films",
         stance: "They can surprise her.",
         confidence: "high",
-        supersedes: opinion,
+        supersedes: idOf(input, "Old films are dull."),
       },
     ],
     interests: [
-      { status: "fading", target_id: interest },
+      { status: "fading", target_id: idOf(input, "Old films.") },
       { status: "new", content: "Restored films." },
     ],
     goals: { add: [{ title: "Find more films", why: "Stay curious" }], drop: [dropped] },
@@ -264,8 +280,9 @@ test("stale and unknown targets are ignored and active goal additions stop at th
   await deps.core.memory.setStatus(old, "stale");
   all.llm.handlers.core_reflect = () => ({
     insights: [],
-    opinions: [{ subject: "films", stance: "Interesting", confidence: "low", supersedes: old }],
-    interests: [{ status: "fading", target_id: old }],
+    // A stale view is never shown, so the model can only name an id it wasn't given.
+    opinions: [{ subject: "films", stance: "Interesting", confidence: "low", supersedes: "m9" }],
+    interests: [{ status: "fading", target_id: "m9" }],
     goals: {
       add: [
         { title: "First", why: "Reason" },
@@ -332,11 +349,18 @@ test("a target becoming stale during generation cannot be superseded", async () 
   const { all, deps } = setup();
   await memory(deps, "episode", "A day.");
   const target = await memory(deps, "opinion", "A view.");
-  all.llm.handlers.core_reflect = async () => {
+  all.llm.handlers.core_reflect = async (input: string) => {
     await deps.core.memory.setStatus(target, "stale");
     return {
       insights: [],
-      opinions: [{ subject: "view", stance: "Changed", confidence: "medium", supersedes: target }],
+      opinions: [
+        {
+          subject: "view",
+          stance: "Changed",
+          confidence: "medium",
+          supersedes: idOf(input, "A view."),
+        },
+      ],
       interests: [],
       goals: { add: [], drop: [] },
       narrative: null,
@@ -369,10 +393,10 @@ test("fade and drop only needs no document embeddings and traces both accepted I
     if (texts.length === 0) throw new Error("empty embedding batch");
     return embed(texts, kind);
   });
-  all.llm.handlers.core_reflect = () => ({
+  all.llm.handlers.core_reflect = (input: string) => ({
     insights: [],
     opinions: [],
-    interests: [{ status: "fading", target_id: interest }],
+    interests: [{ status: "fading", target_id: idOf(input, "Films.") }],
     goals: { add: [], drop: [goal] },
     narrative: null,
   });
@@ -658,4 +682,78 @@ test("two near-twin goals proposed the same night become one", async () => {
   expect(
     (await deps.core.goals.active()).filter((g) => g.title === "Send posts rough"),
   ).toHaveLength(1);
+});
+
+const timeAs = (field: string, words: string, meaning: object) => ({
+  field,
+  words,
+  from: "",
+  unit: "day",
+  shift: 1,
+  weekday: null,
+  month: null,
+  day_of_month: null,
+  part: null,
+  clock: "",
+  span: "at",
+  rough: false,
+  ...meaning,
+});
+
+test("her reflections cite what they rest on and label their own time words, a goal's too", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  const input = await memory(deps, "episode", "A week of screenings.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [{ content: "the screenings [m1] end tomorrow", depth: null }],
+    opinions: [],
+    interests: [],
+    goals: { add: [{ title: "Finish the essay by Sunday", why: "it matters" }], drop: [] },
+    narrative: null,
+    times: [
+      timeAs("insight_1", "tomorrow", {}),
+      timeAs("goal_1_title", "Sunday", { unit: "weekday", weekday: "sunday" }),
+    ],
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const insight = (await all.db.select().from(core_memory)).find((m) => m.kind === "insight")!;
+  expect(insight.content).toBe(
+    "the screenings (⟦2026-01-05|day|UTC⟧) end ⟦2026-01-06|day|UTC|tomorrow⟧",
+  );
+  expect(insight.payload).toEqual({ cites: [input] });
+  const goal = (await all.db.select().from(core_goal)).find((g) => g.source === "reflect")!;
+  expect(goal.title).toBe("Finish the essay by ⟦2026-01-11|day|UTC|Sunday⟧");
+  expect(goal.why).toBe("it matters");
+});
+
+test("a time word is labelled only in the field its label names", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" } });
+  await memory(deps, "episode", "A day.");
+  all.llm.handlers.core_reflect = () => ({
+    insights: [{ content: "it ends tomorrow", depth: null }],
+    opinions: [{ subject: "endings", stance: "better tomorrow", confidence: "low" }],
+    interests: [],
+    goals: { add: [], drop: [] },
+    narrative: null,
+    times: [timeAs("opinion_1", "tomorrow", {})],
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  const rows = await all.db.select().from(core_memory);
+  expect(rows.find((m) => m.kind === "insight")!.content).toBe("it ends tomorrow");
+  expect(rows.find((m) => m.kind === "opinion")!.content).toBe(
+    "endings: better ⟦2026-01-06|day|UTC|tomorrow⟧",
+  );
+});
+
+test("a fading target naming a memory that isn't an interest fades nothing", async () => {
+  const { all, deps } = setup();
+  const episode = await memory(deps, "episode", "A day.");
+  all.llm.handlers.core_reflect = (input: string) => ({
+    insights: [],
+    opinions: [],
+    interests: [{ status: "fading", target_id: idOf(input, "A day.") }],
+    goals: { add: [], drop: [] },
+    narrative: null,
+  });
+  expect(await coreReflect(deps, now)).toBe("done");
+  expect((await deps.core.memory.get(episode))?.salience).toBe(0.5);
 });

@@ -71,7 +71,7 @@ export async function coreDriftWatch(
       system: loadPrompt("core/drift", config.prompts.core_drift),
       input: JSON.stringify({ core_values: persona.coreValues, snapshot: current.content }),
       schema: Output,
-      timeoutMs: config.models.structured_timeout_ms,
+      timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.drift.max_tokens,
     });
     return ctx.commit(async (tx) => {

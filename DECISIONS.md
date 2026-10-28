@@ -278,3 +278,12 @@ code itself.
 | 2026-10-26 | A note's time words are matched case-insensitively, first plain occurrence in their field, never inside a citation or token | The model labels words it wrote; the first match is what it means in the usual case, and a citation's words are never its own. |
 | 2026-10-26 | Settling a hurt (its memory superseded by a resolved copy) retires the ideas, reflections and beliefs citing the hurt | What a repair says is over is dropped, as her loops already do; a note resting on the open hurt would carry it past the make-up. |
 | 2026-10-26 | `user_model` traces what its notes dropped as `dropped_labels` | Its `dropped` key already lists the beliefs deduplicated away. |
+| 2026-10-28 | `life_event` runs on the `core` model role (same Haiku 5.5 id) | Thinking is chosen per role; the event generator writes labelled notes like the core loops, while `life_plan` stays on `life` and writes none. |
+| 2026-10-28 | Core token caps are 8000 (`core.loops`, `snapshot`, `appraise`, `resolve`, `drift`, `reflect`, `consolidate`, `core.world.event_max_tokens`) | Thinking counts toward `max_tokens`; the user loops' 8000 is the tested room. |
+| 2026-10-28 | Core note rules are their own prompt (`prompts/core/notes/v1.md`), the times section copied from notes v2 | Notes v2 speaks of "them" and whose a memory is, which core never has; a copy beats bumping the user loops' prompt. |
+| 2026-10-28 | A core note citing a memory later superseded isn't retired (B143) | Core thoughts belong to their moment, and reflect already replaces twin views. |
+| 2026-10-28 | Reflect shows its inputs, context and narrative under m-ids; `supersedes` and fading targets take m-ids, mapped back in code | One id system per input; an unknown id changes nothing. |
+| 2026-10-28 | Snapshot `times` fields are one per line, "<Section> <n>" | One string per field, so a time word is labelled only in the line it names. |
+| 2026-10-28 | Every note-writing core loop's input starts with `nowLine` on her calendar | Its time words count from today, so the model needs to see which day that is. |
+| 2026-10-28 | `times` defaults to [] in core schemas (`.default([])`) | Required for the model (zod output schema), and scripted test outputs without it stay valid, as `depth` already does. |
+| 2026-10-28 | A planned event's note runs over content and thought together; only its cites go on the intention | Cites are lineage only; one call keeps the event's two strings consistent. |

@@ -152,3 +152,19 @@ test("a resolved time becomes a token the renderer dates, with its edges outside
   expect(labelToken(r({}), "UTC", "thurs")).toBe("⟦2026-01-08|day|UTC|thurs⟧");
   expect(labelInstant(r({ clock: "10:00" }), "UTC").toISOString()).toBe("2026-01-08T10:00:00.000Z");
 });
+
+test("a shift no calendar holds is no time, not a crash", () => {
+  expect(resolveTime(meaning({ shift: 1e9 }), MON)).toBeNull();
+  expect(resolveTime(meaning({ unit: "month", shift: 1e9 }), MON)).toBeNull();
+});
+
+test("a one-digit hour is the same clock time", () => {
+  expect(resolveTime(meaning({ clock: "9:05" }), MON)?.clock).toBe("09:05");
+  expect(resolveTime(meaning({ clock: "25:00" }), MON)).toBeNull();
+});
+
+test("a named date said on that very day is that day; an unnamed month's 'the 5th' is the next one", () => {
+  expect(date({ unit: "date", month: 1, day_of_month: 5, shift: 1 })).toBe("2026-01-05");
+  expect(date({ unit: "date", day_of_month: 5, shift: 1 })).toBe("2026-02-05");
+  expect(date({ unit: "date", month: 1, day_of_month: 5, shift: -1 })).toBe("2025-01-05");
+});

@@ -124,6 +124,10 @@ function base(): Labels {
   };
 }
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+const IDIOLECT_TYPE: Labels["idiolect"][number]["type"] = IdiolectTypeFirst();
+function IdiolectTypeFirst() {
+  return LabelsSchema.shape.idiolect.element.shape.type.options[0]!;
+}
 
 test("a reply spread over three bubbles and a late answer to an earlier question both hold", () => {
   const out = checkLabels(base(), ctx);
@@ -414,5 +418,69 @@ test("an id used earlier in the conversation stays taken even when its words are
     id: "m3",
     reason: "bad_ref",
     ref: "id already used",
+  });
+});
+
+test("two context moves on one earlier message: the second is not new", () => {
+  const onlyFirst: CheckContext = {
+    ...ctx,
+    earlier: { ...emptyLabels(), moves: [move("m1", ["1.1"], "spica", "asks")] },
+  };
+  const raw = base();
+  raw.moves.push(
+    { id: "m7", pieces: ["2.1"], act: "asks", replies_to: "" },
+    { id: "m8", pieces: ["2.1"], act: "asks", replies_to: "" },
+  );
+  raw.moves[1] = { id: "m4", pieces: ["4.1"], act: "confirms", replies_to: "m7" };
+  raw.propositions[1] = { ...raw.propositions[1]!, moves: ["m4", "m7"] };
+  const out = checkLabels(raw, onlyFirst);
+  expect(out.drops).toEqual([{ layer: "move", id: "m8", reason: "nothing_new" }]);
+  expect(out.moves.filter((m) => m.context).map((m) => m.id)).toEqual(["m7"]);
+});
+
+test("a move citing an unknown piece doesn't upset the order the others are checked in", () => {
+  const onlyFirst: CheckContext = {
+    ...ctx,
+    earlier: { ...emptyLabels(), moves: [move("m1", ["1.1"], "spica", "asks")] },
+  };
+  const raw = base();
+  // The reply comes first and its target last, with an unplaceable move between them.
+  raw.moves = [
+    { id: "m4", pieces: ["4.1"], act: "confirms", replies_to: "m7" },
+    { id: "m9", pieces: ["9.9"], act: "states", replies_to: "" },
+    { id: "m7", pieces: ["2.1"], act: "asks", replies_to: "" },
+  ];
+  raw.propositions = [];
+  raw.threads = [];
+  raw.intimacy = null;
+  const out = checkLabels(raw, onlyFirst);
+  expect(out.drops).toEqual([{ layer: "move", id: "m9", reason: "bad_ref", ref: "pieces 9.9" }]);
+  expect(out.moves.map((m) => [m.id, m.repliesTo])).toEqual([
+    ["m7", null],
+    ["m4", "m7"],
+  ]);
+});
+
+test("a memory that falls for its own reason reports no broken links first", () => {
+  const raw = base();
+  raw.moves.push({ id: "m5", pieces: ["5.1"], act: "guesses", replies_to: "" });
+  raw.propositions.push(prop({ id: "p3", moves: ["m5"], times: ["t9"], mentions: ["e9"] }));
+  expect(checkLabels(raw, ctx).drops).toEqual([
+    { layer: "proposition", id: "p3", reason: "wrong_speaker" },
+  ]);
+});
+
+test("a time on an unknown piece or base, and idiolect on unknown pieces, say what they cite", () => {
+  const raw = base();
+  raw.times.push(time({ id: "t2", piece: "9.9" }), time({ id: "t3", from: "t42" }));
+  raw.idiolect.push({ id: "i1", pieces: ["9.9"], type: IDIOLECT_TYPE });
+  const drops = checkLabels(raw, ctx).drops;
+  expect(drops).toContainEqual({ layer: "time", id: "t2", reason: "bad_ref", ref: "piece 9.9" });
+  expect(drops).toContainEqual({ layer: "time", id: "t3", reason: "bad_ref", ref: "from t42" });
+  expect(drops).toContainEqual({
+    layer: "idiolect",
+    id: "i1",
+    reason: "bad_ref",
+    ref: "pieces 9.9",
   });
 });

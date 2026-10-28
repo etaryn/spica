@@ -56,6 +56,9 @@ export async function withWords(
       const words = text.get(c.turnId);
       return words !== undefined && c.end <= words.length ? words.slice(c.start, c.end) : null;
     });
-    return parts.every((p) => p) ? [{ question, text: parts.join(" / ") }] : [];
+    // A lost message drops the question; an empty slice is only left out.
+    if (parts.some((p) => p === null)) return [];
+    const said = parts.filter(Boolean);
+    return said.length ? [{ question, text: said.join(" / ") }] : [];
   });
 }

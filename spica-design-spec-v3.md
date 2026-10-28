@@ -41,7 +41,9 @@ default unless a reason is documented, MAY is optional.
 - Every numeric constant lives in config (`config/default.json`), never in
   code.
 - Every LLM prompt is a versioned file under `prompts/`, never inline. Prompt
-  paths use hyphens, not underscores.
+  paths use hyphens, not underscores. A paragraph several prompts share lives once under
+  `prompts/shared/<name>/v<N>.md` and is pulled in by a line `{{include shared/<name>@v<N>}}`;
+  the prompt sends the same words, so including it is not a new prompt version.
 - If a choice is OPEN, stop and ask. Do not pick.
 - If a choice is not covered here, pick the simplest option that respects the
   scope rules (§4) and log it in `DECISIONS.md` with a one-line reason.
@@ -311,7 +313,7 @@ are **the same in kind and differ in cadence and scope.**
 | Client → server | `POST /api/chat`: `202` once the message is stored, judged and buffered; the crisis path answers in the request with `200` and the resources card (`503` with the card if generation fails). `GET /api/chat/history?after=<turnId>` for catch-up |
 | Server → client | Server-Sent Events (`GET /api/events`), fed by Postgres `LISTEN/NOTIFY` through an `EventBus` in `Deps` (events carry ids, never message text). One stream per signed-in user; heartbeat; client reconnects with backoff and catches up from history. `session_log` is the source of truth |
 | Out-of-app | Web Push (VAPID). Every message she sends pushes (`deliverPart`); the service worker shows nothing while a Spica tab is visible; crisis replies push a generic body (`push.generic_body`) |
-| Models | Behind `LLMProvider`: replies `claude-sonnet-5`; labelling, classifiers, judges, the guard, life and core loops `claude-haiku-5-5` (since 2026-10-23), with thinking off (`models.structured_thinking`, default `disabled`; the judge keeps `models.judge_thinking`) because the model thinks by default; labelling has its own role and thinks (`models.labels`, `labels_thinking` `adaptive`, `labels_max_tokens` 16000, `labels_timeout_ms` 180000; Built 17b). IDs in config (`models.*`). The reply caches its shared prefix (core values + self snapshot) via `models.reply_cache` (`off` / `5m` / `1h`, default `5m`). Labelling caches its prompt via `models.labels_cache` (same values, default `5m`); the cold path's lock-busy retries (`cold_path.retry_limit` 6, doubling from `retry_delay_seconds` 30) cover an exchange queued behind three labelling calls. The guard caches its prompt via `models.guard_cache` (same values, default `5m`); the other structured prompts stay uncached, since they rarely repeat within 5 minutes or are under the 512-token minimum |
+| Models | Behind `LLMProvider`: replies `claude-sonnet-5`; labelling, classifiers, judges, the guard, life and core loops `claude-haiku-5-5` (since 2026-10-23), with thinking off (`models.structured_thinking`, default `disabled`; the judge keeps `models.judge_thinking`) because the model thinks by default; labelling has its own role and thinks (`models.labels`, `labels_thinking` `adaptive`, `labels_max_tokens` 16000, `labels_timeout_ms` 180000; Built 17b). IDs in config (`models.*`). The reply caches its shared prefix (core values + self snapshot) via `models.reply_cache` (`off` / `5m` / `1h`, default `1h`: the prefix is the same for every user, so one write per hour serves everyone, where a 5-minute entry lapses between a few users' replies and pays the write again; the 2x write only costs more with a single user). Labelling caches its prompt via `models.labels_cache` (same values, default `1h`); the cold path's lock-busy retries (`cold_path.retry_limit` 6, doubling from `retry_delay_seconds` 30) cover an exchange queued behind three labelling calls. The guard caches its prompt via `models.guard_cache` (same values, default `1h`); the other structured prompts stay uncached, since they rarely repeat within 5 minutes or are under the 512-token minimum |
 | Embeddings | Voyage `voyage-3.5`, 1024 dimensions, behind `Embedder` |
 | Auth | Better Auth, email and password, 18+ enforced server-side |
 | Layout | `src/mind`: framework-free (no Next imports, no `Date.now()`, no `process.env`; everything injected via `Deps`), organised by engine (`memory`, `state`, `world`, `process`) plus `platform` (LLM, embedder, clock, config, jobs, events, modules, social, push), each engine split into `core/` and `user/`; an ESLint rule stops core, world and shared code importing user code, process code or the cross-user admin repos, by `@/` or relative path (V2). `src/db`: schema and repos split into `user/` (`userId`-first), `world/` and `admin/` (cross-user, workers and the inspector). `src/runtime`: the Node implementations (pg-boss, Postgres event bus, Web Push). `src/server`: Next server helpers (auth, session, inspector access). `src/app` Next.js; `src/worker` pg-boss, one registration file per engine; `src/modules` the module list; `prompts/`; `evals/` |
@@ -458,7 +460,9 @@ Every table here references `user(id) ON DELETE CASCADE`.
   timestamps (§9.5).
 - **Trace tables**: `retrieval_trace`, `reach_out_log`, `judge_log`,
   `relationship_event`, and `user_loop_trace` (Built 9a: one row per user
-  loop run with calls, tokens, cost and error class; §9.5).
+  loop run with calls, tokens, cost and error class; §9.5), and `llm_usage` (one row per
+  model call made for a user, counts only: purpose, model, input, output, cache read, cache
+  write and its 1h part; cost is worked out on read from `prices`; §15).
   `ego_tick` is gone with the per-user ego.
 
 ### 6.2 Core scope (Built through 8c where marked; the rest New)
@@ -1163,7 +1167,7 @@ at most `user_mind.max_triggers_per_day` per user. Each writes a
 
 **Built 9a:** `runUserLoop` (`src/mind/process/user/runner.ts`) meters and
 traces like the core runner (they share `src/mind/platform/llm/meter.ts`):
-cost from `core.prices`, retries `core.max_retries`, model role
+cost from `prices`, retries `core.max_retries`, model role
 `models.user_mind`. There is no per-call budget: the cap is on runs. At most
 `user_mind.max_triggers_per_day` (3) non-capped runs per user per local date
 (UTC when the user has no timezone); a trigger over the cap is stored as a
@@ -2190,7 +2194,7 @@ once, after signup; taking it before signup (as a hook) is a later decision.
   reconcile calls), appraisals, a handful of wander and anticipate runs,
   nightly reflect, consolidate and render, and one drift judge. Every core model
   call goes through `runCoreLoop`, which meters calls, tokens and cost
-  (`core.prices`, dollars per million tokens) and writes one trace per run.
+  (`prices`, dollars per million tokens by model, each token kind at its own rate) and writes one trace per run.
   Each call first reserves a slot in `core_budget_day` for her local date
   (one atomic upsert guarded by the loop's limit), so overlapping jobs can't
   overshoot; a call refused mid-run throws `BudgetSpentError`, which the event
@@ -2216,10 +2220,22 @@ once, after signup; taking it before signup (as a hook) is a later decision.
   with what happens, not with users or time. **Built 9b:** a batch is three
   calls (summarise, reflect, ideate), so at most 9 per user per day. Each
   user loop run writes a `user_loop_trace` with tokens and cost from
-  `core.prices`. Idle users cost nothing beyond the built per-user ticks (relationship, outreach), which are code-only
+  `prices`. Idle users cost nothing beyond the built per-user ticks (relationship, outreach), which are code-only
   except a reach-out's composition.
 - **Reply:** one reply-model call per reply (one more and a guard check
   when the guard is on).
+- **Usage (Built):** every model call made for a user is booked to them in `llm_usage`
+  (`forUser` stamps the id where a user's work begins; `src/runtime/usage-sink.ts` writes it
+  without ever delaying or failing the call); core calls stay in `core_loop_trace`. `prices`
+  (top level of config) holds each model's input, output, cache read and 5m / 1h write rates;
+  `spend` and `callCost` price a call with them, and a model with no price makes a cost unknown.
+- **Measured shape (2026-10-28, from the 17d and 17e runs at live prices):** a user's exchange
+  (their texts, her reply, the guard, three labelling calls, reconcile) costs about $0.011 with the
+  shared prefixes cached and $0.023 without a hit; the reply model is about two thirds of it and
+  the labelling calls' thinking most of the rest. A typical user (15 exchanges a day) is about
+  $5 to $11 a month, a dormant one nothing (reach-outs stop after `outreach.max_unanswered`), and
+  the fixed core and world loops about $0.2 a month (at most about $0.8 by the call budget).
+  Cost is linear in exchanges: the window and retrieval are capped, so length does not grow it.
 - **Removed:** the per-user life tick and per-user event generation.
 - Every core and user loop records tokens and cost in its trace row.
 
@@ -2614,10 +2630,10 @@ The full record of what each built phase delivered (migrations, prompt versions,
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Remotion and live three.js (`three-vrm`) rendering, a `video` craft goal | B102 |
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
-| **Time model** (Phase 16, built 2026-10-21) | Times stored as data and rendered by code with their distance (`platform/relative-date.ts`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
-| **Time anchors** (Phase 16b, built 2026-10-24; full row in `docs/spec-v3-history.md`) | One date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
-| **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
-| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; 17c and 17d built 2026-10-26; 17e built 2026-10-28; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. **17d** (built 2026-10-26): her user-mind notes cite memories and threads by id, each rendered by code with whose it is, and label their own time words in the time structure, which code resolves; an idea about them resting only on her life isn't written, original ideas are kept, a superseded memory retires the ideas, reflections and beliefs citing it, and `insertFact` stores what it's given (B1 done). **17e** (built 2026-10-28): every core writer (`life_event`, resolve, appraise, anticipate, ruminate, wander, reflect with goals, consolidate, the snapshot) labels its own time words and may cite her memories through `platform/notes.ts`, a citation rendered as the memory's date (`memory/core/citables.ts`); core-role calls think (`models.core_thinking`); core memory and snapshots are stored as given, and the Phase 16 parser (`anchorTimes`, chrono-node, shown dates) is deleted (B132 gone with it); `pnpm exit:long` added for B142 | B139, B142, B143 |
+| **Time model** (Phase 16, built 2026-10-21; closed 2026-10-28, still live) | Times stored as data and rendered by code with their distance (first `platform/relative-date.ts`, since 16b date tokens and `withTimeRendering`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
+| **Time anchors** (Phase 16b, built 2026-10-24; closed 2026-10-28, its writing half replaced by Phase 17; full row in `docs/spec-v3-history.md`) | Still live: date tokens placed by code, one render wrapper, day dividers, guard v7 `wrong_day`, code-picked reach-out framing. Replaced: the repos' anchoring of every write and extract's time words (17b, 17d, 17e). As built: one date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
+| **Time anchor fixes** (Phase 16c, built and merged 2026-10-24, close run done; obsolete since 17e deleted the parser it fixed; full row in `docs/spec-v3-history.md`) | From the 16b close run: a span is anchored only when one rule reads all of it (no words lost); a relative day next to its written-out date is one token; extract's weekday cross-check goes; her loops pass the dates they were shown; `insertFact` takes a row's own `occurred_at` as a shown date; a part of the day with a clock time anchors as a time; ISO dates anchor and extract v11 adds no dates | — |
+| **Labelled memory** (Phase 17; 17a built 2026-10-25, replay only; 17b built and merged 2026-10-26, close run done; 17c and 17d built 2026-10-26; 17e built 2026-10-28; **closed 2026-10-28**, its phase doc deleted at the close, in git) | What was said is kept as said and every layer of its meaning is labelled apart from it: messages are the base, labels point into them by character range, code reads labels and calls read both. **17a** built the pieces (`memory/user/pieces.ts`), the code-made conversation and exchange layers (`layers.ts`), the layered labels and their checks (`annotations.ts`), the call input (`label-input.ts`), the time meaning a model fills and code resolves (`platform/time-labels.ts`) and extract v12, run only by `pnpm review:extract-labels`. Exchange mode (Ethan); each exchange is two calls, a reading call with thinking (moves, mentions, times) and a meaning call without (propositions, threads, idiolect, relationship), because one grammar for every layer is over the API limit. **17b** made it live: labels v1 in three thinking calls, the `annotation` table, memories stored as code-built lines (label, status, date tokens, the words quoted), `updates` superseding by id, her view of older messages glossed from time labels, thread lines with the event apart from the check-in; v11 and its anchoring deleted (B133–B136 resolved). Phase 16d (the 16c close run's date fixes) was settled at 17b's close: B129–B131 done, B1 narrowed to ideate. **17c** (built 2026-10-26): open questions held as the user's words by coordinate, turn judge v3 cites pieces and open-question ids, a question closes when her reply's move answers it (B9 done), the judge's merge runs under the state lock (part of B7 done), bids held to reply links (toward/against need one, away keeps the idle-gap timing); the code-made conversation, burst and exchange layers are read from what turn-taking records (session id, `reply_to`, the cold-path job), no new storage. **17d** (built 2026-10-26): her user-mind notes cite memories and threads by id, each rendered by code with whose it is, and label their own time words in the time structure, which code resolves; an idea about them resting only on her life isn't written, original ideas are kept, a superseded memory retires the ideas, reflections and beliefs citing it, and `insertFact` stores what it's given (B1 done). **17e** (built 2026-10-28): every core writer (`life_event`, resolve, appraise, anticipate, ruminate, wander, reflect with goals, consolidate, the snapshot) labels its own time words and may cite her memories through `platform/notes.ts`, a citation rendered as the memory's date (`memory/core/citables.ts`); core-role calls think (`models.core_thinking`); core memory and snapshots are stored as given, and the Phase 16 parser (`anchorTimes`, chrono-node, shown dates) is deleted (B132 gone with it); `pnpm exit:long` added for B142 | B139, B142, B143 |
 | **Frontend** | The client and its latency: B34 | B34 |
 
 Each starts with its own design doc.
@@ -2722,12 +2738,12 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B145).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B146).
 
 ### 25.1 Memory and recall
 - **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
-  that a memory holds; citing moves needs the conversation in the loops' input. *After `exit:user`*
-  (Phase 17d).
+  that a memory holds; citing moves needs the conversation in the loops' input. The 17d
+  `exit:user` close run showed no note that needed a move. *Tuning.*
 - **B140.** Her notes don't label their own time words. In the 17d close runs `times` was empty in
   all 48 loop calls, and six day words stayed raw in summaries ("Sunday" ×3, "the weekend of the
   17th", "this weekend"), nearly all next to a citation carrying the date
@@ -2764,6 +2780,11 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 
 ### 25.2 Conversation and turn-taking
+- **B146.** Turn-taking minors from the 17c final review, left at Phase 17's close: a question
+  first recorded as one bubble isn't extended when the judge later cites it with its
+  continuation; "away" ignores a reply to an older message of hers (it counts only her last one);
+  the inspector shows `open_questions` as raw coordinates. *Tuning* (the inspector one with the
+  frontend).
 - **B7.** Concurrency edge cases: concurrent crisis requests with different snapshot tails
   pick different `reply_to`s; a retry's attempt count is inherited by turns
   merged during generation; `restore` and `giveUp` check only the epoch;

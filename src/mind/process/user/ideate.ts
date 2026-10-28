@@ -1,8 +1,8 @@
 /**
  * Her idea for one user after a big event: one thing she wants to bring up with them next time,
  * or nothing. An idea gets one chance, in her next reply or as a reason to write first, and
- * expires unused once the event it's about has passed, or after a few days. Ideas can become reach-outs and push notifications, so ideate
- * never reads anything a crisis touched.
+ * expires unused once the event it's about has passed, or after a few days. Ideas can become
+ * reach-outs and push notifications, so ideate never reads anything a crisis touched.
  */
 import { z } from "zod";
 import { insertFact } from "@/db/repos/user/facts";

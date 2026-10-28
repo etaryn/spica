@@ -41,7 +41,8 @@ export type ResolvedTime = {
   rough: boolean;
 };
 
-const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+// "9:05" is the same clock as "09:05".
+const CLOCK = /^([01]?\d|2[0-3]):[0-5]\d$/;
 // A date search gives up after this many months (or years) without finding the day, so an
 // impossible one ("the 30th of February") comes back null instead of looping.
 const MAX_STEPS = 48;
@@ -74,13 +75,13 @@ export function resolveTime(meaning: TimeMeaning, base: string): ResolvedTime | 
   if (meaning.clock !== null && !CLOCK.test(meaning.clock)) return null;
   // "since friday" is never a coming Friday, so a forward reading is turned back.
   const shift = meaning.span === "since" ? -Math.abs(meaning.shift) : meaning.shift;
-  const date = resolveDate({ ...meaning, shift }, base);
+  const date = safely(() => resolveDate({ ...meaning, shift }, base));
   if (date === null) return null;
   return {
     date,
     precision: PRECISION[meaning.unit],
     part: meaning.part,
-    clock: meaning.clock,
+    clock: meaning.clock?.padStart(5, "0") ?? null,
     span: meaning.span,
     rough: meaning.rough,
   };
@@ -147,6 +148,16 @@ export function labelInstant(t: ResolvedTime, zone: string): Date {
   return tokenDates(labelToken(t, zone))[0]!;
 }
 
+/** A shift past any calendar ("in a billion days") is no date, not a crash. */
+function safely(f: () => string | null): string | null {
+  try {
+    return f();
+  } catch (error) {
+    if (error instanceof RangeError) return null;
+    throw error;
+  }
+}
+
 function resolveDate(m: TimeMeaning, base: string): string | null {
   switch (m.unit) {
     case "day":
@@ -202,7 +213,11 @@ function nthDate(
       month === null
         ? isoDate(year, baseMonth + i * step, day)
         : isoDate(year + i * step, month, day);
-    if (candidate === null || (step > 0 ? candidate <= base : candidate >= base)) continue;
+    if (candidate === null) continue;
+    // A named date said on that very day ("8 January", on the 8th) is that day; "the 8th" is the
+    // next one.
+    const unnamedToday = candidate === base && month === null;
+    if (step > 0 ? candidate < base || unnamedToday : candidate >= base) continue;
     found += 1;
     if (found === Math.abs(shift)) return candidate;
   }

@@ -2722,7 +2722,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B144).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B145).
 
 ### 25.1 Memory and recall
 - **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
@@ -2740,8 +2740,11 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 - **B142.** Long conversations are still untested. `user-mind-two-weeks` (`pnpm exit:user`) has
   one-turn sessions, so `long_conversation` never fired and consolidate wrote no gist in either
   17d close run. The script exists (17e): `long-conversation` (`pnpm exit:long`), one 24-turn
-  session and a lease nine days later; in fake mode `long_conversation` fires. *Phase 17e close
-  run* (the gist needs real labels).
+  session and a lease nine days later. Its 17e close run: `long_conversation` fired but was
+  `capped` (three `param_band` runs had spent the day's `max_triggers_per_day`), and no gist,
+  since the week's memories sat in open threads. The script now starts the long session late so
+  its run falls on the next day, and closes the sister and Osaka storylines before the lease.
+  *Next `exit:long` run.*
 - **B143.** A core note citing a memory that is later superseded isn't retired, unlike her user
   notes: core thoughts belong to their moment, and reflect already replaces twin opinions and
   interests. Revisit if a run shows a thought resting on a replaced view. *Tuning.*
@@ -2751,6 +2754,12 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
   orion's belt tonight", labelled as Tuesday night: the stored word "tonight" with its gloss, at the
   midnight edge. The labels resolved as given; the model copied the stale word. Options: render a
   stale kept word as its date only, or a worked example in the core notes rules. *Tuning.*
+- **B145.** An announcement labelled as a bid loses its memory but keeps its storyline. In the 17e
+  `exit:long` run (`review-2026-10-28T03-12-02-703Z.md`) "I signed the lease on a tiny place in
+  Osaka!" was read as act `bids`; only states, answers, confirms, denies and corrects assert, so
+  its proposition was dropped as `wrong_speaker`, yet its new thread "Osaka apartment lease" opened:
+  a storyline with no memory behind it. Options: don't open a thread whose only proposition was
+  dropped, or let a bid that tells news assert. *Tuning.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

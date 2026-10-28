@@ -154,8 +154,11 @@ state lock, her reply's move closes a question (B9), bids are held to reply link
 **17d, notes cite labels, is built** (merged 2026-10-28, close runs done:
 `evals/results/analysis-2026-10-27-phase-17d.md`): her user-mind notes cite
 memories and threads by id with whose each is, label their own time words, and are retired when a
-memory they cite is superseded (`platform/notes.ts`). **Next: 17e, core notes on labels**, which
-deletes the Phase 16 parser.
+memory they cite is superseded (`platform/notes.ts`). **17e, core notes on labels, is built** (2026-10-28, branch
+`phase-17e`): every core writer labels its own time words and may cite her memories, a citation
+rendered as the memory's date (`memory/core/citables.ts`); core-role calls think; the Phase 16
+parser (`anchorTimes`, chrono-node, shown dates) is deleted. Close runs (`exit:core-day`,
+`review:world-outreach`, `exit:long`) await Ethan's go; they close Phase 17.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

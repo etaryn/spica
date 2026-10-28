@@ -1,7 +1,8 @@
 /**
  * Phase 17e exit, all fake (scripted core loops, fake reply, fake guard), real DB: her core loops
  * label their own time words and cite her memories, and code makes both dates; nothing reads her
- * prose for dates. A user's data never reaches a core loop, and a user's run leaves core unchanged.
+ * prose for dates. A user's data never reaches a core loop (wander, her world, reflect, the
+ * snapshot), and a user's run leaves core unchanged.
  */
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
@@ -180,7 +181,10 @@ async function coreDump(): Promise<string> {
 }
 
 test("5: leak canary: A's data never reaches a core loop; A's run leaves core unchanged", async () => {
-  const base = makeTestDeps(utc);
+  const base = makeTestDeps({
+    ...utc,
+    core: { world: { event_probability: 1, events_per_day_max: 1, fallthrough_probability: 0 } },
+  });
   const llm = new CapturingLLM();
   const d = { ...base, llm };
   d.clock.set(thu);
@@ -216,11 +220,20 @@ test("5: leak canary: A's data never reaches a core loop; A's run leaves core un
   const core = coreDepsOf(d);
   const seen = llm.seen.length;
   expect((await coreWander(core, thu)).status).toBe("done");
+  // Her world writes too: today's event, then its landing and appraisal.
+  await coreWorldTick(core, thu);
+  await coreWorldTick(core, new Date(thu.getTime() + 8 * 3_600_000));
   expect(await coreReflect(core, thu)).toBe("done");
   expect(await coreRenderSnapshot(core, thu)).toBe("done");
   const coreCalls = llm.seen.slice(seen);
   expect(coreCalls.map((c) => c.purpose)).toEqual(
-    expect.arrayContaining(["core_wander", "core_reflect", "core_render_snapshot"]),
+    expect.arrayContaining([
+      "core_wander",
+      "life_event",
+      "core_appraise",
+      "core_reflect",
+      "core_render_snapshot",
+    ]),
   );
   for (const c of coreCalls) expect(c.text).not.toContain(TOKEN);
   expect(await coreDump()).not.toContain(TOKEN);

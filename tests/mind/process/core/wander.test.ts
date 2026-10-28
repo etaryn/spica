@@ -511,3 +511,21 @@ test("her wandering cites the seed by id and labels its own time words", async (
   expect(input.startsWith("It's ")).toBe(true);
   expect(input).toContain("Seed memory: [m1] Spica found an old film.");
 });
+
+test("her wandering's time fields follow its configured item count", async () => {
+  const { all, deps } = setup({ life: { timezone: "UTC" }, core: { wander: { max_items: 3 } } });
+  await plan(deps);
+  await seed(deps, "Spica found an old film.", { created: before(30) });
+  all.llm.handlers.core_wander = () => ({
+    items: [
+      { kind: "thought", content: "one", salience: "low" },
+      { kind: "idea", content: "two", salience: "low" },
+      { kind: "idea", content: "three, tonight", salience: "low" },
+    ],
+    times: [tonightAs("item_3")],
+  });
+  expect((await coreWander(deps, now)).status).toBe("done");
+  expect((await thoughts(all)).map((t) => t.content)).toContain(
+    "three, ⟦2026-01-05|night|UTC|tonight⟧",
+  );
+});

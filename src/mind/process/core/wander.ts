@@ -24,19 +24,23 @@ import { prepareThoughts, storeThoughts, traceDrops, WORLD_LOCK } from "./though
 import type { ApplyOutput, ThinkingResult } from "./thoughts";
 import { HOUR } from "@/mind/platform/time";
 
-const Output = z.object({
-  items: z
-    .array(
-      z.object({
-        kind: z.enum(["thought", "idea", "hypothetical"]),
-        content: z.string(),
-        salience: z.enum(["low", "medium"]),
-        depth: DepthLabel.nullable().default(null),
-      }),
-    )
-    .min(1),
-  times: noteTimesSchema(["item_1", "item_2"]).default([]),
-});
+// Each item's time words are under its own field, so there are as many as items she may write.
+const outputFor = (maxItems: number) =>
+  z.object({
+    items: z
+      .array(
+        z.object({
+          kind: z.enum(["thought", "idea", "hypothetical"]),
+          content: z.string(),
+          salience: z.enum(["low", "medium"]),
+          depth: DepthLabel.nullable().default(null),
+        }),
+      )
+      .min(1),
+    times: noteTimesSchema(
+      Array.from({ length: maxItems }, (_, i) => `item_${i + 1}`) as [string, ...string[]],
+    ).default([]),
+  });
 
 async function eligibility(deps: Pick<CoreDeps, "config"> & { core: CoreScope }, now: Date) {
   const day = lifeDate(deps.config.life, now);
@@ -220,7 +224,7 @@ export async function coreWander(deps: CoreDeps, now: Date): Promise<ThinkingRes
         ),
       ].join("\n\n"),
       input,
-      schema: Output,
+      schema: outputFor(config.core.wander.max_items),
       timeoutMs: config.models.core_timeout_ms,
       maxTokens: config.core.loops.max_tokens,
     });

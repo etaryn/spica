@@ -123,43 +123,25 @@ its rerun fixes are built; what each delivered is in `docs/spec-v3-history.md`.
 The 2026-10-19 review runs' fixes are built ("this week",
 her news never takes the last weekly slot, wander through lived memory, reflect twins, she lives
 online). No night: her energy is a battery, she logs off when it runs low at any hour, and
-reach-outs skip their night. **Phase 16, the time model, is built** (2026-10-21; B125, B126,
-B127): every time a prompt reads is rendered with its distance, her
-notes and snapshot carry the day they were written, ideas expire through `fact.stale_after`, and
-guard v6 reads NOW in both zones. **No retries** (2026-10-22, side phase, closed): no prompt is
+reach-outs skip their night. **No retries** (2026-10-22, side phase, closed): no prompt is
 retried or regenerated after a failure, so structural failures show (SDK transport retries kept).
-**Haiku 5.5** (2026-10-23, side phase, closed): every Haiku role on `claude-haiku-5-5` with thinking
-off; the guard caches its prompt (`models.guard_cache`).
-**Phase 16b, time anchors, is built** (2026-10-24): stored text keeps the date each time phrase
-meant as a token (`platform/time-anchors.ts`), builders place tokens on their owner's calendar and
-one wrapper renders them where prompts reach the model; extract dates from the message's send
-time; her view of the conversation has day dividers and glosses; guard v7 `wrong_day` drops a
-misdated reach-out; merged 2026-10-24, close runs done (`evals/results/analysis-2026-10-24-phase-16b.md`).
-**Phase 16c, time anchor fixes, is built** (2026-10-24): anchoring reads one
-clause at a time and whole date phrases, a day said twice is one token, ISO dates anchor, extract's
-weekday cross-check is gone (extract v11), a row's own date and the dates her loops were shown
-date the words they write; merged, close run done (`evals/results/analysis-2026-10-24-phase-16c.md`).
-**Phase 17, labelled memory** (§20 row; phase doc `docs/2026-10-25-phase-17-labelled-memory-design.md`):
-what was said is kept as said and every layer of its meaning is labelled apart from it. **17a is
-built** (2026-10-25, replay only; analysis `evals/results/analysis-2026-10-25-phase-17a.md`).
-**17b, labels as memory, is built** (merged 2026-10-26): the cold path
-labels each exchange in three thinking calls (`memory/user/label.ts`, `prompts/labels/v1.md`), keeps
-every label in `annotation`, and stores memories as code-built lines (`memory-line.ts`); her view of
-older messages is glossed from time labels; extract v11 and its anchoring are gone. Close run done
-(`evals/results/analysis-2026-10-26-phase-17b.md`); Phase 16d was settled in it (B129–B131 done,
-"since" always points back; B1 narrowed to ideate and B132 left for 17d; new B137, B138).
-**17c, turn-taking on labels, is built** (merged 2026-10-26): open questions are the
-user's words by coordinate (`turn-taking/questions.ts`), judge v3 cites pieces and merges under the
-state lock, her reply's move closes a question (B9), bids are held to reply links.
-**17d, notes cite labels, is built** (merged 2026-10-28, close runs done:
-`evals/results/analysis-2026-10-27-phase-17d.md`): her user-mind notes cite
-memories and threads by id with whose each is, label their own time words, and are retired when a
-memory they cite is superseded (`platform/notes.ts`). **17e, core notes on labels, is built and merged** (2026-10-28,
-close runs done: `evals/results/analysis-2026-10-28-phase-17e.md`): every core writer labels its
-own time words and may cite her memories, a citation rendered as the memory's date
-(`memory/core/citables.ts`); core-role calls think; the Phase 16 parser (`anchorTimes`,
-chrono-node, shown dates) is deleted. **Phase 17 is closed.** Open from its close: B142 (rerun
-`exit:long`), B144, B145 (tuning).
+**Haiku 5.5** (2026-10-23, side phase, closed): every Haiku role on `claude-haiku-5-5`, thinking
+off except where a role sets it; the guard caches its prompt (`models.guard_cache`).
+**Phases 16 and 17 are closed** (2026-10-28). Dates, as they stand: a date is a token
+(`platform/time-anchors.ts`) made by code from a date it holds or from a time label a model filled
+in (`platform/time-labels.ts`); nothing reads prose for dates. Tokens render with their distance
+where a prompt reaches the model (`withTimeRendering`), notes and the snapshot carry the day they
+were written, her view of the conversation has day dividers and label glosses, ideas expire
+through `fact.stale_after`, and guard v7 reads now in both zones and drops a misdated reach-out
+(`wrong_day`). From Phase 16 the reading half lives on; its writing half (the anchoring parser,
+16b and 16c) was replaced by **Phase 17, labelled memory**: what was said is kept as said and its
+meaning labelled apart from it. The cold path labels each exchange in three thinking calls
+(`memory/user/label.ts`, `prompts/labels/v1.md`) into `annotation` and code-built memory lines;
+open questions are the user's words by coordinate; her user-mind notes and every core writer cite
+memories by id and label their own time words through `platform/notes.ts`
+(`memory/core/citables.ts` for core); core-role calls think. What each slice delivered is in
+`docs/spec-v3-history.md`; the close runs are `evals/results/analysis-2026-10-2*-phase-1*.md`.
+Open from the close: B142 (rerun `exit:long`), and B139–B141, B143–B146 for tuning.
 B35 waits on his reply-model comparison; Publishing, Video and Frontend come later. Persona v7's
 drafted lines await Ethan's full persona rewrite, planned with Claude in a later phase. Each phase
 or slice starts with a design doc in `docs/`; built plans are deleted (history is in git).

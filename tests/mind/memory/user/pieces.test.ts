@@ -73,3 +73,10 @@ test("the call reads a message's first piece with its speaker and time, the rest
     ].join("\n"),
   );
 });
+
+test("a straight or a curly apostrophe is the same letter", () => {
+  const [piece] = numberPieces([msg("m", "user", "i don’t know, it’s sunday")], 0);
+  expect(findPhrase(piece!, "don't know")).not.toBeNull();
+  const [straight] = numberPieces([msg("n", "user", "i don't know")], 0);
+  expect(findPhrase(straight!, "don’t know")).not.toBeNull();
+});

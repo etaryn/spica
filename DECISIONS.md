@@ -287,3 +287,13 @@ code itself.
 | 2026-10-28 | Every note-writing core loop's input starts with `nowLine` on her calendar | Its time words count from today, so the model needs to see which day that is. |
 | 2026-10-28 | `times` defaults to [] in core schemas (`.default([])`) | Required for the model (zod output schema), and scripted test outputs without it stay valid, as `depth` already does. |
 | 2026-10-28 | A planned event's note runs over content and thought together; only its cites go on the intention | Cites are lineage only; one call keeps the event's two strings consistent. |
+| 2026-10-28 | A named date said on that very day ("8 January", on the 8th, shift 1) is that day; an unnamed "the 8th" is still the next one | Said on its own day a named date almost always means today; the old reading put it a year later. |
+| 2026-10-28 | A time label whose shift runs past any calendar resolves to nothing (dropped as `bad_time`) | A malformed label is one dropped label, never a failed call. |
+| 2026-10-28 | `findPhrase` treats a straight and a curly apostrophe as one letter | The model and the user's keyboard differ; the words are the same. |
+| 2026-10-28 | `core.prices` moved to a top-level `prices` with cache read and 5m / 1h write rates, and the reply model priced | One price list for every call; `spend` ignored cache tokens and returned no cost for the reply model. |
+| 2026-10-28 | `llm_usage` holds counts per call, not dollars; cost is worked out on read | A price change then rewrites no history. |
+| 2026-10-28 | Core calls are not in `llm_usage` (`user_id` is not null); `core_loop_trace` stays their ledger | A core row would put a user-shaped table in the core's path, and the trace already carries core tokens and cost. |
+| 2026-10-28 | `forUser(llm, userId)` stamps the user on every request, wrapped where a user's work begins (receive, reply, guard, cold path, user loops) | No call site passes the id; the id never reaches the API. |
+| 2026-10-28 | The usage write is fire and forget, a failure logged | Bookkeeping must never delay or lose a reply. |
+| 2026-10-28 | `reply_cache`, `guard_cache`, `labels_cache` default `1h` | Measured prefixes are shared by every user: at 2 to 50 users a 5-minute entry lapses between replies and pays the write again, so 1h costs up to 43% less per exchange and never more beyond one user. |
+| 2026-10-28 | Paragraphs identical across prompts live once in `prompts/shared/` behind `{{include}}`, with no prompt version bump | Two copies (Depth in 6 core prompts, Dates in 5) could drift; the rendered text is byte-identical, which a hash check of the configured prompts confirmed. |

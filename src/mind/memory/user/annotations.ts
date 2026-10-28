@@ -316,7 +316,7 @@ export function mergeLabels(a: CheckedLabels, b: CheckedLabels): CheckedLabels {
  * loses only the link: the label it hung from stays. Nothing is asked again.
  */
 export function checkLabels(raw: Labels, ctx: CheckContext): CheckedLabels {
-  const check = new Checker(ctx, raw);
+  const check = new Checker(ctx);
   const moves = check.moves(raw.moves);
   const mentions = check.mentions(raw.mentions);
   const times = check.times(raw.times);
@@ -345,7 +345,6 @@ class Checker {
   private readonly pieces: Map<string, Piece>;
   private readonly order: Map<string, number>;
   private readonly openThreads: Set<string>;
-  private readonly rawMoves: Set<string>;
   private readonly taken: Set<string>;
   private readonly allMoves: Map<string, CheckedMove>;
   private readonly allMentions: Set<string>;
@@ -353,15 +352,11 @@ class Checker {
   private readonly allPropositions: Set<string>;
   private readonly labelledPieces: Set<string>;
 
-  constructor(
-    private readonly ctx: CheckContext,
-    raw: Labels,
-  ) {
+  constructor(private readonly ctx: CheckContext) {
     const e = ctx.earlier;
     this.pieces = new Map(ctx.pieces.map((p) => [p.id, p]));
     this.order = new Map(ctx.pieces.map((p, i) => [p.id, i]));
     this.openThreads = new Set(ctx.threadIds);
-    this.rawMoves = new Set(raw.moves.map((m) => m.id));
     this.allMoves = new Map(e.moves.map((m) => [m.id, m]));
     this.allMentions = new Set(e.mentions.map((m) => m.id));
     this.allTimes = new Map(e.times.map((t) => [t.id, t]));
@@ -418,6 +413,8 @@ class Checker {
         context,
       };
       this.allMoves.set(m.id, move);
+      // Once an earlier message has its move, a second one on it is not new either.
+      if (context) for (const p of m.pieces) this.labelledPieces.add(p);
       kept.push(move);
     }
     return kept;
@@ -466,7 +463,7 @@ class Checker {
       if (!this.claim("time", id)) continue;
       const piece = this.pieces.get(pieceId);
       if (!piece) {
-        this.drop("time", id, "bad_ref");
+        this.drop("time", id, "bad_ref", `piece ${pieceId}`);
         continue;
       }
       if (!piece.isNew) {
@@ -480,7 +477,7 @@ class Checker {
       }
       const base = this.base(from, piece, meaning.unit);
       if (!base) {
-        this.drop("time", id, "bad_ref");
+        this.drop("time", id, "bad_ref", `from ${from}`);
         continue;
       }
       // A meaning that can't resolve from any day is malformed, whatever it counts from.
@@ -517,6 +514,18 @@ class Checker {
         continue;
       }
       const moves = p.moves.map((id) => this.allMoves.get(id)!);
+      // Whether it stands at all comes first, so a memory that falls reports no broken links.
+      const fresh = moves.filter((m) => this.isNew(m.pieces));
+      if (fresh.length === 0) {
+        this.drop("proposition", p.id, "nothing_new");
+        continue;
+      }
+      // Only something said now, by the one it's about, makes it theirs: an old statement can't
+      // come back in on a new "lol", and her guess about them is never their fact.
+      if (!fresh.some((m) => ASSERTING.has(m.act) && speaks(m.speaker, p.subject))) {
+        this.drop("proposition", p.id, "wrong_speaker");
+        continue;
+      }
       // A memory's times come from the words it rests on, never from a question beside it.
       const own = new Set(moves.flatMap((m) => m.pieces));
       const times = this.keep("proposition", p.id, "times", p.times, (id) => {
@@ -532,17 +541,6 @@ class Checker {
       const updates = this.known("proposition", p.id, "updates", none(p.updates), (id) =>
         this.allPropositions.has(id),
       );
-      const fresh = moves.filter((m) => this.isNew(m.pieces));
-      if (fresh.length === 0) {
-        this.drop("proposition", p.id, "nothing_new");
-        continue;
-      }
-      // Only something said now, by the one it's about, makes it theirs: an old statement can't
-      // come back in on a new "lol", and her guess about them is never their fact.
-      if (!fresh.some((m) => ASSERTING.has(m.act) && speaks(m.speaker, p.subject))) {
-        this.drop("proposition", p.id, "wrong_speaker");
-        continue;
-      }
       this.allPropositions.add(p.id);
       kept.push({
         ...p,
@@ -594,7 +592,7 @@ class Checker {
       if (!this.claim("idiolect", i.id)) continue;
       const cited = this.cite(i.pieces);
       if (!cited) {
-        this.drop("idiolect", i.id, "bad_ref");
+        this.drop("idiolect", i.id, "bad_ref", `pieces ${i.pieces.join(" ")}`);
         continue;
       }
       if (!cited.some((p) => p.isNew)) {

@@ -71,3 +71,22 @@ test("withWords slices the user's words back out, joining pieces, and leaves out
   ]);
   expect(await withWords(db, u, [])).toEqual([]);
 });
+
+test("an empty slice of a question is left out, not the whole question", async () => {
+  const db = getTestDb();
+  const u = await createTestUser();
+  const t = await insertTurn(db, u, {
+    id: "00000000-0000-4000-8000-000000000003",
+    session_id: "00000000-0000-4000-8000-0000000000ab",
+    role: "user",
+    text: "you going?",
+    created_at: new Date("2026-01-05T09:00:00Z"),
+  });
+  const question = {
+    coords: [
+      { turnId: t.id, start: 0, end: 10 },
+      { turnId: t.id, start: 10, end: 10 },
+    ],
+  };
+  expect(await withWords(db, u, [question])).toEqual([{ question, text: "you going?" }]);
+});

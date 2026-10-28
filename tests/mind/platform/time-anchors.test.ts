@@ -3,7 +3,6 @@ import { expect, test } from "vitest";
 import {
   dateToken,
   formatToken,
-  isSingleToken,
   nowLine,
   ownDate,
   renderAbsolute,
@@ -84,10 +83,8 @@ test("now on both calendars", () => {
   );
 });
 
-test("absolute rendering, token dates and single tokens", () => {
+test("absolute rendering and token dates", () => {
   const s = `the race ${formatToken("2026-01-13", "day", "UTC")}`;
   expect(renderAbsolute(s)).toBe("the race Tuesday 13 January 2026");
   expect(tokenDates(s)[0]!.toISOString()).toBe("2026-01-13T12:00:00.000Z");
-  expect(isSingleToken(formatToken("2026-01-13", "day", "UTC"))).toBe(true);
-  expect(isSingleToken("tomorrow")).toBe(false);
 });

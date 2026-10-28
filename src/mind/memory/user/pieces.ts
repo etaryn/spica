@@ -59,7 +59,12 @@ export function coordinate(piece: Piece): Coordinate {
 
 /** Where `words` sit inside the piece, ignoring case and spacing; null when they aren't there. */
 export function findPhrase(piece: Piece, words: string): Coordinate | null {
-  const tokens = words.trim().split(/\s+/).filter(Boolean).map(escapeRegExp);
+  // A straight and a curly apostrophe are the same letter: the model and the keyboard differ.
+  const tokens = words
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => escapeRegExp(t).replace(/['’]/g, "['’]"));
   if (tokens.length === 0) return null;
   const match = new RegExp(tokens.join("\\s+"), "i").exec(piece.text);
   if (!match) return null;

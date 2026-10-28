@@ -22,7 +22,6 @@ export type Precision =
 type Anchor = { local: string; precision: Precision; zone: string };
 
 const TOKEN = /⟦([^|⟧]+)\|([^|⟧]+)\|([^|⟧]+)(?:\|([^⟧]*))?⟧/g;
-const ONE_TOKEN = /^⟦[^⟧]+⟧$/;
 const DAY_MS = 86_400_000;
 const PART_HOUR: Record<string, number> = { morning: 9, afternoon: 15, evening: 19, night: 22 };
 
@@ -83,10 +82,6 @@ export function tokenDates(text: string): Date[] {
   return [...text.matchAll(TOKEN)].map((m) =>
     instant({ local: m[1]!, precision: m[2] as Precision, zone: m[3]! }),
   );
-}
-
-export function isSingleToken(text: string): boolean {
-  return ONE_TOKEN.test(text.trim());
 }
 
 /** "It's Tuesday 13 January, 21:40 where they are; …for you.": now on both calendars. */

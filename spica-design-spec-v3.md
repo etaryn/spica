@@ -2722,7 +2722,7 @@ together once the prototype is complete), **before users** (before any
 non-test user), or **later**. Items in modules v3 replaces (the per-user ego
 and life tick) were dropped; the replacement is designed fresh.
 
-Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B143).
+Done items move to `docs/spec-v3-history.md` with their resolution; numbers are never reused (highest so far: B144).
 
 ### 25.1 Memory and recall
 - **B139.** Notes cite memories and threads, not moves. A note can only rest on something said
@@ -2745,6 +2745,12 @@ Done items move to `docs/spec-v3-history.md` with their resolution; numbers are 
 - **B143.** A core note citing a memory that is later superseded isn't retired, unlike her user
   notes: core thoughts belong to their moment, and reflect already replaces twin opinions and
   interests. Revisit if a run shows a thought resting on a replaced view. *Tuning.*
+- **B144.** Her kept time words can be copied after they've gone stale. In the 17e
+  `exit:core-day` run (`review-2026-10-28T02-39-03-790Z.md`), wander at Tuesday 00:00 read its
+  seed as "the telescope booking for tonight (that's last night, Monday 5 January)" and wrote "find
+  orion's belt tonight", labelled as Tuesday night: the stored word "tonight" with its gloss, at the
+  midnight edge. The labels resolved as given; the model copied the stale word. Options: render a
+  stale kept word as its date only, or a worked example in the core notes rules. *Tuning.*
 - **B6.** Name floor done (salience 1.0, which decay never lowers). Cap onboarding facts in
   the guard input: *tuning*. The `minimal` / `basic` / `rich` profile experiment: *tuning*.
 

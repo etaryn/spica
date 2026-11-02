@@ -339,6 +339,7 @@ describe("usage sink", () => {
     output_tokens: 20,
     cache_read_input_tokens: null,
     cache_creation_input_tokens: 5,
+    cache_creation: { ephemeral_1h_input_tokens: 3, ephemeral_5m_input_tokens: 2 },
   };
 
   test("reports every completed call with its purpose and model, including a refused reply", async () => {
@@ -377,6 +378,7 @@ describe("usage sink", () => {
         output_tokens: 20,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 5,
+        cache_creation_1h_input_tokens: 3,
       },
       {
         purpose: "reply",
@@ -385,6 +387,7 @@ describe("usage sink", () => {
         output_tokens: 20,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 5,
+        cache_creation_1h_input_tokens: 3,
       },
       {
         purpose: "labels_read",
@@ -393,8 +396,39 @@ describe("usage sink", () => {
         output_tokens: 20,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 5,
+        cache_creation_1h_input_tokens: 3,
       },
     ]);
+  });
+});
+
+describe("usage attribution", () => {
+  const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 };
+
+  test("a call made for a user reports who it was for; one made for nobody reports no user", async () => {
+    const onUsage = vi.fn();
+    const reply = stubClient({
+      stop_reason: "end_turn",
+      usage,
+      content: [{ type: "text", text: "hi" }],
+    });
+    const p = new AnthropicProvider(reply.client, models, onUsage);
+    await p.generateReply({ userId: "u1", system: [{ text: "s" }], messages: [] });
+    const structured = stubClient(undefined, { usage, parsed_output: { ok: true } });
+    const q = new AnthropicProvider(structured.client, models, onUsage);
+    const base = {
+      purpose: "crisis",
+      system: "s",
+      input: "i",
+      schema: z.object({ ok: z.boolean() }),
+      timeoutMs: 1,
+      maxTokens: 1,
+    };
+    await q.classifyJson({ ...base, userId: "u2" });
+    await q.classifyJson(base);
+    expect(onUsage.mock.calls.map((c) => c[0].user_id)).toEqual(["u1", "u2", undefined]);
+    // The userId is ours, never sent to the API.
+    expect(JSON.stringify(reply.create.mock.calls[0]![0])).not.toContain("u1");
   });
 });
 

@@ -9,6 +9,7 @@ import type { Deps } from "@/mind/platform/deps";
 import { errorName } from "@/mind/platform/errors";
 import { meterLlm, spend } from "@/mind/platform/llm/meter";
 import type { LLMProvider } from "@/mind/platform/llm/types";
+import { forUser } from "@/mind/platform/llm/for-user";
 
 export type UserLoopName =
   "user_summarise" | "user_reflect" | "user_model" | "user_ideate" | "user_consolidate";
@@ -34,7 +35,9 @@ export async function runUserLoop(
   name: UserLoopName,
   fn: (ctx: { deps: UserLoopDeps; traceId: string }) => Promise<UserLoopResult>,
 ): Promise<"done" | "failed"> {
-  const meter = meterLlm(deps.llm, { maxRetries: deps.config.core.max_retries });
+  const meter = meterLlm(forUser(deps.llm, run.user_id), {
+    maxRetries: deps.config.core.max_retries,
+  });
   const traceId = randomUUID();
   const base = {
     id: traceId,
@@ -53,7 +56,7 @@ export async function runUserLoop(
       status: "done",
       error: null,
       calls: meter.calls(),
-      ...spend(meter.usage, deps.config.core.prices),
+      ...spend(meter.usage, deps.config.prices),
     });
     for (const f of result.written ?? [])
       await deps.modules.emit({
@@ -77,7 +80,7 @@ export async function runUserLoop(
       status: "failed",
       error: errorName(error),
       calls: meter.calls(),
-      ...spend(meter.usage, deps.config.core.prices),
+      ...spend(meter.usage, deps.config.prices),
     });
     return "failed";
   }

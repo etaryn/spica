@@ -20,17 +20,33 @@
     "reply_thinking": "disabled",
     "reply_timeout_ms": 30000,
     "reply_max_retries": 1,
-    "reply_cache": "5m",
-    "guard_cache": "5m",
+    "reply_cache": "1h",
+    "guard_cache": "1h",
     "labels": "claude-haiku-5-5",
     "labels_thinking": "adaptive",
     "labels_max_tokens": 16000,
     "labels_timeout_ms": 180000,
-    "labels_cache": "5m",
+    "labels_cache": "1h",
     "user_mind_thinking": "adaptive",
     "user_mind_timeout_ms": 90000,
     "core_thinking": "adaptive",
     "core_timeout_ms": 90000
+  },
+  "prices": {
+    "claude-haiku-5-5": {
+      "input": 0.1,
+      "output": 0.5,
+      "cache_read": 0.01,
+      "cache_write_5m": 0.125,
+      "cache_write_1h": 0.2
+    },
+    "claude-sonnet-5": {
+      "input": 2,
+      "output": 10,
+      "cache_read": 0.2,
+      "cache_write_5m": 2.5,
+      "cache_write_1h": 4
+    }
   },
   "embedding": {
     "provider": "voyage",
@@ -579,7 +595,6 @@
       ],
       "optional": ["core_anticipate", "core_ruminate", "core_wander", "post_draft", "post_check"]
     },
-    "prices": { "claude-haiku-5-5": { "input": 0.1, "output": 0.5 } },
     "goals": {
       "max_active": 3,
       "min_active": 1,

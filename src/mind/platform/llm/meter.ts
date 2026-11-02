@@ -36,7 +36,11 @@ export function meterLlm(
   return { llm: metered, usage, calls: () => calls };
 }
 
-export function spend(usage: LlmUsage[], prices: Config["core"]["prices"]) {
+/**
+ * What the calls cost: every token kind at its own rate. One call to a model with no price makes
+ * the whole cost unknown rather than a sum that quietly leaves it out.
+ */
+export function spend(usage: LlmUsage[], prices: Config["prices"]) {
   if (!usage.length) return { model: null, tokens_in: null, tokens_out: null, cost: null };
   const tokensIn = usage.reduce((sum, u) => sum + u.input_tokens, 0);
   const tokensOut = usage.reduce((sum, u) => sum + u.output_tokens, 0);
@@ -47,7 +51,20 @@ export function spend(usage: LlmUsage[], prices: Config["core"]["prices"]) {
       cost = null;
       continue;
     }
-    cost += (u.input_tokens * price.input + u.output_tokens * price.output) / 1_000_000;
+    cost += callCost(u, price);
   }
   return { model: usage.at(-1)!.model, tokens_in: tokensIn, tokens_out: tokensOut, cost };
+}
+
+/** One call's dollars; a price is dollars per million tokens. */
+export function callCost(u: LlmUsage, price: Config["prices"][string]): number {
+  const written1h = u.cache_creation_1h_input_tokens;
+  return (
+    (u.input_tokens * price.input +
+      u.output_tokens * price.output +
+      u.cache_read_input_tokens * price.cache_read +
+      (u.cache_creation_input_tokens - written1h) * price.cache_write_5m +
+      written1h * price.cache_write_1h) /
+    1_000_000
+  );
 }

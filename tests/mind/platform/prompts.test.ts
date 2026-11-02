@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { loadPersona } from "@/mind/platform/persona";
@@ -110,4 +113,42 @@ test("labels v1 labels pieces in layers and never asks for a date", () => {
   // A correction or repeat still makes a memory, and a memory's times come from its own moves.
   expect(p).toMatch(/a correction is stored as the corrected version/);
   expect(p).toMatch(/A proposition's times come from the words its own moves cover/);
+});
+
+test("an include line is replaced by the shared file's text, in place", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "prompts-"));
+  mkdirSync(path.join(root, "shared", "rule"), { recursive: true });
+  mkdirSync(path.join(root, "loop"));
+  writeFileSync(path.join(root, "shared", "rule", "v1.md"), "Shared rule.\nSecond line.\n");
+  writeFileSync(
+    path.join(root, "loop", "v1.md"),
+    "Before.\n\n{{include shared/rule@v1}}\n\nAfter.\n",
+  );
+  expect(loadPrompt("loop", "v1", root)).toBe("Before.\n\nShared rule.\nSecond line.\n\nAfter.");
+});
+
+test("an include of a file that isn't there fails loudly instead of sending a hole", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "prompts-"));
+  mkdirSync(path.join(root, "loop"));
+  writeFileSync(path.join(root, "loop", "v1.md"), "{{include shared/nope@v1}}\n");
+  expect(() => loadPrompt("loop", "v1", root)).toThrow(/prompt not found/);
+});
+
+test("the core prompts that share a paragraph still send it, whole", () => {
+  const c = loadConfig();
+  for (const [name, version] of [
+    ["core/appraise", c.prompts.core_appraise],
+    ["core/anticipate", c.prompts.core_anticipate],
+    ["core/ruminate", c.prompts.core_ruminate],
+    ["core/wander", c.prompts.core_wander],
+    ["core/reflect", c.prompts.core_reflect],
+    ["core/consolidate", c.prompts.core_consolidate],
+  ] as const) {
+    const p = loadPrompt(name, version);
+    expect(p).toContain("Depth: for each memory you write, set `depth`");
+    expect(p).not.toContain("{{include");
+  }
+  expect(loadPrompt("core/reflect", c.prompts.core_reflect)).toContain(
+    "Dates: the input gives days with how far they are from now",
+  );
 });

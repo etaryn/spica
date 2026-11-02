@@ -91,7 +91,7 @@ code itself.
 | 2026-10-09 | A summary is a `shared` fact superseded on each run | Reuses fact storage and history without a new table; supersede keeps one live summary per user. |
 | 2026-10-09 | Summaries are excluded from retrieval, reconcile neighbours and decay | The reply has its own slot for the live summary; as a retrieved memory it would repeat, and reconcile or decay would merge or fade it. |
 | 2026-10-09 | A failed `user_mind_run` is not retried (queue retry limit 0) | The next big event produces a fresh summary; a retry would double-spend against the daily cap. |
-| 2026-10-09 | User loops reuse `core.prices` and `core.max_retries` | Same models and API, so one price table and one retry policy; a separate set would only drift. |
+| 2026-10-09 | User loops reuse `core.prices` (now the top-level `prices`) and `core.max_retries` | Same models and API, so one price table and one retry policy; a separate set would only drift. |
 | 2026-10-09 | The `user_mind_run` sweep rides on `cold_path_sweep` | It already scans per-user pending work on a schedule; a new job would add a schedule for one query. |
 | 2026-10-09 | The `user_mind_run` sweep reuses `cold_path.sweep_batch` | Same sweep job, same batch bound; a key of its own would bound the same pass twice. |
 | 2026-10-09 | The memory view lists the live summary under "Where things stand" | It is about them, so they can see and hard-delete it like any other memory. |

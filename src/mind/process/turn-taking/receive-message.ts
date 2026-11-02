@@ -29,6 +29,7 @@ import { waitWindowMs } from "./pacing";
 import { openAfter, withWords } from "./questions";
 import { mutateState } from "./state";
 import * as T from "./transitions";
+import { forUser } from "@/mind/platform/llm/for-user";
 
 export type ReceiveResult =
   | { status: "accepted" }
@@ -59,10 +60,12 @@ async function enqueueSafely(
 }
 
 export async function receiveMessage(
-  deps: Deps,
+  rawDeps: Deps,
   userId: string,
   input: UserMessageInput,
 ): Promise<ReceiveResult> {
+  // Its crisis check and turn judge are booked to the sender.
+  const deps = { ...rawDeps, llm: forUser(rawDeps.llm, userId) };
   const { db, clock, config, log } = deps;
 
   const { turn, existed } = await receiveTurn(deps, userId, input);

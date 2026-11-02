@@ -21,6 +21,7 @@ import { modules } from "@/modules";
 import { PgBossQueue } from "./pg-boss-jobs";
 import { vapidPublicKey, type Env } from "./env";
 import { PgEventBus } from "./pg-event-bus";
+import { usageSink } from "./usage-sink";
 import { WebPushPusher } from "./web-push";
 import { createWebSources } from "./web-sources";
 
@@ -59,7 +60,11 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
     core: createCoreLayer(db),
     clock: systemClock,
     llm: withTimeRendering(
-      new AnthropicProvider(new Anthropic(), config.models),
+      new AnthropicProvider(
+        new Anthropic(),
+        config.models,
+        usageSink({ db, clock: systemClock, log: consoleLogger }),
+      ),
       systemClock,
       config.time.relative_max_days,
     ),

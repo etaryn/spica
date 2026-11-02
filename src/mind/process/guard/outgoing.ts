@@ -13,6 +13,7 @@ import { fallbackLine } from "./fallback";
 import { checkMessage, type GuardInput, type GuardVerdict } from "./guard";
 import { matchKeyword } from "./keywords";
 import { groundSelfClaims, isUngrounded, type GroundedClaim } from "./self-claims";
+import { forUser } from "@/mind/platform/llm/for-user";
 
 export type OutgoingArgs = {
   userId: string;
@@ -35,7 +36,11 @@ export type OutgoingResult = {
 type Checked = { text: string; verdict: GuardVerdict; claims: GroundedClaim[] };
 type GuardDeps = Pick<Deps, "db" | "llm" | "config" | "clock" | "log" | "embedder" | "core">;
 
-export async function guardOutgoing(deps: GuardDeps, args: OutgoingArgs): Promise<OutgoingResult> {
+export async function guardOutgoing(
+  rawDeps: GuardDeps,
+  args: OutgoingArgs,
+): Promise<OutgoingResult> {
+  const deps = { ...rawDeps, llm: forUser(rawDeps.llm, args.userId) };
   if (!deps.config.guard.enabled) {
     const text = args.first.trim();
     return {

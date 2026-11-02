@@ -21,7 +21,7 @@ export class AnthropicProvider implements LLMProvider {
     private readonly onUsage?: UsageSink,
   ) {}
 
-  async generateReply({ system, messages }: ReplyRequest): Promise<string> {
+  async generateReply({ userId, system, messages }: ReplyRequest): Promise<string> {
     const effort = this.models.reply_effort;
     const cacheControl = cacheControlFor(this.models.reply_cache);
 
@@ -44,7 +44,7 @@ export class AnthropicProvider implements LLMProvider {
       },
       { timeout: this.models.reply_timeout_ms, maxRetries: this.models.reply_max_retries },
     );
-    this.report("reply", this.models.reply, response.usage);
+    this.report("reply", this.models.reply, response.usage, userId);
 
     if (response.stop_reason === "refusal") throw new Error("reply model refused");
 
@@ -58,6 +58,7 @@ export class AnthropicProvider implements LLMProvider {
 
   async classifyJson<T>({
     purpose,
+    userId,
     system,
     input,
     schema,
@@ -98,7 +99,7 @@ export class AnthropicProvider implements LLMProvider {
       },
       { timeout: timeoutMs, maxRetries },
     );
-    this.report(purpose, modelId, response.usage, onUsage);
+    this.report(purpose, modelId, response.usage, userId, onUsage);
 
     if (response.parsed_output == null) throw new Error("classifier returned no parsed output");
     return schema.parse(response.parsed_output);
@@ -118,15 +119,23 @@ export class AnthropicProvider implements LLMProvider {
     return ids[model];
   }
 
-  private report(purpose: string, model: string, usage: Anthropic.Usage, extra?: UsageSink): void {
+  private report(
+    purpose: string,
+    model: string,
+    usage: Anthropic.Usage,
+    userId?: string,
+    extra?: UsageSink,
+  ): void {
     if (!this.onUsage && !extra) return;
     const u = {
       purpose,
       model,
+      ...(userId ? { user_id: userId } : {}),
       input_tokens: usage.input_tokens,
       output_tokens: usage.output_tokens,
       cache_read_input_tokens: usage.cache_read_input_tokens ?? 0,
       cache_creation_input_tokens: usage.cache_creation_input_tokens ?? 0,
+      cache_creation_1h_input_tokens: usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
     };
     this.onUsage?.(u);
     extra?.(u);

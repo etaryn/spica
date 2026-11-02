@@ -655,6 +655,28 @@ export const push_subscription = pgTable(
   (t) => [index("push_subscription_user_idx").on(t.user_id)],
 );
 
+/**
+ * What each model call made for a user used. Counts only, no text; never read by the chat loop.
+ * Dollars are worked out on read from the config prices, so a price change rewrites no history.
+ * Core calls aren't here: they belong to no user and `core_loop_trace` is their ledger.
+ */
+export const llm_usage = pgTable(
+  "llm_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    user_id: userRef(),
+    purpose: text("purpose").notNull(),
+    model: text("model").notNull(),
+    input_tokens: integer("input_tokens").notNull(),
+    output_tokens: integer("output_tokens").notNull(),
+    cache_read_input_tokens: integer("cache_read_input_tokens").notNull(),
+    cache_creation_input_tokens: integer("cache_creation_input_tokens").notNull(),
+    cache_creation_1h_input_tokens: integer("cache_creation_1h_input_tokens").notNull(),
+    created_at: ts("created_at").notNull(),
+  },
+  (t) => [index("llm_usage_user_created_idx").on(t.user_id, t.created_at)],
+);
+
 /** Every guard decision and turn-taking judge decision. Never read by the chat loop. */
 export const judge_log = pgTable(
   "judge_log",

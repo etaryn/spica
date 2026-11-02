@@ -74,6 +74,18 @@ const models = z.object({
   core_timeout_ms: positiveInt,
 });
 
+// US dollars per million tokens, by model id. Cache writes are priced by how long they keep.
+const prices = z.record(
+  z.string(),
+  z.object({
+    input: nonNegative,
+    output: nonNegative,
+    cache_read: nonNegative,
+    cache_write_5m: nonNegative,
+    cache_write_1h: nonNegative,
+  }),
+);
+
 const embedding = z.object({
   provider: z.literal("voyage"),
   model: text,
@@ -637,8 +649,6 @@ const core = z
     max_retries: countFromZero,
     budget_reserve: countFromZero,
     loop_priority: z.object({ essential: z.array(coreLoop), optional: z.array(coreLoop) }),
-    // US dollars per million tokens, by model id.
-    prices: z.record(z.string(), z.object({ input: nonNegative, output: nonNegative })),
     goals: z.object({
       max_active: positiveInt,
       min_active: z.number().int().min(0),
@@ -926,6 +936,7 @@ const time = z.object({ relative_max_days: positiveInt });
 
 export const ConfigSchema = z.object({
   models,
+  prices,
   embedding,
   session,
   chat,

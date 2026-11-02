@@ -10,6 +10,8 @@ export type ChatMessage = { role: "user" | "assistant"; content: string };
 export type SystemBlock = { text: string; cache?: boolean };
 
 export interface ReplyRequest {
+  /** Who the call is for, so its usage is booked to them; never sent to the API. */
+  userId?: string;
   /** Ordered; joined with blank lines, the blocks are the whole system prompt. */
   system: SystemBlock[];
   messages: ChatMessage[];
@@ -35,6 +37,8 @@ export type CacheTtl = "off" | "5m" | "1h";
 export interface ClassifyRequest<T> {
   /** What the call is for ("crisis", "labels_read", "reconcile", "judge_recall", …); fakes route on it. */
   purpose: string;
+  /** Who the call is for, so its usage is booked to them; never sent to the API. Core calls have none. */
+  userId?: string;
   model?: StructuredModel;
   system: string;
   input: string;
@@ -56,10 +60,14 @@ export interface ClassifyRequest<T> {
 export interface LlmUsage {
   purpose: string;
   model: string;
+  /** Who the call was for; absent for core calls. */
+  user_id?: string;
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
+  /** The part of `cache_creation_input_tokens` written at the 1h rate; the rest was 5m. */
+  cache_creation_1h_input_tokens: number;
 }
 
 export interface LLMProvider {

@@ -274,6 +274,7 @@ export class FakeLLMProvider implements LLMProvider {
       output_tokens: 0,
       cache_read_input_tokens: 0,
       cache_creation_input_tokens: 0,
+      cache_creation_1h_input_tokens: 0,
     });
     return out;
   }

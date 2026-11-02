@@ -8,6 +8,7 @@ export type UsageRow = {
   output_tokens: number;
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
+  cache_creation_1h_input_tokens: number;
 };
 
 /** Sums token usage per (purpose, model) across a whole eval run, to see which call site drives spend. */
@@ -24,12 +25,14 @@ export class UsageTally {
       output_tokens: 0,
       cache_read_input_tokens: 0,
       cache_creation_input_tokens: 0,
+      cache_creation_1h_input_tokens: 0,
     };
     row.calls += 1;
     row.input_tokens += u.input_tokens;
     row.output_tokens += u.output_tokens;
     row.cache_read_input_tokens += u.cache_read_input_tokens;
     row.cache_creation_input_tokens += u.cache_creation_input_tokens;
+    row.cache_creation_1h_input_tokens += u.cache_creation_1h_input_tokens;
     this.rows.set(key, row);
   };
 

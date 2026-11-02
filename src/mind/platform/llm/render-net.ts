@@ -16,6 +16,7 @@ export function withTimeRendering<T extends LLMProvider>(
   const wrapped = Object.create(inner) as T;
   wrapped.generateReply = (request) =>
     inner.generateReply({
+      ...request,
       system: request.system.map((b) => ({ ...b, text: render(b.text) })),
       messages: request.messages.map((m) => ({ ...m, content: render(m.content) })),
     });

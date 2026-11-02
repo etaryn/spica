@@ -49,6 +49,7 @@ import { bidAfter, hurtFactContent, type Signals } from "@/mind/state/user/relat
 import type { ParamName } from "@/mind/state/user/relationship/types";
 import { movedParams, updateRelationship } from "@/mind/state/user/relationship/update";
 import { snapshotSection } from "@/mind/memory/core/depth";
+import { forUser } from "@/mind/platform/llm/for-user";
 
 export class LockBusyError extends Error {}
 
@@ -85,7 +86,9 @@ export async function runColdPathJob(deps: Deps, job: ColdPathJob): Promise<void
   }
 }
 
-export async function runColdPath(deps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
+export async function runColdPath(rawDeps: Deps, job: ColdPathJob): Promise<ColdPathOutcome> {
+  // Labelling and reconciling are booked to the user whose exchange this is.
+  const deps = { ...rawDeps, llm: forUser(rawDeps.llm, job.userId) };
   const { db, config, clock, log } = deps;
 
   const outcome = await db.transaction(async (tx): Promise<ColdPathOutcome> => {

@@ -8,6 +8,7 @@ const call = (purpose: string, model: string, input: number, output: number) => 
   output_tokens: output,
   cache_read_input_tokens: 0,
   cache_creation_input_tokens: 0,
+  cache_creation_1h_input_tokens: 0,
 });
 
 describe("UsageTally", () => {
@@ -25,6 +26,7 @@ describe("UsageTally", () => {
         output_tokens: 900,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 0,
+        cache_creation_1h_input_tokens: 0,
       },
       {
         purpose: "guard",
@@ -34,6 +36,7 @@ describe("UsageTally", () => {
         output_tokens: 110,
         cache_read_input_tokens: 0,
         cache_creation_input_tokens: 0,
+        cache_creation_1h_input_tokens: 0,
       },
     ]);
     expect(t.format()).toHaveLength(3);

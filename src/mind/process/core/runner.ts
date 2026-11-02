@@ -79,7 +79,7 @@ export async function runCoreLoop<T>(
       error: null,
       created_at: now,
       calls: meter.calls(),
-      ...spend(meter.usage, config.core.prices),
+      ...spend(meter.usage, config.prices),
       ...fields,
     });
 
@@ -106,7 +106,7 @@ export async function runCoreLoop<T>(
         error: null,
         created_at: now,
         calls: meter.calls(),
-        ...spend(meter.usage, config.core.prices),
+        ...spend(meter.usage, config.prices),
       });
       return value;
     });

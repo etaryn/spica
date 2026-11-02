@@ -69,6 +69,7 @@ import { shapeText } from "./shape-text";
 import { splitParts } from "./split-parts";
 import { textingShape } from "./texting-shape";
 import { loadYourDayLine } from "./your-day-line";
+import { forUser } from "@/mind/platform/llm/for-user";
 
 const summaryPayload = z.object({
   where_things_stand: z.string(),
@@ -268,7 +269,8 @@ function bounded<T>(
   );
 }
 
-async function composeFrom(deps: Deps, userId: string, input: ComposeInput): Promise<Composed> {
+async function composeFrom(rawDeps: Deps, userId: string, input: ComposeInput): Promise<Composed> {
+  const deps = { ...rawDeps, llm: forUser(rawDeps.llm, userId) };
   const { db, clock, config, llm, log } = deps;
   const { recent, earlier } = input;
   const inCrisis = !!input.flag?.flagged;

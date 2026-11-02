@@ -29,3 +29,32 @@ test("reply and structured prompts are rendered at the clock's now; the inner pr
   expect(fake.structuredCalls.at(-1)!.input).toContain("2 days ago, Sunday 11 January");
   expect(fake.structuredCalls.at(-1)!.input).not.toContain("⟦");
 });
+
+test("the user a call is for survives the rendering wrapper, replies included", async () => {
+  const seen: (string | undefined)[] = [];
+  const fake = new FakeLLMProvider();
+  fake.replies.push("ok");
+  fake.handlers.probe = () => ({ ok: true });
+  const spy = {
+    generateReply: (r: Parameters<typeof fake.generateReply>[0]) => {
+      seen.push(r.userId);
+      return fake.generateReply(r);
+    },
+    classifyJson: ((r: { userId?: string }) => {
+      seen.push(r.userId);
+      return fake.classifyJson(r as never);
+    }) as typeof fake.classifyJson,
+  };
+  const llm = withTimeRendering(spy, new SimClock(new Date("2026-01-13T09:00:00Z")), 6);
+  await llm.generateReply({ userId: "u1", system: [{ text: "s" }], messages: [] });
+  await llm.classifyJson({
+    purpose: "probe",
+    userId: "u2",
+    system: "s",
+    input: "i",
+    schema: z.object({ ok: z.boolean() }),
+    timeoutMs: 1000,
+    maxTokens: 10,
+  });
+  expect(seen).toEqual(["u1", "u2"]);
+});

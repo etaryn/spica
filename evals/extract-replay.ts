@@ -77,7 +77,7 @@ const lines = usage.summary().map((u) => ({
   input: u.input_tokens,
   output: u.output_tokens,
   cacheRead: u.cache_read_input_tokens,
-  cost: spend([u], config.core.prices).cost,
+  cost: spend([u], config.prices).cost,
 }));
 writeFileSync(
   file,

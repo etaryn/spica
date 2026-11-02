@@ -9,4 +9,8 @@
   v0, then rewritten nightly by core loops) and `# Public voice` (feeds only `publicPersona`).
   v7 holds lines Claude drafted that await Ethan's rewrite: don't edit the persona without him.
 - She is openly an AI, sibling of Alcor; identity disclosure is honest, in her own voice.
+- A paragraph that several prompts repeat word for word lives once in `shared/<name>/v<N>.md`
+  and is pulled in with `{{include shared/<name>@v<N>}}` on its own line (`loadPrompt` expands it;
+  one level). Moving a paragraph there changes no prompt version while the rendered text is
+  identical; changing its words is a new shared version and a new version of each prompt using it.
 - Numbers belong in config, not prompt text; a prompt describes, code decides.

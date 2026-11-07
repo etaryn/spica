@@ -29,15 +29,13 @@ Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tag
 master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
 rule: the old PNGs go in the same slice that ships real renders.
 
-## Hair design (2026-11-08, Ethan)
-An asymmetric bob, her left side longer, with a simple fringe and the star tie: nothing else. The
-earlier wolf cut (staggered layers, diagonal fringe, dissolving cubes) was too complicated to build
-and to simulate. No cubes: a permanent mesh can't flow, so any glitch is an animation effect.
-
-The hair is the sample's own hair cards, edited in place (its bob is already clean and keeps its
-spring-bone weights): the right front lock cut to chin length, the left front lock stretched to the
-chest. A from-scratch version made of physics-simulated locks (`hair.py`, `run.sh v5`) is parked: it
-hangs correctly but reads noisier than the sample's smooth cards.
+## Hair design (2026-11-08, Ethan; brief reopened)
+A short, stiff bob ending above the shoulders, a simple fringe, one long asymmetric strip, and a
+small side bunch (a tuft, not a long tail) bound by the star tie on the opposite side (shapes
+from Ethan's references, pending): nothing else. The bunch is built at two heights, high and low,
+for Ethan to compare; each piece is its own object so removing one is a delete. The tie wraps real hair, so clipping at the band is checked in the first renders. The earlier chest-length
+left layer, wolf cut and cubes are gone: anything long and loose clips in every pose. The strip
+gets few bones and little swing. The simulated-lock version (`hair.py`, `run.sh v5`) stays parked.
 
 ## Base model (2026-11-07)
 Built on a VRoid Studio sample export (`sample_model.vrm`, kept in `assets/model/base/`, git-ignored).
@@ -63,8 +61,8 @@ blender-rules. Left out: the live-session MCP (runs unsandboxed code in a runnin
   `render.py`), so the model is reproducible from code and every change is a diff.
 - `assets/model/renders/`: git-ignored review renders.
 - Model parts as separate named objects: head, face plane (eye/mouth textures), fringe-right,
-  fringe-left, fringe-cover (hurt swap), hair clumps (12–16), long layer + cubes, tie + two stars,
-  torso/hoodie, hood, tee, shorts, tights, sneakers, hands. Built with rigging in mind: edge loops
+  fringe-left, hair clumps (few, large), long strip, side ponytail, tie + two stars,
+  hoodie (hood down, fixed), tee, shorts, tights, sneakers, hands. Built with rigging in mind: edge loops
   at joints, nothing dangling.
 
 ## Stages and checks
@@ -75,9 +73,9 @@ blender-rules. Left out: the live-session MCP (runs unsandboxed code in a runnin
    sampled from the render matches the hex codes; amber appears only where the brief allows
    (scripted pixel check). **Ethan reviews the look.**
 2. **Revise** until Ethan says locked.
-3. **Face.** Swappable eye/mouth textures for the five expressions; hurt fringe swap; hood-up.
-4. **Rig.** Humanoid armature with fingers; hair, hood, tie and cubes follow the head.
-   Check: stress poses (arms up, sit, hood up) without clipping.
+3. **Face.** Swappable eye/mouth textures for the five expressions.
+4. **Rig.** Humanoid armature with fingers; hair, tie and the fixed hood follow the head; the long strip and side ponytail each get a short stiff chain.
+   Check: stress poses (arms up, sit, hand at mouth) without clipping.
 5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit,
    smirk, flustered). Check: playblast of each.
 6. **Export and integration.** `.glb` + `.blend`; `render.py` makes sprites from clip frames; one

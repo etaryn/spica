@@ -11,7 +11,12 @@ seam until O2.
 ## Decisions (Ethan, 2026-11-07)
 - No hand-posed sprites: a rigged model with a **preset of animation clips**; any frame can be
   rendered as a still.
-- Static reference model first, **v1 = lowest poly**, as proof of concept and design check.
+- ~~Lowest-poly v1 first~~ **Changed 2026-11-07:** low poly can't carry meaningful detail (v1 and a
+  standard-poly v2 were built as checkpoints and judged by Ethan: proportions right, detail missing).
+  Go straight to a **high-poly** model. **Body, face and hair first, no clothes yet**: clothes come
+  after those three are right. A low-poly derivative (the version arc) is made later from the final
+  high-poly model, not built first.
+- Skills: Blender-specific Claude skills installed at user scope for this work (see Tools).
 - Tool: **Blender 5.2.3 LTS** (`C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`),
   driven headless by Python scripts.
 - Proposed (take as yes unless he says no): face stays clean even in v1 (brief); iris and skin hex
@@ -24,6 +29,14 @@ Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tag
 master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
 rule: the old PNGs go in the same slice that ships real renders.
 
+## Tools
+Blender 5.2.3 LTS headless. Skills installed to `~/.claude/skills/` from a vetted markdown-only copy
+of TMHSDigital/Blender-Developer-Tools (commit 9ce1540; licence CC BY-NC-ND 4.0, so unmodified and
+for our own agent use only, never redistributed in this repo): mesh-editing-and-bmesh,
+procedural-materials-and-shaders, headless-batch-scripting, uv-and-mesh-attributes,
+geometry-nodes-python, constraints-and-parenting, slotted-actions-animation, porting-to-blender-5,
+blender-rules. Left out: the live-session MCP (runs unsandboxed code in a running Blender).
+
 ## Layout
 - `assets/model/spica.blend`: the model (kept in git; binary, small at v1).
 - `assets/model/build/`: Python build scripts (`build_model.py`, later `rig.py`, `anim.py`,
@@ -35,7 +48,9 @@ rule: the old PNGs go in the same slice that ships real renders.
   at joints, nothing dangling.
 
 ## Stages and checks
-1. **Reference still (v1).** Model, toon material with ink-navy outline, palette from the brief.
+1. **High-poly body, face and hair (no clothes).** Mannequin-smooth body (no anatomical detail),
+   sculpted face (nose, lips, brow, cheeks, ears), fine hair locks. Toon material with ink-navy
+   outline, palette from the brief.
    Checks: front/side/back/three-quarter turntable renders; 64 px black-silhouette test; palette
    sampled from the render matches the hex codes; amber appears only where the brief allows
    (scripted pixel check). **Ethan reviews the look.**

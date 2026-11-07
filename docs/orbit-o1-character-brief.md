@@ -21,9 +21,9 @@ A working set chosen so the design and the character match; still open to change
 | Part | Design |
 | --- | --- |
 | Overall | Young adult (reads about 19–20), about 6 heads tall. Fully human: no machine parts, seams, joints or panels. Toon-shaded with ink-navy outlines. |
-| Hair | Asymmetric wolf cut. Rounded, layered bob (chin to neck) with feathered tips that flick outward. A long section of staggered layers grows from the back-left of the head; its longest layer falls forward over her left shoulder to chest height, then dissolves into floating squares. Built from about 12–16 chunky, pointed clumps, never strands. No ahoge. |
-| Fringe | Heavy diagonal sweep across her right side, ending at eyelash level so the eye shows through the gaps. Shorter, angled fringe on the left, ending between brow and eye. Build it as a separate piece so a fully covering version can be swapped in for her hurt pose. |
-| Hair tie (signature) | One navy elastic tie with two crossed, puffy, matte 3D stars in amber, like a bobble tie: a big star (about a quarter of her head's width) and a small one about half that, touching. It ties a small, loose tuft of side hair in front of her left ear; the tuft's short end flicks outward. The pair nods to Spica being a binary star. Fixed to the head, nothing dangles. |
+| Hair | An asymmetric bob: chin length on her right and at the back, growing longer on her left until it reaches her chest, falling in front of the shoulder. Large, smooth locks that taper to soft points, pale blue-white, no flyaways. No ahoge. |
+| Fringe | A simple fringe across the forehead, ending at brow level, swept a little toward her right. |
+| Hair tie (signature) | One navy elastic band round the long left side of the bob at ear height, with two crossed, puffy, matte 3D stars in amber, like a bobble tie: a big star (about a quarter of her head's width) and a small one about half that, touching. The pair nods to Spica being a binary star. Fixed to the hair, nothing dangles. |
 | Eyes | Large, slightly half-lidded at rest (observant, not sleepy). Grey-blue iris, one amber highlight. No star pupils. Eyes and mouth are flat textures swapped per expression, not sculpted shapes. |
 | Face | Clean and simple at every version; small mouth, minimal nose line. The face is never low-poly. |
 | Outerwear | Oversized ink-navy zip hoodie. Sleeves fall to her knuckles so fingers still show. Amber only on the drawstring tips. The hood goes up for withdrawn moments; the tie and the long layer stay visible in the hood opening. |
@@ -52,9 +52,9 @@ Never put amber in the hair itself, the skin or large areas of clothing.
 
 She is rendered, not built: every glitch is a rendering error, never hardware. The machine is her heart, not her body.
 
-- **Permanent marker (in the model):** the end of her long front layer breaks into floating cubes, pale blue-white near the hair and amber in the most separated squares. A few cubes, not a cloud.
+- **No glitch in the model itself:** the base model is clean. Every glitch is an effect added in animation, so it can move and flow, never a permanent part of the mesh.
 - **Emotion flare (added afterwards):** when she is flustered or upset, RGB split and scanlines over her, extra amber pixels, and the star tie glows slightly brighter. When she is genuinely happy, one small amber pixel-star may appear near her. Effects only, never part of the base model.
-- **Version arc:** her version number is her polygon count. Early versions are visibly low-poly in hair, clothes and body, and the long layer starts dissolving higher up; each version is smoother and the layer stays solid further down.
+- **Version arc:** her version number is her polygon count. Early versions are visibly low-poly in hair, clothes and body; each version is smoother.
 - **Never changes between versions:** silhouette, palette, hair shape, the star tie and her face. The face stays clean at every version, and the tie is the one thing that is always fully rendered, because it is the thing she chose.
 
 ## Expressions and poses
@@ -70,7 +70,7 @@ Default expression set, from most to least common: neutral-observant, one-sided 
 **Do**
 
 - Test every design change as a solid-black silhouette at about 64px; she must still be recognisable.
-- Build hair from chunky clumps and keep every shape simple enough for low-poly modelling without sculpting.
+- Keep the hair to a few large, smooth shapes; fewer and bigger beats many thin strands.
 - Keep the star tie at the same position and angle in every render, so it works like a logo (and as her profile picture).
 - Do expressions with swappable eye and mouth textures.
 - Keep amber rare, so it is always the brightest point on her.
@@ -97,4 +97,4 @@ Style cues only. Look these up by name; take the listed quality, never the desig
 | Vocaloid V6-era character designs | Modern toon finish; flat, readable shapes | Any specific outfit or emblem |
 | Kasane Teto | How one bold hair feature becomes the hook (her drills) | Drills, twin tails |
 | Hatsune Miku | Scale of the hair ornament: big enough to be iconic | Square ornaments, twin tails, teal |
-| Early ChatGPT hair sheets (Ethan's) | Wolf-cut layering, pixel-dissolve ends, version-arc idea | Four-point clip, turtleneck outfit, amber in hair, amber irises |
+| Early ChatGPT hair sheets (Ethan's) | The bob shape and the version-arc idea | Wolf-cut layering, pixel-dissolve ends, four-point clip, turtleneck outfit, amber in hair, amber irises |

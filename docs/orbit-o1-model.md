@@ -29,6 +29,11 @@ Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tag
 master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
 rule: the old PNGs go in the same slice that ships real renders.
 
+## Hair design (2026-11-08, Ethan)
+An asymmetric bob, her left side longer, with a simple fringe and the star tie: nothing else. The
+earlier wolf cut (staggered layers, diagonal fringe, dissolving cubes) was too complicated to build
+and to simulate. No cubes: a permanent mesh can't flow, so any glitch is an animation effect.
+
 ## Base model (2026-11-07)
 Built on a VRoid Studio sample export (`sample_model.vrm`, kept in `assets/model/base/`, git-ignored).
 Its VRM metadata reads: commercial use `personalNonProfit`, redistribution not allowed, modification
@@ -36,7 +41,7 @@ Its VRM metadata reads: commercial use `personalNonProfit`, redistribution not a
 **re-export with commercial use and modification allowed before any of this ships or is committed.**
 Until then `spica-v4.blend` (the derived model) is git-ignored; only the scripts are committed.
 Pipeline: `base_prepare.py` (import the glTF, strip clothes, her toon materials, outline) then
-`hair_edit.py` (fringe sweep, bob flick, long layer, tie, cubes, eye colours); the .vrm is read as a
+`hair.py` (the asymmetric bob and fringe as simulated locks, the tie, eye colours); the .vrm is read as a
 .glb copy, so no VRM add-on is needed. v1 to v3 (own-built) remain until v4 is approved, then go.
 
 ## Tools

@@ -1,6 +1,8 @@
 """
 Builds her v1 reference model (lowest poly, face clean) from code and saves assets/model/spica.blend.
-Run: blender -b -P assets/model/build/build_model.py
+Run: blender -b -P assets/model/build/build_model.py            (v1, lowest poly, spica-v1.blend)
+     SPICA_LOD=std blender -b -P assets/model/build/build_model.py   (v2, standard poly, spica-v2.blend)
+v2 smooths the face, hair and hands to full detail; clothes only get rounder, not detailed.
 Z is up and she faces -Y, so her left is +X. Every part is its own named object (hair clumps,
 fringe pieces, tie, stars, cubes, clothes) so the rig and the expression swaps can find them.
 """
@@ -13,6 +15,7 @@ from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+STD = os.environ.get("SPICA_LOD", "low") == "std"
 
 PAL = dict(
     navy="1E2340", offwhite="F2EFE8", hair="CFE0F2", hairshade="8FA6C8", amber="FFB23F",
@@ -116,16 +119,21 @@ def new_scene():
     toon("offwhite", PAL["offwhite"], "B9B6C4")
     toon("skin", PAL["skin"], "F1D8CF")
     toon("hair", PAL["hair"], PAL["hairshade"])
+    toon("hair_under", PAL["hairshade"], "6C80A6")
     toon("amber", PAL["amber"], PAL["amberdeep"])
 
 
-def mesh_obj(name, bm, mat, outline=True, smooth=False, th=0.004):
+def mesh_obj(name, bm, mat, outline=True, smooth=False, th=0.004, sub=0):
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
     ob = bpy.data.objects.new(name, me)
     bpy.context.scene.collection.objects.link(ob)
     me.materials.append(MATS[mat])
+    if STD and sub:
+        mod = ob.modifiers.new("smooth", "SUBSURF")
+        mod.levels = mod.render_levels = sub
+        smooth = True
     if outline:
         me.materials.append(OUTLINE)
         mod = ob.modifiers.new("outline", "SOLIDIFY")
@@ -139,7 +147,7 @@ def mesh_obj(name, bm, mat, outline=True, smooth=False, th=0.004):
 
 
 def loft(name, secs, mat, sides=6, cap0=True, apex=False, hint=(0, -1, 0), smooth=False,
-         outline=True, th=0.004):
+         outline=True, th=0.004, sub=0):
     """Tube along a path. secs = [(point, a, b), ...]; a, b are the ellipse radii across the path:
     a along T x hint, b along the other. apex=True closes the last section to a point."""
     bm = bmesh.new()
@@ -175,7 +183,21 @@ def loft(name, secs, mat, sides=6, cap0=True, apex=False, hint=(0, -1, 0), smoot
     else:
         bm.faces.new(rings[-1])
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
-    return mesh_obj(name, bm, mat, outline=outline, smooth=smooth, th=th)
+    return mesh_obj(name, bm, mat, outline=outline, smooth=smooth, th=th, sub=sub)
+
+
+def spline(pts, n):
+    """n+1 points along a Catmull-Rom curve through pts; also returns each point's position along
+    the control list, so widths can be interpolated."""
+    out = []
+    for i in range(n + 1):
+        s = i / n * (len(pts) - 1)
+        k = min(int(s), len(pts) - 2)
+        t = s - k
+        p0, p1, p2, p3 = pts[max(k - 1, 0)], pts[k], pts[k + 1], pts[min(k + 2, len(pts) - 1)]
+        out.append((0.5 * ((2 * p1) + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t
+                           + (3 * p1 - p0 - 3 * p2 + p3) * t ** 3), s))
+    return out
 
 
 # ---------------------------------------------------------------- head and face
@@ -189,10 +211,11 @@ def surf(az, el, off=0.0):
 
 def head_bmesh():
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=1.0)
+    bmesh.ops.create_uvsphere(bm, u_segments=48 if STD else 32, v_segments=32 if STD else 20,
+                              radius=1.0)
     for v in bm.verts:
         z = v.co.z
-        f = 1 - 0.38 * (-z) ** 1.6 if z < 0 else 1.0
+        f = (1 - (0.46 * (-z) ** 1.3 if STD else 0.38 * (-z) ** 1.6)) if z < 0 else 1.0
         v.co = Vector((v.co.x * RX * f, v.co.y * RY * f, HC.z + z * RZ))
     bm.normal_update()
     return bm
@@ -244,6 +267,14 @@ def build_head():
 
 # ---------------------------------------------------------------- hair
 def clump(name, pts, widths, hint, mat="hair", sides=6):
+    if STD:
+        sm = spline([Vector(p) for p in pts], 8)
+        secs = []
+        for p, s in sm:
+            k = min(int(s), len(widths) - 2)
+            w = widths[k] + (widths[k + 1] - widths[k]) * (s - k)
+            secs.append((p, w, max(0.006, w * 0.30)))
+        return loft(name, secs, mat, sides=8, apex=True, hint=hint, th=0.003, sub=1)
     secs = [(p, w, max(0.007, w * 0.32)) for p, w in zip(pts, widths)]
     return loft(name, secs, mat, sides=sides, apex=True, hint=hint, th=0.003)
 
@@ -269,11 +300,13 @@ def build_hair():
     # Layered bob: chunky clumps round the sides and back, tips flicking outward.
     bob = {-62: -0.10, -86: -0.12, -112: -0.135, -138: -0.15, -164: -0.155,
            62: None, 86: -0.12, 112: -0.135, 138: -0.15, 164: -0.155, 180: -0.16}
-    for az, z1 in bob.items():
+    for i, (az, z1) in enumerate(bob.items()):
         if z1 is None:
             continue  # her left front is the tie tuft
-        clump(f"bob_{az:+d}", hang(az, 0.11, z1, 0.03, 0.36), [0.050, 0.056, 0.054, 0.046, 0.0],
-              radial(az))
+        layer = (i % 2) * 0.05 if STD else 0.0  # every other clump sits a layer further out
+        w = 0.85 if STD else 1.0
+        clump(f"bob_{az:+d}", hang(az, 0.11, z1 - layer * 0.2, 0.03 + layer, 0.36 + layer),
+              [0.050 * w, 0.056 * w, 0.054 * w, 0.046 * w, 0.0], radial(az))
 
     # Fringe: a heavy diagonal sweep over her right (-X), a shorter angled one on her left.
     right = [
@@ -367,21 +400,53 @@ def build_cubes(origin):
 
 
 # ---------------------------------------------------------------- body
+def build_hand(side, sgn, C, d):
+    """Full hand: palm, four fingers with three joints and a slight curl toward the palm, thumb.
+    C is the cuff end, d the direction down the arm; the palm faces her body."""
+    V = Vector
+    inward = V((-sgn, 0, 0))
+    loft(f"palm_{side}", [(C - d * 0.025, 0.040, 0.019), (C + d * 0.02, 0.043, 0.020),
+                          (C + d * 0.05, 0.041, 0.017)], "skin", sides=10, hint=(1, 0, 0), sub=1,
+         th=0.002)
+    spread = (-0.0295, -0.0098, 0.0098, 0.0295)
+    total = (0.068, 0.080, 0.074, 0.058)
+    curl = (6, 12, 9, 16)  # degrees at the base joint; each joint curls further
+    for k, (yo, ln, cl) in enumerate(zip(spread, total, curl)):
+        p = [C + V((0, yo, 0)) + d * 0.045]
+        seg = (ln * 0.45, ln * 0.30, ln * 0.25)
+        for j, sl in enumerate(seg):
+            a = math.radians(cl * (j + 1) * 1.6)
+            p.append(p[-1] + (d * math.cos(a) + inward * math.sin(a)) * sl)
+        rad = (0.0098, 0.0092, 0.0082, 0.0068)
+        secs = [(pt, r, r * 0.92) for pt, r in zip(p, rad)]
+        secs.append((p[-1] + (d * 0.5 + inward * 0.5).normalized() * 0.006, 0, 0))
+        loft(f"finger_{side}{k + 1}", secs, "skin", sides=8, apex=True, hint=(1, 0, 0), sub=1,
+             th=0.0018)
+    t0 = C + V((-sgn * 0.022, -0.036, 0.0)) + d * 0.02
+    tp = [t0, t0 + V((-sgn * 0.004, -0.018, 0)) + d * 0.014,
+          t0 + V((-sgn * 0.010, -0.030, 0)) + d * 0.034, t0 + V((-sgn * 0.016, -0.036, 0)) + d * 0.052]
+    secs = [(pt, r, r * 0.92) for pt, r in zip(tp, (0.0125, 0.0112, 0.0098, 0.0078))]
+    secs.append((tp[-1] + (tp[-1] - tp[-2]).normalized() * 0.006, 0, 0))
+    loft(f"thumb_{side}", secs, "skin", sides=8, apex=True, hint=(1, 0, 0), sub=1, th=0.0018)
+
+
 def build_body():
     V = Vector
     # Neck and clothes.
-    loft("neck", [(V((0, 0.005, 1.31)), 0.045, 0.045), (V((0, 0.005, 1.41)), 0.044, 0.044)],
-         "skin", sides=8, smooth=True)
+    N = 14 if STD else 8  # sides round the clothes; they get rounder in v2, not more detailed
+    SU = 1 if STD else 0
+    loft("neck", [(V((0, 0.005, 1.28)), 0.045, 0.045), (V((0, 0.005, 1.40)), 0.042, 0.042)],
+         "skin", sides=12 if STD else 8, smooth=True)
     loft("tee", [(V((0, 0, 1.25)), 0.145, 0.105), (V((0, 0, 1.0)), 0.14, 0.10),
-                 (V((0, 0, 0.84)), 0.16, 0.108)], "offwhite", sides=8)
-    loft("hoodie", [(V((0, 0, 1.40)), 0.07, 0.062), (V((0, 0, 1.35)), 0.115, 0.09),
-                    (V((0, 0, 1.30)), 0.165, 0.115), (V((0, 0, 1.15)), 0.16, 0.12),
-                    (V((0, 0, 0.91)), 0.17, 0.128)], "navy", sides=8, cap0=False)
-    loft("pelvis", [(V((0, 0, 0.90)), 0.13, 0.092), (V((0, 0, 0.78)), 0.126, 0.09)], "navy", sides=8)
+                 (V((0, 0, 0.84)), 0.16, 0.108)], "offwhite", sides=N, smooth=STD)
+    loft("hoodie", [(V((0, 0, 1.335)), 0.075, 0.065), (V((0, 0, 1.315)), 0.12, 0.092),
+                    (V((0, 0, 1.29)), 0.165, 0.115), (V((0, 0, 1.15)), 0.16, 0.12),
+                    (V((0, 0, 0.91)), 0.17, 0.128)], "navy", sides=N, cap0=False, smooth=STD)
+    loft("pelvis", [(V((0, 0, 0.90)), 0.13, 0.092), (V((0, 0, 0.78)), 0.126, 0.09)], "navy", sides=N, smooth=STD)
     loft("hood", [(V((0, 0.115, 1.39)), 0.13, 0.05), (V((0, 0.14, 1.30)), 0.135, 0.065),
-                  (V((0, 0.13, 1.20)), 0.10, 0.04)], "navy", sides=8)
+                  (V((0, 0.13, 1.20)), 0.10, 0.04)], "navy", sides=N, smooth=STD)
     bpy.ops.mesh.primitive_torus_add(major_radius=0.062, minor_radius=0.016, major_segments=16,
-                                     minor_segments=6, location=(0, 0.004, 1.395))
+                                     minor_segments=6, location=(0, 0.004, 1.335))
     collar = bpy.context.active_object
     collar.name = "collar"
     collar.data.materials.append(MATS["navy"])
@@ -396,36 +461,39 @@ def build_body():
         sh.data.materials.append(MATS["navy"])
         loft(f"sleeve_{side}", [(S, 0.062, 0.062), ((S + E) / 2, 0.056, 0.056), (E, 0.052, 0.052),
                                 ((E + C) / 2, 0.055, 0.055), (C, 0.062, 0.062)],
-             "navy", sides=8)
+             "navy", sides=N, smooth=STD)
         d = (C - E).normalized()
-        loft(f"palm_{side}", [(C - d * 0.02, 0.040, 0.017), (C + d * 0.035, 0.040, 0.016)],
-             "skin", sides=6, hint=(1, 0, 0))
-        lens = [0.062, 0.074, 0.068, 0.054]
-        for k, (yo, ln) in enumerate(zip((-0.027, -0.009, 0.009, 0.027), lens)):
-            st = C + V((0, yo, 0)) + d * 0.03
-            loft(f"finger_{side}{k + 1}", [(st, 0.0105, 0.0105), (st + d * ln * 0.55, 0.0100, 0.0100),
-                                          (st + d * ln, 0.0075, 0.0075)], "skin", sides=5,
+        if STD:
+            build_hand(side, sgn, C, d)
+        else:
+            loft(f"palm_{side}", [(C - d * 0.02, 0.040, 0.017), (C + d * 0.035, 0.040, 0.016)],
+                 "skin", sides=6, hint=(1, 0, 0))
+            lens = [0.062, 0.074, 0.068, 0.054]
+            for k, (yo, ln) in enumerate(zip((-0.027, -0.009, 0.009, 0.027), lens)):
+                st = C + V((0, yo, 0)) + d * 0.03
+                loft(f"finger_{side}{k + 1}", [(st, 0.0105, 0.0105), (st + d * ln * 0.55, 0.0100, 0.0100),
+                                              (st + d * ln, 0.0075, 0.0075)], "skin", sides=5,
+                     hint=(1, 0, 0), th=0.002)
+            th0 = C + V((-sgn * 0.02, -0.045, 0.0)) + d * 0.0
+            loft(f"thumb_{side}", [(th0, 0.011, 0.011), (th0 + V((0, -0.015, -0.025)), 0.0105, 0.0105),
+                                   (th0 + V((0, -0.025, -0.045)), 0.0075, 0.0075)], "skin", sides=5,
                  hint=(1, 0, 0), th=0.002)
-        th0 = C + V((-sgn * 0.02, -0.045, 0.0)) + d * 0.0
-        loft(f"thumb_{side}", [(th0, 0.011, 0.011), (th0 + V((0, -0.015, -0.025)), 0.0105, 0.0105),
-                               (th0 + V((0, -0.025, -0.045)), 0.0075, 0.0075)], "skin", sides=5,
-             hint=(1, 0, 0), th=0.002)
 
         H = V((sgn * 0.075, 0.0, 0.88))
         K = V((sgn * 0.072, -0.01, 0.47))
         A = V((sgn * 0.066, 0.0, 0.10))
         loft(f"leg_{side}", [(H, 0.072, 0.072), ((H + K) / 2, 0.066, 0.066), (K, 0.056, 0.056),
-                              ((K + A) / 2, 0.049, 0.049), (A, 0.041, 0.041)], "tights", sides=8)
+                              ((K + A) / 2, 0.049, 0.049), (A, 0.041, 0.041)], "tights", sides=N, smooth=STD)
         loft(f"shorts_{side}", [(V((sgn * 0.075, 0, 0.83)), 0.084, 0.088),
                                 (V((sgn * 0.074, 0, 0.75)), 0.082, 0.087),
-                                (V((sgn * 0.073, -0.003, 0.66)), 0.078, 0.084)], "navy", sides=8)
+                                (V((sgn * 0.073, -0.003, 0.66)), 0.078, 0.084)], "navy", sides=N, smooth=STD)
         x = sgn * 0.066
         loft(f"shoe_{side}", [(V((x, 0.085, 0.085)), 0.047, 0.05), (V((x, 0.0, 0.08)), 0.055, 0.056),
                               (V((x, -0.10, 0.065)), 0.054, 0.048), (V((x, -0.16, 0.05)), 0.036, 0.034)],
-             "offwhite", sides=8, hint=(0, 0, 1))
+             "offwhite", sides=N, hint=(0, 0, 1), sub=SU)
         loft(f"sole_{side}", [(V((x, 0.09, 0.016)), 0.05, 0.016), (V((x, -0.0, 0.016)), 0.058, 0.016),
-                              (V((x, -0.17, 0.016)), 0.042, 0.016)], "amber", sides=8,
-             hint=(0, 0, 1))
+                              (V((x, -0.17, 0.016)), 0.042, 0.016)], "amber", sides=N,
+             hint=(0, 0, 1), sub=SU)
 
     # Drawstrings: two short strings from the collar, amber only on the tips.
     for sgn, side in ((1, "l"), (-1, "r")):
@@ -448,7 +516,7 @@ def main():
                    if any(m and m.name == "amber" for m in o.data.materials))
     print("AMBER_OBJECTS", amber)
     print("POLYS", sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH"))
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v2.blend" if STD else "spica-v1.blend"))
     print("SAVED")
 
 

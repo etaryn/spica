@@ -9,7 +9,7 @@ SCRIPT=build_model.py
 [ "$V" = "v3" ] && SCRIPT=hires.py
 ARGS="-P assets/model/build/$SCRIPT"
 [ "$V" = "v5" ] && ARGS="-P assets/model/build/base_prepare.py -P assets/model/build/hair.py" && export SPICA_WIDE=1   # work in progress: hair rebuilt from simulated locks
-[ "$V" = "v4" ] && ARGS="-P assets/model/build/base_prepare.py -P assets/model/build/hair_edit.py -P assets/model/build/hair_settle.py" && export SPICA_WIDE=1
+[ "$V" = "v4" ] && ARGS="-P assets/model/build/base_prepare.py -P assets/model/build/hair_cards.py" && export SPICA_WIDE=1
 "$B" -b $ARGS 2>&1 | grep -E 'AMBER|POLYS|SAVED|Error|Traceback|line '
 "$B" -b "assets/model/spica-$V.blend" -P assets/model/build/render.py -- "assets/model/renders/$V" 2>&1 | grep -E 'RENDERED|Error|Traceback|line '
 node assets/model/build/compose.mjs "assets/model/renders/$V"

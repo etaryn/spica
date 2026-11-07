@@ -1,7 +1,7 @@
 """
 Turns the downloaded VRoid sample (assets/model/base/sample_model.glb, a .vrm renamed) into her
 starting point: clothes and helper meshes stripped, skin and hair on her toon materials with the
-navy outline, spring bones and expression shape keys kept. Saves assets/model/spica-v4.blend.
+navy outline, spring bones and expression shape keys kept. Saves assets/model/spica-base.blend (a stage, not the model).
 Run: blender -b -P assets/model/build/base_prepare.py
 """
 import os
@@ -162,7 +162,7 @@ def main():
 
     n_poly = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     print("POLYS_TOTAL", n_poly, "BODY", len(body.data.polygons))
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v4.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-base.blend"))
     print("SAVED")
 
 

@@ -1,13 +1,13 @@
 """
-Her hair, built from the ground up (the sample's 87 stiff hair cards are deleted): a scalp cap and
-about sixty locks, every lock a chain pinned at its root on the skull and dropped under gravity
-against her head, face, neck and shoulders. Locks come in clumps of three with staggered lengths, so
-tips feather. Wolf cut: a layered bob that flicks outward, a heavy diagonal fringe over her right and
-a shorter one over her left, a long staggered layer from the back-left that drapes over her left
-shoulder, a tied tuft in front of her left ear with two crossed amber stars, and cubes dissolving
-from the longest layer. The chains are bound to the head bone; spring physics for video comes later.
+Her hair: an asymmetric bob, her left side longer. About ninety locks, each a chain pinned at its
+root on her skull and dropped under gravity against her head, neck and shoulders, so it hangs the
+way hair does. Locks come in clumps of three with staggered lengths, so the tips feather: a scalp
+cap, a bob every 15 degrees round her head (chin length on her right, nape at the back, growing
+long on her left until it reaches her chest), a simple fringe, and two crossed amber stars on a navy
+band on the long left side at ear height. The chains are bound to the head bone; spring physics for
+video comes later.
 Runs after base_prepare.py in the same Blender session:
-  blender -b -P base_prepare.py -P hair.py        (run.sh v5 does this; work in progress)
+  blender -b -P base_prepare.py -P hair.py        (run.sh v5 does this)
 Z is up, she faces -Y, her left is +X.
 """
 import math
@@ -60,15 +60,6 @@ def finish_lock(name, secs, mat, outline, sub=1, th=0.0016, apex=True, hint=(1, 
     return ob
 
 
-def lock_secs(path_pts, widths, n=14):
-    """Sections along a spline through path_pts with widths interpolated per control point."""
-    sm = spline(path_pts, n)
-    secs = []
-    for p, s in sm:
-        k = min(int(s), len(widths) - 2)
-        w = widths[k] + (widths[k + 1] - widths[k]) * (s - k)
-        secs.append((p, w, max(0.0035, w * 0.30)))
-    return secs
 
 
 def amber_toon():
@@ -147,47 +138,8 @@ def star(name, r_out, mat, outline):
     return mesh_part(name, bm, mat, outline, 0.0016, sub=1)
 
 
-def tie_accessories(tuft, outline):
-    """Navy band round the settled tuft and two crossed amber stars on it."""
-    vs = sorted(((tuft.matrix_world @ v.co) for v in tuft.data.vertices), key=lambda p: -p.z)
-    top, tip = vs[0].z, vs[-1].z
-    ring = [p for p in vs if abs(p.z - (top - (top - tip) * 0.4)) < 0.004]
-    e = sum(ring, V()) / len(ring)
-    navy = flat("navy", "1E2340")
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.0105, minor_radius=0.0040, major_segments=24,
-                                     minor_segments=10, location=e)
-    band = bpy.context.active_object
-    band.name = "tie_band"
-    band.data.materials.append(navy)
-    for p in band.data.polygons:
-        p.use_smooth = True
-    n = V((0.55, -0.85, 0)).normalized()
-    q = n.to_track_quat("Z", "Y")
-    amber = amber_toon()
-    big = star("tie_star_big", 0.026, amber, outline)
-    big.location = e + n * 0.016
-    big.rotation_euler = q.to_euler()
-    small = star("tie_star_small", 0.014, amber, outline)
-    small.location = big.location + q @ V((0.022, 0.017, 0.003))
-    small.rotation_euler = (q @ Euler((0, 0, math.radians(36))).to_quaternion()).to_euler()
-    return e
 
 
-def cubes(origin, hair_mat, amber, outline):
-    ox, oy, oz = origin
-    spec = [(0.000, -0.040, 0.026, 20, hair_mat), (0.018, -0.075, 0.022, 48, hair_mat),
-            (-0.014, -0.108, 0.018, 12, hair_mat), (0.024, -0.140, 0.022, 33, hair_mat),
-            (-0.008, -0.178, 0.015, 60, amber), (0.022, -0.212, 0.012, 25, amber),
-            (-0.018, -0.242, 0.010, 40, amber)]
-    for i, (dx, dz, s, rot, mat) in enumerate(spec):
-        bpy.ops.mesh.primitive_cube_add(size=s, location=(ox + dx, oy - 0.004 * i, oz + dz))
-        c = bpy.context.active_object
-        c.name = f"cube_{i + 1}"
-        c.rotation_euler = (math.radians(rot), math.radians(rot * 0.6), math.radians(rot * 1.3))
-        c.data.materials.append(mat)
-        c.data.materials.append(outline)
-        mod = c.modifiers.new("outline", "SOLIDIFY")
-        mod.thickness, mod.offset, mod.use_flip_normals, mod.material_offset = 0.0018, 1.0, True, 1
 
 
 def recolor_eyes():
@@ -322,103 +274,14 @@ def waypoint_path(way, off):
     return resample([surf_pt(az, el, off - 0.001 * j) for j, (az, el) in enumerate(way)], N)
 
 
-LONG_PATH = [V(c) for c in [(0.06, 0.12, 1.47), (0.095, 0.11, 1.41), (0.115, 0.07, 1.385), (0.12, 0.0, 1.375),
-                            (0.112, -0.06, 1.355), (0.105, -0.105, 1.30), (0.097, -0.122, 1.22),
-                            (0.092, -0.126, 1.15)]]
 
 
-BODY_BVH = None
 
 
-def snap_to_body(p, reach=0.12):
-    """Pull a point within `reach` of the body onto its surface, so held hair lies on the neck and shoulder."""
-    loc, nrm, _, dist = BODY_BVH.find_nearest(p)
-    if loc is not None and dist < reach:
-        return loc + nrm * 0.016
-    return p
 
 
-def specs():
-    """Every lock: name, initial chain, pinned particles, pull back to the shaped rest, width, clump, hint."""
-    rnd = random.Random(7)
-    out = []
-
-    def clump(name, chain_fn, pin, rest, width, hint):
-        """Three locks per clump: the main one and two shorter, narrower neighbours."""
-        for k, (cut, off, wsc, rs) in enumerate(((1.0, 0.0, 1.0, 1.0), (0.84, -0.55, 0.72, 1.0), (0.70, 0.55, 0.62, 1.0))):
-            ch = chain_fn(cut, off * width)
-            twist = math.radians(rnd.uniform(-55, 55))
-            h = V(hint)
-            hv = V(h.x * math.cos(twist) - h.y * math.sin(twist), h.x * math.sin(twist) + h.y * math.cos(twist), h.z)
-            out.append(dict(name=f"{name}_{k}", chain=ch, pin=pin, rest=rest * rs,
-                            width=width * wsc * rnd.uniform(0.75, 1.25), group=name, hint=tuple(hv)))
-        # one thin strand beside each clump breaks up the panel look
-        out.append(dict(name=f"{name}_s", chain=chain_fn(0.95, rnd.choice([-1.2, 1.2]) * width), pin=pin,
-                        rest=rest, width=0.008, group=name + "s", hint=hint))
-
-    # Layered bob: roots round the crown and sides, alternate clumps one layer further out.
-    # Every 15 degrees round the head (her left front is the tie tuft), lengths from the cheek at the
-    # front to the nape at the back, every other clump one layer further out.
-    azs = list(range(-165, -59, 15)) + list(range(90, 181, 15))
-    for i, az in enumerate(azs):
-        a_ = abs(az)
-        drop = (0.06 if a_ <= 70 else 0.075 if a_ <= 100 else 0.09 if a_ <= 140 else 0.105)
-        drop *= 1 + 0.12 * math.sin(i * 1.7)
-        layer = rnd.choice([0.0, 0.03, 0.06, 0.09])
-        az += rnd.uniform(-4, 4)
-        a = math.radians(az)
-        side = V(math.cos(a), math.sin(a), 0)
-
-        def fn(cut, off, az=az, drop=drop, layer=layer, side=side, i=i):
-            ch = bob_path(az, 48, -8, drop * cut, 0.008 + 0.004 * (1 - cut) * 6,
-                          0.012 + layer * 0.1, wig=0.003, phase=i)
-            return [p + side * off for p in ch]
-        clump(f"bob{int(round(az)):+d}", fn, 10, 0.020, (0.028 if a_ <= 75 else 0.036) * rnd.uniform(0.75, 1.25),
-              radial_hint(az))  # held while it follows the skull
-
-    # Fringe: heavy diagonal sweep over her right (-X), shorter and higher on her left.
-    right = [[(18, 62), (0, 42), (-20, 22), (-31, 4)], [(24, 64), (8, 46), (-8, 28), (-20, 8)],
-             [(30, 66), (14, 48), (0, 34), (-8, 14)]]
-    left = [[(40, 64), (36, 48), (30, 32), (22, 14)], [(50, 60), (48, 44), (44, 28), (38, 12)]]
-    for tag, group, w in (("r", right, 0.026), ("l", left, 0.022)):
-        for i, way in enumerate(group):
-            base = waypoint_path(way, 0.011)
-
-            def fn(cut, off, base=base):
-                end = max(6, int(round(len(base) * cut)))
-                part = base[:end]
-                lat = V(1, 0, 0)
-                return resample([p + lat * off for p in part], N)
-            clump(f"fringe_{tag}{i + 1}", fn, 9, 0.07, w, tuple(base[2] - HC))
-
-    # Long layer: staggered locks from the left side of the head, just behind the tuft. They fall in
-    # front of her shoulder onto her chest; longest toward the front.
-    for i, (az, drop) in enumerate(zip((84, 92, 100, 108, 116, 124, 132), (0.30, 0.25, 0.28, 0.21, 0.24, 0.17, 0.20))):
-        az += rnd.uniform(-2, 2)
-        lane_off = 0.0
-
-        def fn(az=az, drop=drop, i=i):
-            ch = bob_path(az, 44, 0, drop, 0.0, 0.016 + 0.004 * (i % 2), wig=0.004, phase=i)
-            # lean forward as it falls, so it lands on the front of the shoulder, not the back
-            return [p + V(0.0, -0.075 * max(0.0, (p.z - 1.50) / -0.3), 0.0) for p in ch]
-        out.append(dict(name=f"long_{i + 1}", chain=fn(), pin=10, rest=0.0, width=0.019 * rnd.uniform(0.85, 1.2),
-                        group=f"long{i}", hint=radial_hint(az)))
-
-    # A few thin flyaways escaping the bob.
-    for i, (az, el) in enumerate([(-100, 40), (125, 36), (150, 30), (-150, 34), (95, 46), (-70, 48)]):
-        base = bob_path(az, el, -20, 0.03 + 0.02 * (i % 2), 0.02, off=0.02, wig=0.006, phase=i * 2)
-        out.append(dict(name=f"fly_{i + 1}", chain=base, pin=10, rest=0.01, width=0.0045, group=f"fly{i}",
-                        hint=radial_hint(az)))
-
-    # The tuft in front of her left ear, short and tied.
-    tuft = bob_path(74, 26, 8, 0.042, 0.016, off=0.016)
-    out.append(dict(name="tuft", chain=tuft, pin=9, rest=0.12, width=0.013, group="tuft", hint=radial_hint(74)))
-    return out
 
 
-def radial_hint(az):
-    a = math.radians(az)
-    return (math.sin(a), -math.cos(a), 0.0)
 
 
 # ---------------------------------------------------------------- the simulation
@@ -580,6 +443,103 @@ def he_mesh(name, bm, mat, outline):
     return ob
 
 
+def radial_hint(az):
+    a = math.radians(az)
+    return (math.sin(a), -math.cos(a), 0.0)
+
+
+def left_drop(az):
+    """How far a left-side clump hangs below the skull: longest just in front of the ear."""
+    pts = [(60, 0.24), (75, 0.28), (90, 0.31), (105, 0.29), (120, 0.24), (135, 0.18), (150, 0.13),
+           (165, 0.115), (180, 0.105)]
+    for (a0, d0), (a1, d1) in zip(pts, pts[1:]):
+        if a0 <= az <= a1:
+            return d0 + (d1 - d0) * (az - a0) / (a1 - a0)
+    return pts[-1][1]
+
+
+def specs():
+    """Every lock: name, initial chain, pinned particles, pull back to the shaped rest, width, clump, hint."""
+    rnd = random.Random(11)
+    out = []
+
+    def clump(name, chain_fn, pin, rest, width, hint, tie=False):
+        """Three locks per clump (the main one and two shorter, narrower neighbours) and a thin strand."""
+        for k, (cut, off, wsc) in enumerate(((1.0, 0.0, 1.0), (0.88, -0.6, 0.8))):
+            twist = math.radians(rnd.uniform(-10, 10))
+            h = V(hint)
+            hv = V(h.x * math.cos(twist) - h.y * math.sin(twist), h.x * math.sin(twist) + h.y * math.cos(twist), h.z)
+            out.append(dict(name=f"{name}_{k}", chain=chain_fn(cut, off * width), pin=pin, rest=rest,
+                            width=width * wsc * rnd.uniform(0.92, 1.08), group=name, hint=tuple(hv),
+                            tie=tie and k == 0))
+
+    # The bob: a clump every 20 degrees. Her right and the back are chin to nape; her left keeps growing
+    # until it reaches her chest, falling in front of her shoulder.
+    for i, az in enumerate(list(range(-160, -59, 20)) + list(range(60, 181, 20))):
+        a_ = abs(az)
+        left = az > 0
+        if left:
+            drop = left_drop(az)
+        else:
+            drop = 0.06 if a_ <= 70 else 0.075 if a_ <= 100 else 0.09 if a_ <= 140 else 0.105
+        drop *= 1 + 0.10 * math.sin(i * 1.7)
+        layer = 0.05 * (i % 2)
+        az += rnd.uniform(-2, 2)
+        a = math.radians(az)
+        side = V(math.cos(a), math.sin(a), 0)
+        long_side = left and az < 140
+
+        def fn(cut, off, az=az, drop=drop, layer=layer, side=side, i=i, long_side=long_side):
+            if long_side:
+                ch = bob_path(az, 44, 0, drop * cut, 0.0, 0.016 + 0.004 * (i % 2), wig=0.002, phase=i)
+                # lean forward as it falls, so it lands on the front of the shoulder, not the back
+                ch = [p + V(0.0, -0.075 * max(0.0, (p.z - 1.50) / -0.3), 0.0) for p in ch]
+            else:
+                ch = bob_path(az, 48, -8, drop * cut, 0.008 + 0.004 * (1 - cut) * 6, 0.012 + layer * 0.1,
+                              wig=0.002, phase=i)
+            return [p + side * off for p in ch]
+        clump(f"bob{int(round(az)):+d}", fn, 10, 0.020 if not long_side else 0.0,
+              (0.040 if a_ <= 75 else 0.050) * rnd.uniform(0.92, 1.08), radial_hint(az),
+              tie=(left and 70 <= az <= 90 and not any(sp["tie"] for sp in out)))
+
+    # A simple fringe across the forehead, swept a little to her right.
+    for i, az0 in enumerate((-22, -7, 8, 23)):
+        way = [(az0 + 8, 62), (az0, 44), (az0 - 8, 26), (az0 - 14, 12)]
+        base_ = waypoint_path(way, 0.011)
+
+        def fn(cut, off, base_=base_):
+            end = max(6, int(round(len(base_) * cut)))
+            return resample([p + V(1, 0, 0) * off for p in base_[:end]], N)
+        clump(f"fringe{i + 1}", fn, 9, 0.07, 0.036, tuple(base_[2] - HC))
+    return out
+
+
+def tie_accessories(lock, outline, frac=0.16):
+    """A navy band round the long left side at ear height and two crossed amber stars on it."""
+    vs = sorted(((lock.matrix_world @ v.co) for v in lock.data.vertices), key=lambda p: -p.z)
+    top, tip = vs[0].z, vs[-1].z
+    ring = [p for p in vs if abs(p.z - (top - (top - tip) * frac)) < 0.004]
+    e = sum(ring, V()) / len(ring)
+    navy = flat("navy", "1E2340")
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.0125, minor_radius=0.0042, major_segments=24,
+                                     minor_segments=10, location=e)
+    band = bpy.context.active_object
+    band.name = "tie_band"
+    band.data.materials.append(navy)
+    for p in band.data.polygons:
+        p.use_smooth = True
+    n = V((0.55, -0.85, 0)).normalized()
+    q = n.to_track_quat("Z", "Y")
+    amber = amber_toon()
+    big = star("tie_star_big", 0.026, amber, outline)
+    big.location = e + n * 0.024
+    big.rotation_euler = q.to_euler()
+    small = star("tie_star_small", 0.014, amber, outline)
+    small.location = big.location + q @ V((0.022, 0.017, 0.003))
+    small.rotation_euler = (q @ Euler((0, 0, math.radians(36))).to_quaternion()).to_euler()
+    return e
+
+
 def main():
     outline = bpy.data.materials["outline"]
     hair_mat = bpy.data.materials["hair"]
@@ -591,37 +551,29 @@ def main():
     # Only the body is a collider; the face mesh holds eyeballs and decals, which push hair about.
     bvhs = [skin_bvh(bpy.data.objects["Body"])]
     HEAD_BVHS.extend(bvhs + [skin_bvh(bpy.data.objects["Face"])])
-    global BODY_BVH
-    BODY_BVH = bvhs[0]
     build_cap(outline, hair_mat)
     sp = specs()
     settled = sim_chains(sp, bvhs)
-    if os.environ.get("SPICA_DEBUG"):
-        for s_, c_ in zip(sp, settled):
-            if s_["name"].endswith("_0") or s_["name"] in ("tuft",):
-                print("LOCK", s_["name"], [tuple(round(x, 3) for x in c_[i]) for i in (0, 5, 10, 17)])
-    long_low = None
+    tie_lock = None
     for s, c in zip(sp, settled):
         w = s["width"]
         secs = [(p, taper(j / (len(c) - 1), w), 0.0) for j, p in enumerate(c)]
         secs = [(p, wd, max(0.0025 if w < 0.01 else 0.0035, wd * 0.30)) for p, wd, _ in secs]
-        finish_lock(s["name"], secs, hair_mat, outline, hint=s["hint"])
-        if s["name"].startswith("long_"):
-            low = min(c, key=lambda p: p.z)
-            if long_low is None or low.z < long_low.z:
-                long_low = low
+        ob = finish_lock(s["name"], secs, hair_mat, outline, hint=s["hint"])
+        if s["tie"]:
+            tie_lock = ob
     skin_bvhs = bvhs + [skin_bvh(bpy.data.objects["face_outline"])]
-    pushed = sum(bake_and_push(o, skin_bvhs) for o in list(bpy.data.objects)
-                 if o.type == "MESH" and o.name.startswith(("bob", "fringe_", "long_", "fly_")) or o.name == "tuft")
+    pushed = 0
+    for o in list(bpy.data.objects):
+        if o.type == "MESH" and o.name.startswith(("bob", "fringe")):
+            pushed += bake_and_push(o, skin_bvhs)
     print("PUSHED", pushed)
-    tie_accessories(bpy.data.objects["tuft"], outline)
-    cubes(long_low, hair_mat, bpy.data.materials["amber"], outline)
+    tie_accessories(tie_lock, outline)
     for o in bpy.data.objects:
-        if o.type == "MESH" and (o.name.startswith(("bob", "fringe_", "long_", "fly_", "cube_", "tie_"))
-                                 or o.name in ("tuft", "hair_cap")):
+        if o.type == "MESH" and (o.name.startswith(("bob", "fringe", "tie_")) or o.name == "hair_cap"):
             bind_to_head(o)
     recolor_eyes()
-    print("LOCKS", len(sp), "LONG_LOW", tuple(round(x, 3) for x in long_low))
+    print("LOCKS", len(sp))
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v5.blend"))
     print("SAVED")
 

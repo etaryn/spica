@@ -267,15 +267,26 @@ def fit_head():
     HR = (hi - lo) / 2
     # The face mesh stops behind the ears; the skull runs on to about y = 0.11 (read off the hair
     # that sat on it), so front to back is set by hand.
-    HC.y, HR.y = 0.022, 0.088
+    HC.y, HR.y = 0.02, 0.088
     print("HEAD", tuple(round(x, 3) for x in HC), tuple(round(x, 3) for x in HR))
 
 
-def head_pt(az, el, s=1.0):
-    """A point on the head ellipsoid (scaled by s): az from the front toward her left, el above the horizon."""
+HEAD_BVHS = []
+
+
+def surf_pt(az, el, off=0.0):
+    """The point `off` metres outside her skin in direction (az, el) from the head centre: az from the
+    front toward her left, el above the horizon. Found by casting a ray at the real head surface."""
     a, e = math.radians(az), math.radians(el)
-    return HC + V(HR.x * s * math.cos(e) * math.sin(a), -HR.y * s * math.cos(e) * math.cos(a),
-                  HR.z * s * math.sin(e))
+    d = V(math.cos(e) * math.sin(a), -math.cos(e) * math.cos(a), math.sin(e))
+    best = None
+    for bvh in HEAD_BVHS:
+        loc, _, _, dist = bvh.ray_cast(HC, d)
+        if loc is not None and (best is None or dist < best):
+            best = dist
+    if best is None:
+        best = 0.09
+    return HC + d * (best + off)
 
 
 def resample(pts, n):
@@ -293,9 +304,9 @@ def resample(pts, n):
     return out
 
 
-def bob_path(az, root_el, hug_to, drop, flick, s=1.14, wig=0.0, phase=0.0):
+def bob_path(az, root_el, hug_to, drop, flick, off=0.012, wig=0.0, phase=0.0):
     """Down the skull from root_el to hug_to, then hanging `drop` metres with the tips flicking out."""
-    pts = [head_pt(az, root_el + (hug_to - root_el) * k / 8, s) for k in range(9)]
+    pts = [surf_pt(az, root_el + (hug_to - root_el) * k / 8, off) for k in range(9)]
     last = pts[-1]
     a = math.radians(az)
     out = V(math.sin(a), -math.cos(a), 0)
@@ -306,8 +317,8 @@ def bob_path(az, root_el, hug_to, drop, flick, s=1.14, wig=0.0, phase=0.0):
     return resample(pts, N)
 
 
-def waypoint_path(way, s):
-    return resample([head_pt(az, el, s - 0.012 * j) for j, (az, el) in enumerate(way)], N)
+def waypoint_path(way, off):
+    return resample([surf_pt(az, el, off - 0.001 * j) for j, (az, el) in enumerate(way)], N)
 
 
 LONG_PATH = [V(c) for c in [(0.06, 0.12, 1.47), (0.095, 0.11, 1.41), (0.115, 0.07, 1.385), (0.12, 0.0, 1.375),
@@ -339,20 +350,22 @@ def specs():
                             group=name, hint=hint))
 
     # Layered bob: roots round the crown and sides, alternate clumps one layer further out.
-    bob_az = {-62: 0.075, -86: 0.105, -112: 0.115, -138: 0.125, -164: 0.13, 62: None, 86: 0.105,
-              112: 0.115, 138: 0.125, 164: 0.13, 180: 0.135}
-    for i, (az, drop) in enumerate(bob_az.items()):
-        if drop is None:
-            continue  # her left front is the tie tuft
+    # Every 15 degrees round the head (her left front is the tie tuft), lengths from the cheek at the
+    # front to the nape at the back, every other clump one layer further out.
+    azs = list(range(-165, -44, 15)) + list(range(90, 181, 15))
+    for i, az in enumerate(azs):
+        a_ = abs(az)
+        drop = (0.06 if a_ <= 70 else 0.075 if a_ <= 100 else 0.09 if a_ <= 140 else 0.105)
+        drop *= 1 + 0.12 * math.sin(i * 1.7)
         layer = (i % 2) * 0.06
         a = math.radians(az)
         side = V(math.cos(a), math.sin(a), 0)
 
         def fn(cut, off, az=az, drop=drop, layer=layer, side=side, i=i):
-            ch = bob_path(az, 54 - 6 * (i % 3), -8, drop * cut, 0.020 + 0.012 * (1 - cut) * 6, 1.13 + layer,
-                          wig=0.003, phase=i)
+            ch = bob_path(az, 54 - 6 * (i % 3), -8, drop * cut, 0.008 + 0.004 * (1 - cut) * 6,
+                          0.012 + layer * 0.1, wig=0.003, phase=i)
             return [p + side * off for p in ch]
-        clump(f"bob{az:+d}", fn, 5, 0.020, 0.030, radial_hint(az))
+        clump(f"bob{az:+d}", fn, 10, 0.020, 0.036, radial_hint(az))  # held while it follows the skull
 
     # Fringe: heavy diagonal sweep over her right (-X), shorter and higher on her left.
     right = [[(18, 62), (0, 42), (-20, 22), (-31, 4)], [(24, 64), (8, 46), (-8, 28), (-20, 8)],
@@ -360,7 +373,7 @@ def specs():
     left = [[(40, 64), (36, 48), (30, 32), (22, 14)], [(50, 60), (48, 44), (44, 28), (38, 12)]]
     for tag, group, w in (("r", right, 0.026), ("l", left, 0.022)):
         for i, way in enumerate(group):
-            base = waypoint_path(way, 1.12)
+            base = waypoint_path(way, 0.011)
 
             def fn(cut, off, base=base):
                 end = max(6, int(round(len(base) * cut)))
@@ -387,13 +400,13 @@ def specs():
 
     # A few thin flyaways escaping the bob.
     for i, (az, el) in enumerate([(-100, 40), (125, 36), (150, 30), (-150, 34), (95, 46), (-70, 48)]):
-        base = bob_path(az, el, -30, 0.09 + 0.03 * (i % 2), 0.05, s=1.2, wig=0.01, phase=i * 2)
-        out.append(dict(name=f"fly_{i + 1}", chain=base, pin=4, rest=0.004, width=0.0045, group=f"fly{i}",
+        base = bob_path(az, el, -20, 0.03 + 0.02 * (i % 2), 0.02, off=0.02, wig=0.006, phase=i * 2)
+        out.append(dict(name=f"fly_{i + 1}", chain=base, pin=10, rest=0.01, width=0.0045, group=f"fly{i}",
                         hint=radial_hint(az)))
 
     # The tuft in front of her left ear, short and tied.
-    tuft = bob_path(74, 26, 8, 0.042, 0.016, s=1.18)
-    out.append(dict(name="tuft", chain=tuft, pin=6, rest=0.12, width=0.013, group="tuft", hint=radial_hint(74)))
+    tuft = bob_path(74, 26, 8, 0.042, 0.016, off=0.016)
+    out.append(dict(name="tuft", chain=tuft, pin=9, rest=0.12, width=0.013, group="tuft", hint=radial_hint(74)))
     return out
 
 
@@ -419,18 +432,14 @@ def sim_chains(specs_, bvhs):
     pins = [s["pin"] for s in specs_]
     rest = [s["rest"] for s in specs_]
     groups = [s["group"] for s in specs_]
-    lim = 1.0 + RAD / min(HR)
 
     def collide(p):
+        if p.z > 1.385:  # above the chin the hair is placed on the skin by surf_pt; the body mesh
+            return p     # there (scalp, jaw underside) pushes it the wrong way
         for bvh in bvhs:
             loc, nrm, _, _ = bvh.find_nearest(p)
             if loc is not None and (p - loc).dot(nrm) < RAD:
                 p = loc + nrm * RAD
-        q = p - HC
-        e = V(q.x / (HR.x * 0.97), q.y / (HR.y * 0.97), q.z / (HR.z * 0.97))
-        if 0 < e.length < lim:
-            e = e.normalized() * lim
-            p = HC + V(e.x * HR.x * 0.97, e.y * HR.y * 0.97, e.z * HR.z * 0.97)
         return p
 
     for f in range(FRAMES):
@@ -490,7 +499,10 @@ def build_cap(outline, hair_mat):
             drop.append(f)
     bmesh.ops.delete(bm, geom=drop, context="FACES")
     for v in bm.verts:
-        v.co = HC + V(v.co.x * HR.x * 1.10, v.co.y * HR.y * 1.10, v.co.z * HR.z * 1.10)
+        d = v.co.normalized()
+        el = math.degrees(math.asin(max(-1.0, min(1.0, d.z))))
+        az = math.degrees(math.atan2(d.x, -d.y))
+        v.co = surf_pt(az, el, 0.006)
     return he_mesh("hair_cap", bm, hair_mat, outline)
 
 
@@ -516,11 +528,13 @@ def main():
     fit_head()
     for o in [o for o in bpy.data.objects if o.name.startswith("Hair0")]:
         bpy.data.objects.remove(o)
-    build_cap(outline, hair_mat)
     dg = bpy.context.evaluated_depsgraph_get()
-    bvhs = [BVHTree.FromObject(bpy.data.objects[n], dg) for n in ("Body", "Face")]
+    # Only the body is a collider; the face mesh holds eyeballs and decals, which push hair about.
+    bvhs = [BVHTree.FromObject(bpy.data.objects["Body"], dg)]
+    HEAD_BVHS.extend(bvhs + [BVHTree.FromObject(bpy.data.objects["Face"], dg)])
     global BODY_BVH
     BODY_BVH = bvhs[0]
+    build_cap(outline, hair_mat)
     sp = specs()
     settled = sim_chains(sp, bvhs)
     if os.environ.get("SPICA_DEBUG"):

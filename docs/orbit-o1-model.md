@@ -1,0 +1,57 @@
+# Orbit O1 — her 3D model
+
+Status: draft for Ethan's approval (2026-11-07). Look: `docs/orbit-o1-character-brief.md` (source of
+truth, not repeated here). Branch: `orbit/o1-model`.
+
+## Goal
+A fixed, rigged, toon-shaded 3D Spica that the post engine can turn into stills, and later video.
+This phase delivers the model and a preset of animations; posting stays with the existing sprite
+seam until O2.
+
+## Decisions (Ethan, 2026-11-07)
+- No hand-posed sprites: a rigged model with a **preset of animation clips**; any frame can be
+  rendered as a still.
+- Static reference model first, **v1 = lowest poly**, as proof of concept and design check.
+- Tool: **Blender 5.2.3 LTS** (`C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`),
+  driven headless by Python scripts.
+- Proposed (take as yes unless he says no): face stays clean even in v1 (brief); iris and skin hex
+  as proposed, tuned by eye; glitch cubes are real geometry (a few); emotion-flare effects are
+  never in the model; one mid-sized version first, the version arc comes later.
+
+## Seam with the post engine
+Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tags
+(`assets/poses/poses.json`). Stage 6 renders any clip frame to that format (plus a higher-res
+master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
+rule: the old PNGs go in the same slice that ships real renders.
+
+## Layout
+- `assets/model/spica.blend`: the model (kept in git; binary, small at v1).
+- `assets/model/build/`: Python build scripts (`build_model.py`, later `rig.py`, `anim.py`,
+  `render.py`), so the model is reproducible from code and every change is a diff.
+- `assets/model/renders/`: git-ignored review renders.
+- Model parts as separate named objects: head, face plane (eye/mouth textures), fringe-right,
+  fringe-left, fringe-cover (hurt swap), hair clumps (12–16), long layer + cubes, tie + two stars,
+  torso/hoodie, hood, tee, shorts, tights, sneakers, hands. Built with rigging in mind: edge loops
+  at joints, nothing dangling.
+
+## Stages and checks
+1. **Reference still (v1).** Model, toon material with ink-navy outline, palette from the brief.
+   Checks: front/side/back/three-quarter turntable renders; 64 px black-silhouette test; palette
+   sampled from the render matches the hex codes; amber appears only where the brief allows
+   (scripted pixel check). **Ethan reviews the look.**
+2. **Revise** until Ethan says locked.
+3. **Face.** Swappable eye/mouth textures for the five expressions; hurt fringe swap; hood-up.
+4. **Rig.** Humanoid armature with fingers; hair, hood, tie and cubes follow the head.
+   Check: stress poses (arms up, sit, hood up) without clipping.
+5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit,
+   smirk, flustered). Check: playblast of each.
+6. **Export and integration.** `.glb` + `.blend`; `render.py` makes sprites from clip frames; one
+   end-to-end test post through `pnpm eval --llm=fake`.
+
+## Limits (be honest)
+Rendered looks are judged by Ethan; Claude checks proportions, silhouette, palette and
+consistency from renders. Hair is the highest risk. Procedural animation is functional, not
+polished.
+
+## Out of scope
+Version arc beyond v1, voice, video output, emotion-flare effects, publishing (O2+).

@@ -11,3 +11,4 @@ next-env.d.ts
 .pnpm-store/
 
 .data/
+assets/model/renders/

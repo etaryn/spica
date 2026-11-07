@@ -306,7 +306,8 @@ def resample(pts, n):
 
 def bob_path(az, root_el, hug_to, drop, flick, off=0.012, wig=0.0, phase=0.0):
     """Down the skull from root_el to hug_to, then hanging `drop` metres with the tips flicking out."""
-    pts = [surf_pt(az, root_el + (hug_to - root_el) * k / 8, off) for k in range(9)]
+    pts = [surf_pt(az, root_el + (hug_to - root_el) * k / 8,
+                   off * min(1.0, k / 3) - 0.007 * (1 - min(1.0, k / 3))) for k in range(9)]
     last = pts[-1]
     a = math.radians(az)
     out = V(math.sin(a), -math.cos(a), 0)
@@ -329,7 +330,7 @@ LONG_PATH = [V(c) for c in [(0.06, 0.12, 1.47), (0.095, 0.11, 1.41), (0.115, 0.0
 BODY_BVH = None
 
 
-def snap_to_body(p, reach=0.05):
+def snap_to_body(p, reach=0.12):
     """Pull a point within `reach` of the body onto its surface, so held hair lies on the neck and shoulder."""
     loc, nrm, _, dist = BODY_BVH.find_nearest(p)
     if loc is not None and dist < reach:
@@ -346,29 +347,34 @@ def specs():
         """Three locks per clump: the main one and two shorter, narrower neighbours."""
         for k, (cut, off, wsc, rs) in enumerate(((1.0, 0.0, 1.0, 1.0), (0.84, -0.55, 0.72, 1.0), (0.70, 0.55, 0.62, 1.0))):
             ch = chain_fn(cut, off * width)
-            twist = math.radians(rnd.uniform(-38, 38))
+            twist = math.radians(rnd.uniform(-55, 55))
             h = V(hint)
             hv = V(h.x * math.cos(twist) - h.y * math.sin(twist), h.x * math.sin(twist) + h.y * math.cos(twist), h.z)
             out.append(dict(name=f"{name}_{k}", chain=ch, pin=pin, rest=rest * rs,
-                            width=width * wsc * rnd.uniform(0.8, 1.2), group=name, hint=tuple(hv)))
+                            width=width * wsc * rnd.uniform(0.75, 1.25), group=name, hint=tuple(hv)))
+        # one thin strand beside each clump breaks up the panel look
+        out.append(dict(name=f"{name}_s", chain=chain_fn(0.95, rnd.choice([-1.2, 1.2]) * width), pin=pin,
+                        rest=rest, width=0.008, group=name + "s", hint=hint))
 
     # Layered bob: roots round the crown and sides, alternate clumps one layer further out.
     # Every 15 degrees round the head (her left front is the tie tuft), lengths from the cheek at the
     # front to the nape at the back, every other clump one layer further out.
-    azs = list(range(-165, -44, 15)) + list(range(90, 181, 15))
+    azs = list(range(-165, -59, 15)) + list(range(90, 181, 15))
     for i, az in enumerate(azs):
         a_ = abs(az)
         drop = (0.06 if a_ <= 70 else 0.075 if a_ <= 100 else 0.09 if a_ <= 140 else 0.105)
         drop *= 1 + 0.12 * math.sin(i * 1.7)
-        layer = (i % 2) * 0.06
+        layer = rnd.choice([0.0, 0.03, 0.06, 0.09])
+        az += rnd.uniform(-4, 4)
         a = math.radians(az)
         side = V(math.cos(a), math.sin(a), 0)
 
         def fn(cut, off, az=az, drop=drop, layer=layer, side=side, i=i):
-            ch = bob_path(az, 54 - 6 * (i % 3), -8, drop * cut, 0.008 + 0.004 * (1 - cut) * 6,
+            ch = bob_path(az, 48, -8, drop * cut, 0.008 + 0.004 * (1 - cut) * 6,
                           0.012 + layer * 0.1, wig=0.003, phase=i)
             return [p + side * off for p in ch]
-        clump(f"bob{az:+d}", fn, 10, 0.020, 0.036, radial_hint(az))  # held while it follows the skull
+        clump(f"bob{int(round(az)):+d}", fn, 10, 0.020, (0.028 if a_ <= 75 else 0.036) * rnd.uniform(0.75, 1.25),
+              radial_hint(az))  # held while it follows the skull
 
     # Fringe: heavy diagonal sweep over her right (-X), shorter and higher on her left.
     right = [[(18, 62), (0, 42), (-20, 22), (-31, 4)], [(24, 64), (8, 46), (-8, 28), (-20, 8)],
@@ -385,21 +391,18 @@ def specs():
                 return resample([p + lat * off for p in part], N)
             clump(f"fringe_{tag}{i + 1}", fn, 9, 0.07, w, tuple(base[2] - HC))
 
-    # Long layer: staggered locks from the back-left, held over the shoulder, free below it.
-    lanes = (-0.045, -0.030, -0.015, 0.0, 0.015, 0.030, 0.045)
-    reach = (0.62, 0.78, 0.9, 1.0, 0.86, 0.72, 0.60)
-    for i, (lane, share) in enumerate(zip(lanes, reach)):
-        k = max(4, int(round(len(LONG_PATH) * share)))
-        pts = [p + V(lane * (j / (len(LONG_PATH) - 1)), lane * 0.35 * (j / (len(LONG_PATH) - 1)), 0.0)
-               for j, p in enumerate(LONG_PATH[:k])]
-        chain = [p for p, _ in spline(pts, N - 1)]
-        wig = rnd.uniform(0.003, 0.007)
-        ph = rnd.uniform(0, 6)
-        chain = [p + V(wig * math.sin(ph + 6 * j / (N - 1)), 0, 0) * (j / (N - 1)) for j, p in enumerate(chain)]
-        chain = [snap_to_body(p) if j >= 5 else p for j, p in enumerate(chain)]  # lie on the neck and shoulder
-        out.append(dict(name=f"long_{i + 1}", chain=chain,
-                        pin=max(5, int(round((N - 1) * min(4.5, k - 1.5) / (k - 1)))), rest=0.0, width=0.017,
-                        group="long", hint=(1, -0.5, 0)))
+    # Long layer: staggered locks from the left side of the head, just behind the tuft. They fall in
+    # front of her shoulder onto her chest; longest toward the front.
+    for i, (az, drop) in enumerate(zip((84, 92, 100, 108, 116, 124, 132), (0.30, 0.25, 0.28, 0.21, 0.24, 0.17, 0.20))):
+        az += rnd.uniform(-2, 2)
+        lane_off = 0.0
+
+        def fn(az=az, drop=drop, i=i):
+            ch = bob_path(az, 44, 0, drop, 0.0, 0.016 + 0.004 * (i % 2), wig=0.004, phase=i)
+            # lean forward as it falls, so it lands on the front of the shoulder, not the back
+            return [p + V(0.0, -0.075 * max(0.0, (p.z - 1.50) / -0.3), 0.0) for p in ch]
+        out.append(dict(name=f"long_{i + 1}", chain=fn(), pin=10, rest=0.0, width=0.019 * rnd.uniform(0.85, 1.2),
+                        group=f"long{i}", hint=radial_hint(az)))
 
     # A few thin flyaways escaping the bob.
     for i, (az, el) in enumerate([(-100, 40), (125, 36), (150, 30), (-150, 34), (95, 46), (-70, 48)]):
@@ -420,6 +423,7 @@ def radial_hint(az):
 
 # ---------------------------------------------------------------- the simulation
 RAD = 0.008          # how far a lock's centre line stays off the skin
+MU = 0.6             # contact friction: hair on a slope slides only when it is steeper than this
 SEP = 0.010          # locks of one clump keep at least this far apart
 
 
@@ -437,13 +441,20 @@ def sim_chains(specs_, bvhs):
     groups = [s["group"] for s in specs_]
     rads = [max(RAD, s["width"] * 0.9) for s in specs_]
 
-    def collide(p, rad=RAD):
+    def collide(p, rad=RAD, before=None):
         if p.z > 1.46:  # above the ears the hair is placed on the skin by surf_pt; the body mesh
             return p     # there (scalp) pushes it the wrong way
         for bvh in bvhs:
             loc, nrm, _, _ = bvh.find_nearest(p)
             if loc is not None and (p - loc).dot(nrm) < rad:
+                depth = rad - (p - loc).dot(nrm)
                 p = loc + nrm * rad
+                if before is not None:  # Coulomb friction on the move since the start of the step
+                    mv = p - before
+                    tang = mv - nrm * mv.dot(nrm)
+                    tl = tang.length
+                    if tl > 1e-9:
+                        p = p - tang * (1.0 if tl < MU * depth else MU * depth / tl)
         return p
 
     for f in range(FRAMES):
@@ -453,6 +464,7 @@ def sim_chains(specs_, bvhs):
                 vel = (p - O[ci][i]) * 0.985
                 O[ci][i] = p.copy()
                 c[i] = p + vel + g * dt * dt
+                c[i] = collide(c[i], rads[ci], before=p)
             for i in range(pins[ci]):
                 c[i] = chains[ci][i].copy()
                 O[ci][i] = c[i].copy()

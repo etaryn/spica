@@ -12,3 +12,4 @@ next-env.d.ts
 
 .data/
 assets/model/renders/
+assets/model/base/

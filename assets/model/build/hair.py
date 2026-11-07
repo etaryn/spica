@@ -35,14 +35,14 @@ def V(*a):
 
 
 BEND_W = float(os.environ.get("SPICA_CHAIN_BEND", "0.05"))  # resistance to sharp bends
-FRAMES = int(os.environ.get("SPICA_FRAMES", "150"))
-N = 18  # particles per lock
+FRAMES = int(os.environ.get("SPICA_FRAMES", "240"))
+N = 28  # particles per lock
 HC = V((0, 0.03, 1.495))   # head ellipsoid: set from her face mesh in fit_head()
 HR = V((0.0965, 0.088, 0.106))
 
 
 def finish_lock(name, secs, mat, outline, sub=1, th=0.0016, apex=True, hint=(1, -0.5, 0)):
-    bm = loft_bm(secs, sides=10, apex=apex, hint=hint)
+    bm = loft_bm(secs, sides=14, apex=apex, hint=hint)
     me = bpy.data.meshes.new(name)
     bm.to_mesh(me)
     bm.free()
@@ -333,7 +333,7 @@ def snap_to_body(p, reach=0.05):
     """Pull a point within `reach` of the body onto its surface, so held hair lies on the neck and shoulder."""
     loc, nrm, _, dist = BODY_BVH.find_nearest(p)
     if loc is not None and dist < reach:
-        return loc + nrm * RAD * 1.3
+        return loc + nrm * 0.016
     return p
 
 
@@ -346,8 +346,11 @@ def specs():
         """Three locks per clump: the main one and two shorter, narrower neighbours."""
         for k, (cut, off, wsc, rs) in enumerate(((1.0, 0.0, 1.0, 1.0), (0.84, -0.55, 0.72, 1.0), (0.70, 0.55, 0.62, 1.0))):
             ch = chain_fn(cut, off * width)
-            out.append(dict(name=f"{name}_{k}", chain=ch, pin=pin, rest=rest * rs, width=width * wsc,
-                            group=name, hint=hint))
+            twist = math.radians(rnd.uniform(-38, 38))
+            h = V(hint)
+            hv = V(h.x * math.cos(twist) - h.y * math.sin(twist), h.x * math.sin(twist) + h.y * math.cos(twist), h.z)
+            out.append(dict(name=f"{name}_{k}", chain=ch, pin=pin, rest=rest * rs,
+                            width=width * wsc * rnd.uniform(0.8, 1.2), group=name, hint=tuple(hv)))
 
     # Layered bob: roots round the crown and sides, alternate clumps one layer further out.
     # Every 15 degrees round the head (her left front is the tie tuft), lengths from the cheek at the
@@ -393,10 +396,10 @@ def specs():
         wig = rnd.uniform(0.003, 0.007)
         ph = rnd.uniform(0, 6)
         chain = [p + V(wig * math.sin(ph + 6 * j / (N - 1)), 0, 0) * (j / (N - 1)) for j, p in enumerate(chain)]
-        chain = [snap_to_body(p) if j >= 5 else p for j, p in enumerate(chain)]
+        chain = [snap_to_body(p) if j >= 5 else p for j, p in enumerate(chain)]  # lie on the neck and shoulder
         out.append(dict(name=f"long_{i + 1}", chain=chain,
-                        pin=max(4, int(round((N - 1) * min(4.5, k - 1.5) / (k - 1)))), rest=0.008,
-                        width=0.017, group="long", hint=(1, -0.5, 0)))
+                        pin=max(5, int(round((N - 1) * min(4.5, k - 1.5) / (k - 1)))), rest=0.0, width=0.017,
+                        group="long", hint=(1, -0.5, 0)))
 
     # A few thin flyaways escaping the bob.
     for i, (az, el) in enumerate([(-100, 40), (125, 36), (150, 30), (-150, 34), (95, 46), (-70, 48)]):
@@ -432,14 +435,15 @@ def sim_chains(specs_, bvhs):
     pins = [s["pin"] for s in specs_]
     rest = [s["rest"] for s in specs_]
     groups = [s["group"] for s in specs_]
+    rads = [max(RAD, s["width"] * 0.9) for s in specs_]
 
-    def collide(p):
-        if p.z > 1.385:  # above the chin the hair is placed on the skin by surf_pt; the body mesh
-            return p     # there (scalp, jaw underside) pushes it the wrong way
+    def collide(p, rad=RAD):
+        if p.z > 1.46:  # above the ears the hair is placed on the skin by surf_pt; the body mesh
+            return p     # there (scalp) pushes it the wrong way
         for bvh in bvhs:
             loc, nrm, _, _ = bvh.find_nearest(p)
-            if loc is not None and (p - loc).dot(nrm) < RAD:
-                p = loc + nrm * RAD
+            if loc is not None and (p - loc).dot(nrm) < rad:
+                p = loc + nrm * rad
         return p
 
     for f in range(FRAMES):
@@ -473,7 +477,7 @@ def sim_chains(specs_, bvhs):
                     c[i] = c[i].lerp(chains[ci][i], rest[ci])
                 if it % 3 == 0:
                     for i in range(pins[ci], len(c)):
-                        c[i] = collide(c[i])
+                        c[i] = collide(c[i], rads[ci])
             for a in range(len(P) - 1):
                 if groups[a] == groups[a + 1]:
                     for i in range(max(pins[a], pins[a + 1]), len(P[a])):
@@ -484,8 +488,51 @@ def sim_chains(specs_, bvhs):
                             P[a][i] = P[a][i] - push
     for ci, c in enumerate(P):
         for i in range(pins[ci], len(c)):
-            c[i] = collide(c[i])
+            c[i] = collide(c[i], rads[ci])
     return P
+
+
+def bake_and_push(ob, bvhs, margin=0.0025, reach=0.04):
+    """Apply the lock's subdivision into real vertices, then move any vertex that lies inside her skin
+    out to the surface, so no hair clips into her body."""
+    smooth = ob.modifiers.get("smooth")
+    outline_mod = ob.modifiers.get("outline")
+    if smooth is None:
+        return 0
+    if outline_mod:
+        outline_mod.show_viewport = False
+    dg = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+    old = ob.data
+    ob.data = me
+    bpy.data.meshes.remove(old)
+    ob.modifiers.remove(smooth)
+    if outline_mod:
+        outline_mod.show_viewport = True
+    moved = 0
+    for v in me.vertices:
+        for bvh in bvhs:
+            loc, nrm, _, d = bvh.find_nearest(v.co)
+            if loc is not None and d < reach and (v.co - loc).dot(nrm) < margin:
+                v.co = loc + nrm * margin
+                moved += 1
+    me.update()
+    for p in me.polygons:
+        p.use_smooth = True
+    return moved
+
+
+def skin_bvh(ob):
+    """BVH of an object's posed surface without its outline shell, whose flipped normals would read
+    as 'inside' for every point just outside her skin."""
+    mod = ob.modifiers.get("outline")
+    if mod:
+        mod.show_viewport = False
+    dg = bpy.context.evaluated_depsgraph_get()
+    tree = BVHTree.FromObject(ob, dg)
+    if mod:
+        mod.show_viewport = True
+    return tree
 
 
 def build_cap(outline, hair_mat):
@@ -530,8 +577,8 @@ def main():
         bpy.data.objects.remove(o)
     dg = bpy.context.evaluated_depsgraph_get()
     # Only the body is a collider; the face mesh holds eyeballs and decals, which push hair about.
-    bvhs = [BVHTree.FromObject(bpy.data.objects["Body"], dg)]
-    HEAD_BVHS.extend(bvhs + [BVHTree.FromObject(bpy.data.objects["Face"], dg)])
+    bvhs = [skin_bvh(bpy.data.objects["Body"])]
+    HEAD_BVHS.extend(bvhs + [skin_bvh(bpy.data.objects["Face"])])
     global BODY_BVH
     BODY_BVH = bvhs[0]
     build_cap(outline, hair_mat)
@@ -551,6 +598,10 @@ def main():
             low = min(c, key=lambda p: p.z)
             if long_low is None or low.z < long_low.z:
                 long_low = low
+    skin_bvhs = bvhs + [skin_bvh(bpy.data.objects["face_outline"])]
+    pushed = sum(bake_and_push(o, skin_bvhs) for o in list(bpy.data.objects)
+                 if o.type == "MESH" and o.name.startswith(("bob", "fringe_", "long_", "fly_")) or o.name == "tuft")
+    print("PUSHED", pushed)
     tie_accessories(bpy.data.objects["tuft"], outline)
     cubes(long_low, hair_mat, bpy.data.materials["amber"], outline)
     for o in bpy.data.objects:

@@ -121,7 +121,7 @@ def long_layer(outline, hair_mat):
                for j, p in enumerate(PATH[:n_ctrl])]
         widths = [0.011, 0.015, 0.016, 0.016, 0.015, 0.014, 0.011, 0.0][:n_ctrl]
         widths[-1] = 0.0
-        secs = lock_secs(pts, widths)
+        secs = lock_secs(pts, widths, n=26)
         finish_lock(f"long_{i + 1}", secs, hair_mat, outline)
         if end is None or pts[-1].z < end.z:
             end = pts[-1]
@@ -205,16 +205,23 @@ def star(name, r_out, mat, outline):
     return mesh_part(name, bm, mat, outline, 0.0016, sub=1)
 
 
-def tie(outline, hair_mat):
-    """A short tuft in front of her left ear, tied with a navy band and two crossed amber stars."""
-    bpy.data.objects.remove(card(59))  # the sample's long left lock; the tuft replaces it
+def make_tuft(outline, hair_mat):
+    """A short tuft in front of her left ear (the sample's long left lock is removed for it)."""
+    bpy.data.objects.remove(card(59))
     pts = [V(c) for c in [(0.097, -0.006, 1.545), (0.108, -0.004, 1.505), (0.112, -0.001, 1.470),
                           (0.121, 0.004, 1.440)]]
-    secs = lock_secs(pts, [0.009, 0.012, 0.010, 0.0], n=10)
-    finish_lock("tuft", secs, hair_mat, outline, hint=(1, 0, 0))
-    e = pts[1].lerp(pts[2], 0.4)
+    secs = lock_secs(pts, [0.009, 0.012, 0.010, 0.0], n=16)
+    return finish_lock("tuft", secs, hair_mat, outline, hint=(1, 0, 0))
+
+
+def tie_accessories(tuft, outline):
+    """Navy band round the settled tuft and two crossed amber stars on it."""
+    vs = sorted(((tuft.matrix_world @ v.co) for v in tuft.data.vertices), key=lambda p: -p.z)
+    top, tip = vs[0].z, vs[-1].z
+    ring = [p for p in vs if abs(p.z - (top - (top - tip) * 0.4)) < 0.004]
+    e = sum(ring, V()) / len(ring)
     navy = flat("navy", "1E2340")
-    bpy.ops.mesh.primitive_torus_add(major_radius=0.0125, minor_radius=0.0042, major_segments=24,
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.0105, minor_radius=0.0040, major_segments=24,
                                      minor_segments=10, location=e)
     band = bpy.context.active_object
     band.name = "tie_band"
@@ -282,20 +289,15 @@ def recolor_eyes():
 
 
 def main():
+    """Shape the hair cards: fringe sweep and bob flick. The long layer, the tuft, gravity and the
+    accessories come in hair_settle.py, which lets everything hang under physics."""
     outline = bpy.data.materials["outline"]
     hair_mat = bpy.data.materials["hair"]
     for n in FRINGE:
         warp(card(n), fringe)
     for n in BACK:
         warp(card(n), flick)
-    e = tie(outline, hair_mat)
-    low = long_layer(outline, hair_mat)
-    amber = bpy.data.materials["amber"]
-    cubes(low, hair_mat, amber, outline)
-    recolor_eyes()
-    print("LONG_END", tuple(round(x, 3) for x in low), "TIE", tuple(round(x, 3) for x in e))
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v4.blend"))
-    print("SAVED")
 
 
-main()
+if __name__ == "__main__":
+    main()

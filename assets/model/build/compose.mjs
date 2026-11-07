@@ -9,8 +9,7 @@ const dir = process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.
 const views = ["front", "threeq", "side", "back"];
 const heads = ["head", "head3q", "headback"];
 const BG = { r: 170, g: 179, b: 197, alpha: 1 };
-const W = 600;
-const H = 900;
+const { width: W, height: H } = await sharp(path.join(dir, "view-front.png")).metadata();
 
 const sheet = sharp({ create: { width: W * 4, height: H, channels: 4, background: BG } });
 await sheet

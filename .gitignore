@@ -13,3 +13,4 @@ next-env.d.ts
 .data/
 assets/model/renders/
 assets/model/base/
+assets/model/spica-v4.blend

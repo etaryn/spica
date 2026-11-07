@@ -14,15 +14,16 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else os.path.join(os.path.dirname(os.path.dirname(bpy.data.filepath)), "renders")
 OUT = os.path.abspath(OUT)
 os.makedirs(OUT, exist_ok=True)
-VIEWS = {"front": 0, "threeq": 35, "side": 90, "back": 180, "head": 0, "head3q": 35, "headback": 180}
-ZOOM = {"head": (0.50, 1.50), "head3q": (0.50, 1.50), "headback": (0.50, 1.50)}  # ortho scale, centre height
+VIEWS = {"front": 0, "threeq": 35, "side": 90, "back": 180, "head": 0, "head3q": 35, "headback": 180, "face": 0, "face3q": 35}
+ZOOM = {"head": (0.50, 1.50), "head3q": (0.50, 1.50), "headback": (0.50, 1.50), "face": (0.26, 1.45), "face3q": (0.26, 1.45)}  # ortho scale, centre height
 CZ = 0.86
 
 sc = bpy.context.scene
 sc.render.engine = "BLENDER_EEVEE"
 sc.eevee.taa_render_samples = 24
 sc.render.film_transparent = True
-sc.render.resolution_x, sc.render.resolution_y = 600, 900
+WIDE = os.environ.get("SPICA_WIDE") == "1"  # T-pose base: arms out, so a square frame
+sc.render.resolution_x, sc.render.resolution_y = (900, 900) if WIDE else (600, 900)
 sc.view_settings.view_transform = "Standard"
 sc.render.image_settings.file_format = "PNG"
 sc.render.image_settings.color_mode = "RGBA"
@@ -52,7 +53,7 @@ sc.collection.objects.link(sun)
 
 
 def shoot(name, angle, view="full"):
-    scale, cz = ZOOM.get(view, (1.95, CZ))
+    scale, cz = ZOOM.get(view, (1.9 if WIDE else 1.95, CZ))
     cam.data.ortho_scale = scale
     rig.location = (0, 0, cz)
     rig.rotation_euler = (0, 0, math.radians(angle))

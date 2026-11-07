@@ -29,6 +29,16 @@ Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tag
 master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
 rule: the old PNGs go in the same slice that ships real renders.
 
+## Base model (2026-11-07)
+Built on a VRoid Studio sample export (`sample_model.vrm`, kept in `assets/model/base/`, git-ignored).
+Its VRM metadata reads: commercial use `personalNonProfit`, redistribution not allowed, modification
+**prohibited**. Ethan exported it himself (author field "spica"), so those terms are his to change:
+**re-export with commercial use and modification allowed before any of this ships or is committed.**
+Until then `spica-v4.blend` (the derived model) is git-ignored; only the scripts are committed.
+Pipeline: `base_prepare.py` (import the glTF, strip clothes, her toon materials, outline) then
+`hair_edit.py` (fringe sweep, bob flick, long layer, tie, cubes, eye colours); the .vrm is read as a
+.glb copy, so no VRM add-on is needed. v1 to v3 (own-built) remain until v4 is approved, then go.
+
 ## Tools
 Blender 5.2.3 LTS headless. Skills installed to `~/.claude/skills/` from a vetted markdown-only copy
 of TMHSDigital/Blender-Developer-Tools (commit 9ce1540; licence CC BY-NC-ND 4.0, so unmodified and

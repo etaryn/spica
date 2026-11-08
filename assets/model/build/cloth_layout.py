@@ -48,7 +48,7 @@ SOCK_BAND = 0.022  # height of the ribbed band at the top of a sock
 # pictures (cloth_tex.py) and laid on the surface in the shader, so they lie flush on it and stay on it as she moves.
 STAR_FACE, STAR_SOCK = "5A44D4", "8E86D0"  # the tattoo's colour (the iris's mid violet) and the stocking stars' (the hair's shadow tone)
 FACE_STAR = (0.058, 1.4245, 0.0045)  # x, z of its centre (metres, rest pose, her left is +x) and its outer radius; the picture lies flat on the skin there
-SOCK_STARS = [(0.585, 15, 0.070, 8), (0.415, 135, 0.064, -10), (0.245, -105, 0.052, 14)]  # three stars round the thigh-high: height, angle round the leg (0 is the front, + toward her left), outer radius, turn in degrees
+SOCK_STARS = [(0.585, -32, 0.070, 0), (0.415, 135, 0.064, -10), (0.245, -105, 0.052, 14)]  # three stars round the thigh-high: height, angle round the leg (0 is the front, + toward her left), outer radius, turn in degrees
 STAR_FILL = 0.45  # a star's outer radius as a fraction of the width of its picture
 LINING, LINING_SHADE = "2D3A8C", "1C2566"  # the inside of the hoodie and the facing along its opening: a spacey dark blue, darker than her hair
 PANTS, PANTS_SHADE, PANTS_THREAD = "34353E", "272830", "5A5B68"

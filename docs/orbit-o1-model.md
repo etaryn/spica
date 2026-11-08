@@ -156,7 +156,7 @@ a violet accent: lavender-periwinkle hair, dark glowing violet eyes, violet snea
   that was the distortion. Only skin within 1 cm of the star's centre gets it (the gate is in the mesh's undeformed 'Generated'
   coordinates), shaded like the skin at 92 % opacity, colour the iris's mid violet `5A44D4`, 9 mm across, centre x 0.058, z 1.4245
   (`FACE_STAR`). Because the cheek really does turn away there, it is foreshortened (narrower) seen from straight on, and a regular star
-  from a three-quarter view. The stocking's three stars (`SOCK_STARS`: height, angle round the leg, outer radius, turn: z 0.585 at 15
+  from a three-quarter view. The stocking's three stars (`SOCK_STARS`: height, angle round the leg, outer radius, turn: z 0.585 at -32
   degrees and 7 cm, z 0.415 at 135 degrees and 6.4 cm, z 0.245 at -105 degrees and 5.2 cm) are each laid by the true distances on the cloth from
   their own centre: the angle round the leg from the star's centre line (wrapped) times the leg's radius at that height, and the height
   above the star's centre, so none is stretched as the thigh narrows to the calf, and a star wider than the front of the leg wraps round it

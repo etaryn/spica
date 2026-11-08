@@ -275,9 +275,8 @@ def toon(name, base, shade, cut=0.30, soft=False, grain=None, decals=None, ease=
             return v
 
         phi = nb.math("ARCTAN2", nb.math("SUBTRACT", x, along(cxs)), nb.math("MULTIPLY", nb.math("SUBTRACT", y, along(cys)), -1.0))
-        radius = along(rs)
         for zc, deg, rad, turn in CL.SOCK_STARS:
-            du = nb.math("MULTIPLY", nb.math("WRAP", nb.math("SUBTRACT", phi, math.radians(deg)), -math.pi, math.pi), radius)  # distance round the leg from the star's centre line
+            du = nb.math("MULTIPLY", nb.math("WRAP", nb.math("SUBTRACT", phi, math.radians(deg)), -math.pi, math.pi), float(np.interp(zc, zs, rs)))  # distance round the leg from the star's centre line, at the leg's radius at the star's own height (the same scale across the star, so its sides stay straight)
             dv = nb.math("SUBTRACT", z, zc)
             t, width = math.radians(turn), rad / CL.STAR_FILL
             a_ = nb.math("MULTIPLY_ADD", du, math.cos(t) / width, nb.math("MULTIPLY", dv, math.sin(t) / width))

@@ -1,6 +1,6 @@
 # Orbit O1 — her 3D model
 
-Status: draft for Ethan's approval (2026-11-07). Look: `docs/orbit-o1-character-brief.md` (source of
+Status: base (body, face, hair) approved 2026-11-08; clothes in progress. Look: `docs/orbit-o1-character-brief.md` (source of
 truth, not repeated here). Branch: `orbit/o1-model`.
 
 ## Goal
@@ -30,12 +30,32 @@ master), so no mind-side code changes. Replacing the placeholder silhouettes fol
 rule: the old PNGs go in the same slice that ships real renders.
 
 ## Hair design (2026-11-08, Ethan; brief reopened)
-A short, stiff bob ending above the shoulders, a simple fringe, one long asymmetric strip, and a
-small side bunch (a tuft, not a long tail) bound by the star tie on the opposite side (shapes
-from Ethan's references, pending): nothing else. The bunch is built at two heights, high and low,
-for Ethan to compare; each piece is its own object so removing one is a delete. The tie wraps real hair, so clipping at the band is checked in the first renders. The earlier chest-length
-left layer, wolf cut and cubes are gone: anything long and loose clips in every pose. The strip
-gets few bones and little swing. The simulated-lock version (`hair.py`, `run.sh v5`) stays parked.
+A short, stiff bob (chin length, the layer under the outer hair darker so the layers read apart), a simple fringe, and
+one small bun at the side-back on her right: nothing else. The long strip, the low bunch, the wolf cut and the cubes
+were built or considered and dropped: anything long and loose clips in every pose (a strip down the back clipped
+into the bob however it hung). The star tie and stars are off. Each piece is its own object, so removing one is a
+delete.
+
+**Built 2026-11-08, rebuilt after review (Ethan to judge):** `hair_bob.py` (`run.sh v7`). The bob and fringe are the
+first sample's own cards, reshaped a little (front locks cut to chin, fringe leaned and shortened to brow level).
+One piece is not the sample's. A long strip down her back was built and dropped (2026-11-08, Ethan): the bob curves
+inward under it and clips through however it hangs, so the bun alone carries the asymmetry. The **bun** is copied from the
+third sample (its right-hand bun cards as they are, moved rigidly onto her head, nothing bent), recoloured in her hair
+tones and set at the side-back on her right, sunk 2.2 cm into the bob so it sits on her head with no neck. The
+star tie (band and stars) is off for now: the band needs a neck and the stars were taken out; `SPICA_TIE=1` builds
+them again. Earlier simulated ribbons (strip over the shoulder, cone-of-petals tuft) were dropped: they bent out
+and forward, and the tuft read edgy.
+Hair colour comes from the samples' own hair textures (`hair_toon`): the texture's brightness, with its dark
+roots, lighter tips, lines between strands and highlight blobs, is mapped onto her palette (hair base `#CFE0F2`,
+shadow `#8FA6C8`), then the unlit side goes toward the shadow colour. Nothing is invented: no random tones, no
+added streaks, no neon, no dyed strips (a pair of purple strips was tried and removed). One addition: the inner
+layer is darker, found by ray casts (the cards that lie under other hair: sample cards 020 to 055, 072, 086, 087,
+some bun cards), so the layers of the bob read apart. Everything added is rigid on the head bone: no swing yet. The saved .blend
+opens tidy: rig and bone helpers hidden (the armature still deforms her), Material Preview, a view sun and world.
+**The bun's geometry comes from a sample whose VRM metadata also says modification prohibited**, so the same flag
+applies: the derived .blend stays git-ignored until Ethan re-exports with modification allowed. Clothes are still not
+built (stage 1 above). `hair_cards.py` (v4) and the rest of `hair.py` (v5's own hair build) are older paths, kept
+until Ethan picks.
 
 ## Base model (2026-11-07)
 Built on a VRoid Studio sample export (`sample_model.vrm`, kept in `assets/model/base/`, git-ignored).
@@ -71,7 +91,7 @@ blender-rules. Left out: the live-session MCP (runs unsandboxed code in a runnin
    outline, palette from the brief.
    Checks: front/side/back/three-quarter turntable renders; 64 px black-silhouette test; palette
    sampled from the render matches the hex codes; amber appears only where the brief allows
-   (scripted pixel check). **Ethan reviews the look.**
+   (scripted pixel check). **Ethan reviews the look.** Base approved 2026-11-08; clothes are the next slice of this stage.
 2. **Revise** until Ethan says locked.
 3. **Face.** Swappable eye/mouth textures for the five expressions.
 4. **Rig.** Humanoid armature with fingers; hair, tie and the fixed hood follow the head; the long strip and side ponytail each get a short stiff chain.

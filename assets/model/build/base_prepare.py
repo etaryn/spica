@@ -156,6 +156,9 @@ def main():
     # Hair cards: her hair material and outline (shapes come later).
     for o in bpy.data.objects:
         if o.name.startswith("Hair0") and o.type == "MESH":
+            imgs = [n.image.name for m in o.data.materials if m for n in m.node_tree.nodes if n.bl_idname == "ShaderNodeTexImage" and n.image]
+            if imgs:
+                o["hair_tex"] = imgs[0]  # the card's own strand texture, for the highlight shader
             o.data.materials.clear()
             o.data.materials.append(hair)
             add_outline(o, 0.0012)

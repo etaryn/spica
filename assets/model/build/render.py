@@ -14,8 +14,8 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 OUT = argv[0] if argv else os.path.join(os.path.dirname(os.path.dirname(bpy.data.filepath)), "renders")
 OUT = os.path.abspath(OUT)
 os.makedirs(OUT, exist_ok=True)
-VIEWS = {"front": 0, "threeq": 35, "side": 90, "back": 180, "head": 0, "head3q": 35, "headback": 180, "face": 0, "face3q": 35}
-ZOOM = {"head": (0.50, 1.50), "head3q": (0.50, 1.50), "headback": (0.50, 1.50), "face": (0.26, 1.45), "face3q": (0.26, 1.45)}  # ortho scale, centre height
+VIEWS = {"front": 0, "threeq": 35, "side": 90, "back": 180, "head": 0, "head3q": 35, "head3qr": -35, "headback": 180, "face": 0, "face3q": 35, "chest": 0, "chest3q": 35, "chest3qr": -35, "chestside": 90, "tuftfront": -45, "tuftside": -90, "tuft3q": -135, "tuftback": 180, "chestback": 180, "chestback3q": 140, "chestbackside": 100}
+ZOOM = {"head": (0.50, 1.50), "head3q": (0.50, 1.50), "head3qr": (0.50, 1.50), "headback": (0.50, 1.50), "face": (0.26, 1.45), "face3q": (0.26, 1.45), "chest": (0.60, 1.30), "chest3q": (0.60, 1.30), "chest3qr": (0.60, 1.30), "chestside": (0.60, 1.30), "tuftfront": (0.30, 1.47), "tuftside": (0.30, 1.47), "tuft3q": (0.30, 1.47), "tuftback": (0.30, 1.47), "chestback": (0.60, 1.30), "chestback3q": (0.60, 1.30), "chestbackside": (0.60, 1.30)}  # ortho scale, centre height
 CZ = 0.86
 
 sc = bpy.context.scene
@@ -28,6 +28,8 @@ sc.view_settings.view_transform = "Standard"
 sc.render.image_settings.file_format = "PNG"
 sc.render.image_settings.color_mode = "RGBA"
 
+for _l in [o for o in bpy.data.objects if o.type == "LIGHT"]:  # the saved file's view sun
+    bpy.data.objects.remove(_l)
 world = bpy.data.worlds.new("w")
 world.use_nodes = True
 world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.30, 0.31, 0.36, 1)

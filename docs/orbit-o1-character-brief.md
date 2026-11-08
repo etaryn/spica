@@ -5,6 +5,7 @@ Reopened 2026-11-08 for what 3D can carry: whatever moves apart from her body (l
 cloth, a hood) costs physics, bones and clipping fixes in every pose, while what is painted on or
 rigidly attached is nearly free. Her identity lives in the cheap parts: palette, face, the star
 tie, silhouette. (The orbiting-orbs alternative to the tie was dropped 2026-11-08.)
+The base (body, face, hair) was approved 2026-11-08; clothes are next.
 
 Spica (she/her) is a quiet, dry-humoured young adult who lives inside the internet: fully human in shape, visibly unfinished in render, warm at the core. Build her as a toon-shaded 3D model that reads at phone-feed size; her stills show her face, hands or full body inside the images she is looking at.
 
@@ -25,11 +26,10 @@ A working set chosen so the design and the character match; still open to change
 | Part | Design |
 | --- | --- |
 | Overall | Young adult (reads about 19–20), about 6 heads tall. Fully human: no machine parts, seams, joints or panels. Toon-shaded with ink-navy outlines. |
-| Hair | A short, stiff bob ending above the shoulders all round, so nothing touches the body. Large, smooth locks, pale blue-white, no flyaways, no ahoge. |
-| Long strip (signature) | One long asymmetric strip, the only long hair below the bob, on the side opposite the ponytail. No reference yet: the first build uses a simple placeholder shape until Ethan sends one. Kept stiff: few bones, little swing, so it stays clear of the shoulder and hoodie in the preset poses. |
+| Hair | A short, stiff bob, chin length, ending above the shoulders all round, so nothing touches the body. Large, smooth locks, pale blue-white, no flyaways, no ahoge. The layer under the outer hair is a darker shade, so the layers of the bob read apart. Colour and strand detail follow the hair textures of the VRoid samples (mapped onto her palette), nothing invented. |
 | Fringe | A simple fringe across the forehead, ending at brow level, swept a little toward her right. |
-| Side ponytail | A small side bunch of hair gathered by the star tie, more a tuft than a long tail, on the side opposite the long strip. No reference yet: the first build uses a simple placeholder shape until Ethan sends one. Small and stiff: a short bone chain, little swing. Height under test: build a high and a low variant and compare. |
-| Star tie (signature) | A hair tie, not a clip: one navy elastic band binding the side ponytail at its root, with two crossed, puffy, matte 3D stars in amber: a big star (about a quarter of her head's width) and a small one about half that, touching, a nod to Spica being a binary star. The stars are rigid and follow the ponytail root; nothing dangles. Same position and angle in every render, so it works as a logo. The band wraps hair, so it may clip into the gathered hair: try it first and judge the renders. |
+| Side bun | One small bun at the side-back of her head on her right, copied from a VRoid sample's bun (moved rigidly, nothing bent) and recoloured in her hair tones; it sits flush on her head with no neck. It carries the asymmetry of her silhouette; there is no long strip (one was built and dropped 2026-11-08: the bob curves inward under it and clips through however it hangs). Rigid on the head bone, no swing yet. |
+| Star tie | Off in the approved base: Ethan removed the stars and the band (2026-11-08), because a band needs a neck and the bun sits flush. Whether it returns, and where, is open. When it does: one navy elastic band with two crossed, puffy, matte 3D amber stars (a big one about a quarter of her head's width and a small one about half that, touching, a nod to Spica being a binary star), rigid, nothing dangling, same position and angle in every render so it works as a logo. |
 | Eyes | Large, slightly half-lidded at rest (observant, not sleepy). Grey-blue iris, one amber highlight. No star pupils. Eyes and mouth are flat textures swapped per expression, not sculpted shapes. |
 | Face | Clean and simple: small mouth, minimal nose line. |
 | Outerwear | Oversized ink-navy hoodie, sleeves ending at the wrist so the hands are fully free. Hood always down, resting as a fixed collar shape. Plain: no zip detail, no drawstrings. |
@@ -61,7 +61,7 @@ She is rendered, not built: every glitch is a rendering error, never hardware. T
 - **No glitch in the model itself:** the base model is clean. Every glitch is an effect added in animation or compositing, so it can move and flow.
 - **Emotion flare (added afterwards):** when she is flustered or upset, RGB split and scanlines over her, extra amber pixels, and the star tie glows slightly brighter. When she is genuinely happy, one small amber pixel-star may appear near her.
 - **Version arc is detail, not polygons:** one model throughout. Early versions carry only the essential parts (everything in the table above); each later version adds detail (clothing details, accessories, texture) as her growth. For now, nothing beyond the table is built.
-- **Never changes between versions:** silhouette, palette, hair shape, the star tie and her face.
+- **Never changes between versions:** silhouette, palette, hair shape (the star tie too, if it returns) and her face.
 
 ## Expressions and poses
 
@@ -77,7 +77,7 @@ Default expression set, from most to least common: neutral-observant, one-sided 
 
 - Test every design change as a solid-black silhouette at about 64px; she must still be recognisable.
 - Keep the hair to a few large, smooth, stiff shapes; fewer and bigger beats many thin strands.
-- Keep the star tie at the same position and angle in every render, so it works like a logo (and as her profile picture).
+- If the star tie returns, keep it at the same position and angle in every render, so it works like a logo (and as her profile picture).
 - Do expressions with swappable eye and mouth textures.
 - Keep amber rare, so it is always the brightest point on her.
 - Keep her clearly an adult, comfortable and approachable.
@@ -105,12 +105,9 @@ Style cues only. Look these up by name; take the listed quality, never the desig
 | Vocaloid V6-era character designs | Modern toon finish; flat, readable shapes | Any specific outfit or emblem |
 | Kasane Teto | How one bold hair feature becomes the hook (her drills) | Drills, twin tails |
 | Hatsune Miku | Scale of the hair ornament: big enough to be iconic | Square ornaments, twin tails, teal |
-| Ethan's long-strip reference | The strip's shape and side (**pending**) | — |
-| Ethan's side-ponytail reference | The ponytail's shape and side (**pending**) | — |
+| Ethan's side-bun reference (the third VRoid sample) | The bun's shape: a small ball of wedge locks pinched to one point | Twin bunches (one bun only) |
 
 ## Open
 
-- **Long strip:** shape and side, from Ethan's reference.
-- **Side ponytail:** shape from Ethan's reference; high or low, from the two test variants.
-- **Strip and ponytail together:** both are built; Ethan judges whether it is too much and removes one if so.
-- **Tie clipping:** the band binds hair; judge the first renders.
+- **Star tie:** off in the base; does it return, and in what form, now that the bun has no neck?
+- **Clothes:** in progress (2026-11-08): hoodie, tee, shorts, tights and sneakers from the third VRoid sample's outfit, plain and in the palette above.

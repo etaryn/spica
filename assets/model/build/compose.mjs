@@ -8,7 +8,7 @@ import path from "node:path";
 const dir = process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "../renders");
 const views = ["front", "threeq", "side", "back"];
 const heads = ["head", "head3q", "head3qr", "headback"];
-const BG = { r: 170, g: 179, b: 197, alpha: 1 };
+const BG = { r: 214, g: 212, b: 224, alpha: 1 };
 const { width: W, height: H } = await sharp(path.join(dir, "view-front.png")).metadata();
 
 const sheet = sharp({ create: { width: W * 4, height: H, channels: 4, background: BG } });

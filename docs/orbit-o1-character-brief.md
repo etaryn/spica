@@ -5,7 +5,7 @@ Reopened 2026-11-08 for what 3D can carry: whatever moves apart from her body (l
 cloth, a hood) costs physics, bones and clipping fixes in every pose, while what is painted on or
 rigidly attached is nearly free. Her identity lives in the cheap parts: palette, face, the star
 tie, silhouette. (The orbiting-orbs alternative to the tie was dropped 2026-11-08.)
-The base (body, face, hair) was approved 2026-11-08; clothes are next.
+The base (body, face, hair) was approved 2026-11-08, and the whole look (with clothes, socks and the star tattoo and stars) was accepted as her **v1** the same day, a first draft with some clipping and edginess left (listed in `orbit-o1-model.md`).
 
 Spica (she/her) is a quiet, dry-humoured young adult who lives inside the internet: fully human in shape, visibly unfinished in render, warm at the core. Build her as a toon-shaded 3D model that reads at phone-feed size; her stills show her face, hands or full body inside the images she is looking at.
 
@@ -25,34 +25,39 @@ A working set chosen so the design and the character match; still open to change
 
 | Part | Design |
 | --- | --- |
-| Overall | Young adult (reads about 19–20), about 6 heads tall. Fully human: no machine parts, seams, joints or panels. Toon-shaded with ink-navy outlines. |
-| Hair | A short, stiff bob, chin length, ending above the shoulders all round, so nothing touches the body. Large, smooth locks, pale blue-white, no flyaways, no ahoge. The layer under the outer hair is a darker shade, so the layers of the bob read apart. Colour and strand detail follow the hair textures of the VRoid samples (mapped onto her palette), nothing invented. |
+| Overall | Young adult (reads about 19–20), about 6 heads tall. Fully human: no machine parts, seams, joints or panels. Toon-shaded with deep indigo outlines. A spacey violet accent on an off-white base. |
+| Hair | A short, stiff bob, chin length, ending above the shoulders all round, so nothing touches the body. Large, smooth locks, an off-white tinted lavender-periwinkle (the accent), no flyaways, no ahoge. The layer under the outer hair is a darker shade, so the layers of the bob read apart. One lock beside her left cheek carries a strip of light-blue highlights. Strand detail follows the hair textures of the VRoid samples, mapped onto her palette, nothing invented. |
 | Fringe | A simple fringe across the forehead, ending at brow level, swept a little toward her right. |
 | Side bun | One small bun at the side-back of her head on her right, copied from a VRoid sample's bun (moved rigidly, nothing bent) and recoloured in her hair tones; it sits flush on her head with no neck. It carries the asymmetry of her silhouette; there is no long strip (one was built and dropped 2026-11-08: the bob curves inward under it and clips through however it hangs). Rigid on the head bone, no swing yet. |
 | Star tie | Off in the approved base: Ethan removed the stars and the band (2026-11-08), because a band needs a neck and the bun sits flush. Whether it returns, and where, is open. When it does: one navy elastic band with two crossed, puffy, matte 3D amber stars (a big one about a quarter of her head's width and a small one about half that, touching, a nod to Spica being a binary star), rigid, nothing dangling, same position and angle in every render so it works as a logo. |
-| Eyes | Large, slightly half-lidded at rest (observant, not sleepy). Grey-blue iris, one amber highlight. No star pupils. Eyes and mouth are flat textures swapped per expression, not sculpted shapes. |
-| Face | Clean and simple: small mouth, minimal nose line. |
-| Outerwear | Oversized ink-navy hoodie, sleeves ending at the wrist so the hands are fully free. Hood always down, resting as a fixed collar shape. Plain: no zip detail, no drawstrings. |
-| Inner layer | Off-white tee, visible at the neckline. |
-| Legs and feet | Navy shorts over dark tights; plain chunky sneakers with amber soles. |
+| Eyes | Large, slightly half-lidded at rest (observant, not sleepy). A dark, glowing violet iris (a deeper version of the accent: near-black rim, bright centre) that glows light blue at its lower edge, one light-blue highlight. No star pupils. Eyes and mouth are flat textures swapped per expression, not sculpted shapes. |
+| Face | Clean and simple: small mouth, minimal nose line. A small five-pointed star tattoo (about 9 mm across) under the outer corner of her left eye, in the iris's mid violet (`#5A44D4`), flush on the skin, following the cheek's surface (so it is foreshortened seen from the front, where the cheek turns away, and a regular star from the side). |
+| Outerwear | Off-white cotton-knit hoodie, soft and thick (about 2.4 cm) but cut to her shape: it follows her chest, waist and hips so her natural curves still show (no flare), slim sleeves ending at the wrist, rolled cuffs. A hem of its own: a ribbed band about 1 cm tall, thicker than the body (about 3 mm proud, with a rounded lower edge), separated from the body by a seam groove with a row of tone-on-tone stitches above it. The hem band ends below the top of the shorts, over the upper part of the back pockets, and stands clear of them, so hoodie and pants read as two layers. The zip stops above the hem band, with a bottom stop; below it the hem is split in two, the halves slightly apart (a slot about 1.2 cm wide and 1.6 cm tall). At the top the zip stops at the chest: above the slider the neckline splits in one V from the hood's collar down to the slider, the front hangs looser there, and the cut edges are thick and roll outward like lapels, with a 1.4 cm facing along them (the lining turned out: a real strip of the cloth in the lining colour, standing a little proud, a seam groove where it ends and a row of stitches beside it), showing a little of her skin. The inside of the hoodie is the lining colour too, a spacey dark blue (darker than her hair). Two slanted hand-pocket slits (only the slits, no pockets behind). Otherwise plain: no patches, no drawstrings. Soft shading and a fine fabric grain. Hood always down, resting as a fixed collar shape (off-white, inside and outside), open at the front: it ends in two clean flaps beside her neck, over the top of the dark facing. |
+| Inner layer | None: the opening of the hoodie shows her skin (the white tee V was removed). |
+| Legs and feet | Bare legs. Greyish-black denim shorts ending just below the crotch: a diagonal twill, a few creases (whiskers from the fly out to each hip, three on her left leg and two on her right, and a smile line under each seat, all different), drawn as shadow, never as light lines, and the cloth really folded along them; front pockets, a fly and back pockets, all topstitched in thread the colour of the cloth (no contrast stitching). A rolled hem of its own: a band about 1.9 cm tall, 3 mm proud, with two rows of stitching and a seam groove above it. Socks, asymmetric like the rest of her: a thigh-high sock on her left leg, ending about 6 cm below the shorts, and an ankle sock on her right, both in a clean off-white (nearly white), fine vertical ribs round the leg. The ankle sock has a ribbed band at the top (standing a little proud, with a seam groove under it); the thigh-high stocking has no hem, just a clean straight top edge that wraps the thigh. Three big five-pointed stars in the hair's shadow tone (`#8E86D0`), 5 to 7 cm across, wrap round the stocking, each at its own height, turn and place round the leg (120 degrees apart), so one shows from the front, the side and the back. Plain chunky sneakers: cool-white uppers (the hoodie's tone), soles in a muted periwinkle (not the saturated accent). |
 | Hands | Plain human hands, slightly stylised. They are a main post framing, so keep fingers clear and readable; poses come from a preset set. |
 
 ## Palette
 
-Quiet and comfortable first, strong and graphic second: muted cool colours, hard light-dark contrast, one warm accent. Amber is her heart showing through, so it appears only where marked.
+A spacey violet accent on an off-white base (changed 2026-11-08 from a warm, homemade trial, and before that from a cold blue-white one; Ethan judges this one). The accent is in the hair and the eyes; the sneaker soles are a muted periwinkle from the hair's tones, not the saturated accent (Ethan: too striking); everything else is off-white, greyish black and skin.
 
 | Role | Colour | Hex | Where |
 | --- | --- | --- | --- |
-| Base dark | Ink navy | `#1E2340` | Hoodie, shorts, tie elastic, all outlines |
-| Base light | Warm off-white | `#F2EFE8` | Tee, light areas |
-| Hair | Pale blue-white | `#CFE0F2` | Hair base |
-| Hair shadow | Blue-lavender | `#8FA6C8` | Under layers, nape |
-| **Accent** | Amber | `#FFB23F` | Star tie, glitch pixels, eye highlight, sneaker soles |
-| Accent shadow | Deep amber | `#E08A1E` | Shadow side of the stars |
-| Iris | Grey-blue | `#7D90AD` | Eyes (proposed, tune by eye) |
-| Skin | Light warm | `#F7E6DA` | Skin (proposed, tune by eye) |
+| Hoodie | Cool off-white (pale lavender-grey) | `#E6E7F3` (shadow `#CBCDE4`) | Hoodie, hood and sneaker uppers: cooler than the skin, so it separates from her neck and hands |
+| Socks | Clean off-white, nearly white | `#F8F7F4` (shadow `#DAD8E4`) | Thigh-high sock (her left) and ankle sock (her right) |
+| Soles | Muted periwinkle | `#9D96D8` (shadow `#7670B0`) | Sneaker soles |
+| Lining | Spacey dark blue | `#2D3A8C` (shadow `#1C2566`) | The inside of the hoodie and the facing along its opening, darker than her hair, so the neckline reads against her skin |
+| Pants | Greyish black | `#34353E` (shadow `#22232A`, thread `#4A4B56`) | Shorts |
+| Outline | Deep indigo | `#2B2347` | All outlines, lashes |
+| **Accent** | Cosmic violet | `#8A6BF2` (deep `#4B3A9E`) | The hair and the eyes are tinted from it (no longer used on the soles) |
+| Hair | Lavender-periwinkle | `#CFC6F2` | Hair base |
+| Hair shadow | Deeper periwinkle | `#8E86D0` | Under layers, nape |
+| Hair highlight | Light blue | `#B4DAFF` | One lock beside her left cheek |
+| Iris | Dark glowing violet to light blue | `#160E38` rim, `#5A44D4` mid, `#A9D6FF` glow | Eyes; highlight `#CFEAFF` |
+| Skin | Light neutral peach | `#F8E5DC` (shadow `#ECCFC6`) | Skin (tune by eye) |
+| Zip | Light metal | `#CDD0DA` (dark `#7F8294`) | Zip |
 
-Never put amber in the hair itself, the skin or large areas of clothing.
+Keep the accent to the hair and eyes.
 
 ## Glitch language
 
@@ -110,4 +115,4 @@ Style cues only. Look these up by name; take the listed quality, never the desig
 ## Open
 
 - **Star tie:** off in the base; does it return, and in what form, now that the bun has no neck?
-- **Clothes:** in progress (2026-11-08): hoodie, tee, shorts, tights and sneakers from the third VRoid sample's outfit, plain and in the palette above.
+- **Clothes:** built for v1 (2026-11-08): hoodie, denim shorts, sneakers, socks, fitted and in the palette above. The hoodie has no pocket (the slits are drawn), so the 'hand in the hoodie pocket' pose below needs another gesture, or a modelled pocket.

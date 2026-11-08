@@ -1,8 +1,8 @@
 """
 Turns the downloaded VRoid sample (assets/model/base/sample_model.glb, a .vrm renamed) into her
 starting point: clothes and helper meshes stripped, skin and hair on her toon materials with the
-navy outline, spring bones and expression shape keys kept. Saves assets/model/spica-base.blend (a stage, not the model).
-Run: blender -b -P assets/model/build/base_prepare.py
+navy outline, spring bones and expression shape keys kept. It is the first stage of the build: hair_bob.py and
+clothes.py run after it in the same Blender session (run.sh), and clothes.py saves the model.
 """
 import os
 
@@ -11,7 +11,7 @@ import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-PAL = dict(navy="1E2340", hair="CFE0F2", hairshade="8FA6C8", skin="F7E6DA")
+PAL = dict(navy="2B2347", hair="CFC6F2", hairshade="8E86D0", skin="F8E5DC")  # "navy" is the outline colour: a deep indigo
 MATS = {}
 
 
@@ -97,7 +97,7 @@ def main():
     bpy.ops.import_scene.gltf(filepath=os.path.join(ROOT, "base", "sample_model.glb"))
     OUTLINE = outline_mat()
     CLEAR = clear_mat()
-    skin = toon("skin", PAL["skin"], "F1D8CF", cut=0.16)
+    skin = toon("skin", PAL["skin"], "ECCFC6", cut=0.16)
     hair = toon("hair", PAL["hair"], PAL["hairshade"])
 
     # Helper mesh from the import (a spring-bone collider), not part of her.
@@ -165,8 +165,6 @@ def main():
 
     n_poly = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     print("POLYS_TOTAL", n_poly, "BODY", len(body.data.polygons))
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-base.blend"))
-    print("SAVED")
 
 
 main()

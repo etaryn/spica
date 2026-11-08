@@ -1,11 +1,7 @@
 """
-Her hair, by editing the sample's own hair cards (no new geometry): the sample is already a clean bob,
-so only two cards change. Its long right front lock is cut back to chin length and its long left front
-lock is stretched down to her chest (an asymmetric bob, her left longer), leaning forward so it lies
-on the front of her shoulder, then any vertex inside her skin is pushed out. Two crossed amber stars
-sit on the long left side at ear height. The cards keep the sample's bone weights, so its spring-bone
-hair physics still applies for animation. Runs after base_prepare.py in the same Blender session:
-  blender -b -P base_prepare.py -P hair_cards.py        (run.sh v4 does this)
+Helpers for her hair and eyes, shared by hair_bob.py and clothes.py: a toon material, flat materials, a star and a mesh part,
+the sample's hair cards (`card`, `warp`), the A-pose, a skin BVH, `push_out` (keeps a mesh off her skin) and `recolor_eyes`
+(the iris, highlight, brow, lash and mouth, in her palette). Builds nothing on its own.
 Z is up, she faces -Y, her left is +X.
 """
 import math
@@ -13,7 +9,7 @@ import os
 
 import bmesh
 import bpy
-from mathutils import Euler, Matrix, Vector
+from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -124,12 +120,12 @@ def recolor_eyes():
             nt.links.new(bw.outputs["Val"], cr.inputs["Fac"])
             nt.links.new(cr.outputs["Color"], em.inputs["Color"])
 
-    retint("N00_000_00_EyeIris_00_EYE", ramp=("1E2340", "7D90AD", "B6C5DB"))
-    retint("N00_000_00_EyeHighlight_00_EYE", hexstr="FFB23F")
-    retint("N00_000_00_FaceBrow_00_FACE", hexstr="3A4266")
-    retint("N00_000_00_FaceEyelash_00_FACE", hexstr="1E2340")
-    retint("N00_000_00_FaceEyeline_00_FACE", hexstr="1E2340")
-    retint("N00_000_00_FaceMouth_00_FACE", hexstr="B5707A")
+    retint("N00_000_00_EyeIris_00_EYE", ramp=("160E38", "5A44D4", "A9D6FF"))
+    retint("N00_000_00_EyeHighlight_00_EYE", hexstr="CFEAFF")
+    retint("N00_000_00_FaceBrow_00_FACE", hexstr="463A78")
+    retint("N00_000_00_FaceEyelash_00_FACE", hexstr="2B2347")
+    retint("N00_000_00_FaceEyeline_00_FACE", hexstr="2B2347")
+    retint("N00_000_00_FaceMouth_00_FACE", hexstr="C9808A")
     face = bpy.data.objects["Face"]
     face.data.shape_keys.key_blocks["Fcl_EYE_Close"].value = 0.20
 
@@ -178,23 +174,6 @@ def clamp(x, a=0.0, b=1.0):
 
 CUT = 1.45        # below this height a lock is reshaped; above it the sample is untouched
 CHIN = 1.385      # where her right lock now ends
-CHEST = 1.12      # where her left lock now ends
-
-
-def shorten_right(p):
-    if p.z >= CUT:
-        return p
-    k = (CUT - CHIN) / (CUT - 1.301)  # the sample's lock ended at 1.301
-    return V(p.x, p.y, CUT - (CUT - p.z) * k)
-
-
-def lengthen_left(p):
-    if p.z >= CUT:
-        return p
-    k = (CUT - CHEST) / (CUT - 1.305)  # the sample's lock ended at 1.305
-    d = (CUT - p.z) * k
-    # lean forward as it falls so it lies on the front of her shoulder and chest
-    return V(p.x, p.y - 0.05 * clamp(d / 0.33), CUT - d)
 
 
 def push_out(ob, bvhs, margin=0.0025, reach=0.04):
@@ -212,44 +191,3 @@ def push_out(ob, bvhs, margin=0.0025, reach=0.04):
         v.co = mi @ w
     ob.data.update()
     return moved
-
-
-def stars(outline):
-    """Two crossed amber stars on the outside of the long left lock, at ear height."""
-    c = card(59)
-    vs = [c.matrix_world @ v.co for v in c.data.vertices if 1.455 < (c.matrix_world @ v.co).z < 1.485]
-    e = max(vs, key=lambda p: p.x)
-    n = V((0.55, -0.85, 0)).normalized()
-    q = n.to_track_quat("Z", "Y")
-    amber = amber_toon()
-    big = star("tie_star_big", 0.026, amber, outline)
-    big.location = e + n * 0.012 + V(-0.012, 0, 0)  # on the lock, not beside it
-    big.rotation_euler = q.to_euler()
-    small = star("tie_star_small", 0.014, amber, outline)
-    small.location = big.location + q @ V((0.022, 0.017, 0.003))
-    small.rotation_euler = (q @ Euler((0, 0, math.radians(36))).to_quaternion()).to_euler()
-    for o in (big, small):
-        vg = o.vertex_groups.new(name="J_Bip_C_Head")
-        vg.add([v.index for v in o.data.vertices], 1.0, "REPLACE")
-        mod = o.modifiers.new("armature", "ARMATURE")
-        mod.object = bpy.data.objects["Armature"]
-        o.modifiers.move(len(o.modifiers) - 1, 0)
-
-
-def main():
-    outline = bpy.data.materials["outline"]
-    a_pose()
-    warp(card(58), shorten_right)
-    warp(card(59), lengthen_left)
-    dg = bpy.context.evaluated_depsgraph_get()
-    bvhs = [skin_bvh(bpy.data.objects["Body"]), skin_bvh(bpy.data.objects["face_outline"])]
-    moved = push_out(card(59), bvhs) + push_out(card(58), bvhs)
-    print("PUSHED", moved)
-    stars(outline)
-    recolor_eyes()
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v4.blend"))
-    print("SAVED")
-
-
-if __name__ == "__main__":
-    main()

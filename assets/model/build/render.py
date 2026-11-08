@@ -1,6 +1,6 @@
 """
-Renders review stills of spica.blend: the four views, a flat-colour pass and a black silhouette pass.
-Run: blender -b assets/model/spica.blend -P assets/model/build/render.py -- <outdir> [views...]
+Renders review stills of spica-v1.blend: the full body from four sides, and close-ups of the head, face and chest.
+Run: blender -b assets/model/spica-v1.blend -P assets/model/build/render.py -- <outdir> [views...]
 The camera and the sun ride one empty, so every view is lit the same way.
 """
 import math
@@ -22,8 +22,7 @@ sc = bpy.context.scene
 sc.render.engine = "BLENDER_EEVEE"
 sc.eevee.taa_render_samples = 24
 sc.render.film_transparent = True
-WIDE = os.environ.get("SPICA_WIDE") == "1"  # T-pose base: arms out, so a square frame
-sc.render.resolution_x, sc.render.resolution_y = (900, 900) if WIDE else (600, 900)
+sc.render.resolution_x = sc.render.resolution_y = 900  # T-pose: arms out, so a square frame
 sc.view_settings.view_transform = "Standard"
 sc.render.image_settings.file_format = "PNG"
 sc.render.image_settings.color_mode = "RGBA"
@@ -55,7 +54,7 @@ sc.collection.objects.link(sun)
 
 
 def shoot(name, angle, view="full"):
-    scale, cz = ZOOM.get(view, (1.9 if WIDE else 1.95, CZ))
+    scale, cz = ZOOM.get(view, (1.9, CZ))
     cam.data.ortho_scale = scale
     rig.location = (0, 0, cz)
     rig.rotation_euler = (0, 0, math.radians(angle))

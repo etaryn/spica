@@ -5,7 +5,7 @@ are, moved onto her head without bending anything) and recoloured in her hair to
 asymmetry of the bob. The star tie is off for now. Hair colour follows the samples' own hair textures, with
 the layer under the outer hair darker. Everything added is rigid on the head bone, so it turns with her head.
 Runs after base_prepare.py in the same Blender session:
-  blender -b -P base_prepare.py -P hair_bob.py        (run.sh v7 does this)
+  blender -b -P base_prepare.py -P hair_bob.py -P clothes.py        (run.sh does this)
 Z is up, she faces -Y, her left is +X.
 """
 import math
@@ -19,11 +19,22 @@ from mathutils.bvhtree import BVHTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import hair as hs  # noqa: E402  (head fit and chain helpers; it builds nothing on import)
 import hair_cards as hc  # noqa: E402
 
 ROOT = hc.ROOT
 V = hc.V
+HC = V((0, 0.03, 1.495))  # the head's centre: set from her face mesh in fit_head()
+
+
+def fit_head():
+    """The centre of her head from the face mesh, so the hair sits on the real skull. The face mesh stops behind the ears: front to
+    back is set by hand (the skull runs on to about y = 0.11, read off the hair that sat on it)."""
+    global HC
+    face = bpy.data.objects["Face"]
+    vs = [face.matrix_world @ v.co for v in face.data.vertices]
+    HC = (V([min(v[i] for v in vs) for i in range(3)]) + V([max(v[i] for v in vs) for i in range(3)])) / 2
+    HC.y = 0.02
+    print("HEAD", tuple(round(x, 3) for x in HC))
 
 
 # ---------------------------------------------------------------- head binding
@@ -113,13 +124,13 @@ def outer_pt(az, el, off):
     from the head centre: az from the front toward her left, el above the horizon."""
     a, e = math.radians(az), math.radians(el)
     d = V(math.cos(e) * math.sin(a), -math.cos(e) * math.cos(a), math.sin(e))
-    far = hs.HC + d * 0.4
+    far = HC + d * 0.4
     best = None
     for b in SURFACES:
         loc, _, _, dist = b.ray_cast(far, -d)
         if loc is not None and (best is None or dist < best[0]):
             best = (dist, loc)
-    return (best[1] if best else hs.HC + d * 0.10) + d * off
+    return (best[1] if best else HC + d * 0.10) + d * off
 
 
 def bun_from_sample3(az, el, off):
@@ -158,18 +169,18 @@ def bun_from_sample3(az, el, off):
         bpy.data.objects.remove(o)
     pts = [v.co.copy() for ob in objs for v in ob.data.vertices]
     centre = sum(pts, V()) / len(pts)
-    d0 = (centre - hs.HC).normalized()
+    d0 = (centre - HC).normalized()
     a, e = math.radians(az), math.radians(el)
     d1 = V(math.cos(e) * math.sin(a), -math.cos(e) * math.cos(a), math.sin(e))
     rot = d0.rotation_difference(d1).to_matrix().to_4x4()
-    mat = Matrix.Translation(hs.HC) @ rot @ Matrix.Translation(-hs.HC)
+    mat = Matrix.Translation(HC) @ rot @ Matrix.Translation(-HC)
     for ob in objs:
         ob.data.transform(mat)
     pts = [mat @ p for p in pts]
-    near = min((p - hs.HC).length for p in pts)
-    low = [p for p in pts if (p - hs.HC).length < near + 0.004]
+    near = min((p - HC).length for p in pts)
+    low = [p for p in pts if (p - HC).length < near + 0.004]
     root = sum(low, V()) / len(low)
-    rd = (root - hs.HC).normalized()
+    rd = (root - HC).normalized()
     target = outer_pt(math.degrees(math.atan2(rd.x, -rd.y)), math.degrees(math.asin(rd.z)), off)
     shift = target - root
     for ob in objs:
@@ -187,7 +198,8 @@ def bun_from_sample3(az, el, off):
 
 
 # ---------------------------------------------------------------- hair shading
-HAIR = dict(base="CFE0F2", shade="8FA6C8")
+HAIR = dict(base="CFC6F2", shade="8E86D0", streak="B4DAFF")
+STREAK_CARD = "Hair059"  # the one lock that carries the strip of highlights
 INNER = 0.5  # how far a card of the inner layer goes toward the shadow colour
 
 
@@ -196,12 +208,12 @@ def blend(a, b, t):
     return "".join("%02X" % round(int(a[i:i + 2], 16) * (1 - t) + int(b[i:i + 2], 16) * t) for i in (0, 2, 4))
 
 
-def hair_toon(name, tex, inner=False, clamp_streak=False):
+def hair_toon(name, tex, inner=False, clamp_streak=False, streak=None):
     """Hair as a toon material in her palette that keeps the strands of the sample's own hair texture:
     the texture's brightness (dark roots, lighter tips, the lines between strands, the highlight blobs)
     is mapped onto her tones, then the unlit side goes toward the shadow colour. `inner` darkens the
     cards of the layer under the outer hair. `clamp_streak` keeps the texture's coloured streak (the cyan
-    one of the first sample) from standing out."""
+    one of the first sample) from standing out, or, with `streak` (a hex colour), paints it in that colour: the strip of highlights."""
     b, sh = HAIR["base"], HAIR["shade"]
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -244,15 +256,23 @@ def hair_toon(name, tex, inner=False, clamp_streak=False):
     val = lum.outputs["Val"]
     if clamp_streak:
         val = math("MINIMUM", val, 0.20)
-    ramp = node("ShaderNodeValToRGB")
-    ramp.color_ramp.interpolation = "LINEAR"
-    stops = [(0.045, blend(b, sh, 0.70)), (0.09, blend(b, sh, 0.18)), (0.12, b), (0.17, blend(b, "FFFFFF", 0.30)), (0.50, "F4F9FF")]
-    el = ramp.color_ramp.elements
-    for k, (pos, hexc) in enumerate(stops):
-        e = el[k] if k < len(el) else el.new(pos)
-        e.position, e.color = pos, hc.lin(hexc)
-    L.new(val, ramp.inputs["Fac"])
-    col = ramp.outputs["Color"]
+    def ramp_of(stops):
+        r = node("ShaderNodeValToRGB")
+        r.color_ramp.interpolation = "LINEAR"
+        el = r.color_ramp.elements
+        for k, (pos, hexc) in enumerate(stops):
+            e = el[k] if k < len(el) else el.new(pos)
+            e.position, e.color = pos, hc.lin(hexc)
+        L.new(val, r.inputs["Fac"])
+        return r.outputs["Color"]
+
+    col = ramp_of([(0.045, blend(b, sh, 0.70)), (0.09, blend(b, sh, 0.18)), (0.12, b), (0.17, blend(b, "F6F2FF", 0.35)), (0.50, "F4F0FF")])
+    if streak:  # the texture's cyan streak (much blue, little red) in the highlight colour, the strand lines kept
+        sep = node("ShaderNodeSeparateColor")
+        L.new(img.outputs["Color"], sep.inputs["Color"])
+        mask = math("MULTIPLY", math("GREATER_THAN", sep.outputs["Blue"], 0.30), math("SUBTRACT", 1.0, math("GREATER_THAN", sep.outputs["Red"], 0.15)))
+        deep = blend(streak, "6E86C8", 0.5)
+        col = mix(mask, col, ramp_of([(0.045, blend(streak, deep, 0.7)), (0.09, blend(streak, deep, 0.2)), (0.12, streak), (0.17, blend(streak, "FFFFFF", 0.45)), (0.20, blend(streak, "FFFFFF", 0.65))]))
     if inner:
         col = mix(INNER, col, hc.lin(sh))
     d = node("ShaderNodeBsdfDiffuse")
@@ -297,11 +317,11 @@ def inner_layer(objs):
     for i, (o, pts) in enumerate(zip(objs, per)):
         hidden = total = 0
         for w in pts[::2]:
-            r = (w - hs.HC).length
-            d = (w - hs.HC) / r
+            r = (w - HC).length
+            d = (w - HC) / r
             loc, _, idx, _ = tree.ray_cast(w + d * 0.3, -d)
             total += 1
-            if loc is not None and owner[idx] != i and (loc - hs.HC).length > r + 0.003:
+            if loc is not None and owner[idx] != i and (loc - HC).length > r + 0.003:
                 hidden += 1
         if total and hidden / total > 0.5:
             names.append(o.name)
@@ -317,9 +337,9 @@ def restyle_hair():
     mats = {}
     for o in objs:
         tex = o.get("hair_tex", "_23")
-        key = (tex, o.name in inner)
+        key = (tex, o.name in inner, HAIR["streak"] if o.name.split(".")[0] == STREAK_CARD else None)
         if key not in mats:
-            mats[key] = hair_toon(f"hair_{len(mats)}", tex, inner=key[1], clamp_streak=(tex == "_25"))
+            mats[key] = hair_toon(f"hair_{len(mats)}", tex, inner=key[1], clamp_streak=(tex == "_25"), streak=key[2])
         o.data.materials[0] = mats[key]
 
 
@@ -357,7 +377,7 @@ def main():
     hc.a_pose()
     shorten_to_chin(58)
     shorten_to_chin(59)
-    hs.fit_head()
+    fit_head()
     SURFACES.extend([hc.skin_bvh(bpy.data.objects["Body"]), hc.skin_bvh(bpy.data.objects["Face"])])
     SURFACES.extend(hc.skin_bvh(hc.card(n)) for n in range(1, 88))
 
@@ -366,7 +386,7 @@ def main():
     restyle_hair()
     hc.recolor_eyes()
     if WITH_TIE:  # the tie and its stars are off for now
-        out = V(root.x - hs.HC.x, root.y - hs.HC.y, 0.0).normalized()
+        out = V(root.x - HC.x, root.y - HC.y, 0.0).normalized()
         star_out = (out + V(0, -0.55, 0) + V(0, 0, -0.1)).normalized()
         centre = root + axis * 0.007
         trees = [hc.skin_bvh(o) for o in bpy.data.objects if o.name.startswith("tuft_")]
@@ -374,8 +394,7 @@ def main():
         hit = min((h for h in hits if h[0] is not None), key=lambda h: h[3])[0]
         tie(centre, axis, hit + star_out * STAR_LIFT, star_out, neck + 0.002, amber, outline_mat)
     tidy_view()
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v7.blend"))
-    print("SAVED v7 bun root", tuple(round(c, 3) for c in root), "axis", tuple(round(c, 2) for c in axis), "neck", round(neck, 4))
+    print("BUN root", tuple(round(c, 3) for c in root), "axis", tuple(round(c, 2) for c in axis), "neck", round(neck, 4))
 
 
 BUN_AZ = float(os.environ.get("SPICA_BUN_AZ", "-125"))

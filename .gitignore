@@ -13,14 +13,8 @@ next-env.d.ts
 .data/
 assets/model/renders/
 assets/model/base/
-assets/model/spica-v4.blend
-assets/model/spica-v5.blend
-assets/model/spica-base.blend
-assets/model/spica-v6h.blend
-assets/model/spica-v6b.blend
-assets/model/spica-v7.blend
-assets/model/spica-v6l.blend
-assets/model/spica-v4d.blend
+assets/model/*.blend
 assets/model/*.blend1
 assets/model/build/__pycache__/
 *.vrm
+assets/model/tex/cloth/

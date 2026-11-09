@@ -108,7 +108,6 @@ SCEN = {
     "twist": lambda: shake("J_Bip_C_Spine", 2, 30, 14, 42),
 }
 END = 90
-tree_cache = {}
 
 
 def world_P(o, dg):

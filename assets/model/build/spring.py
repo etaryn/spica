@@ -13,7 +13,7 @@ Run this file in Blender (-P) for a quick self-check; spring_check.py is the ful
 import math
 
 import bpy
-from mathutils import Matrix, Quaternion, Vector
+from mathutils import Quaternion, Vector
 from mathutils.bvhtree import BVHTree
 
 # stiffness: fraction of the way back to rest per frame; drag: velocity lost per frame;

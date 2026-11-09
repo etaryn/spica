@@ -1,7 +1,7 @@
 # Orbit O1 — her 3D model
 
 Status: **v1 built and accepted 2026-11-08** (body, face, hair, clothes, socks, star tattoo and stars; a first draft, with some
-clipping and edginess left, see "v1" below). Look: `docs/orbit-o1-character-brief.md` (source of
+clipping and edginess left, see "v1" below); on 2026-11-09 its default palette became **midnight-noir** and a binary star was added. Look: `docs/orbit-o1-character-brief.md` (source of
 truth, not repeated here). Branch: `orbit/o1-model`.
 
 ## Goal
@@ -192,18 +192,18 @@ last two share. The .vrm is read as a .glb copy, so no VRM add-on is needed.
 ## v1 (2026-11-08)
 Ethan accepted the model as her v1: "good enough to work for her v1" despite some clipping and edginess. It is the file
 `assets/model/spica-v1.blend`, rebuilt from the scripts by `sh assets/model/build/run.sh` (the textures of the clothes are drawn
-first by `cloth_tex.py`; review renders go to `assets/model/renders/v1`). The older models (the procedural v1 to v3, v4 to v7 and
+first by `cloth_tex.py`; review renders go to `assets/model/renders/v1`). With no argument it builds the default palette; `sh assets/model/build/run.sh spacey` builds the first v1 look into `spica-spacey.blend` (palette names are in `palette.py`). The older models (the procedural v1 to v3, v4 to v7 and
 the 2026-11-08 stages up to v8) were deleted when v1 was saved, with the build scripts only they used (`build_model.py`,
 `hires.py`, `hair.py`, `geo.py`, `inspect_base.py`, `make_face.mjs`, the face texture) and the v4 and v5 hair paths in
 `hair_cards.py`; their history is in git (the old procedural v1 to v3 are in earlier commits). Rebuilding after the cleanup
 gives renders pixel-identical to the model before it (all 32 review images checked).
 
-What is in v1: the asymmetric bob and fringe, one bun on her right, a light-blue strip of highlight in one lock; a glowing
-dark-violet iris with a light-blue lower glow and highlight; a small star tattoo under her left eye; a cool-white hoodie (zip,
-two slit pockets, ribbed hem band split below the zip, open V neckline with a dark-blue lining facing, the sample's hood as
-a collar), greyish-black denim shorts (twill, creases, topstitching, rolled hem, back and front pockets), bare legs with a
-thigh-high stocking with three big stars on her left leg and an ankle sock on her right, cool-white sneakers with muted
-periwinkle soles. Palette in the brief.
+What is in v1 (default palette midnight-noir, 2026-11-09): the asymmetric bob and fringe, one bun on her right, one wide cyan strip
+in the long lock beside her left cheek; a glowing dark-blue iris with a cyan lower glow; a pale-yellow star tattoo under her left eye;
+a deep-space-blue hoodie (zip, two slit pockets, ribbed hem band split below the zip, open V neckline with a bright-violet lining
+facing, the sample's hood as a collar), pale ice-grey denim shorts (twill, creases, topstitching, rolled hem, back and front
+pockets), bare legs with a deep-blue thigh-high stocking with three big pale-yellow glowing stars on her left leg and a deep-blue
+ankle sock on her right, cool-white sneakers with muted-gold soles, and the binary star above her head. Palette in the brief.
 
 Known flaws (the clipping and edginess Ethan means, for the next pass):
 - Where the V strip of the hoodie meets the hood's flaps there are small crumpled knots of outline and a few slivers (the
@@ -214,10 +214,40 @@ Known flaws (the clipping and edginess Ethan means, for the next pass):
   and they stay on the cloth in any pose, but nothing is a real object.
 - The hard toon step on the shorts shows a few lighting islands at the hips where the light edge crosses the curves.
 - The face star is foreshortened (narrow) seen from the front, because the cheek turns away steeply there; regular from 3/4.
-- The hood and neck are both pale: they separate by hue only (cool hoodie against warm skin). The dark-blue hood was rejected.
+- The hood used to blend into her neck while it was pale; with the dark hoodie it no longer does (the dark-blue-lining hood was rejected earlier because a big blue patch could not be read as a hood; this one is the hoodie's own blue). The dark outfit makes the underbust bend and any mesh edge more visible than the pale one did.
+- The binary star's rings are faint at full-body size (best in head close-ups); the glow is a shader halo, so for sprites a 2D glow may be better later.
 - No stress poses tested (stage 4), no animation, hair and hood are rigid (no swing).
 - Licence: the derived model contains the VRoid samples' geometry and textures (modification and redistribution prohibited in
   their metadata); re-export the samples with modification allowed before the model ships or is committed.
+
+## Palette, hair strip, underbust and the binary star (2026-11-09)
+Ethan asked for alternative palettes (the name Spica, an accent colour to break up the all-purple look, darker and richer clothes,
+light stockings and pants, highlights), reviewed several sheets of options (six full palettes, then six dark ones with coloured
+stockings), picked **midnight-noir** and tuned it: richer then darker space blue, the stocking and socks a touch darker than the
+hoodie, pale denim shorts, pale-yellow stars, cyan accents. All colours are now in `palette.py` (read by the build scripts and by
+`cloth_tex.py`; `DEFAULT` is the default palette, `run.sh <name>` builds another one). Details that came with it:
+- **Stars:** pale and luminous (`star_glow`): the star pictures are drawn slightly translucent with a soft halo, and the shader lays
+  them unlit (self-lit, not shaded by the cloth); the tattoo gets a thin warm rim, or a pale star disappears on pale skin. The
+  tattoo is about 1.8 cm across (radius 8.8 mm), the stocking stars 10 to 17 cm.
+- **Hair strip:** one wide band of cyan on the highlight lock (`strip_band` in the palette: where along the card's u and how wide;
+  the card's u runs from 0.75 to 1.41, so a band at u 0.5 caught a sliver), keeping the strand lines. Thin strips on many locks were
+  tried and rejected.
+- **Underbust (hoodie):** the dark cloth turned the hard bend where the breast meets the body into a line and a shadow. A taper
+  (the cloth running straight from the nipples to the upper belly) was tried and reverted: it made her look saggy. What stays is only
+  rounding that bend (`UNDERBUST_EASE`): the shell's distance from the torso's axis is sampled on a regular grid of angle by height,
+  blurred, and only the positive change (the inside corner of the bend) is read back at each vertex, so the bust keeps its size, place
+  and top, and meets the body in a long soft curve. Smoothing along the irregular mesh edges was tried first and left diagonal facets.
+- **Binary star** (`binary_stars.py`, called by `clothes.py` when the palette says `orbs`): see the brief. An empty `orbit_placer`
+  is rigid on the head bone (its transform is solved so the pair keeps its place whatever the bone's own transform is) with its Z
+  axis along the line from the middle of her head through the pair's centre; its child `orbit_spin` turns about that axis by a driver
+  (`start + frame * 2 pi / 96`, no keyframes); the orbs and their halos are its children, the two thin torus rings are children of the
+  placer. The glow is the shader's: a halo sphere (3.2 times the orb) whose alpha is zero over the core and then falls from 0.75 at the
+  core's edge to nothing at the rim, with no bloom (the real-time renderer has none). Placement was measured, not guessed: for the
+  pair's direction (azimuth 50 degrees from her left toward behind, elevation 65), distance 18 cm and separation 6.5 cm, each orb's
+  distance to the nearest hair surface over a full turn stays within 2.7 to 4.3 cm. The first setting (a steep plane, 40 degrees
+  elevation, 8 cm apart) let one orb swing far out and the other hang over the hair (a 2.4 cm spread at 7 cm), which is why the
+  plane was made nearly parallel to the top of her head. The pair follows the head when the head bone is posed (checked); the
+  animation is not exported yet (stage 5).
 
 ## Tools
 Blender 5.2.3 LTS headless. Skills installed to `~/.claude/skills/` from a vetted markdown-only copy

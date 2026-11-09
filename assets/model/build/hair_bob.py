@@ -20,6 +20,7 @@ from mathutils.bvhtree import BVHTree
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import hair_cards as hc  # noqa: E402
+from palette import P  # noqa: E402
 
 ROOT = hc.ROOT
 V = hc.V
@@ -198,7 +199,7 @@ def bun_from_sample3(az, el, off):
 
 
 # ---------------------------------------------------------------- hair shading
-HAIR = dict(base="CFC6F2", shade="8E86D0", streak="B4DAFF")
+HAIR = dict(base=P.hair, shade=P.hair_shade, streak=P.streak)
 STREAK_CARD = "Hair059"  # the one lock that carries the strip of highlights
 INNER = 0.5  # how far a card of the inner layer goes toward the shadow colour
 
@@ -208,7 +209,7 @@ def blend(a, b, t):
     return "".join("%02X" % round(int(a[i:i + 2], 16) * (1 - t) + int(b[i:i + 2], 16) * t) for i in (0, 2, 4))
 
 
-def hair_toon(name, tex, inner=False, clamp_streak=False, streak=None):
+def hair_toon(name, tex, inner=False, clamp_streak=False, streak=None, band=None):
     """Hair as a toon material in her palette that keeps the strands of the sample's own hair texture:
     the texture's brightness (dark roots, lighter tips, the lines between strands, the highlight blobs)
     is mapped onto her tones, then the unlit side goes toward the shadow colour. `inner` darkens the
@@ -266,13 +267,23 @@ def hair_toon(name, tex, inner=False, clamp_streak=False, streak=None):
         L.new(val, r.inputs["Fac"])
         return r.outputs["Color"]
 
-    col = ramp_of([(0.045, blend(b, sh, 0.70)), (0.09, blend(b, sh, 0.18)), (0.12, b), (0.17, blend(b, "F6F2FF", 0.35)), (0.50, "F4F0FF")])
+    col = ramp_of([(0.045, blend(b, sh, 0.70)), (0.09, blend(b, sh, 0.18)), (0.12, b), (0.17, blend(b, P.hair_hi, 0.35)), (0.50, P.hair_hi2)])
     if streak:  # the texture's cyan streak (much blue, little red) in the highlight colour, the strand lines kept
         sep = node("ShaderNodeSeparateColor")
         L.new(img.outputs["Color"], sep.inputs["Color"])
         mask = math("MULTIPLY", math("GREATER_THAN", sep.outputs["Blue"], 0.30), math("SUBTRACT", 1.0, math("GREATER_THAN", sep.outputs["Red"], 0.15)))
-        deep = blend(streak, "6E86C8", 0.5)
+        deep = blend(streak, P.streak_deep, 0.5)
         col = mix(mask, col, ramp_of([(0.045, blend(streak, deep, 0.7)), (0.09, blend(streak, deep, 0.2)), (0.12, streak), (0.17, blend(streak, "FFFFFF", 0.45)), (0.20, blend(streak, "FFFFFF", 0.65))]))
+    if band:  # a thin vertical strip of the highlight colour down the card, by its UV (u0, width): the strand lines are kept
+        u = node("ShaderNodeSeparateXYZ")
+        L.new(uv.outputs["UV"], u.inputs["Vector"])
+        u0, w = band
+        edge = math("SUBTRACT", w, math("ABSOLUTE", math("SUBTRACT", u.outputs["X"], u0), 0.0))
+        window = math("MINIMUM", math("MULTIPLY", edge, 1.0 / 0.012), 1.0)  # 1 inside the strip, a short soft edge
+        window = math("MAXIMUM", window, 0.0)
+        hi = P.streak
+        deep = blend(hi, P.streak_deep, 0.5)
+        col = mix(window, col, ramp_of([(0.045, blend(hi, deep, 0.7)), (0.09, blend(hi, deep, 0.2)), (0.12, hi), (0.17, blend(hi, "FFFFFF", 0.15)), (0.20, blend(hi, "FFFFFF", 0.30))]))
     if inner:
         col = mix(INNER, col, hc.lin(sh))
     d = node("ShaderNodeBsdfDiffuse")
@@ -337,9 +348,10 @@ def restyle_hair():
     mats = {}
     for o in objs:
         tex = o.get("hair_tex", "_23")
-        key = (tex, o.name in inner, HAIR["streak"] if o.name.split(".")[0] == STREAK_CARD else None)
+        band = P.strip_band if o.name.split(".")[0] == STREAK_CARD else None  # the one strip of highlights: a band of adjacent strands
+        key = (tex, o.name in inner, HAIR["streak"] if o.name.split(".")[0] == STREAK_CARD else None, band)
         if key not in mats:
-            mats[key] = hair_toon(f"hair_{len(mats)}", tex, inner=key[1], clamp_streak=(tex == "_25"), streak=key[2])
+            mats[key] = hair_toon(f"hair_{len(mats)}", tex, inner=key[1], clamp_streak=(tex == "_25"), streak=key[2], band=key[3])
         o.data.materials[0] = mats[key]
 
 

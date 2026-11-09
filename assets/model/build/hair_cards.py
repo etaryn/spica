@@ -13,6 +13,10 @@ from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+import sys  # noqa: E402
+
+sys.path.insert(0, HERE)
+from palette import P  # noqa: E402
 ROOT = os.path.dirname(HERE)
 
 
@@ -120,12 +124,12 @@ def recolor_eyes():
             nt.links.new(bw.outputs["Val"], cr.inputs["Fac"])
             nt.links.new(cr.outputs["Color"], em.inputs["Color"])
 
-    retint("N00_000_00_EyeIris_00_EYE", ramp=("160E38", "5A44D4", "A9D6FF"))
-    retint("N00_000_00_EyeHighlight_00_EYE", hexstr="CFEAFF")
-    retint("N00_000_00_FaceBrow_00_FACE", hexstr="463A78")
-    retint("N00_000_00_FaceEyelash_00_FACE", hexstr="2B2347")
-    retint("N00_000_00_FaceEyeline_00_FACE", hexstr="2B2347")
-    retint("N00_000_00_FaceMouth_00_FACE", hexstr="C9808A")
+    retint("N00_000_00_EyeIris_00_EYE", ramp=P.iris)
+    retint("N00_000_00_EyeHighlight_00_EYE", hexstr=P.eye_hi)
+    retint("N00_000_00_FaceBrow_00_FACE", hexstr=P.brow)
+    retint("N00_000_00_FaceEyelash_00_FACE", hexstr=P.outline)
+    retint("N00_000_00_FaceEyeline_00_FACE", hexstr=P.outline)
+    retint("N00_000_00_FaceMouth_00_FACE", hexstr=P.mouth)
     face = bpy.data.objects["Face"]
     face.data.shape_keys.key_blocks["Fcl_EYE_Close"].value = 0.20
 

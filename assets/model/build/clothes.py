@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import hair_cards as hc  # noqa: E402
 import cloth_layout as CL  # noqa: E402
+import binary_stars  # noqa: E402
 
 ROOT = hc.ROOT
 V = hc.V
@@ -282,7 +283,7 @@ def toon(name, base, shade, cut=0.30, soft=False, grain=None, decals=None, ease=
             a_ = nb.math("MULTIPLY_ADD", du, math.cos(t) / width, nb.math("MULTIPLY", dv, math.sin(t) / width))
             b_ = nb.math("MULTIPLY_ADD", dv, math.cos(t) / width, nb.math("MULTIPLY", du, -math.sin(t) / width))
             rgb, alpha = nb.tex(cloth_image("sock_star.png"), nb.math("ADD", a_, 0.5), nb.math("ADD", b_, 0.5))
-            col = nb.mixc(alpha, col, shaded(rgb))
+            col = nb.mixc(alpha, col, rgb if CL.STAR_GLOW else shaded(rgb))  # pale stars are self-lit
     if sock:  # fine ribs round the leg (a whole number of them, so there is no seam at the back), deeper in the band at the top
         ang = nb.math("ARCTAN2", nb.math("SUBTRACT", x, sock["axis"][0]), nb.math("MULTIPLY", nb.math("SUBTRACT", y, sock["axis"][1]), -1.0))
         wave = nb.math("SINE", nb.math("MULTIPLY", ang, SOCK_RIBS))
@@ -475,7 +476,7 @@ def split_hem(ob, half, z_top, yc=0.02):
     ob.data.update()
 
 
-def make_sock(body, outline, side, z_top, name, band=True, stars=False):
+def make_sock(body, outline, side, z_top, name, band=True, stars=False, colours=None):
     """A sock: a shell of her leg, 2 mm out, from inside the shoe up to z_top, skinned like the leg so it bends with it. With `band`
     it has a ribbed band at the top that stands a little proud (and a seam groove under it); without, the top is a clean edge that
     wraps the leg (the thigh-high stocking). With `stars` the stars of cloth_tex.py are laid on its front."""
@@ -505,7 +506,7 @@ def make_sock(body, outline, side, z_top, name, band=True, stars=False):
             cys.append(cy)
             rs.append(sum(math.hypot(p.x - cx, p.y - cy) for p in ring) / len(ring))
         star_args = dict(knots=(zs, cxs, cys, rs))
-    ob.data.materials.append(toon(name, CL.SOCK, CL.SOCK_SHADE, soft=True, sock=dict(axis=(x0, 0.015), z=z_top - CL.SOCK_BAND if band else 9.0, stars=star_args)))
+    ob.data.materials.append(toon(name, *(colours or (CL.SOCK, CL.SOCK_SHADE)), soft=True, sock=dict(axis=(x0, 0.015), z=z_top - CL.SOCK_BAND if band else 9.0, stars=star_args)))
     bind(ob, body, 0.0016, outline)
     if band:
         add_loops(ob, [z_top - d for d in (0.002, 0.004, 0.006, 0.008, 0.010, 0.012, 0.014, 0.016, 0.018, CL.SOCK_BAND, CL.SOCK_BAND + 0.002, CL.SOCK_BAND + 0.004, CL.SOCK_BAND + 0.008)])
@@ -566,7 +567,7 @@ def tattoo_face(face):
         sq = nb.math("MULTIPLY", dk, dk)
         dist2 = sq if dist2 is None else nb.math("ADD", dist2, sq)
     near = nb.math("LESS_THAN", dist2, 0.012 * 0.012)
-    r0 = lin("F8E5DC")
+    r0 = lin(CL.P.skin)
     ratio = nb.gray(nb.math("DIVIDE", nb.bw(col), 0.2126 * r0[0] + 0.7152 * r0[1] + 0.0722 * r0[2]))  # how much light the skin has here
     nt.links.new(nb.mixc(nb.math("MULTIPLY", nb.math("MULTIPLY", alpha, near), 0.92), col, nb.mulc(rgb, ratio)), em.inputs["Color"])
 
@@ -790,7 +791,7 @@ def main():
     cloth = {
         "hood": toon("hood", CL.HOODIE, CL.HOODIE_SHADE, soft=True, grain="cotton"),
         "shorts": toon("shorts", PAL["pants"], PAL["pants_shade"], cut=0.34, grain="denim", decals=pants_decals, shine=0.0),
-        "sneakers": toon("sneakers", CL.HOODIE, CL.HOODIE_SHADE),
+        "sneakers": toon("sneakers", CL.SHOE, CL.SHOE_SHADE),
     }
     sole = toon("sole", CL.SOLE_TONE, CL.SOLE_TONE_SHADE)
     lining_mat = toon("lining", CL.LINING, CL.LINING_SHADE, soft=True, grain="cotton")
@@ -860,6 +861,60 @@ def main():
         bmesh.ops.smooth_vert(bm, verts=bm.verts[:], factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
     for _ in range(12):  # the groove down her spine is tighter than the cloth is thick: ease it flat, or the offset folds over there
         bmesh.ops.smooth_vert(bm, verts=[v for v in bm.verts if abs(v.co.x) < 0.035 and v.co.z > HOODIE_HEM + 0.012 and not v.is_boundary], factor=0.5, use_axis_x=False, use_axis_y=True, use_axis_z=True)
+    # the underbust: where her breast meets her body the shell turned in a hard bend (a short, deep crease that the dark cloth made
+    # into a line and a shadow). The cloth is not made to follow her any less, or to fill under the breast (that made her look
+    # saggy): only the inside corner of the bend is rounded off (filled a little toward a blurred version of the surface), so the
+    # breast keeps its place, its size and its top, and meets the body in a long, soft curve. Done on a
+    # regular grid (angle round the torso's axis by height), not along the mesh: smoothing along the mesh's irregular edges leaves
+    # facets. The grid holds the distance from the axis to the shell; the change (blurred minus the original, where positive) is read back at each
+    # vertex and added to its own distance.
+    tree = BVHTree.FromBMesh(bm)
+    y0 = 0.0  # the torso's axis, front to back
+    lo0, lo1, hi0, hi1 = CL.UNDERBUST_EASE
+    th = np.radians(np.arange(-76.0, 76.1, 2.0))  # 0 is straight ahead, + toward her left
+    zs = np.arange(0.96, 1.2801, 0.005)
+    ray = np.full((len(th), len(zs)), np.nan)
+    for i, t in enumerate(th):
+        for j, z in enumerate(zs):
+            hit = tree.ray_cast(Vector((0.0, y0, z)), Vector((math.sin(t), -math.cos(t), 0.0)))[0]
+            if hit:
+                ray[i, j] = math.hypot(hit.x, hit.y - y0)
+    ray = np.where(np.isnan(ray), np.nanmean(ray), ray)
+
+    def ss(v, a_, b_):
+        t_ = np.clip((v - a_) / (b_ - a_), 0.0, 1.0)
+        return t_ * t_ * (3.0 - 2.0 * t_)
+
+    def blur(g, sig_t, sig_z):  # a Gaussian along both axes (edges repeated)
+        for axis, sig in ((0, sig_t), (1, sig_z)):
+            k = np.exp(-0.5 * (np.arange(-3 * int(sig) - 1, 3 * int(sig) + 2) / sig) ** 2)
+            k /= k.sum()
+            pad = len(k) // 2
+            g = np.moveaxis(g, axis, 0)
+            g = np.pad(g, [(pad, pad)] + [(0, 0)] * (g.ndim - 1), mode="edge")
+            g = np.stack([np.convolve(g[:, c], k, mode="valid") for c in range(g.shape[1])], axis=1)
+            g = np.moveaxis(g, 0, axis)
+        return g
+
+    Z, T = np.meshgrid(zs, th)  # both (angles, heights)
+    keep = ss(Z, lo0, lo1) * (1.0 - ss(Z, hi0, hi1)) * (1.0 - ss(np.abs(T), np.radians(45), np.radians(76)))
+    delta = keep * np.maximum(0.0, blur(ray, 4, 9) - ray)  # only the inside of the bend is filled: the bust itself is not flattened or lowered
+    for v in bm.verts:
+        x, y, z = v.co
+        r = math.hypot(x, y - y0)
+        if r < 1e-6 or not (zs[0] <= z <= zs[-1]) or y > y0:
+            continue
+        ang = math.atan2(x, -(y - y0))
+        if abs(ang) >= th[-1]:
+            continue
+        fi, fj = (ang - th[0]) / (th[1] - th[0]), (z - zs[0]) / 0.005
+        i0, j0 = min(int(fi), len(th) - 2), min(int(fj), len(zs) - 2)
+        ui, uj = fi - i0, fj - j0
+        d = (delta[i0, j0] * (1 - ui) * (1 - uj) + delta[i0 + 1, j0] * ui * (1 - uj) + delta[i0, j0 + 1] * (1 - ui) * uj + delta[i0 + 1, j0 + 1] * ui * uj)
+        v.co.x, v.co.y = x * (r + d) / r, y0 + (y - y0) * (r + d) / r
+    band = [v for v in bm.verts if v.co.y < y0 - 0.04 and lo1 < v.co.z < hi0 + 0.04 and abs(v.co.x) < 0.17 and not v.is_boundary]
+    for _ in range(4):  # the moved vertices leave small facets: even them out
+        bmesh.ops.smooth_vert(bm, verts=band, factor=0.5, use_axis_x=False, use_axis_y=True, use_axis_z=False)
     bm.to_mesh(hoodie.data)
     bm.free()
     print("PUSHED hoodie", hc.push_out(hoodie, skin, margin=0.008, reach=0.05))
@@ -894,15 +949,17 @@ def main():
     add_rest_uvs(parts["hood"])
 
     # socks: a thigh-high one on her left leg, an ankle sock on her right
-    parts["sock_l"] = make_sock(body, outline, "L", CL.SOCK_TOP_LONG, "sock_l", band=False, stars=True)
+    parts["sock_l"] = make_sock(body, outline, "L", CL.SOCK_TOP_LONG, "sock_l", band=False, stars=True, colours=(CL.STOCKING, CL.STOCKING_SHADE))
     parts["sock_r"] = make_sock(body, outline, "R", CL.SOCK_TOP_SHORT, "sock_r")
     tattoo_face(bpy.data.objects["Face"])
+    if CL.P.orbs:
+        binary_stars.build(NB, hc.lin, CL.P)
 
     for o in new:
         bpy.data.objects.remove(o)
     print("CLOTHES", {k: len(o.data.polygons) for k, o in parts.items()}, "crotch z %.3f" % crotch)
-    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v1.blend"))
-    print("SAVED spica-v1.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ROOT, "spica-v1.blend" if CL.P_NAME == CL.DEFAULT else "spica-%s.blend" % CL.P_NAME))
+    print("SAVED", os.path.basename(bpy.data.filepath))
 
 
 main()

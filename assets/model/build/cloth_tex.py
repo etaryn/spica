@@ -12,12 +12,25 @@ import math
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 import cloth_layout as L
+from palette import blend, luminance
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tex", "cloth")
 SS = 2
+
+
+if luminance(L.HOODIE) > 0.5:  # a pale hoodie: stitching and seams are its shadow tone, a little deeper
+    STITCH = blend(L.HOODIE_SHADE, "000000", 0.12)
+    TAPE = blend(L.HOODIE, L.HOODIE_SHADE, 0.35)
+    TACK = blend(L.HOODIE_SHADE, "000000", 0.25)
+    SLIT = L.OUTLINE
+else:  # a dark one: they are lighter than the cloth, and the slit is darker
+    STITCH = blend(L.HOODIE, "FFFFFF", 0.30)
+    TAPE = blend(L.HOODIE, "FFFFFF", 0.14)
+    TACK = blend(L.HOODIE, "FFFFFF", 0.22)
+    SLIT = blend(L.HOODIE_SHADE, "000000", 0.6)
 
 
 def rgba(h, a=255):
@@ -105,8 +118,8 @@ def inset(pts, d):
 def hoodie_hem(cv):
     """The seam where the hoodie's hem band meets the body (a shade deeper than the cloth) and a row of tone-on-tone stitches above it."""
     top = L.HEM_Z + L.HEM_BAND
-    cv.line([(cv.box[0], top + 0.001), (cv.box[1], top + 0.001)], rgba("B4AEC6", 210), 0.0022)
-    cv.dashed([(cv.box[0], top + 0.0050), (cv.box[1], top + 0.0050)], rgba("BDB7CF", 255), 0.0010, 0.0032, 0.0018)
+    cv.line([(cv.box[0], top + 0.001), (cv.box[1], top + 0.001)], rgba(STITCH, 210), 0.0022)
+    cv.dashed([(cv.box[0], top + 0.0050), (cv.box[1], top + 0.0050)], rgba(STITCH, 255), 0.0010, 0.0032, 0.0018)
 
 
 def hoodie_back():
@@ -120,12 +133,12 @@ def hoodie_front():
     hoodie_hem(cv)
     for sgn in (-1, 1):  # tone-on-tone stitches on the body beside the facing, along the opening
         zs = [L.ZIP_TOP, 1.38]
-        cv.dashed([(sgn * (L.OPEN_SLOPE * (z - L.ZIP_TOP) + L.FACING_W + 0.005), z) for z in zs], rgba("BDB7CF", 255), 0.0010, 0.0032, 0.0018)
+        cv.dashed([(sgn * (L.OPEN_SLOPE * (z - L.ZIP_TOP) + L.FACING_W + 0.005), z) for z in zs], rgba(STITCH, 255), 0.0010, 0.0032, 0.0018)
     z0, z1 = L.ZIP_END + 0.008, L.ZIP_TOP
     # the zip: a tape each side in a slightly deeper off-white, stitched, and the teeth down the middle
     for sgn in (-1, 1):
-        cv.poly([(sgn * 0.0020, z0), (sgn * 0.0085, z0), (sgn * 0.0085, z1), (sgn * 0.0020, z1)], rgba("E4DFEC", 235))
-        cv.line([(sgn * 0.0074, z0), (sgn * 0.0074, z1)], rgba("BDB7CF", 255), 0.0008)
+        cv.poly([(sgn * 0.0020, z0), (sgn * 0.0085, z0), (sgn * 0.0085, z1), (sgn * 0.0020, z1)], rgba(TAPE, 235))
+        cv.line([(sgn * 0.0074, z0), (sgn * 0.0074, z1)], rgba(STITCH, 255), 0.0008)
     pitch, z = 0.0046, z0
     k = 0
     while z + pitch < z1:
@@ -149,12 +162,12 @@ def hoodie_front():
     # two slanted hand-pocket slits, one each side: only the slit, no pocket behind it
     for sgn in (-1, 1):
         a, b = (sgn * 0.0900, 0.935), (sgn * 0.0780, 1.017)
-        cv.line([a, b], rgba("2E2748", 215), 0.0036)  # the opening
+        cv.line([a, b], rgba(SLIT, 215), 0.0036)  # the opening
         cv.line([(a[0] + sgn * 0.0030, a[1] + 0.0010), (b[0] + sgn * 0.0030, b[1] + 0.0010)], rgba("FFFFFF", 150), 0.0016)  # the lip, catching the light
         for off in (-0.0050, 0.0050):  # tone-on-tone stitching along both sides
-            cv.dashed([(a[0] + off, a[1]), (b[0] + off, b[1])], rgba("BDB7CF", 255), 0.0010, 0.0036, 0.0026)
+            cv.dashed([(a[0] + off, a[1]), (b[0] + off, b[1])], rgba(STITCH, 255), 0.0010, 0.0036, 0.0026)
         for e in (a, b):  # bar tacks at both ends
-            cv.line([(e[0] - 0.0050, e[1]), (e[0] + 0.0050, e[1])], rgba("9D97B5", 255), 0.0012)
+            cv.line([(e[0] - 0.0050, e[1]), (e[0] + 0.0050, e[1])], rgba(TACK, 255), 0.0012)
     cv.save("hoodie_front.png")
 
 
@@ -205,7 +218,7 @@ def pants_back():
     for sgn in (-1, 1):  # back pockets, sewn on in thread the colour of the cloth, a touch lighter
         c = sgn * 0.074
         pocket = [(c - 0.043, 0.890), (c + 0.043, 0.890), (c + 0.043, 0.826), (c, 0.804), (c - 0.043, 0.826)]
-        cv.poly(pocket, rgba("5A5B68", 45))
+        cv.poly(pocket, rgba(L.PANTS_THREAD, 45))
         topstitch(cv, closed(pocket), thread)
         topstitch(cv, closed(inset(pocket, 0.0050)), thread)
     for s in L.SMILES:  # the creases under the seat
@@ -220,11 +233,28 @@ def star_points(cx, cz, radius, turn):
              cz + (radius if k % 2 == 0 else radius * 0.382) * math.sin(math.radians(turn + 90 + 36 * k))) for k in range(10)]
 
 
-def star(name, color):
-    """A five-pointed star, point up, in the middle of a square picture (the star's outer radius is STAR_FILL of the width)."""
-    cv = Canvas(512, 512, (-0.5, 0.5, -0.5, 0.5))
-    cv.poly(star_points(0.0, 0.0, L.STAR_FILL, 0), rgba(color))
-    cv.save(name)
+def star(name, color, rim=False):
+    """A five-pointed star, point up, in the middle of a square picture (the star's outer radius is STAR_FILL of the width). With
+    STAR_GLOW it is pale and translucent with a soft halo round it (and, for the tattoo, a thin warm rim so that a pale star
+    still reads on pale skin)."""
+    if not L.STAR_GLOW:
+        cv = Canvas(512, 512, (-0.5, 0.5, -0.5, 0.5))
+        cv.poly(star_points(0.0, 0.0, L.STAR_FILL, 0), rgba(color))
+        cv.save(name)
+        return
+    n = 1024
+    pts = [(n * (0.5 + x), n * (0.5 - y)) for x, y in star_points(0.0, 0.0, L.STAR_FILL * 0.92, 0)]
+    mask = Image.new("L", (n, n), 0)
+    ImageDraw.Draw(mask).polygon(pts, fill=255)
+    halo = mask.filter(ImageFilter.GaussianBlur(26)).point(lambda v: int(v * 0.55))
+    fill = mask.point(lambda v: int(v * 0.88))  # a little translucent
+    img = Image.new("RGBA", (n, n), rgba(color)[:3] + (0,))
+    img.putalpha(halo)
+    img = Image.alpha_composite(img, Image.merge("RGBA", (*Image.new("RGB", (n, n), rgba(color)[:3]).split(), fill)))
+    if rim:  # the tattoo: a thin warm edge
+        edge = ImageDraw.Draw(img)
+        edge.line(pts + [pts[0]], fill=rgba("E8A83C", 235), width=12, joint="curve")
+    img.resize((512, 512), Image.LANCZOS).save(os.path.join(OUT, name))
 
 
 def denim_weave():
@@ -250,7 +280,7 @@ if __name__ == "__main__":
     hoodie_back()
     pants_front()
     pants_back()
-    star("face_star.png", L.STAR_FACE)
+    star("face_star.png", L.STAR_FACE, rim=True)
     star("sock_star.png", L.STAR_SOCK)
     Image.new("RGBA", (16, 16), (0, 0, 0, 0)).save(os.path.join(OUT, "blank.png"))
     denim_weave()

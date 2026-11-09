@@ -5,13 +5,17 @@ navy outline, spring bones and expression shape keys kept. It is the first stage
 clothes.py run after it in the same Blender session (run.sh), and clothes.py saves the model.
 """
 import os
+import sys
 
 import bmesh
 import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-PAL = dict(navy="2B2347", hair="CFC6F2", hairshade="8E86D0", skin="F8E5DC")  # "navy" is the outline colour: a deep indigo
+sys.path.insert(0, HERE)
+from palette import P  # noqa: E402
+
+PAL = dict(navy=P.outline, hair=P.hair, hairshade=P.hair_shade, skin=P.skin)  # "navy" is the outline colour
 MATS = {}
 
 
@@ -97,7 +101,7 @@ def main():
     bpy.ops.import_scene.gltf(filepath=os.path.join(ROOT, "base", "sample_model.glb"))
     OUTLINE = outline_mat()
     CLEAR = clear_mat()
-    skin = toon("skin", PAL["skin"], "ECCFC6", cut=0.16)
+    skin = toon("skin", PAL["skin"], P.skin_shade, cut=0.16)
     hair = toon("hair", PAL["hair"], PAL["hairshade"])
 
     # Helper mesh from the import (a spring-bone collider), not part of her.

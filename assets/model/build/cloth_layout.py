@@ -5,6 +5,13 @@ A front or back texture covers a box (x0, x1, z0, z1) of her body seen from the 
 """
 HOODIE_BOX = (-0.30, 0.30, 0.80, 1.40)
 SHORTS_BOX = (-0.22, 0.22, 0.74, 0.92)
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from palette import DEFAULT, NAME as P_NAME, P, blend  # noqa: E402
+
+UNDERBUST_EASE = (0.99, 1.05, 1.19, 1.25)  # the hard bend under her breasts is rounded over these heights (nothing, full, full, nothing)
 HEM_Z = 0.855  # the hoodie's hem: low enough to cover the top of the shorts' back pockets
 ARM_Y, ARM_Z = 0.025, 1.287  # an arm's axis in the T-pose (the shoulder joint): it runs along x from here
 ZIP_TOP = 1.22  # where the zip's slider sits: above it the hoodie hangs open
@@ -40,18 +47,20 @@ SMILES = [smooth_line(w) for w in (
 )]
 
 # a cool off-white base, a spacey violet accent, greyish-black pants
-HOODIE, HOODIE_SHADE = "E6E7F3", "CBCDE4"  # the hoodie, its hood and the sneakers' uppers: a cool white, so it separates from her warm skin
-SOCK, SOCK_SHADE = "F8F7F4", "DAD8E4"  # the socks: a clean off-white, nearly white, with the hoodie's cool shadow
+HOODIE, HOODIE_SHADE = P.hoodie, P.hoodie_shade
+SHOE, SHOE_SHADE = P.shoe, P.shoe_shade  # the hoodie, its hood and the sneakers' uppers: a cool white, so it separates from her warm skin
+SOCK, SOCK_SHADE = P.sock, P.sock_shade
+STOCKING, STOCKING_SHADE = P.stocking, P.stocking_shade  # the socks: a clean off-white, nearly white, with the hoodie's cool shadow
 SOCK_TOP_LONG, SOCK_TOP_SHORT = 0.700, 0.190  # where the thigh-high sock (her left leg) and the ankle sock (her right) end
 SOCK_BAND = 0.022  # height of the ribbed band at the top of a sock
 # Stars (Ethan): a small tattoo under the outer corner of her left eye, and a few big ones on the thigh-high stocking. Drawn as
 # pictures (cloth_tex.py) and laid on the surface in the shader, so they lie flush on it and stay on it as she moves.
-STAR_FACE, STAR_SOCK = "5A44D4", "8E86D0"  # the tattoo's colour (the iris's mid violet) and the stocking stars' (the hair's shadow tone)
-FACE_STAR = (0.058, 1.4245, 0.0045)  # x, z of its centre (metres, rest pose, her left is +x) and its outer radius; the picture lies flat on the skin there
-SOCK_STARS = [(0.585, -32, 0.070, 0), (0.415, 135, 0.064, -10), (0.245, -105, 0.052, 14)]  # three stars round the thigh-high: height, angle round the leg (0 is the front, + toward her left), outer radius, turn in degrees
+STAR_FACE, STAR_SOCK, STAR_GLOW = P.star_face, P.star_sock, P.star_glow  # the tattoo's colour (the iris's mid violet) and the stocking stars' (the hair's shadow tone)
+FACE_STAR = (0.058, 1.4245, 0.0088)  # x, z of its centre (metres, rest pose, her left is +x) and its outer radius; the picture lies flat on the skin there
+SOCK_STARS = [(0.585, -32, 0.084, 0), (0.415, 135, 0.077, -10), (0.245, -105, 0.063, 14)]  # three stars round the thigh-high: height, angle round the leg (0 is the front, + toward her left), outer radius, turn in degrees
 STAR_FILL = 0.45  # a star's outer radius as a fraction of the width of its picture
-LINING, LINING_SHADE = "2D3A8C", "1C2566"  # the inside of the hoodie and the facing along its opening: a spacey dark blue, darker than her hair
-PANTS, PANTS_SHADE, PANTS_THREAD = "34353E", "272830", "5A5B68"
-SOLE_TONE, SOLE_TONE_SHADE = "9D96D8", "7670B0"  # the sneaker soles: a muted periwinkle, between the hair's base and shadow tones
-OUTLINE = "2B2347"
-ZIP_METAL, ZIP_DARK = "CDD0DA", "7F8294"
+LINING, LINING_SHADE = P.lining, P.lining_shade  # the inside of the hoodie and the facing along its opening: a spacey dark blue, darker than her hair
+PANTS, PANTS_SHADE, PANTS_THREAD = P.pants, P.pants_shade, P.pants_thread
+SOLE_TONE, SOLE_TONE_SHADE = P.sole, P.sole_shade  # the sneaker soles: a muted periwinkle, between the hair's base and shadow tones
+OUTLINE = P.outline
+ZIP_METAL, ZIP_DARK = P.zip_metal, P.zip_dark

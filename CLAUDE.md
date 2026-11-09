@@ -10,7 +10,9 @@ Design docs: `docs/orbit/o1-character-brief.md` (the look, source of truth) and
 `DECISIONS.md`. Expressions (stage 3) are built in: 25, `face_expr.use(name)`; they need `assets/references/` (git-ignored).
 Next: O1 stages 4-6 (secondary motion and corrective shapes, clips, sprites); doodles only when Ethan asks.
 
-- Build: `sh assets/model/build/run.sh [palette]`; check: `check_model.py` (see README). All colours
+- **v2 is her current model** (`docs/orbit/o1-v2-spec.md`, later choices in `DECISIONS.md`): build with `sh assets/model_v2/build/run.sh`,
+  colours in `assets/model_v2/build/palette.py`. It reads v1's `spica-v1.blend` for her face features. No rig or expressions yet.
+- v1 build: `sh assets/model/build/run.sh [palette]`; check: `check_model.py` (see README). All colours
   live in `assets/model/build/palette.py`.
 - `.blend`, `.vrm`, textures and renders are git-ignored (the VRoid samples' licence forbids
   committing modified copies).

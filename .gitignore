@@ -27,3 +27,10 @@ evals/results/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# Orbit model v2: CC0 base bundle, built model and renders stay local
+assets/model_v2/base/
+assets/model_v2/renders/
+assets/model_v2/*.blend
+assets/model_v2/*.blend1
+assets/model_v2/build/__pycache__/

@@ -86,6 +86,9 @@ e = black.node_tree.nodes.new("ShaderNodeEmission")
 e.inputs["Color"].default_value = (0, 0, 0, 1)
 black.node_tree.links.new(e.outputs["Emission"], o.inputs["Surface"])
 bpy.context.view_layer.material_override = black
+for _o in bpy.data.objects:  # the face decal is a flat patch over her face: left in, the black override would paint a black square there
+    if _o.name.startswith("face_decal"):
+        _o.hide_render = True
 for n in body:
     shoot(f"sil-{n}", VIEWS[n], n)
 print("RENDERED", names)

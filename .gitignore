@@ -18,6 +18,8 @@ assets/model/*.blend1
 assets/model/build/__pycache__/
 *.vrm
 assets/model/tex/cloth/
+assets/model/tex/face/
+assets/references/
 .env
 .env.*
 .data/

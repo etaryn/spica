@@ -7,7 +7,8 @@ over is data, by hand: her rendered sprites are copied into `assets/poses/` on `
 
 Design docs: `docs/orbit/o1-character-brief.md` (the look, source of truth) and
 `docs/orbit/o1-model.md` (the build, flaws, next stages). Choices the docs don't cover go in
-`DECISIONS.md`. Next: O1 stages 3-6 (expressions, secondary motion, clips, sprites).
+`DECISIONS.md`. Expressions (stage 3) are built in: 25, `face_expr.use(name)`; they need `assets/references/` (git-ignored).
+Next: O1 stages 4-6 (secondary motion and corrective shapes, clips, sprites); doodles only when Ethan asks.
 
 - Build: `sh assets/model/build/run.sh [palette]`; check: `check_model.py` (see README). All colours
   live in `assets/model/build/palette.py`.

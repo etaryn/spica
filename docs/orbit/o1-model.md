@@ -29,7 +29,9 @@ another palette into `spica-<palette>.blend` (the first look is `spacey`). The c
 hair colours, eye colours) → `clothes.py` (clothes, socks, face tattoo, binary star, then `rig_prep.py`; saves the file).
 `cloth_tex.py` (Pillow and numpy, outside Blender) draws the pictures the shaders lay on the cloth first. Shared files: `palette.py` (every
 colour, one entry per palette), `cloth_layout.py` (positions and sizes), `hair_cards.py` (helpers: toon material, `push_out`, eye colours),
-`binary_stars.py`, `render.py` and `compose.mjs` (review renders and sheets), `check_model.py` (the animation-readiness check, below).
+`binary_stars.py`, `render.py` and `compose.mjs` (review renders and sheets), `check_model.py` (the animation-readiness check, below), and the
+expression files `expr_defs.py`, `expr_draw.py`, `expr_sheet.py`, `expressions.py`, `face_keys.py`, `face_setup.py`, `face_decal.py`, `face_map.py`,
+`face_build.py`, `face_expr.py`.
 The .vrm is read as a .glb copy, so no VRM add-on is needed. All model files are git-ignored (licence, below); only scripts and docs are
 committed. Older models and their scripts were deleted when v1 was saved; they are in git history.
 
@@ -148,6 +150,44 @@ a `.glb`. **Result 2026-11-09: no problems, four notes:**
 - **Expressions:** the face shape keys are there; the swappable eye and mouth textures (stage 3) are not built.
 - Export: the toon materials, shader glows and the driver do not survive a `.glb`; sprites and video are rendered from Blender.
 
+## Expressions (stage 3, started 2026-11-09; the standard set first, doodles after approval)
+**Copied, not drawn** (Ethan: copy from references, do not improvise the art). Her Face is the same VRoid face as the ReForge Mode
+*Expression Pack* reference model (8,280 polygons, the same eight material slots, different vertex numbering), so that model's
+174 shape keys are transferred onto her by UV position (`face_keys.py`): ARKit-style mouth shapes, `Teeth_Vampire/Shark/FrontFang`
+(real fangs, canines leaning inward), a tongue, `eyeBlink` (thin, fully closed lids: the sample's own `Fcl_EYE_Close` was the thick,
+half-closed one), `Eye_Joy` / `Eye_Fun` arches, brow and eye shapes, eye look keys. The pack's named presets (`re_Mouth Smirk 2`,
+`re_Eye Happy 3`...) are plain key weights, read out of its Unity `.anim` files into `assets/references/pack_presets.json`;
+`expr_defs.py` is her expression table built from them. Its overlay textures (blush, forehead lines, eyebags) lie in the same face UV
+layout and are copied to `tex/face/`; `face_setup.py` lays them on her skin material (3 swappable slots).
+Her mouth material lost its picture when it was recoloured to one flat colour (no teeth, no tongue): `face_setup` maps the sample's
+mouth picture to her palette by brightness (inside, tongue, teeth). The VRoid look of a closed mouth is a thin outline shell, so a
+`mouth_outline` shell (1.3 mm, dark rose) is built with the keys, and the skin outline shell is rebuilt with the keys (it had none: it
+stayed put when the jaw opened). The two black marks at the mouth corners were outline-shell faces showing through the skin cut-out:
+those faces are deleted. A flat pressed mouth collapses to nothing on the mesh, so neutral, bored and confused keep a small **drawn
+decal** (`expr_draw.py`, `face_decal.py`: a skin-hugging patch built from the skin surface with the mouth and eye cut-outs bridged),
+which also carries the tears and sweat drops. Neutral is exactly what Ethan liked (a short thin black line).
+**Style rule (Ethan, 2026-11-09): solid, separated colours, little blending** (her skin, hair and clothes are toon steps, so the mouth and
+the extras must be too). The mouth picture is mapped by a CONSTANT colour ramp into four flat bands (a darker top band, the inside,
+the tongue, the teeth: `MOUTH_*` in `face_setup.py`), the teeth carry no outline (only the lips do). The pack's soft blush is cut into
+flat ovals and its Shade 1 into a hard-edged navy shadow (`blush_flat.png`, `shade_hard.png`, made by `expr_draw.py`; the frightened
+expression uses the shadow instead of forehead lines). There are no sweat drops and no tear in sad (Ethan removed them). The cry tears are a thick two-tone stream (0.027 wide, tapering to 0.022, over half the
+eye's 0.05), translucent, no outline, **laid on the skin as an overlay in UV space** (`cry_uv.png`, made by `to_uv` in `expr_draw.py` from a
+front-view picture through the map `uv_xz.npy` that `face_map.py` bakes from her face's UV layout): her eyelash and eyebrow layers draw
+over skin, so the stream starts under the lid, and it runs to the skin's own bottom edge (her jaw) with no stair-steps. (The decal can't
+do this: it is a separate surface that sorts against the eye layers and ends in a 1.2 mm staircase at the face border.) Blush is drawn on the decal (not the pack's overlay), just under the eye, and may cover the star tattoo: a soft blended pink glow with
+`////` lines on top, for flustered and shy (Ethan's pick; the solid lines, solid ovals and glow-only versions were deleted).
+Review: `python assets/model/build/expr_draw.py`, then `blender -b assets/model/spica-v1.blend -P assets/model/build/expressions.py -- assets/model/renders/expr`,
+then `python -I assets/model/build/expr_sheet.py assets/model/renders/expr face` (sheets of six). Once, `blender -b assets/model/spica-v1.blend -P assets/model/build/face_map.py` makes the UV map the tears need. expressions: neutral, happy, laugh, soft_smile, smug, smirk, devious, teasing, wink, angry, furious, sad, sad_old (both sads kept), hurt,
+cry, flustered, shy, surprised, frightened, confused (the wavy-mouth one), pout, cross_eyed, disappointed, bored, sleepy (yawn was removed;
+angry uses the `angry_c` mouth and surprised `Mouth_Surprised`, Ethan's picks). (Names: `smug` is the closed lens smile with smiling eyes, `smirk` the one-sided half-lidded one, `soft_smile` a
+soft thin drawn line smile (a gentle curve, 0.34 mm like sad_old's mouth line) with eyes a little wider; Ethan kept `wink`.)
+**Doodles** (thick unstable black lines) were built (8 hybrids) and **removed by Ethan** ("not ideal, will be worked on in the future"): the
+entries, drawings and pictures are gone. What stays, unused, is the infrastructure they needed: the decal's FRONT layer (draws over her
+eyes, rebuilt from the posed face; `FRONT` in `expr_draw.py` is empty) and `hide=("brows",)`. **Rule (Ethan):** render whatever was tried for him to see before deciding it is not needed (he picks from the renders; the rejected candidates were then deleted at his request, nothing is kept). Not yet in `run.sh`, not saved in the
+.blend, front view at rest pose only. The decal is a 1.2 mm grid, so its edge stair-steps where it meets the face border.
+**Licence:** the pack's EULA forbids redistributing any part of it; it, the references, the transferred keys and its textures stay
+local (git-ignored: `assets/references/`, `tex/face/`, `.blend`), like the VRoid samples.
+
 ## Known flaws (the clipping and edginess Ethan means, for the next pass)
 - Where the hoodie's V strip meets the hood's flaps there are small crumpled knots of outline and a few slivers (the sample hood's own
   folded flap ends); a rebuilt hood was rejected.
@@ -183,14 +223,15 @@ code in a running Blender).
 ## Layout
 - `assets/model/spica-v1.blend`: the model (git-ignored, see the licence note; rebuilt by `run.sh`); `spica-<palette>.blend` for other palettes.
 - `assets/model/build/`: `run.sh`, `base_prepare.py`, `hair_bob.py`, `hair_cards.py`, `palette.py`, `cloth_layout.py`, `cloth_tex.py`,
-  `clothes.py`, `binary_stars.py`, `rig_prep.py`, `render.py`, `compose.mjs`, `check_model.py`; later `anim.py`.
+  `clothes.py`, `binary_stars.py`, `rig_prep.py`, `render.py`, `compose.mjs`, `check_model.py`, the expression files (above); later `anim.py`.
 - `assets/model/renders/`: git-ignored review renders (`v1/`, `check/` from the check, the two VRoid samples).
-- `assets/model/tex/cloth/`: git-ignored textures drawn by `cloth_tex.py`.
+- `assets/model/tex/cloth/`: git-ignored textures drawn by `cloth_tex.py`; `tex/face/`: the expression pictures, overlays and `uv_xz.npy`.
+- `assets/references/`: git-ignored: the Expression Pack (its reference model is the source of the face's extra shape keys), the VRoid CC0 samples.
 
 ## Stages and checks
 1. **High-poly body, face, hair, clothes.** Done; Ethan accepted it as v1 (2026-11-08) and chose the palette (2026-11-09).
 2. **Revise** until Ethan says locked (v1 is a first draft: "Known flaws" is the revision list).
-3. **Face.** Swappable eye/mouth textures for the five expressions (the 58 shape keys exist already).
+3. **Face.** Built into the model (2026-11-09): 25 expressions, `face_expr.use(name)` switches them (see "Expressions"). Ethan is still choosing and polishing them.
 4. **Rig.** The humanoid armature with fingers exists and is checked (above). Left: secondary motion for hair, bust and the hood (short
    stiff chains or a physics layer) and corrective shapes. Check: `check_model.py` stress poses without clipping.
 5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit, smirk, flustered). Check: playblast of each.

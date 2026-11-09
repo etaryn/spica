@@ -1,7 +1,7 @@
 # Orbit O1 — her 3D model
 
 Status: **v1 built and accepted 2026-11-08; default look midnight-noir since 2026-11-09; checked for the animation phase 2026-11-09**
-(a first draft with some clipping and edginess left, see "Known flaws"). Look: `docs/orbit-o1-character-brief.md` (source of truth, not
+(a first draft with some clipping and edginess left, see "Known flaws"). Look: `docs/orbit/o1-character-brief.md` (source of truth, not
 repeated here). Branch: `orbit/o1-model`. This file is the build side: what exists, how it is made, why it is made that way, and what
 was tried and dropped. The day-by-day history is in git.
 

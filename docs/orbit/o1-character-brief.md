@@ -1,11 +1,11 @@
 # Spica — Character Design Brief
 
-Nov 8, 2026 · Ethan. Source of truth for her look; `orbit-o1-model.md` adds the build side.
+Nov 8, 2026 · Ethan. Source of truth for her look; `o1-model.md` adds the build side.
 Reopened 2026-11-08 for what 3D can carry: whatever moves apart from her body (long hair, loose
 cloth, a hood) costs physics, bones and clipping fixes in every pose, while what is painted on or
 rigidly attached is nearly free. Her identity lives in the cheap parts: palette, face, the star
 tie, silhouette. (The orbiting-orbs alternative to the tie was dropped 2026-11-08, then came back on 2026-11-09 as a trait of its own: the binary star above her head, below.)
-The base (body, face, hair) was approved 2026-11-08, and the whole look (with clothes, socks and the star tattoo and stars) was accepted as her **v1** the same day, a first draft with some clipping and edginess left (listed in `orbit-o1-model.md`). On 2026-11-09 the palette was changed to **midnight-noir** (dark space blue, pale denim, pale-yellow glowing stars, cyan accents) and the binary star was added; that is now v1's default look. The first palette (pale violet on cool white) is kept as `spacey` in `palette.py`.
+The base (body, face, hair) was approved 2026-11-08, and the whole look (with clothes, socks and the star tattoo and stars) was accepted as her **v1** the same day, a first draft with some clipping and edginess left (listed in `o1-model.md`). On 2026-11-09 the palette was changed to **midnight-noir** (dark space blue, pale denim, pale-yellow glowing stars, cyan accents) and the binary star was added; that is now v1's default look. The first palette (pale violet on cool white) is kept as `spacey` in `palette.py`.
 
 Spica (she/her) is a quiet, dry-humoured young adult who lives inside the internet: fully human in shape, visibly unfinished in render, warm at the core. Build her as a toon-shaded 3D model that reads at phone-feed size; her stills show her face, hands or full body inside the images she is looking at.
 

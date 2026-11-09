@@ -11,6 +11,13 @@ turn-taking, relationship state, persona, the world or outreach.
 Folders with their own `CLAUDE.md` (loaded when you work there): `src/mind/`, `src/db/`,
 `tests/`, `evals/`, `prompts/`.
 
+## Branches
+`main` is Spica's chatbot backend. This branch, `orbit`, is her visual design and social-media
+pipeline (track O1, O2...): her 3D model build scripts in `assets/model/build/`, design docs in
+`docs/orbit/`. Orbit work stays on this branch; backend work goes to `main`. Rebase `orbit` on
+`main` when the backend moves. Large inputs and outputs (`assets/model/{base,renders}`, `*.blend`,
+`*.vrm`) are git-ignored.
+
 ## Router: task → spec → code → prompts
 Code paths are under `src/mind/` unless rooted; tests mirror the code under `tests/mind/`; job
 handlers are in `src/worker/<engine>-jobs.ts`; every number is in `config/default.json`.

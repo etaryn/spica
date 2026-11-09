@@ -18,3 +18,10 @@ assets/model/*.blend1
 assets/model/build/__pycache__/
 *.vrm
 assets/model/tex/cloth/
+.env
+.env.*
+.data/
+evals/results/
+.next/
+next-env.d.ts
+*.tsbuildinfo

@@ -1,1 +1,0 @@
-ALTER TABLE "conversation_state" ADD COLUMN "sending_since" timestamp with time zone;

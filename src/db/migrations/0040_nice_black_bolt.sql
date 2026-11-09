@@ -1,1 +1,0 @@
-ALTER TABLE "web_find" ADD COLUMN "description" text;

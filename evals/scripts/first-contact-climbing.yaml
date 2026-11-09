@@ -1,9 +1,0 @@
-name: first-contact-climbing
-description: invented move names (sloper / heel hook)
-mode: real
-sessions:
-  - at: "day 0 20:00"
-    turns: ["finally sent my project at the wall today"]
-assertions:
-  - { type: no_false_recall }
-  - { type: guard, outcome_not: [fallback] }

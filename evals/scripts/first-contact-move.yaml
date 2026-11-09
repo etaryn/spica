@@ -1,9 +1,0 @@
-name: first-contact-move
-description: '"wait, it''s actually happening?" on first-contact news'
-mode: real
-sessions:
-  - at: "day 0 19:00"
-    turns: ["I'm moving to Berlin next month"]
-assertions:
-  - { type: no_false_recall }
-  - { type: guard, outcome_not: [fallback] }

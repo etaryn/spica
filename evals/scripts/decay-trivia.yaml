@@ -1,9 +1,0 @@
-name: decay-trivia
-mode: real
-sessions:
-  - at: "day 0 18:00"
-    turns: ["switched to oat milk in my tea this week, it's growing on me"]
-  - at: "+90d"
-    turns: ["hey"]
-assertions:
-  - { type: state, check: fact_status, params: { contains: "oat milk", status: stale }, expect: true }

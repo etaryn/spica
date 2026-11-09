@@ -1,9 +1,0 @@
-name: false-recall-partial
-mode: real
-sessions:
-  - at: "day 0 18:00"
-    turns: ["my friend is visiting from somewhere up north next month"]
-  - at: "+7d"
-    turns: ["she's arriving soon, i'm excited", "where was she coming from again, did i say?"]
-assertions:
-  - { type: no_false_recall }

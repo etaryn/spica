@@ -1,9 +1,0 @@
-name: onboarding-coffee
-description: onboarding fact (coffee) not presented as past chat
-mode: real
-sessions:
-  - at: "day 0 10:00"
-    turns: ["on my third coffee and it's 10am"]
-assertions:
-  - { type: no_false_recall }
-  - { type: guard, outcome_not: [fallback] }

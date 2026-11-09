@@ -223,7 +223,7 @@ code in a running Blender).
 ## Layout
 - `assets/model/spica-v1.blend`: the model (git-ignored, see the licence note; rebuilt by `run.sh`); `spica-<palette>.blend` for other palettes.
 - `assets/model/build/`: `run.sh`, `base_prepare.py`, `hair_bob.py`, `hair_cards.py`, `palette.py`, `cloth_layout.py`, `cloth_tex.py`,
-  `clothes.py`, `binary_stars.py`, `rig_prep.py`, `render.py`, `compose.mjs`, `check_model.py`, the expression files (above); later `anim.py`.
+  `clothes.py`, `binary_stars.py`, `rig_prep.py`, `spring.py`, `spring_check.py`, `render.py`, `compose.mjs`, `check_model.py`, the expression files (above); later `anim.py`.
 - `assets/model/renders/`: git-ignored review renders (`v1/`, `check/` from the check, the two VRoid samples).
 - `assets/model/tex/cloth/`: git-ignored textures drawn by `cloth_tex.py`; `tex/face/`: the expression pictures, overlays and `uv_xz.npy`.
 - `assets/references/`: git-ignored: the Expression Pack (its reference model is the source of the face's extra shape keys), the VRoid CC0 samples.
@@ -232,8 +232,16 @@ code in a running Blender).
 1. **High-poly body, face, hair, clothes.** Done; Ethan accepted it as v1 (2026-11-08) and chose the palette (2026-11-09).
 2. **Revise** until Ethan says locked (v1 is a first draft: "Known flaws" is the revision list).
 3. **Face.** Built into the model (2026-11-09): 25 expressions, `face_expr.use(name)` switches them (see "Expressions"). Ethan is still choosing and polishing them.
-4. **Rig.** The humanoid armature with fingers exists and is checked (above). Left: secondary motion for hair, bust and the hood (short
-   stiff chains or a physics layer) and corrective shapes. Check: `check_model.py` stress poses without clipping.
+4. **Rig.** The humanoid armature with fingers exists and is checked (above). **Secondary motion** is `spring.py` (2026-11-09): a spring-bone
+   solver baked into pose keys on the hair and bust chains (`spring.bake(arm, f0, f1)`, after the main motion is keyed; 24 fps). A cone
+   (20 degrees per hair bone, 15 bust) keeps the stiff bob stiff, a collision keeps tails 12 mm out of skin, hood and hoodie, and
+   the bun's chains (08, 09: its cards use them) stay rigid. Test: `blender -b assets/model/spica-v1.blend -P assets/model/build/spring_check.py -- assets/model/renders/spring`
+   (head shake, nod, jump, spine twist: bone lengths, NaN, lag, settling, collisions against rigid, same keys on a second bake, renders rigid | sprung;
+   0 problems). Bust: a jump moves the bust bones' tips up to 34 mm and the chest and hoodie follow them, no tearing in the side or 3/4 renders.
+   **Corrective shapes: decided not needed** (2026-11-09): renders of the sit (side, 3/4, hip close-up) and crossed arms (front, 3/4, side)
+   show no skin through cloth and no torn armpit; the counts in `check_model.py` (hoodie 2.8% and shorts 5.5% in sit) are the compressed side of the
+   bend. Build them only if a clip shows a problem. Stage 4 is closed; the stiffness and drag numbers (`HAIR`, `BUST` in `spring.py`) are
+   a first guess to tune on the first real clip (stage 5), by eye.
 5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit, smirk, flustered). Check: playblast of each.
 6. **Export and integration.** `.blend` plus renders (a `.glb` is a structure test only); `render.py` makes sprites from clip frames; one
    end-to-end test post through `pnpm eval --llm=fake`.

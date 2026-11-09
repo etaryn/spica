@@ -1,293 +1,205 @@
 # Orbit O1 — her 3D model
 
-Status: **v1 built and accepted 2026-11-08** (body, face, hair, clothes, socks, star tattoo and stars; a first draft, with some
-clipping and edginess left, see "v1" below); on 2026-11-09 its default palette became **midnight-noir** and a binary star was added. Look: `docs/orbit-o1-character-brief.md` (source of
-truth, not repeated here). Branch: `orbit/o1-model`.
+Status: **v1 built and accepted 2026-11-08; default look midnight-noir since 2026-11-09; checked for the animation phase 2026-11-09**
+(a first draft with some clipping and edginess left, see "Known flaws"). Look: `docs/orbit-o1-character-brief.md` (source of truth, not
+repeated here). Branch: `orbit/o1-model`. This file is the build side: what exists, how it is made, why it is made that way, and what
+was tried and dropped. The day-by-day history is in git.
 
 ## Goal
-A fixed, rigged, toon-shaded 3D Spica that the post engine can turn into stills, and later video.
-This phase delivers the model and a preset of animations; posting stays with the existing sprite
-seam until O2.
+A fixed, rigged, toon-shaded 3D Spica that the post engine can turn into stills, and later video. This phase delivers the model and a
+preset of animations; posting stays with the existing sprite seam until O2.
 
 ## Decisions (Ethan, 2026-11-07)
-- No hand-posed sprites: a rigged model with a **preset of animation clips**; any frame can be
-  rendered as a still.
-- ~~Lowest-poly v1 first~~ **Changed 2026-11-07:** low poly can't carry meaningful detail (v1 and a
-  standard-poly v2 were built as checkpoints and judged by Ethan: proportions right, detail missing).
-  Go straight to a **high-poly** model. **Body, face and hair first, no clothes yet**: clothes come
-  after those three are right. A low-poly derivative (the version arc) is made later from the final
-  high-poly model, not built first.
-- Skills: Blender-specific Claude skills installed at user scope for this work (see Tools).
-- Tool: **Blender 5.2.3 LTS** (`C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`),
-  driven headless by Python scripts.
-- Proposed (take as yes unless he says no): face stays clean even in v1 (brief); iris and skin hex
-  as proposed, tuned by eye; glitch cubes are real geometry (a few); emotion-flare effects are
-  never in the model; one mid-sized version first, the version arc comes later.
+- No hand-posed sprites: a rigged model with a **preset of animation clips**; any frame can be rendered as a still.
+- High-poly from the start (a low-poly and a standard-poly checkpoint were judged: proportions right, detail missing). The low-poly
+  version arc is derived later from the final model.
+- Tool: **Blender 5.2.3 LTS** (`C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`), driven headless by Python scripts.
+- The face stays clean; emotion-flare effects are never in the model; one mid-sized version first, the version arc comes later.
 
 ## Seam with the post engine
-Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tags
-(`assets/poses/poses.json`). Stage 6 renders any clip frame to that format (plus a higher-res
-master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
-rule: the old PNGs go in the same slice that ships real renders.
+Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tags (`assets/poses/poses.json`). Stage 6 renders any clip
+frame to that format (plus a higher-res master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
+rule: the old PNGs go in the same slice that ships real renders. The look is made by Blender's materials (toon shader nodes, shader
+glows), which do not export to glTF, so sprites are rendered from Blender, not from a `.glb`.
 
-## Hair design (2026-11-08, Ethan; brief reopened)
-A short, stiff bob (chin length, the layer under the outer hair darker so the layers read apart), a simple fringe, and
-one small bun at the side-back on her right: nothing else. The long strip, the low bunch, the wolf cut and the cubes
-were built or considered and dropped: anything long and loose clips in every pose (a strip down the back clipped
-into the bob however it hung). The star tie and stars are off. Each piece is its own object, so removing one is a
-delete.
+## How it is built
+`sh assets/model/build/run.sh` builds `assets/model/spica-v1.blend` and its review renders (`renders/v1`); `run.sh <palette>` builds
+another palette into `spica-<palette>.blend` (the first look is `spacey`). The chain runs in one Blender session:
+`base_prepare.py` (import the VRoid sample as glTF, strip its clothes, her toon materials and outline) → `hair_bob.py` (bob, fringe, bun,
+hair colours, eye colours) → `clothes.py` (clothes, socks, face tattoo, binary star, then `rig_prep.py`; saves the file).
+`cloth_tex.py` (Pillow and numpy, outside Blender) draws the pictures the shaders lay on the cloth first. Shared files: `palette.py` (every
+colour, one entry per palette), `cloth_layout.py` (positions and sizes), `hair_cards.py` (helpers: toon material, `push_out`, eye colours),
+`binary_stars.py`, `render.py` and `compose.mjs` (review renders and sheets), `check_model.py` (the animation-readiness check, below).
+The .vrm is read as a .glb copy, so no VRM add-on is needed. All model files are git-ignored (licence, below); only scripts and docs are
+committed. Older models and their scripts were deleted when v1 was saved; they are in git history.
 
-**Built 2026-11-08, rebuilt after review (Ethan to judge):** `hair_bob.py`. The bob and fringe are the
-first sample's own cards, reshaped a little (front locks cut to chin, fringe leaned and shortened to brow level).
-One piece is not the sample's. A long strip down her back was built and dropped (2026-11-08, Ethan): the bob curves
-inward under it and clips through however it hangs, so the bun alone carries the asymmetry. The **bun** is copied from the
-third sample (its right-hand bun cards as they are, moved rigidly onto her head, nothing bent), recoloured in her hair
-tones and set at the side-back on her right, sunk 2.2 cm into the bob so it sits on her head with no neck. The
-star tie (band and stars) is off for now: the band needs a neck and the stars were taken out; `SPICA_TIE=1` builds
-them again. Earlier simulated ribbons (strip over the shoulder, cone-of-petals tuft) were dropped: they bent out
-and forward, and the tuft read edgy.
-Hair colour comes from the samples' own hair textures (`hair_toon`): the texture's brightness, with its dark
-roots, lighter tips, lines between strands and highlight blobs, is mapped onto her palette (hair base `#CFE0F2`,
-shadow `#8FA6C8`), then the unlit side goes toward the shadow colour. Nothing is invented: no random tones, no
-added streaks, no neon, no dyed strips (a pair of purple strips was tried and removed). One addition: the inner
-layer is darker, found by ray casts (the cards that lie under other hair: sample cards 020 to 055, 072, 086, 087,
-some bun cards), so the layers of the bob read apart. Everything added is rigid on the head bone: no swing yet. The saved .blend
-opens tidy: rig and bone helpers hidden (the armature still deforms her), Material Preview, a view sun and world.
-**The bun's geometry comes from a sample whose VRM metadata also says modification prohibited**, so the same flag
-applies: the derived .blend stays git-ignored until Ethan re-exports with modification allowed.
+## Parts (separate named objects, all skinned to one armature)
+- **Body, Face** (the sample's skin: the Face carries 58 VRM expression shape keys and the eye and mouth materials), `face_outline`.
+- **Hair001–087** (the sample's hair cards, front locks cut to chin, fringe leaned and shortened), **tuft_122–152** (the bun: the third
+  sample's bun cards, moved rigidly onto her head). **hoodie**, **hood**, **shorts**, **sneakers**, **sock_l** (thigh-high), **sock_r**
+  (ankle). **orbit_placer / orbit_spin, orb_a, orb_b, their halos, orbit_ring_a / _b** (the binary star, not skinned).
+- Each piece is its own object, so removing one is a delete. Skinned pieces have an Armature modifier first and an outline Solidify
+  after it.
 
-**Clothes (2026-11-08, Ethan to judge; revised five times after the first pass):** `clothes.py` (saves
-`spica-v1.blend`, runs after `hair_bob.py`). The **hoodie** is a shell of her own skin (torso, shoulders and arms to the wrist),
-welded at her skin mesh's UV seams (or any offset or smoothing opens gaps there), pushed out 2.4 cm on the body and 1.8 cm on the
-sleeves along her skin's normals, so it keeps her shape; smoothed six times (the thicker the knit, the more the offset has to be
-eased where she curves in), kept 8 mm off her skin, and only then cut straight at the hip and the wrists. The hem and the cuffs
-are rolled (`roll`): the offset gets a thick rim (+8 mm hem, +6 mm cuffs) and then shrinks to 15% at the edge as a quarter circle,
-so the edge curves in toward the body and shows the cloth's thickness; the denim shorts' hems curl in the same way (`curl_edge`).
-The sample's hood and lining lie on top as the fixed collar. Colour: pale off-white `#F2EFE8` with cool light shadows `#D3D8E0`,
-soft wide shading and a pale fuzzy rim. Texture: cotton, a faint fine weave plus a fine grain, drawn in 3D from her rest-pose
-coordinates, stored on the mesh as two UV layers (`rest_xy`, `rest_xz`), so they stick to the cloth in any pose. Tried and gone:
-the sample's own oversized hoodie (puffed); that hoodie pulled in (the armpits tore); a constant-thickness skin-tight shell
-(read as a flat sheet); a drape (the cloth hangs from supports over the waist: Ethan said it lost the hoodie's shape, 2026-11-08);
-vertical ribs; a brick-stitch pattern; an inward Solidify for edge thickness (dark creases); navy. The **shorts** are the sample's,
-only the part its alpha mask shows (the rest of that mesh is a hidden full-body layer) plus the band of that layer round the hips,
-cut just below her crotch and just above the hoodie's hem, in denim blue with a diagonal twill pattern. The legs are bare. The
-**sneakers** are the sample's, laces dropped, off-white upper and the lowest 4.5 cm amber. The sample's pieces are skinned with its own weights to her armature (same
-bone names) and moved up 5 mm (the sample's body sits that much lower), then pushed off her skin; the shells use her skin's
-weights. Known: no pocket; the sample's hood stands as a tall collar behind her neck and its edge is still a flat sheet; the
-sneakers are the sample's blocky low-poly shoe; no stress poses tested yet (stage 4). The sample's hood, shorts and shoes carry the
-same modification-prohibited flag as the other samples.
+## Hair
+A short stiff bob, a fringe and one small bun on her right: nothing long or loose (a long strip down her back, a low bunch, a wolf cut
+and cubes were built or considered and dropped: anything long clips in every pose). The bob and fringe are the first sample's own cards,
+reshaped a little. The bun is copied from the third sample, recoloured, sunk 2.2 cm into the bob so it sits on her head with no neck.
+The star tie is off (`SPICA_TIE=1` rebuilds it). Hair colour comes from the samples' own strand textures (`hair_toon`): the texture's
+brightness (dark roots, lighter tips, lines between strands) is mapped onto the palette's ramp, then the unlit side goes toward the
+shadow tone; nothing is invented. The layer under the outer hair is darker, found by ray casts (the cards that lie under other hair), so
+the layers of the bob read apart. One wide band of cyan (`strip_band` in the palette: where along the card's u, which runs 0.75 to 1.41
+on that card, and how wide) is painted on the lock beside her left cheek, strand lines kept; thin strips on many locks were tried and
+rejected. The bun's geometry comes from a sample whose VRM metadata says modification prohibited, so the same flag applies.
 
-**Look (2026-11-08, Ethan: the busy warm style did not fit; blank clothes, a zip, slits, back pockets, a spacey palette; he accepted the palette):**
-the clothes are blank again (the patches, the pocket, the heart, the label, the gingham, the elbow patches, the coloured
-ribbing, the terracotta lining and the shoe accents were removed). What is added is drawn as textures by `cloth_tex.py`
-(Pillow and numpy, run by `run.sh` before Blender; PNGs in the git-ignored `assets/model/tex/cloth/`; layout and colours
-in `cloth_layout.py`) and laid on the cloth in the shader from her rest-pose coordinates, so they stay on the cloth in any pose:
-on the hoodie a zip (tapes, teeth, slider and pull) and two slanted hand-pocket slits (just the slit, a lip, tone-on-tone
-stitching and bar tacks); on the pants a front and a back picture (see below). Palette: off-white hoodie, greyish-black pants,
-a violet accent: lavender-periwinkle hair, dark glowing violet eyes, violet sneaker soles, deep indigo outlines.
+## Clothes
+The sample's pieces (hood, shorts, shoes) are skinned with their own weights to her armature (same bone names), moved up 5 mm (the
+sample's body sits that much lower) and pushed off her skin; the hoodie and the socks are **shells of her own skin**, so they keep her
+shape and deform with the same weights.
+- **Hoodie:** a shell of her torso, shoulders and arms (welded at her skin mesh's UV seams, or any offset or smoothing opens gaps),
+  pushed out 2.4 cm on the body and 1.8 cm on the sleeves along her skin's normals, smoothed six times, kept 8 mm off her skin, then
+  cut straight at the hip and wrists. Cuffs are rolled (the offset shrinks to 15% at the edge as a quarter circle). **Hem:** a band of
+  its own (1 cm, 3 mm proud, rounded lower edge, a seam groove above, fine vertical ribs in the shader, tone-on-tone stitches), no
+  flare, low enough to cover the top of the shorts' back pockets, split by a slot (1.2 cm wide, 1.6 cm tall) below where the zip ends.
+  **Neckline:** the zip's slider sits at z 1.22; above it a V (half-width 0.7 x height above the slider) is cut through the shell, the
+  front has up to 2 cm more room, and the cut edges roll outward like lapels with a real 1.4 cm facing (a second material slot, 2 mm
+  proud, a seam groove, stitches beside it) in the lining colour. The inside of the cloth (back faces) is the lining colour too.
+  **Underbust:** the hard bend where the breast meets the body turned into a line and a shadow on the dark cloth. It is rounded on a
+  regular grid of angle by height (`UNDERBUST_EASE`): the shell's distance from the torso's axis is blurred and only the positive change
+  (the inside corner of the bend) is added back, so the bust keeps its size, place and top. A taper that ran the cloth straight from the
+  nipples to the upper belly made her look saggy and was reverted; smoothing along the mesh edges left diagonal facets.
+- **Hood:** the sample's own hood, a collar draped round the back and sides of her neck. Its front (a V that would run across the
+  opening, and the sample's shredded flap ends, a pile of sliver triangles no smoothing fixes) is cut off with one straight plane
+  (`HOOD_FRONT_Y`), so it ends in two clean flaps beside her neck; the rest is untouched, pushed 6 mm off the finished hoodie and her
+  skin. Its thin inner layer is dropped.
+- **Shorts:** the sample's, only the part its alpha mask shows plus the hip band of its hidden layer, cut just below her crotch and
+  above the hoodie's hem, welded then smoothed 80 times (hard toon steps show any lump as a blotch), subdivided to 4–5 mm so creases can
+  be real folds. A rolled hem band of its own (1.9 cm, 3 mm proud, two stitch rows, a groove above).
+- **Socks:** `make_sock` builds a shell of her leg 2.2 mm out from inside the shoe: a thigh-high stocking on her left leg (top at z 0.70,
+  a clean plane-cut edge, no hem; an attempt to make that edge read as elastic was reverted) and an ankle sock on her right (top at z 0.19, with
+  a ribbed band 2.2 cm tall, 2.5 mm proud). Fine vertical ribs round the leg in the shader.
+- **Sneakers:** the sample's blocky shoe, laces dropped; the lowest 4.5 cm is the sole.
 
-**Layering and denim (2026-11-08, Ethan: the hoodie loose at the bottom, open above the zip, real denim, light-blue eye and hair highlights):**
-- Hoodie layering (revised the same day: a flared hem made the waist look thin and bent back in abruptly to meet the pants,
-  and the cut-out V read as a window, not a split neckline). There is no flare. The hem (`HEM_Z` 0.855) is low enough to cover
-  the top of the shorts' back pockets and keeps its full thickness to the edge, so it stands clear of the shorts, which hug
-  her under it. The zip's slider sits at z 1.22 (`ZIP_TOP`); above it `open_front` cuts a V (half-width 0.7 x height above
-  the slider) through the hoodie's shell (the hood's front is cut separately, see below). The front above the
-  slider has up to 2 cm more room (`thickness`), and the cut
-  edges are given more than their thickness (`lo` 1.7 in `open_front`): they roll outward like lapels, standing off her.
-  The edges carry a lining facing (the hoodie and her skin were both warm and about as bright, so the neckline blended in;
-  Ethan picked a deeper lining, then asked for a spacey dark blue, darker than her hair, and for the band to be traced and
-  applied properly, not pasted on). `LINING` is `2D3A8C` (shadow `1C2566`). The facing is real: `open_front(facing=...)` rolls the
-  cut edge first (rolling thin strips one by one made the surface ragged), then splits the faces along the lines `FACING_W` (1.4 cm)
-  and a few finer ones from the edge as it lies, so the strip's border is a clean line; its faces get a second material slot (the
-  lining), it stands 2 mm proud with a 1.5 mm seam groove where it ends, and a row of tone-on-tone stitches runs beside it on the
-  body (drawn in `hoodie_front.png`). The slots are cloth, lining, outline, outline (`line_up`). The inside of the cloth (its back
-  faces: seen at the opening, the cuffs and the hem) is the lining colour in the shader (`lining` in `toon`). The lapel's outward
-  flare fades out toward the top (`lo_top`), so the band tucks under the hood's flaps and is not run through by them.
-- The hood is the sample's own, lying on top of the strip (Ethan: the rebuilt hood was not good; use the original and overlay it
-  above the V strip without clipping; the space-blue hood read as a huge patch of blue that cannot be recognised as the hood, so
-  its colour is off-white again, inside and outside; and its edges where it meets her shoulder were broken: copy the original
-  as much as possible, do not build it). So it is touched as little as possible: its front, a V that would run across the
-  opening and the sample's shredded flap ends (a pile of sliver triangles that no smoothing can fix), is cut off with one
-  straight plane (`HOOD_FRONT_Y`, y = 0: she faces -y), so the hood ends in two clean flaps beside her neck; the dark strip goes
-  under them. Everything behind the plane is the sample's, with no subdivision, no smoothing and no cut along the V. It is
-  pushed 6 mm off the finished hoodie and her skin. The sample's thin inner layer is dropped (it pokes through the outer one).
-  Tried and removed: `rebuild_hood` (a clean grid cast from the sample: the neck stood well against its dark-blue inside, but
-  its lower edge and back looked wrong), cutting the hood along the V (ragged flaps), smoothing the flaps, and a facing, a
-  bead or a tint on the sample hood (they showed its messy double-layer mesh). Still: a few tiny slivers where the strip
-  meets the lower edge of a flap.
-  There is no tee under it: the opening shows her skin (a white tee V at the top of the zip was removed).
-  The zip ends above the hem band with a bottom stop (`ZIP_END`); below it `split_hem` cuts a slot (`HEM_SPLIT`, 1.2 cm
-  wide, 1.6 cm tall) so the two halves of the hem stand slightly apart.
-- Hems of their own (Ethan: a clear hem, a separate, slightly rolled, thicker line with a hem texture, not just outlines).
-  `add_loops` puts a ring of edges every 2 mm up the hem (the faces are 1 cm tall), then `hem_band` shapes it: from the lower
-  edge up `HEM_BAND` (hoodie, 1 cm) or `PANTS_BAND` (shorts, 1.9 cm) the cloth stands proud (3 mm / 3 mm); the rounded edge and the
-  top fall-off shrink with a small band with a rounded
-  lower edge, and a narrow groove (the seam) cuts in just above. The hoodie's band moves straight out from the torso axis,
-  not along the normal (the normal is noisy in the groove down her spine and the bead folded into dark arrows there). Textures:
-  the hoodie's band has fine vertical ribs round the torso in the shader (`ribs`; a whole number of them, `RIBS_ROUND`, so
-  there is no seam at the back), a seam line and a row of tone-on-tone stitches above it (`hoodie_hem`, drawn in the front and
-  back pictures); the shorts' band has two rows of topstitching and the groove (`hem_lines`). The earlier dark shadow strip
-  on the pants under the hoodie hem is gone (it read as a darker strip at the back of the pants).
-- Hoodie tone (Ethan: the hoodie `F2EFE8` and her skin `F8E5DC` were both warm and equally bright, so the neckline and the hood
-  blended into her neck; the dark-blue hood was rejected, then he asked to try a cooler hoodie tone): `HOODIE` is `E6E7F3`
-  (shadow `CBCDE4`) for the hoodie and the hood, a pale lavender-grey tied to the hair, warm skin against cool cloth. The sneakers
-  keep the warm off-white (`OFFWHITE`). The same brightness, a different hue.
-- Shoes and socks (Ethan: the shoes in a tone like the rest of her; a thigh-high sock on one leg and a normal sock on the other):
-  the sneakers' uppers are now `HOODIE`; the soles are a muted periwinkle (`SOLE_TONE` `9D96D8`, shadow `7670B0`; the saturated violet
-  accent was too striking, Ethan). `make_sock` builds a sock as a shell of her leg (the
-  leg bones' weights select the faces, 2.2 mm out, from inside the shoe at z 0.05 up to `SOCK_TOP_LONG` 0.70 on her left leg or
-  `SOCK_TOP_SHORT` 0.19 on her right, a straight top edge cut by a plane), skinned like the leg, and, on the ankle sock only (`band`), a ribbed band `SOCK_BAND`
-  (2.2 cm) at the top that stands 2.5 mm proud over a seam groove (`add_loops` and `hem_band(down=True)`); the thigh-high stocking has no
-  hem (Ethan), only the straight plane-cut top edge, so it wraps the thigh cleanly (an attempt to make that edge read as elastic, with a
-  taper, a sheer top and a squeezed thigh, was reverted: Ethan liked the plain edge better), in `SOCK` `F8F7F4` (a clean off-white, nearly
-  white, with the hoodie's cool shadow `DAD8E4`; they were dark violet-grey, then a light cool white that read lavender-grey, and Ethan
-  wanted off-white or white)
-  with fine vertical ribs round the leg in the shader (`sock` in `toon`, `SOCK_RIBS` of them). The thigh-high sock ends 6 cm below
-  the shorts' hem, so a band of skin shows. Rough: the sample shoe's opening is a jagged edge where the sock goes in.
-- Stars (Ethan: a small five-pointed tattoo under the corner of her eye, and big stars on the stocking, flush and sticking, not flat
-  objects; then: the face star looked a little distorted, and three big stars wrapping round the leg, visible from all angles). They are
-  textures, not objects: `face_star.png` and `sock_star.png` are one star each (point up, outer radius `STAR_FILL` 0.45 of the width of a
-  square picture) drawn by `cloth_tex.py` (a ten-corner outline, inner radius 0.382 of the outer) and laid on the surface in the shader, so
-  they have no thickness to float or clip and follow every bend. The tattoo (`tattoo_face`): her skin material is copied for the face
-  alone and the picture is laid by the face mesh's own UV map, which wraps the cheek with hardly any stretch (measured at the star:
-  0.29 m per unit along u and 0.26 along v, at right angles), the two directions scaled to metres so the star is the same size both
-  ways; it follows the surface exactly even where the cheek turns away. The first version projected the picture straight back along y,
-  which looked fine from the front but stretched the star about 2x on the surface (the cheek's normal there is 60 degrees off the front);
-  that was the distortion. Only skin within 1 cm of the star's centre gets it (the gate is in the mesh's undeformed 'Generated'
-  coordinates), shaded like the skin at 92 % opacity, colour the iris's mid violet `5A44D4`, 9 mm across, centre x 0.058, z 1.4245
-  (`FACE_STAR`). Because the cheek really does turn away there, it is foreshortened (narrower) seen from straight on, and a regular star
-  from a three-quarter view. The stocking's three stars (`SOCK_STARS`: height, angle round the leg, outer radius, turn: z 0.585 at -32
-  degrees and 7 cm, z 0.415 at 135 degrees and 6.4 cm, z 0.245 at -105 degrees and 5.2 cm) are each laid by the true distances on the cloth from
-  their own centre: the angle round the leg from the star's centre line (wrapped) times the leg's radius at that height, and the height
-  above the star's centre, so none is stretched as the thigh narrows to the calf, and a star wider than the front of the leg wraps round it
-  (the three are 120 degrees apart, so one is always showing from the front, the outer side and the back; the inner side is hidden by her other
-  leg). The leg's centre and radius are measured on the finished shell at seven heights and interpolated in the shader. Colour: the hair's
-  shadow tone `8E86D0`, shaded like the cloth.
-- Denim, from what makes it read in a toon render (the real weave is too fine to show, so the cues are big ones): a hard toon
-  step (not the soft ramp that read as a melted patch); a twill coarser than the real cloth (ribs 5 mm apart, faint, so it does
-  not stripe); a few creases, not mirrored (whiskers from the fly out to each hip: three on her left leg and two on her right, and a
-  smile line under each seat, all different), each drawn as shadow (a soft
-  dark band with a darker line in it, tapering at both ends; light wear lines read as white scratches and were removed), and
-  the mesh (subdivided five-fold, 4-5 mm) is bent along the same lines (`crease_cloth`) so they catch the light as folds;
-  front pocket mouths, fly and back pockets in topstitching (a dark groove and a row of thread in a slightly lighter grey, no
-  contrast colour).
-- Bugs found on the way: the sample's shorts mesh is split along its UV seams, so moving the cloth tore it open and the
-  smoothing could not cross the seams (now welded first, then smoothed 80 rounds so hard toon steps do not show its lumps as
-  blotches); creases displaced the coordinates the pattern was laid by (rest coordinates are now stored before the creases);
-  crinkles added round the hem read as a lace edge (removed; the hem band replaced them); the tee poked through the shorts' waist (the tee is gone now).
-- Eyes: the iris glows light blue (`A9D6FF`) at its lower edge and the highlight is light blue (`CFEAFF`). Hair: one lock
-  (`STREAK_CARD`, the sample-1 card whose texture carries a cyan streak) has that streak painted light blue (`B4DAFF`)
-  with the strand lines kept: a thin strip beside her left cheek. Widen it or move it by changing the card.
+## Details drawn into the shaders
+Everything below is a picture (drawn by `cloth_tex.py`) laid on the surface in the shader from her **rest-pose coordinates** (stored on
+each mesh as two UV layers, `rest_xy` and `rest_xz`), so it stays on the cloth in any pose and has no thickness to float or clip:
+the zip (tapes, teeth, bottom stop, slider and pull), two slanted hand-pocket slits, stitching, and on the shorts front pockets, a fly,
+back pockets, a twill (ribs 5 mm apart, coarser than real so it reads at distance) and creases. **Creases** are drawn as shadow (a soft
+dark band with a darker line, tapering; light wear lines read as white scratches) and the mesh is bent along the same lines
+(`crease_cloth`): three whiskers on her left leg, two on her right, a smile line under each seat, all different. The shorts use a hard
+toon step (the soft ramp read as a melted patch).
+- **Stars** are textures too (`face_star.png`, `sock_star.png`: one five-point star each, point up). `star_glow` makes them pale,
+  slightly translucent, self-lit, with a soft halo; the tattoo also gets a thin warm rim or a pale star vanishes on pale skin.
+  **Tattoo** (`tattoo_face`): her skin material is copied for the face alone and the picture is laid by the face mesh's own UV map (it
+  wraps the cheek with hardly any stretch there; a straight projection along y stretched the star about 2x because the cheek's normal is
+  60 degrees off the front), 1.8 cm across, centre x 0.058, z 1.4245. **Stocking stars** (`SOCK_STARS`): three, 10 to 17 cm, each laid
+  by true distances on the cloth from its own centre (angle round the leg x the leg's radius at that height, and height), so none is
+  stretched as the thigh narrows; 120 degrees apart, so one always shows from the front, the side and the back.
 
-## Base model (2026-11-07)
-Built on a VRoid Studio sample export (`sample_model.vrm`, kept in `assets/model/base/`, git-ignored).
-Its VRM metadata reads: commercial use `personalNonProfit`, redistribution not allowed, modification
-**prohibited**. Ethan exported it himself (author field "spica"), so those terms are his to change:
-**re-export with commercial use and modification allowed before any of this ships or is committed.**
-Until then `spica-v1.blend` (the derived model) is git-ignored (`assets/model/*.blend`); only the scripts and the docs are committed.
-Pipeline: `base_prepare.py` (import the glTF, strip clothes, her toon materials, outline), then `hair_bob.py` (the bob, the bun,
-the eye colours), then `clothes.py` (clothes, socks, the star tattoo; saves the model); `hair_cards.py` holds the helpers the
-last two share. The .vrm is read as a .glb copy, so no VRM add-on is needed.
+## Palette
+All colours are in `palette.py` (slots documented in its header). **midnight-noir** is the default (chosen 2026-11-09 from six trials);
+`spacey` is the first look. Colours and where they go: the brief's Palette section. How it was chosen: Ethan wanted the name Spica in the
+palette (a blue-white star, and "spica" means an ear of wheat, hence pale-gold stars), an accent to break up an all-purple look, darker
+and richer clothes, a pale pair of shorts, light then dark stockings; he rejected a muted navy, a too-bright blue, yellow-orange stars
+and a dark-blue hood (a huge patch that could not be read as a hood).
 
-## v1 (2026-11-08)
-Ethan accepted the model as her v1: "good enough to work for her v1" despite some clipping and edginess. It is the file
-`assets/model/spica-v1.blend`, rebuilt from the scripts by `sh assets/model/build/run.sh` (the textures of the clothes are drawn
-first by `cloth_tex.py`; review renders go to `assets/model/renders/v1`). With no argument it builds the default palette; `sh assets/model/build/run.sh spacey` builds the first v1 look into `spica-spacey.blend` (palette names are in `palette.py`). The older models (the procedural v1 to v3, v4 to v7 and
-the 2026-11-08 stages up to v8) were deleted when v1 was saved, with the build scripts only they used (`build_model.py`,
-`hires.py`, `hair.py`, `geo.py`, `inspect_base.py`, `make_face.mjs`, the face texture) and the v4 and v5 hair paths in
-`hair_cards.py`; their history is in git (the old procedural v1 to v3 are in earlier commits). Rebuilding after the cleanup
-gives renders pixel-identical to the model before it (all 32 review images checked).
+## Binary star (`binary_stars.py`)
+Two glowing orbs (icy cyan-white, 3.2 cm; pale gold, 2.4 cm) that circle each other above her head, on the side opposite her bun.
+`orbit_placer` is an empty rigid on the head bone (its transform is solved from the evaluated parent matrix so the pair keeps its place
+whatever the bone's own transform is) with its Z axis along the line from the middle of her head through the pair's centre; its child
+`orbit_spin` turns about that axis by a driver (`start + frame * 2 pi / 96`, no keyframes, so it runs for ever); the orbs and halos are
+its children, two thin faint torus rings (children of the placer) mark the orbits so a still reads as orbiting. The glow is the shader's
+(the real-time renderer has no bloom): a halo sphere 3.2 times the orb whose alpha is zero over the core, 0.75 at the core's edge and
+nothing at the rim. **Placement was measured, not guessed:** the pair sits at azimuth 50 degrees from her left toward behind, elevation
+65, 18 cm from the middle of her head, 6.5 cm apart, so the orbit plane lies parallel to the top of her head and each orb stays 2.7 to
+4.3 cm from her hair all the way round (the first, steeper setting varied by 2.4 cm at 7 cm: one orb swung out, the other hung over the
+hair). It follows the head bone (checked by posing the head).
 
-What is in v1 (default palette midnight-noir, 2026-11-09): the asymmetric bob and fringe, one bun on her right, one wide cyan strip
-in the long lock beside her left cheek; a glowing dark-blue iris with a cyan lower glow; a pale-yellow star tattoo under her left eye;
-a deep-space-blue hoodie (zip, two slit pockets, ribbed hem band split below the zip, open V neckline with a bright-violet lining
-facing, the sample's hood as a collar), pale ice-grey denim shorts (twill, creases, topstitching, rolled hem, back and front
-pockets), bare legs with a deep-blue thigh-high stocking with three big pale-yellow glowing stars on her left leg and a deep-blue
-ankle sock on her right, cool-white sneakers with muted-gold soles, and the binary star above her head. Palette in the brief.
+## Rig and animation readiness (2026-11-09)
+The rig is the VRoid humanoid armature: 149 bones with Root, hips, spine, chest, upper chest, neck, head, shoulders, arms, 15 finger
+bones a hand, legs, feet, toes, two eye bones, bust bones, 94 secondary bones (hair, bust, coat skirt) and the face's 58 expression shape
+keys (neutral, joy, sorrow, angry, surprised, fun, eye close, the five mouth vowels A I U E O, and more).
+**`rig_prep.py`** (the last build step) makes it clean:
+- **Weights:** the sample's pieces were weighted to bones her skeleton does not have (hood strings, hood bones); Blender dropped those
+  weights and the hood followed what was left (its edges stretched up to 3.6x under a head turn). Each weight is now moved to the nearest
+  ancestor bone she has; every skinned piece has weights only on her bones, at most four of them (what glTF keeps), adding up to 1, and
+  no stray or duplicate vertex groups (the garments had 130 to 149 each). The hoodie had 610 vertices on more than four bones.
+- **Parenting:** every skinned piece is a child of the armature (it sits at the origin, so nothing moved).
+- **Rest pose:** the arms used to be left lowered 48 degrees as a leftover pose-bone transform (the hair and clothes were fitted in that
+  pose). It is now an action, **`A_pose`** (fake user, assigned, keyed on the Root and J_Bip bones), and the pose bones are clear, so the
+  rest pose is a clean T-pose and the file opens in A-pose. Start animations from it (or push it down in the NLA) and clear the action to
+  get the T-pose.
 
-Known flaws (the clipping and edginess Ethan means, for the next pass):
-- Where the V strip of the hoodie meets the hood's flaps there are small crumpled knots of outline and a few slivers (the
-  sample hood's own folded flap ends; the hood is cut off by a plane in front of her neck, and a rebuilt hood was rejected).
-- The sample shoe is a blocky low-poly mesh, with a jagged opening where the socks enter it; the hem slot of the hoodie has a
-  small wobble where the bead meets the cut; the hood's lower edge has a few outline ticks.
-- Zip, pockets, stitching, creases (partly), the stars and the tattoo are drawn into the shaders, not modelled: right for stills,
-  and they stay on the cloth in any pose, but nothing is a real object.
-- The hard toon step on the shorts shows a few lighting islands at the hips where the light edge crosses the curves.
+**`check_model.py`** (read-only; `blender -b assets/model/spica-v1.blend -P assets/model/build/check_model.py -- <out dir>`) checks the
+structure (all humanoid bones, identity transforms, parenting), the skinning (no unweighted vertex, at most 4 bones, no stray groups,
+armature modifier first), the rest pose and action, the expression keys, the binary star, ten stress poses (rest, A-pose, arms up, arms
+forward, arms crossed, sit, lean forward, head turn and nod, stride, spine twist) with garment-vertices-inside-body counts, stretched
+edges (4 mm or longer), floating cloth, hair inside her body and the orbs' clearance, renders each pose from the front and side, and test-exports
+a `.glb`. **Result 2026-11-09: no problems, four notes:**
+- Hoodie 2.8% and shorts 5.5% of their vertices are inside her skin in the **sit** pose (90 degrees of hip flexion; the compressed side of
+  the bend; not visible in the render), the sneakers 4.1% in a long **stride** (15 vertices), and one hoodie edge is stretched 4.5x in
+  the **crossed-arms** pose (the armpit; not visible). Everything else is clean: no garment more than 1% inside her in the other poses,
+  the hood's stretch is now at most 1.6x, the orbs stay at least 3 cm from her in every pose, the glTF exports (7 MB).
+**For the animation phase (not done yet):**
+- **Secondary motion:** no spring-bone or physics data is in the file (the VRM spring-bone extension is not read). The hair cards are
+  weighted to the sample's `J_Sec_Hair*` bones and the bust to `J_Sec_*_Bust*`, so a physics layer can drive them; the bun, the hood, the
+  clothes and the binary star are rigid on their bones (no swing yet).
+- **Corrective shapes** for the hip crease (shorts and hoodie hem in a seated pose) and the armpit if clips need them.
+- **Expressions:** the face shape keys are there; the swappable eye and mouth textures (stage 3) are not built.
+- Export: the toon materials, shader glows and the driver do not survive a `.glb`; sprites and video are rendered from Blender.
+
+## Known flaws (the clipping and edginess Ethan means, for the next pass)
+- Where the hoodie's V strip meets the hood's flaps there are small crumpled knots of outline and a few slivers (the sample hood's own
+  folded flap ends); a rebuilt hood was rejected.
+- The sample shoe is a blocky low-poly mesh, with a jagged opening where the socks enter it; the hoodie's hem slot has a small wobble
+  where the bead meets the cut; the hood's lower edge has a few outline ticks.
+- Zip, pockets, stitching, creases (partly), the stars and the tattoo are drawn into shaders, not modelled: right for stills and they
+  stay on the cloth in any pose, but nothing is a real object.
+- The hard toon step on the shorts shows a few lighting islands at the hips; the dark outfit makes any mesh edge more visible than the
+  pale one did.
 - The face star is foreshortened (narrow) seen from the front, because the cheek turns away steeply there; regular from 3/4.
-- The hood used to blend into her neck while it was pale; with the dark hoodie it no longer does (the dark-blue-lining hood was rejected earlier because a big blue patch could not be read as a hood; this one is the hoodie's own blue). The dark outfit makes the underbust bend and any mesh edge more visible than the pale one did.
-- The binary star's rings are faint at full-body size (best in head close-ups); the glow is a shader halo, so for sprites a 2D glow may be better later.
-- No stress poses tested (stage 4), no animation, hair and hood are rigid (no swing).
-- Licence: the derived model contains the VRoid samples' geometry and textures (modification and redistribution prohibited in
-  their metadata); re-export the samples with modification allowed before the model ships or is committed.
+- The binary star's rings are faint at full-body size (best in head close-ups); the glow is a shader halo, so a 2D glow may be better for
+  sprites later.
+- **Licence:** the derived model contains the VRoid samples' geometry and textures (modification and redistribution prohibited in their
+  metadata; Ethan exported them himself, so the terms are his to change): **re-export the samples with commercial use and modification
+  allowed before the model ships or is committed.**
 
-## Palette, hair strip, underbust and the binary star (2026-11-09)
-Ethan asked for alternative palettes (the name Spica, an accent colour to break up the all-purple look, darker and richer clothes,
-light stockings and pants, highlights), reviewed several sheets of options (six full palettes, then six dark ones with coloured
-stockings), picked **midnight-noir** and tuned it: richer then darker space blue, the stocking and socks a touch darker than the
-hoodie, pale denim shorts, pale-yellow stars, cyan accents. All colours are now in `palette.py` (read by the build scripts and by
-`cloth_tex.py`; `DEFAULT` is the default palette, `run.sh <name>` builds another one). Details that came with it:
-- **Stars:** pale and luminous (`star_glow`): the star pictures are drawn slightly translucent with a soft halo, and the shader lays
-  them unlit (self-lit, not shaded by the cloth); the tattoo gets a thin warm rim, or a pale star disappears on pale skin. The
-  tattoo is about 1.8 cm across (radius 8.8 mm), the stocking stars 10 to 17 cm.
-- **Hair strip:** one wide band of cyan on the highlight lock (`strip_band` in the palette: where along the card's u and how wide;
-  the card's u runs from 0.75 to 1.41, so a band at u 0.5 caught a sliver), keeping the strand lines. Thin strips on many locks were
-  tried and rejected.
-- **Underbust (hoodie):** the dark cloth turned the hard bend where the breast meets the body into a line and a shadow. A taper
-  (the cloth running straight from the nipples to the upper belly) was tried and reverted: it made her look saggy. What stays is only
-  rounding that bend (`UNDERBUST_EASE`): the shell's distance from the torso's axis is sampled on a regular grid of angle by height,
-  blurred, and only the positive change (the inside corner of the bend) is read back at each vertex, so the bust keeps its size, place
-  and top, and meets the body in a long soft curve. Smoothing along the irregular mesh edges was tried first and left diagonal facets.
-- **Binary star** (`binary_stars.py`, called by `clothes.py` when the palette says `orbs`): see the brief. An empty `orbit_placer`
-  is rigid on the head bone (its transform is solved so the pair keeps its place whatever the bone's own transform is) with its Z
-  axis along the line from the middle of her head through the pair's centre; its child `orbit_spin` turns about that axis by a driver
-  (`start + frame * 2 pi / 96`, no keyframes); the orbs and their halos are its children, the two thin torus rings are children of the
-  placer. The glow is the shader's: a halo sphere (3.2 times the orb) whose alpha is zero over the core and then falls from 0.75 at the
-  core's edge to nothing at the rim, with no bloom (the real-time renderer has none). Placement was measured, not guessed: for the
-  pair's direction (azimuth 50 degrees from her left toward behind, elevation 65), distance 18 cm and separation 6.5 cm, each orb's
-  distance to the nearest hair surface over a full turn stays within 2.7 to 4.3 cm. The first setting (a steep plane, 40 degrees
-  elevation, 8 cm apart) let one orb swing far out and the other hang over the hair (a 2.4 cm spread at 7 cm), which is why the
-  plane was made nearly parallel to the top of her head. The pair follows the head when the head bone is posed (checked); the
-  animation is not exported yet (stage 5).
+## Tried and dropped (so it is not tried again)
+Hoodie: the sample's own oversized hoodie (puffed); that hoodie pulled in (the armpits tore); a constant-thickness skin-tight shell (a flat
+sheet); a drape over the waist (lost the hoodie's shape); a flared hem (thin-looking waist, abrupt bend); an inward Solidify for edge
+thickness (dark creases); vertical ribs on the body; a brick-stitch pattern (read as a wall); a tee under the opening (a white V at the
+neckline); a rebuilt hood grid, cutting the hood along the V, smoothing its flaps, a facing or bead or tint on the sample hood. Shorts:
+crinkles round the hem (a lace edge); a dark shadow strip under the hoodie (a darker strip on the pants); light wear lines on creases
+(white scratches); an elastic-looking stocking edge (taper, sheer top, squeezed thigh). Hair: a strip down the back (clips), purple strips,
+neon highlights, thin cyan strips on many locks. Palette: warm homemade trial, saturated violet soles, a dark-blue hood.
 
 ## Tools
-Blender 5.2.3 LTS headless. Skills installed to `~/.claude/skills/` from a vetted markdown-only copy
-of TMHSDigital/Blender-Developer-Tools (commit 9ce1540; licence CC BY-NC-ND 4.0, so unmodified and
-for our own agent use only, never redistributed in this repo): mesh-editing-and-bmesh,
-procedural-materials-and-shaders, headless-batch-scripting, uv-and-mesh-attributes,
-geometry-nodes-python, constraints-and-parenting, slotted-actions-animation, porting-to-blender-5,
-blender-rules. Left out: the live-session MCP (runs unsandboxed code in a running Blender).
+Blender 5.2.3 LTS headless. Skills installed to `~/.claude/skills/` from a vetted markdown-only copy of TMHSDigital/Blender-Developer-Tools
+(commit 9ce1540; licence CC BY-NC-ND 4.0, so unmodified and for our own agent use only, never redistributed in this repo):
+mesh-editing-and-bmesh, procedural-materials-and-shaders, headless-batch-scripting, uv-and-mesh-attributes, geometry-nodes-python,
+constraints-and-parenting, slotted-actions-animation, porting-to-blender-5, blender-rules. Left out: the live-session MCP (runs unsandboxed
+code in a running Blender).
 
 ## Layout
-- `assets/model/spica-v1.blend`: the model (git-ignored, see the licence note; rebuilt by `run.sh`).
-- `assets/model/build/`: Python build scripts, so the model is reproducible from code and every change is a diff:
-  `run.sh` (the whole build, the renders and the sheets), `base_prepare.py`, `hair_bob.py`, `hair_cards.py` (shared helpers),
-  `cloth_layout.py` (positions and colours), `cloth_tex.py` (draws the clothes' details, runs outside Blender),
-  `clothes.py`, `render.py`, `compose.mjs`; later `rig.py`, `anim.py`.
-- `assets/model/renders/`: git-ignored review renders (`v1/`, and the two VRoid samples).
+- `assets/model/spica-v1.blend`: the model (git-ignored, see the licence note; rebuilt by `run.sh`); `spica-<palette>.blend` for other palettes.
+- `assets/model/build/`: `run.sh`, `base_prepare.py`, `hair_bob.py`, `hair_cards.py`, `palette.py`, `cloth_layout.py`, `cloth_tex.py`,
+  `clothes.py`, `binary_stars.py`, `rig_prep.py`, `render.py`, `compose.mjs`, `check_model.py`; later `anim.py`.
+- `assets/model/renders/`: git-ignored review renders (`v1/`, `check/` from the check, the two VRoid samples).
 - `assets/model/tex/cloth/`: git-ignored textures drawn by `cloth_tex.py`.
-- Model parts as separate named objects: the body and face, hair cards and the bun, hoodie, hood, denim shorts, sneakers, two socks.
-  Built with rigging in mind: nothing dangling.
 
 ## Stages and checks
-1. **High-poly body, face and hair (no clothes).** Mannequin-smooth body (no anatomical detail),
-   sculpted face (nose, lips, brow, cheeks, ears), fine hair locks. Toon material with ink-navy
-   outline, palette from the brief.
-   Checks: front/side/back/three-quarter turntable renders; 64 px black-silhouette test; palette
-   sampled from the render matches the hex codes; amber appears only where the brief allows
-   (scripted pixel check). **Ethan reviews the look.** Base approved 2026-11-08; clothes and details added; the whole accepted as v1 on 2026-11-08.
-2. **Revise** until Ethan says locked (v1 is a first draft: the known flaws above are the revision list).
-3. **Face.** Swappable eye/mouth textures for the five expressions.
-4. **Rig.** Humanoid armature with fingers; hair, tie and the fixed hood follow the head; the long strip and side ponytail each get a short stiff chain.
-   Check: stress poses (arms up, sit, hand at mouth) without clipping.
-5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit,
-   smirk, flustered). Check: playblast of each.
-6. **Export and integration.** `.glb` + `.blend`; `render.py` makes sprites from clip frames; one
+1. **High-poly body, face, hair, clothes.** Done; Ethan accepted it as v1 (2026-11-08) and chose the palette (2026-11-09).
+2. **Revise** until Ethan says locked (v1 is a first draft: "Known flaws" is the revision list).
+3. **Face.** Swappable eye/mouth textures for the five expressions (the 58 shape keys exist already).
+4. **Rig.** The humanoid armature with fingers exists and is checked (above). Left: secondary motion for hair, bust and the hood (short
+   stiff chains or a physics layer) and corrective shapes. Check: `check_model.py` stress poses without clipping.
+5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit, smirk, flustered). Check: playblast of each.
+6. **Export and integration.** `.blend` plus renders (a `.glb` is a structure test only); `render.py` makes sprites from clip frames; one
    end-to-end test post through `pnpm eval --llm=fake`.
 
 ## Limits (be honest)
-Rendered looks are judged by Ethan; Claude checks proportions, silhouette, palette and
-consistency from renders. Hair is the highest risk. Procedural animation is functional, not
-polished.
+Rendered looks are judged by Ethan; Claude checks proportions, silhouette, palette and consistency from renders and measures what can be
+measured (distances, weights, clipping counts). Hair is the highest risk. Procedural animation is functional, not polished.
 
 ## Out of scope
 Version arc beyond v1, voice, video output, emotion-flare effects, publishing (O2+).

@@ -30,6 +30,7 @@ sys.path.insert(0, HERE)
 import hair_cards as hc  # noqa: E402
 import cloth_layout as CL  # noqa: E402
 import binary_stars  # noqa: E402
+import rig_prep  # noqa: E402
 
 ROOT = hc.ROOT
 V = hc.V
@@ -954,6 +955,8 @@ def main():
     tattoo_face(bpy.data.objects["Face"])
     if CL.P.orbs:
         binary_stars.build(NB, hc.lin, CL.P)
+
+    rig_prep.prepare(bpy.data.objects["Armature"], next(o for o in new if o.type == "ARMATURE"), [o for o in bpy.data.objects if o.name.startswith("tuft_")])
 
     for o in new:
         bpy.data.objects.remove(o)

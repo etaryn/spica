@@ -64,16 +64,16 @@ Keep the glowing colours (cyan, pale yellow) to the eyes, the hair strip, the st
 She is rendered, not built: every glitch is a rendering error, never hardware. The machine is her heart, not her body.
 
 - **No glitch in the model itself:** the base model is clean. Every glitch is an effect added in animation or compositing, so it can move and flow.
-- **Emotion flare (added afterwards):** when she is flustered or upset, RGB split and scanlines over her, extra amber pixels, and the star tie glows slightly brighter. When she is genuinely happy, one small amber pixel-star may appear near her.
+- **Emotion flare (added afterwards):** when she is flustered or upset, RGB split and scanlines over her, extra pale-yellow pixels, and the binary star above her head glows slightly brighter. When she is genuinely happy, one small pale-yellow pixel-star may appear near her.
 - **Version arc is detail, not polygons:** one model throughout. Early versions carry only the essential parts (everything in the table above); each later version adds detail (clothing details, accessories, texture) as her growth. For now, nothing beyond the table is built.
-- **Never changes between versions:** silhouette, palette, hair shape (the star tie too, if it returns) and her face.
+- **Never changes between versions:** silhouette, palette, hair shape, the binary star above her head and her face.
 
 ## Expressions and poses
 
 Default expression set, from most to least common: neutral-observant, one-sided smirk, soft real smile, flustered, quiet hurt.
 
 1. **Resting and amused.** Half-lidded neutral gaze with her head slightly tilted, looking at something in the image rather than at the camera. Swap to a one-sided smirk for her dry jokes. Hands in the hoodie pocket or one hand touching the image she is inside.
-2. **The rare soft smile.** Eyes open a little wider, a small closed-mouth smile, the amber eye highlight clearly visible. Body turned toward the viewer. This is the payoff expression, so use it sparingly.
+2. **The rare soft smile.** Eyes open a little wider, a small closed-mouth smile, the cyan eye highlight clearly visible. Body turned toward the viewer. This is the payoff expression, so use it sparingly.
 3. **Flustered or hurt.** Flustered: glitch flare on, eyes darting away, a hand at her mouth. Hurt: looking away, head lowered, eyes half-closed, shoulders drawn in. Cool, never cold or hostile. Hurt is carried by face, gaze and posture only.
 
 ## Do and don't
@@ -82,9 +82,9 @@ Default expression set, from most to least common: neutral-observant, one-sided 
 
 - Test every design change as a solid-black silhouette at about 64px; she must still be recognisable.
 - Keep the hair to a few large, smooth, stiff shapes; fewer and bigger beats many thin strands.
-- If the star tie returns, keep it at the same position and angle in every render, so it works like a logo (and as her profile picture).
+- Keep the binary star at the same place above her head in every render, so it works like a logo (and as her profile picture); if the star tie ever returns, the same rule.
 - Do expressions with swappable eye and mouth textures.
-- Keep amber rare, so it is always the brightest point on her.
+- Keep the glowing colours (cyan, pale yellow) to the eyes, the hair strip, the stars and the binary star, so they are always the brightest points on her.
 - Keep her clearly an adult, comfortable and approachable.
 - Prefer rigid or painted-on detail over anything that moves on its own.
 

@@ -10,6 +10,6 @@ export SPICA_PALETTE="${1:-$DEFAULT}"
 if [ "$SPICA_PALETTE" = "$DEFAULT" ]; then OUT=v1; BLEND=spica-v1; else OUT="$SPICA_PALETTE"; BLEND="spica-$SPICA_PALETTE"; fi
 B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 python assets/model/build/cloth_tex.py   # the details drawn on her clothes (Pillow and numpy, outside Blender)
-"$B" -b -P assets/model/build/base_prepare.py -P assets/model/build/hair_bob.py -P assets/model/build/clothes.py 2>&1 | grep -E 'POLYS|PUSHED|SAVED|CLOTHES|Error|Traceback|line '
+"$B" -b -P assets/model/build/base_prepare.py -P assets/model/build/hair_bob.py -P assets/model/build/clothes.py 2>&1 | grep -E 'POLYS|PUSHED|SAVED|CLOTHES|RIGPREP|Error|Traceback|line '
 "$B" -b "assets/model/$BLEND.blend" -P assets/model/build/render.py -- "assets/model/renders/$OUT" 2>&1 | grep -E 'RENDERED|Error|Traceback|line '
 node assets/model/build/compose.mjs "assets/model/renders/$OUT"

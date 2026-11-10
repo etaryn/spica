@@ -1,5 +1,5 @@
 # Measures how her hoodie sits on her static model and raises if a rule fails: the collarbones, the sleeve's outline.
-# Run: blender -b assets/model_v2/spica-v2-accents.blend --python-exit-code 1 -P assets/model_v2/build/check_fit.py
+# Run: blender -b assets/model_v2/spica-v2-accents.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_fit.py
 import sys
 from pathlib import Path
 
@@ -8,7 +8,7 @@ import numpy as np
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import base_mesh as bm
 import body as shape
 import clothes as fit

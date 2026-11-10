@@ -1,5 +1,5 @@
 # Measures her rig and raises if any rule fails: bones, weights, nothing moved at rest, the neck join, cloth in stress poses.
-# Run: blender -b assets/model_v2/spica-v2.blend --python-exit-code 1 -P assets/model_v2/build/check_rig.py
+# Run: blender -b assets/model_v2/spica-v2.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_rig.py
 import sys
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import base_mesh as bm
 import rig_poses as rp
 

@@ -1,5 +1,5 @@
 # Tests both sets of her expressions: every key exists on her face and its shells, the tattoo stays on her cheek in a head turn.
-# Run: blender -b assets/model_v2/spica-v2.blend --python-exit-code 1 -P assets/model_v2/build/check_expressions.py
+# Run: blender -b assets/model_v2/spica-v2.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_expressions.py
 import sys
 from pathlib import Path
 
@@ -7,7 +7,7 @@ import bpy
 import numpy as np
 from mathutils.kdtree import KDTree
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import expr2_defs
 import face_expr
 import face_expr2

@@ -1,5 +1,5 @@
 # Tests her swing and the binary star: lag, settling, the same result twice, the tail out of her body.
-# Run: blender -b assets/model_v2/spica-v2-drape.blend --python-exit-code 1 -P assets/model_v2/build/check_spring.py
+# Run: blender -b assets/model_v2/spica-v2-drape.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_spring.py
 import math
 import sys
 from pathlib import Path
@@ -7,7 +7,7 @@ from pathlib import Path
 import bpy
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import body as shape
 import rig_poses as rp
 import spring

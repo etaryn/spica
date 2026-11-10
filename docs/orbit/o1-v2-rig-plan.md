@@ -1,5 +1,7 @@
 # O1 v2 rig, swing and expressions: implementation plan
 
+Status: built. This is the plan as written; the T-pose rest and later changes are listed at the top of `o1-v2-rig-spec.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.

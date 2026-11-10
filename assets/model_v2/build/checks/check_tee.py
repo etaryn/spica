@@ -1,12 +1,12 @@
 # Measures her T-pose hoodie: how far the cloth hangs below her arm, near the armpit. Raises if it is a pouch.
-# Run: blender -b assets/model_v2/spica-v2-tpose.blend --python-exit-code 1 -P assets/model_v2/build/check_tee.py
+# Run: blender -b assets/model_v2/spica-v2-tpose.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_tee.py
 import sys
 from pathlib import Path
 
 import bpy
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import base_mesh as bm
 
 POUCH_MOST = 0.052  # the most the cloth may hang below her arm: the moderate fit Ethan chose measures 50 mm

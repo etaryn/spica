@@ -4,13 +4,14 @@ B="/c/Program Files/Blender Foundation/Blender 5.2/blender.exe"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 F="$ROOT/spica-v2.blend"
 R="$ROOT/renders/rig"
-"$B" -b "$ROOT/spica-v2-accents.blend" --python-exit-code 1 -P "$ROOT/build/check_fit.py" 2>&1 | grep -E "FIT|Assert|Traceback"
+"$B" -b "$ROOT/spica-v2-accents.blend" --python-exit-code 1 -P "$ROOT/build/checks/check_fit.py" 2>&1 | grep -E "FIT|Assert|Traceback"
+"$B" -b "$ROOT/spica-v2-tpose.blend" --python-exit-code 1 -P "$ROOT/build/checks/check_tee.py" 2>&1 | grep -E "TEE|Assert|RuntimeError|Traceback" | cut -c1-200
 for check in check_rig check_drape check_spring check_expressions; do
-  "$B" -b "$F" --python-exit-code 1 -P "$ROOT/build/$check.py" 2>&1 | grep -E "RIG|POSE|PROBLEM|CHECK|DRAPE |SPRING|EXPRESSIONS|Assert|Traceback" | cut -c1-200
+  "$B" -b "$F" --python-exit-code 1 -P "$ROOT/build/checks/$check.py" 2>&1 | grep -E "RIG|POSE|PROBLEM|CHECK|DRAPE |SPRING|EXPRESSIONS|Assert|Traceback" | cut -c1-200
 done
 rm -rf "$R/after" "$R/poses"
 SPICA_POSE=arms_down "$B" -b "$F" --python-exit-code 1 -P "$ROOT/build/render.py" -- "$R/after" toon front,q,side,back,face 2>&1 | grep -E "^Error|Traceback"
-python -I "$ROOT/build/compare_rest.py" "$R/before" "$R/after"
+python -I "$ROOT/build/checks/compare_rest.py" "$R/before" "$R/after"
 for pose in a_pose arms_down arms_up arms_overhead arms_forward arms_crossed sit lean head_turn stride twist; do
   SPICA_POSE=$pose "$B" -b "$F" --python-exit-code 1 -P "$ROOT/build/render.py" -- "$R/poses/$pose" toon front,q,side 2>&1 | grep -E "^Error|Traceback"
 done

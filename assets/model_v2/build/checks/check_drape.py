@@ -1,12 +1,12 @@
 # Tests her cloth shapes: they exist, are silent at rest, switch on in the key poses, and ease the bend at her armpit.
-# Run: blender -b assets/model_v2/spica-v2-drape.blend --python-exit-code 1 -P assets/model_v2/build/check_drape.py
+# Run: blender -b assets/model_v2/spica-v2-drape.blend --python-exit-code 1 -P assets/model_v2/build/checks/check_drape.py
 import sys
 from pathlib import Path
 
 import bpy
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import base_mesh as bm
 import drape
 import rig_poses as rp

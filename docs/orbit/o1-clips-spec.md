@@ -7,9 +7,9 @@ Nov 11, 2026. Status: design agreed with Ethan, not built.
 ## Goal
 
 Her real body replaces the four placeholder silhouettes in her posts. Any frame of a clip can be
-rendered as a still with any of her 32 faces, so nothing is hand-posed. Done means one fake-LLM
-test post per facing shows her, correctly lit and placed, and Ethan has approved the clips and the
-sprites from renders.
+rendered as a still with any of her 32 faces, so nothing is hand-posed. Done means one test post
+per facing shows her, correctly lit and placed, and Ethan has approved the clips and the sprites
+from renders.
 
 ## Out of scope
 
@@ -95,8 +95,9 @@ Its own small commit on `main`. `orbit` is never merged. The sprites and `poses.
   it needs. The `flop()` and the mirrored anchor are deleted, so she cannot be flipped by accident.
 - **`post.ts` and `evals/scripts/posts-review.ts`:** read both files.
 - **Tests:** `post-library.test.ts` and `post-render.test.ts` read the placeholders from
-  `assets/poses/` today. They move to a small fixture folder, `tests/fixtures/poses/`, holding a
-  placeholder and its manifest in the new format, so they pass on a fresh clone with no sprites.
+  `assets/poses/` today, and `post-tick.test.ts` and the Phase 14 exit test make posts from that
+  folder. All four move to a fixture folder, `tests/fixtures/poses/`, holding the placeholders and
+  a manifest in the new format, so they pass on a fresh clone with no sprites.
 - **Replace rule:** the four placeholders leave `assets/poses/` in the same commit.
 
 ## Licence
@@ -116,14 +117,17 @@ A new `assets/model_v2/build/checks/check_clips.py`:
 - Each sprite has a transparent background, nothing touching its canvas edges, and its anchor in
   the agreed place.
 
-Ethan judges the look from renders. On `main`, the post tests pass, and `pnpm eval --llm=fake` makes
-one test post per facing.
+Ethan judges the look from renders. On `main`, the post tests pass, and a temporary test calls
+`renderStill` directly to make one test post per facing, with no LLM or database. (`pnpm eval
+--llm=fake` replays chat scripts and makes no posts.)
 
 ## Known risks
 
 - Transparency has never run with `brow_over` or with her binary star's glow. The glow is the
   likeliest to show dark edges, and any fix is part of this work.
 - Her faces have only been reviewed head-on, so the three faces may need fixes at 32 degrees.
+- `observing` and `curious` have a fixed sideways glance. Sprites send it the way she faces, so she
+  does not look back over her shoulder.
 - `look_up` is the first real head tilt on these faces and her ponytail. The known hair clip is a
   40-degree tilt toward the ponytail, which this clip does not do.
 

@@ -27,6 +27,21 @@ CHEST_CENTRE_Y = -0.0375  # the middle of her chest, front to back
 SLEEVE_ROOM = 1.22  # how much wider the sleeves are made, for the oversized look
 PAST_WRIST = 0.095  # how far the cuff ends past the wrist
 SHOULDER_EASE = 0.020  # how far the cloth stands out past her shoulder
+SHOULDER_REST = 0.012  # the hoodie rests this far above the top of her shoulder
+SHOULDER_POINT = 0.155  # past this she is arm, not shoulder: the drop stays what it is here
+SHOULDER_DROP_FADE = (1.07, 1.26)  # no drop below the first height, all of it above the second
+SLEEVE_LINE = (1.245, 1.075)  # the heights between which the upper sleeve's width runs straight
+SLEEVE_ROWS, SLEEVE_TURNS, SLEEVE_CARRY = 9, 12, 0.03  # how finely it is measured along and round the arm, and how far sewn cloth follows
+CHEST_REST = 0.013  # the cloth over her collarbones rests this far off her
+CHEST_FADE = (1.20, 1.27)  # nothing moves below the first height, all of it above the second
+CHEST_WIDTH, CHEST_BLUR, CHEST_CARRY = 0.17, 0.018, 0.04  # how far out from her middle, how widely the move is blurred, how far sewn cloth follows
+FIT_PASSES = 5  # how many rounds of settling the sleeves and collarbones get
+CHEST_KEEP = 0.25  # the share of the extra gap that stays
+EVEN_Z, EVEN_X = (0.99, 1.05, 1.20, 1.25), (0.14, 0.18)  # where the chest is evened: heights it fades in and out over, and how far out it fades
+EVEN_BACK, EVEN_REACH, EVEN_BLUR, EVEN_CARRY = 0.02, 0.05, 0.012, 0.03  # front only; how far to look for the mirror image; how widely the move is blurred; how far sewn cloth follows
+EVEN_PASSES, EVEN_RELAX = 4, 4  # rounds of meeting halfway, then of relaxing the surface
+LAYERS_TOGETHER = 0.015  # layers of the hood this close move as one when pushed off her skin
+FLAP_BACK = (0.01, 0.06)  # from the first depth to the second the hood stops moving
 SEAM_SLIT = 0.008  # the hem seam's edges that stretching pulled this far apart are sewn back together
 BODY_GAP = 0.010  # the cloth stays at least this far off her skin
 OUTLINE_WIDTH = 0.0016
@@ -61,7 +76,7 @@ FOOT_WIDTH, FOOT_HEIGHT, FOOT_LENGTH = 0.60, 0.50, 0.84  # how much of its width
 COLLAR_GAP = 0.0025  # how far the collar sits off her ankle
 COLLAR_REACH = 0.075  # the collar's inner wall is found within this of her ankle
 HEEL_ROOM, TOE_ROOM = 0.006, 0.010  # how much longer the sneaker is than her foot, behind and in front
-TRIM_CLEAR, TRIM_FADE = 0.018, 0.02  # the hood's violet lining stops about this far short of its trim
+TRIM_CLEAR, TRIM_FADE = 0.018, 0.02  # the hood's lining stops about this far short of its trim
 SEAM_QUIET = 2  # how many steps either side of a seam have no outline
 FOLD_ROUNDS, FOLD_DEEP = 8, 0.005  # how wide a fold is read, and how deep counts as fully in shadow
 ZIP_TEETH_BAND, ZIP_TEETH_STEP = 0.15, 0.0042  # share of the strip that is teeth (each way from its centre), and their spacing
@@ -77,8 +92,8 @@ HEM_EASE = 0.020  # how close the elastic hem sits to her hips
 GATHER_HEIGHT = 0.095  # how far above the hem the cloth starts curving in
 HEM_BAND = 0.03  # the band itself, which stays snug
 WAIST_HEIGHT = 1.03  # the narrowest part of her waist
-WAIST_EASE = 0.032  # how far the cloth sits off her waist at the sides
-WAIST_DEPTH_EASE = 0.026  # and at her front and back
+WAIST_EASE = 0.020  # how far the cloth sits off her waist at the sides
+WAIST_DEPTH_EASE = 0.018  # and at her front and back
 WELD = 0.0012  # pattern pieces share their seams to within this distance
 
 
@@ -98,7 +113,8 @@ def her_arm(body):
     radial = np.linalg.norm(p - origin - along[:, None] * direction, axis=1)
     near = radial < 0.06
     steps = np.arange(0.12, 0.34, 0.01)
-    widths = [np.percentile(radial[near & (np.abs(along - t) < 0.008)], 90) for t in steps]
+    slices = [radial[near & (np.abs(along - t) < 0.008)] for t in steps]
+    widths = [np.percentile(s, 90) if len(s) else np.inf for s in slices]  # the last slices can run past her fingertips
     wrist = float(steps[int(np.argmin(widths))])
     print("her wrist height", round(float((origin + direction * wrist)[2]), 3))
     return origin, direction, wrist
@@ -271,6 +287,23 @@ def fit_sleeves(p, labels, arm):
     return out
 
 
+def rest_on_shoulders(p, labels, body):
+    """Lowers each shoulder of the hoodie onto hers: nothing at her neck, the most at the point of her shoulder, and easing out down her chest and arm."""
+    skin = bm.get_co(body)
+    skin = skin[(skin[:, 2] > 1.0) & (skin[:, 2] < 1.34)]
+    cloth = p[np.isin(labels, ["sleeve", "body"]) & (p[:, 2] > 1.0)]
+    across = np.arange(0.04, SHOULDER_POINT + 0.001, 0.01)
+    out = p.copy()
+    for side in (1, -1):
+        top = lambda q, x: q[np.abs(q[:, 0] * side - x) < 0.005, 2].max()
+        drop = bd.smoothed(np.array([max(top(cloth, x) - top(skin, x) - SHOULDER_REST, 0.0) for x in across]), 1.0)
+        here = p[:, 0] * side > 0
+        amount = np.interp(p[here, 0] * side, np.r_[0.02, across], np.r_[0.0, drop])
+        out[here, 2] -= amount * smooth_steps(p[here, 2], *SHOULDER_DROP_FADE)
+        print("shoulder", "L" if side > 0 else "R", "lowered by up to", round(float(drop.max()), 3))
+    return out
+
+
 def fit_shoulders(p, labels, body):
     """Moves each side's shoulder so it sits just outside hers."""
     skin = bm.get_co(body)
@@ -411,8 +444,108 @@ def sewn(p, faces, solid, arm, hem_slit=SEAM_SLIT):
     return verts, polys, flags, arms
 
 
-def keep_off_body(verts, faces, body, under=None):
-    """Cloth inside or too close to the garment under it, or to her skin, moves out; its neighbours ease along."""
+def edge_pairs(faces):
+    return np.array(sorted({tuple(sorted(e)) for f in faces for e in zip(f, f[1:] + f[:1])}))
+
+
+def carry_along(change, moved, points, edges, reach):
+    """Cloth sewn to what moved goes with it, fading with distance, so no seam pulls open."""
+    tree = KDTree(int(moved.sum()))
+    for k, co in enumerate(points[moved]):
+        tree.insert(co, k)
+    tree.balance()
+    source = change[moved]
+    out = change.copy()
+    for i in np.where(~moved)[0]:
+        _, k, d = tree.find(points[i])
+        out[i] = source[k] * math.exp(-((d / reach) ** 2))
+    return bm.smooth_field(out, edges, ~moved, 8)
+
+
+def straighten_sleeves(verts, on_arm, arm, edges):
+    """Takes the pinch out of each upper sleeve: round the arm, its width runs straight from the shoulder to below the deltoid. Folds are kept."""
+    origin, direction, _ = arm
+    change = np.zeros_like(verts)
+    moved = np.zeros(len(verts), bool)
+    for side in (1, -1):
+        mirror = np.array([side, 1, 1])
+        o, d = origin * mirror, direction * mirror
+        here = (on_arm > 0.5) & (verts[:, 0] * side > 0)
+        q = verts[here]
+        along = (q - o) @ d
+        radial = q - o - along[:, None] * d
+        r = np.linalg.norm(radial, axis=1)
+        across = hr.unit(np.cross(d, (0.0, 1.0, 0.0)))
+        turn = (np.arctan2(radial @ np.cross(d, across), radial @ across) + math.pi) / (2 * math.pi) * SLEEVE_TURNS
+        first, last = ((np.array(SLEEVE_LINE) - o[2]) / d[2]).tolist()
+        rows = np.linspace(first, last, SLEEVE_ROWS)
+        step = rows[1] - rows[0]
+        size = np.full((SLEEVE_ROWS, SLEEVE_TURNS), np.nan)
+        for i, t in enumerate(rows):
+            for k in range(SLEEVE_TURNS):
+                ring = r[(np.abs(along - t) < step) & (turn.astype(int) % SLEEVE_TURNS == k)]
+                if len(ring) >= 3:
+                    size[i, k] = np.percentile(ring, 92)  # its outer edge, which is what makes the outline
+        ratio = np.ones_like(size)
+        for k in range(SLEEVE_TURNS):
+            if not np.isnan(size[[0, -1], k]).any():
+                good = ~np.isnan(size[:, k])
+                ratio[good, k] = np.linspace(size[0, k], size[-1, k], SLEEVE_ROWS)[good] / size[good, k]
+        ratio = (np.roll(ratio, 1, 1) + 2 * ratio + np.roll(ratio, -1, 1)) / 4
+        row = np.clip((along - first) / (last - first), 0, 1) * (SLEEVE_ROWS - 1)
+        i0 = np.clip(row.astype(int), 0, SLEEVE_ROWS - 2)
+        k0 = turn.astype(int) % SLEEVE_TURNS
+        k1 = (k0 + 1) % SLEEVE_TURNS
+        fr, ft = row - i0, turn - np.floor(turn)
+        scale = ratio[i0, k0] * (1 - fr) * (1 - ft) + ratio[i0 + 1, k0] * fr * (1 - ft) + ratio[i0, k1] * (1 - fr) * ft + ratio[i0 + 1, k1] * fr * ft
+        change[here] = radial * (scale - 1)[:, None]
+        moved |= here
+    print("sleeve outline moved by up to", round(float(np.linalg.norm(change, axis=1).max()), 4))
+    return verts + carry_along(change, moved, verts, edges, SLEEVE_CARRY)
+
+
+def settle_on_chest(verts, labels, edges, body):
+    """Brings the cloth over her collarbones and the slope of her shoulders down onto her: the panels and the hood's front flap, whose layers keep their order."""
+    tree = BVHTree.FromPolygons(bm.get_co(body).tolist(), [list(f.vertices) for f in body.data.polygons], all_triangles=False)
+    panel = np.isin(labels, ["body", "sleeve"])
+    flap = np.isin(labels, ["hood", "trim"])
+    zone = (panel | flap) & (verts[:, 2] > CHEST_FADE[0]) & (np.abs(verts[:, 0]) < CHEST_WIDTH)
+    pull = np.zeros_like(verts)
+    for i in np.where(zone)[0]:
+        hit, _, _, dist = tree.find_nearest(tuple(verts[i]))
+        if dist > CHEST_REST:
+            wanted = CHEST_REST + (dist - CHEST_REST) * CHEST_KEEP  # a share of the gap stays, so cloth lying on cloth does not cross it
+            pull[i] = (np.array(hit) - verts[i]) * (1 - wanted / dist)
+    fade = smooth_steps(verts[:, 2], *CHEST_FADE) * np.where(flap, 1 - smooth_steps(verts[:, 1], *FLAP_BACK), 1.0)  # the hood's back keeps its volume
+    pull = bm.spread(verts, pull * fade[:, None], zone, CHEST_BLUR)  # by distance, so the hood's layers move as one and folds stay
+    print("collarbone cloth lowered by up to", round(float(np.linalg.norm(pull, axis=1).max()), 4))
+    return verts + carry_along(pull, zone, verts, edges, CHEST_CARRY)
+
+
+def even_out_chest(verts, faces, labels, edges):
+    """Her body is the same on both sides and the source garment is not: each side of the chest meets its mirror image halfway, then the surface is relaxed a little."""
+    panel = labels == "body"
+    sheet = [f for f in faces if panel[f].all()]
+    side, height = np.abs(verts[:, 0]), verts[:, 2]
+    zone = panel & (verts[:, 1] < EVEN_BACK) & (height > EVEN_Z[0]) & (height < EVEN_Z[3]) & (side < EVEN_X[1])
+    fade = (smooth_steps(height, EVEN_Z[0], EVEN_Z[1]) * (1 - smooth_steps(height, EVEN_Z[2], EVEN_Z[3])) * (1 - smooth_steps(side, *EVEN_X)))[:, None]
+    for _ in range(EVEN_PASSES):
+        mirrored = verts * np.array([-1.0, 1.0, 1.0])
+        tree = BVHTree.FromPolygons(mirrored.tolist(), sheet, all_triangles=False)
+        change = np.zeros_like(verts)
+        for i in np.where(zone)[0]:
+            hit, _, _, dist = tree.find_nearest(tuple(verts[i]))
+            if hit is not None and dist < EVEN_REACH:
+                change[i] = (np.array(hit) - verts[i]) / 2
+        change = bm.spread(verts, change * fade, zone, EVEN_BLUR)
+        verts = verts + carry_along(change, zone, verts, edges, EVEN_CARRY)
+    relaxed = bm.smooth_field(verts, edges, zone, EVEN_RELAX)
+    print("chest evened: last move", round(float(np.linalg.norm(change, axis=1).max()), 4))
+    return verts + (relaxed - verts) * fade
+
+
+def keep_off_body(verts, faces, body, under=None, together=None):
+    """Cloth inside or too close to the garment under it, or to her skin, moves out; its neighbours ease along. Layers in `together` take the push as one."""
     layers = [(bm.get_co(body).tolist(), [list(f.vertices) for f in body.data.polygons])]
     if under is not None:  # nearest-surface tests against skin alone would miss cloth that is inside the shorts
         layers.insert(0, (under[0].tolist(), under[1]))
@@ -428,9 +561,12 @@ def keep_off_body(verts, faces, body, under=None):
             if float(np.dot(co - hit, normal)) < BODY_GAP:
                 moved[i] = hit + normal * BODY_GAP
                 touched[i] = True
-    pairs = np.array(sorted({tuple(sorted(e)) for f in faces for e in zip(f, f[1:] + f[:1])}))
+    pairs = edge_pairs(faces)
     print("cloth points moved off her skin:", int(touched.sum()), "of", len(verts))
-    return verts + bm.smooth_field(moved - verts, pairs, bm.grow(touched, pairs, 4) & ~touched, 12)
+    change = bm.smooth_field(moved - verts, pairs, bm.grow(touched, pairs, 4) & ~touched, 12)
+    if together is not None:
+        change = bm.spread(verts, change, together, LAYERS_TOGETHER)
+    return verts + change
 
 
 def cloth_material(name, base, shade, lining, lining_shade, cut=1.10, soft=0.03, crease=None, metal=None, ends=None):
@@ -538,7 +674,9 @@ def cloth_material(name, base, shade, lining, lining_shade, cut=1.10, soft=0.03,
         shadow.inputs["B"].default_value = linear(crease)
         outside = shadow.outputs["Result"]
     t.links.new(outside, pick.inputs["A"])
-    t.links.new(two_tone(lining, lining_shade), pick.inputs["B"])
+    inner = two_tone(lining, lining_shade)
+    inner.node.name = "lining_tone"  # render.py finds it here to try colours
+    t.links.new(inner, pick.inputs["B"])
     t.links.new(pick.outputs["Result"], emit.inputs[0])
     t.links.new(emit.outputs[0], out.inputs[0])
     return m
@@ -1012,6 +1150,7 @@ def main():
     p = (p - np.array([centre_x, centre_y, top])) * SCALE + np.array([0.0, CHEST_CENTRE_Y, SHOULDER_TOP])
 
     p = fit_sleeves(p, labels, her_arm(body))
+    p = rest_on_shoulders(p, labels, body)
     p = fit_shoulders(p, labels, body)
     p = lengthen(p, labels)
     p, faces, labels = without_strands(p, faces, labels)
@@ -1022,9 +1161,20 @@ def main():
     trim.balance()
     near_trim = 1 - np.clip((np.array([trim.find(co)[2] for co in p]) - TRIM_CLEAR) / TRIM_FADE, 0, 1)
     verts, polys, solid, arm = sewn(p, faces, np.maximum((labels != "hood").astype(float), near_trim), np.isin(labels, ["sleeve", "cuff"]).astype(float))
+    pattern = KDTree(len(p))
+    for k, co in enumerate(p):
+        pattern.insert(co, k)
+    pattern.balance()
+    welded = np.array([labels[pattern.find(co)[1]] for co in verts])
+    seams = edge_pairs(polys)
+    line = her_arm(body)
+    for _ in range(FIT_PASSES):  # each pass measures the cloth as the last one left it
+        verts = straighten_sleeves(verts, arm, line, seams)
+        verts = settle_on_chest(verts, welded, seams, body)
+    verts = even_out_chest(verts, polys, welded, seams)
     sheet, sheet_faces = shorts_shell(body)
     fitted = offset_shell(sheet, sheet_faces)
-    verts = keep_off_body(verts, polys, body, (fitted, sheet_faces))
+    verts = keep_off_body(verts, polys, body, (fitted, sheet_faces), together=np.isin(welded, ["hood", "trim"]))
     verts = curl_ends(verts, arm)
     verts, polys, solid, arm, zip_top = zipper.open_front(verts, polys, solid, arm)
     print("hoodie verts", len(verts), "hem z", round(float(verts[:, 2].min()), 3))

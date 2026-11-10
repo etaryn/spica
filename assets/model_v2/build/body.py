@@ -1,6 +1,7 @@
 # Checkpoint 1: reshapes the CC0 base body into Spica's proportions and saves spica-v2-body.blend.
 # Each section table below is her target, measured in metres; run with Blender in background mode.
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -41,7 +42,7 @@ LEG = [
     (0.80, 0.014, 0.149, -0.103, 0.074),
 ]
 SHOULDER_IN = 0.016  # how much narrower her shoulders are, each side
-ARM_TILT = 12.5  # degrees closer to her body, so her arms hang as her hoodie's sleeves were draped
+ARM_TILT = float(os.environ.get("SPICA_ARM_TILT", 12.5))  # degrees closer to her body, so her arms hang as her hoodie's sleeves were draped; -62 builds the T-pose
 ARM_SLIM = [(0.0, 0.88), (0.45, 0.80), (0.75, 0.78), (1.0, 0.80)]  # radial scale along the arm
 HAND_SCALE = 0.87
 DELTOID_SHRINK = 0.14  # takes the muscle off her shoulder cap
@@ -239,7 +240,7 @@ def main():
     sub.render_levels = 2
     mt.add_outline(ob, mt.outline_material("outline_skin", pal.OUTLINE_SKIN), 0.0018)
 
-    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / "spica-v2-body.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / ("spica-v2-body%s.blend" % bm.STAGE)))
 
 
 if __name__ == "__main__":

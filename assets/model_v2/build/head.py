@@ -458,7 +458,7 @@ def main():
     face_outline(face, line)
 
     print("HEAD top", bm.get_co(ob)[:, 2].max(), "chin", bm.get_co(face)[:, 2].min(), "verts", len(ob.data.vertices))
-    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / "spica-v2-head.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / ("spica-v2-head%s.blend" % bm.STAGE)))
 
 
 if __name__ == "__main__":

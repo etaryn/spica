@@ -32,6 +32,7 @@ CHAIN_STEPS = 900
 FALL_FORWARD = np.array([0.0, -0.00005, 0.0])
 CONTACT_DRAG = 0.96  # how little a touch slows the hair: it slides rather than piles up
 CONTACT_GAP = 0.010  # how close hair sits to what it rests on
+CONTACT_DEEPEST = 0.025
 BAND_MARGIN = 0.004  # how far the band reaches past the hair it covers
 BAND_WIDTH = 0.016  # across the flat band
 BAND_HEIGHT = 0.0032  # how far it stands off the hair
@@ -415,7 +416,7 @@ def hang_chain(start, out, length, half_width, bob_tree, body_tree, axis_xy):
             if hit is not None:
                 hit, normal = np.array(hit), np.array(normal)
                 gap = float(np.dot(x[i] - hit, normal))
-                if gap < room:
+                if -CONTACT_DEEPEST < gap < room:  # deeper than this the nearest surface is the wrong side of the cloth, and a push would throw the chain
                     x[i] = hit + normal * room
                     previous[i] = previous[i] * CONTACT_DRAG + x[i] * (1 - CONTACT_DRAG)
     return rounded(x, length)
@@ -538,7 +539,7 @@ def place_ponytail(verts, faces, labels, bob, body_tree, centre):
     rel = placed - ring_centre
     root_part = (u < 0.08) & (np.linalg.norm(rel, axis=1) < 0.07)
     radius = (float(np.percentile(np.abs(rel[root_part] @ e1), 96)), float(np.percentile(np.abs(rel[root_part] @ e2), 96)))
-    return placed, ring_centre, out, radius, bob_tree
+    return placed, ring_centre, out, radius, bob_tree, u
 
 
 def ring_axes(normal):
@@ -675,7 +676,7 @@ def main():
     bob, verts, inv, _ = add_piece("hair_bob", BOB_SOURCE, keep_bob, False, target_skin, tree, material, line)
     paint_strip(bob, verts, inv)
     bpy.context.view_layer.update()
-    _, _, _, (tie_point, normal, radius, bob_tree) = add_piece(
+    _, _, _, (tie_point, normal, radius, bob_tree, chain_t) = add_piece(
         "hair_ponytail", PONY_SOURCE, keep_pony, True, target_skin, tree, material, line, body_collider(body), bob
     )
     add_tie(tie_point, normal, radius, bob_tree)
@@ -683,6 +684,7 @@ def main():
     height = bm.get_co(pony)[:, 2]
     fade = np.clip((height.max() - height) / (height.max() - height.min()), 0, 1) ** PONY_FADE_CURVE
     pony.data.attributes.new("pony_fade", "FLOAT", "POINT").data.foreach_set("value", fade.astype(np.float32))
+    pony.data.attributes.new("chain_t", "FLOAT", "POINT").data.foreach_set("value", chain_t.astype(np.float32))  # its place along the hanging line, for the rig
     bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / "spica-v2-hair.blend"))
 
 

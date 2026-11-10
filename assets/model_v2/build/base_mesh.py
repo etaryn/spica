@@ -5,10 +5,12 @@ from pathlib import Path
 
 import bpy
 import numpy as np
+from mathutils.kdtree import KDTree
 
 BUILD = Path(__file__).resolve().parent
 ROOT = BUILD.parent
 HEAD_SCALE = float(os.environ.get("SPICA_HEAD_SCALE", 0.93))  # halfway between her first head and v1's proportion (0.863)
+STAGE = os.environ.get("SPICA_STAGE", "")  # added to the body and head files' names, for the T-pose build
 HEAD_PIVOT = (0.0, -0.012, 1.34)  # the head shrinks towards this point at the top of her neck
 BUNDLE = ROOT / "base" / "human_base_meshes_bundle.blend"
 SOURCE_NAME = "GEO-body_female_stylized"
@@ -123,6 +125,21 @@ def smooth_field(d, edges, mask, rounds, rate=0.6):
         mean = s / (count[:, None] if wide else count)
         d[mask] += rate * (mean[mask] - d[mask])
     return d
+
+
+def spread(points, values, mask, radius):
+    """Averages per-point values with every point nearby in space, sewn to it or not, so layers lying together move together."""
+    tree = KDTree(len(points))
+    for i, c in enumerate(points.tolist()):
+        tree.insert(c, i)
+    tree.balance()
+    out = values.copy()
+    for i in np.where(mask)[0]:
+        near = tree.find_range(points[i].tolist(), radius * 2)
+        at = [n[1] for n in near]
+        fall = np.exp(-((np.array([n[2] for n in near]) / radius) ** 2))
+        out[i] = (values[at] * fall[:, None]).sum(0) / fall.sum()
+    return out
 
 
 def grow(mask, edges, rounds):

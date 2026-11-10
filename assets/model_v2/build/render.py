@@ -1,11 +1,14 @@
 # Renders review pictures of a v2 .blend. Args after --: <output dir> <clay|toon> <view,view,...>
-# Views: front, q, qr, side, back, head, headq, headside, hand, foot.
+# Views: front, q, qr, side, back, head, headq, headside, hand, foot, chest, chestl, chestr.
 import math
 import os
 import sys
 
 import bpy
 from mathutils import Vector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import brow_over
 
 out_dir, mode, names = sys.argv[sys.argv.index("--") + 1:][:3]
 os.makedirs(out_dir, exist_ok=True)
@@ -22,6 +25,13 @@ meshes = [o for o in scene.objects if o.type == "MESH"]
 for o in scene.objects:
     if o.name in ("cam", "sun"):
         bpy.data.objects.remove(o)
+if os.environ.get("SPICA_FRAME"):
+    scene.frame_set(int(os.environ["SPICA_FRAME"]))
+if os.environ.get("SPICA_POSE"):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import rig_poses
+
+    rig_poses.apply(bpy.data.objects["Armature"], os.environ["SPICA_POSE"])
 
 world = bpy.data.worlds.new("review")
 scene.world = world
@@ -70,7 +80,7 @@ else:
     sun.data.angle = 0.03
     sun.rotation_euler = (math.radians(33), 0, math.radians(-22))
 
-for variable, material in (("SPICA_HOODIE", "hoodie"), ("SPICA_SOCK", "sock"), ("SPICA_SHORTS", "shorts")):  # tries colours without rebuilding: hoodie "lit,shade"; socks "top lit,top shade,end lit,end shade"
+for variable, material in (("SPICA_HOODIE", "hoodie"), ("SPICA_SOCK", "sock"), ("SPICA_SHORTS", "shorts"), ("SPICA_LINING", "hoodie")):  # tries colours without rebuilding: hoodie "lit,shade"; socks "top lit,top shade,end lit,end shade"
     if os.environ.get(variable):
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from palette import linear
@@ -81,7 +91,7 @@ for variable, material in (("SPICA_HOODIE", "hoodie"), ("SPICA_SOCK", "sock"), (
                 nodes[tag].inputs["A"].default_value = linear(near)
                 nodes[tag].inputs["B"].default_value = linear(far)
         else:
-            mix = next(n for n in nodes if n.type == "MIX" and not n.inputs["A"].is_linked and not n.inputs["B"].is_linked)
+            mix = nodes["lining_tone"] if variable == "SPICA_LINING" else next(n for n in nodes if n.type == "MIX" and not n.inputs["A"].is_linked and not n.inputs["B"].is_linked)
             mix.inputs["A"].default_value = linear(colours[1])
             mix.inputs["B"].default_value = linear(colours[0])
 
@@ -116,7 +126,10 @@ def shot(name, az, centre, scale, w=700, h=1000, el=0, depth=40):
     cam.data.clip_end = depth
     scene.render.resolution_x, scene.render.resolution_y = w, h
     scene.render.filepath = os.path.join(out_dir, name + ".png")
-    bpy.ops.render.render(write_still=True)
+    if mode == "toon":
+        brow_over.render(scene)
+    else:
+        bpy.ops.render.render(write_still=True)
 
 
 mid = Vector((0, -0.02, (lo.z + hi.z) / 2))
@@ -127,6 +140,8 @@ face_views = {"face": 0, "faceq": 35}
 wide_views = {"wide": 0, "widel": -35, "wides": -90, "wideb": 180}
 torso_views = {"torso": 0, "torsoq": 35, "torsor": -35, "torsob": 180}
 hip_views = {"hips": 0, "hipsq": 35, "hipss": 90, "hipsb": 180}
+chest_views = {"chest": 0, "chestl": 30, "chestr": -30}
+armpit_views = {"armpitl": (40, 0.15), "armpitr": (-40, -0.15)}
 for n in names.split(","):
     if n in body_views:
         shot(n, body_views[n], mid, H * 1.06)
@@ -140,6 +155,10 @@ for n in names.split(","):
         shot(n, wide_views[n], Vector((0, -0.02, 1.40)), 0.78, 800, 800)
     elif n in hip_views:
         shot(n, hip_views[n], Vector((0, -0.02, 0.82)), 0.56, 800, 800)
+    elif n in armpit_views:
+        shot(n, armpit_views[n][0], Vector((armpit_views[n][1], -0.02, 1.22)), 0.30, 800, 800)
+    elif n in chest_views:
+        shot(n, chest_views[n], Vector((0, -0.02, 1.17)), 0.40, 900, 900)
     elif n in torso_views:
         shot(n, torso_views[n], Vector((0, -0.02, 1.08)), 0.86, 800, 800)
     elif n in face_views:

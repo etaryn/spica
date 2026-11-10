@@ -1,5 +1,5 @@
 # Adds her star accents: the star tattoo on her left cheek and the binary star above her head.
-# Runs on spica-v2-hair.blend and saves spica-v2.blend. Objects named accent_* keep their colours in clay renders.
+# Runs on spica-v2-hair.blend and saves spica-v2-accents.blend. Objects named accent_* keep their colours in clay renders.
 import math
 import sys
 from pathlib import Path
@@ -24,7 +24,8 @@ TATTOO_AT = (0.066, 1.408)  # x and height of its middle: under the outer corner
 TATTOO_RADIUS = 0.009  # tip to tip it is 1.8 cm
 TATTOO_INNER = 0.42  # the star's inner points, as a share of the tips
 TATTOO_RIM = 1.17  # the warm rim's outer edge, as a share of the star
-TATTOO_LIFT = 0.0004  # how far it sits off her cheek
+TATTOO_LIFT = 0.0006  # how far it sits off her cheek
+TATTOO_DENSE, TATTOO_RINGS = 6, 10  # how finely each edge of the star is divided, and how many rings it is built from
 
 HEAD_MIDDLE = Vector((0.0, -0.012, 1.47))
 BINARY_DIRECTION = Vector((0.42, 0.18, 0.89)).normalized()  # above her head, a little behind and to her left
@@ -116,19 +117,21 @@ def add_tattoo():
         a = math.pi / 2 + i * math.pi / 5
         r = TATTOO_RADIUS * HEAD_SCALE * (1.0 if i % 2 == 0 else TATTOO_INNER)
         outline.append((r * math.cos(a), r * math.sin(a)))
-    rings = (0.25, 0.5, 0.75, 1.0, TATTOO_RIM)
+    outline = [(ax + (bx - ax) * k / TATTOO_DENSE, ay + (by - ay) * k / TATTOO_DENSE) for (ax, ay), (bx, by) in zip(outline, outline[1:] + outline[:1]) for k in range(TATTOO_DENSE)]  # finely enough to follow her cheek, or the skin pokes through the flat pieces
+    around = len(outline)
+    rings = tuple(k / TATTOO_RINGS for k in range(1, TATTOO_RINGS + 1)) + (TATTOO_RIM,)
     flat = [(0.0, 0.0)] + [(x * k, y * k) for k in rings for x, y in outline]
     points = []
     for x, y in flat:
-        hit = skin.ray_cast(centre + side * x + up * y + normal * 0.02, -normal)
+        hit = skin.ray_cast(centre + side * x + up * y + normal * 0.02, -normal)  # laid along her skin, so it curves away with her cheek like a real tattoo
         points.append(hit[0] + hit[1] * TATTOO_LIFT)
     faces, slots = [], []
-    for i in range(10):
-        n = (i + 1) % 10
+    for i in range(around):
+        n = (i + 1) % around
         faces.append([0, 1 + i, 1 + n])
         slots.append(0)
         for ring in range(len(rings) - 1):
-            a, b = 1 + ring * 10, 1 + (ring + 1) * 10
+            a, b = 1 + ring * around, 1 + (ring + 1) * around
             faces.append([a + i, b + i, b + n, a + n])
             slots.append(1 if ring == len(rings) - 2 else 0)
     mesh_object("accent_tattoo", points, faces, [emission("tattoo", pal.TATTOO), emission("tattoo_rim", pal.TATTOO_RIM)], slots)
@@ -272,7 +275,7 @@ def main():
     add_stocking_stars()
     centre, across, other = add_binary_star()
     report_clearance(centre, across, other)
-    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / "spica-v2.blend"))
+    bpy.ops.wm.save_as_mainfile(filepath=str(bm.ROOT / "spica-v2-accents.blend"))
 
 
 if __name__ == "__main__":

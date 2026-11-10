@@ -7,13 +7,17 @@ over is data, by hand: her rendered sprites are copied into `assets/poses/` on `
 
 Design docs: `docs/orbit/o1-character-brief.md` (the look, source of truth) and
 `docs/orbit/o1-model.md` (the build, flaws, next stages). Choices the docs don't cover go in
-`DECISIONS.md`. Expressions (stage 3) are built in: 25, `face_expr.use(name)`; they need `assets/references/` (git-ignored).
-Next: O1 stages 4-6 (secondary motion and corrective shapes, clips, sprites); doodles only when Ethan asks.
+`DECISIONS.md`. Next: clips and sprites; doodles only when Ethan asks.
 
-- **v2 is her current model** (`docs/orbit/o1-v2-spec.md`, later choices in `DECISIONS.md`): build with `sh assets/model_v2/build/run.sh`,
-  colours in `assets/model_v2/build/palette.py`. It reads v1's `spica-v1.blend` for her face features. No rig or expressions yet.
+- **v2 is her current model** (`docs/orbit/o1-v2-spec.md`, rig `docs/orbit/o1-v2-rig-spec.md`, later
+  choices in `DECISIONS.md`). Build from nothing: `sh assets/model_v2/build/run.sh`; every check:
+  `sh assets/model_v2/build/run_rig_check.sh`; colours: `assets/model_v2/build/palette.py`. It needs
+  v1's `spica-v1.blend`, `assets/model/tex/face/` and `assets/references/` (all git-ignored).
+- Her rest pose is the T-pose; `rig_poses.apply(arm, "arms_down")` is how she stands. Expressions:
+  `face_expr2.use(name)` is the current set of 32 (`expr2_defs.py`), `face_expr.use(name)` the
+  original 25. Render through `brow_over.render(scene)`, which puts her brows over her fringe.
 - v1 build: `sh assets/model/build/run.sh [palette]`; check: `check_model.py` (see README). All colours
-  live in `assets/model/build/palette.py`.
+  live in `assets/model/build/palette.py`. v1 has its own 25 expressions and spring bones.
 - `.blend`, `.vrm`, textures and renders are git-ignored (the VRoid samples' licence forbids
   committing modified copies).
 - Ethan judges by renders and gives short corrective feedback; measure placement, don't eyeball.

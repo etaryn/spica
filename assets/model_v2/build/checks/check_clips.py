@@ -6,8 +6,10 @@ from pathlib import Path
 
 import bpy
 import numpy as np
+from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import spring
 import sprites as sp
 
 args = sys.argv[sys.argv.index("--") + 1:]
@@ -67,10 +69,113 @@ def check_state():
         assert keys[toward].value > 0.5 and keys[away].value == 0, "she looks away from where she faces, " + facing
 
 
+WATCH = ("J_Bip_C_Head", "J_Bip_L_Hand", "J_Bip_R_Hand", "J_Bip_L_Foot", "J_Bip_R_Foot", "J_Sec_Pony8")
+LOOPS = ("idle", "walk", "sit_edge")
+GARMENTS = ("shorts", "shorts_cuff_L", "shorts_cuff_R", "stocking", "ankle_sock", "sneaker_L", "sneaker_R")
+GARMENT_MOST = 10  # percent of a garment's points inside her skin, the limit her rig check uses
+KNEE_AT_REST = 7.9  # degrees between her thigh and shin bones standing straight, from their rest positions
+KNEE_STRAIGHT, KNEE_SWING = 6, 45  # a walking knee nearly straightens at heel strike and mid-stance and bends about 60 degrees in the swing
+SWING_MM ={"idle": {"Pony": (0, 20), "Bust": (0, 3), "Bob": (0, 10)}, "walk": {"Pony": (10, 90), "Bust": (2, 12), "Bob": (4, 30)}}  # least and most a chain's tip may travel against her head or chest: Ethan found the first numbers far too lively
+
+
+def evaluated(ob):
+    ev = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = ev.to_mesh()
+    a = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", a)
+    ev.to_mesh_clear()
+    return a.reshape(-1, 3)
+
+
+def sole(name):
+    """The lowest point of a shoe, with its drawn outline on, because GROUND was measured with it."""
+    ob = bpy.data.objects[name]
+    outline = [m for m in ob.modifiers if m.type == "SOLIDIFY"]
+    for m in outline:
+        m.show_viewport = True
+    bpy.context.view_layer.update()
+    low = float(evaluated(ob)[:, 2].min())
+    for m in outline:
+        m.show_viewport = False
+    return low
+
+
+def percent_inside(name, tree):
+    points = evaluated(bpy.data.objects[name])[::3]
+    inside = 0
+    for c in points:
+        loc, nrm, _, _ = tree.find_nearest(Vector(c))
+        inside += (Vector(c) - loc).dot(nrm) < -0.0005
+    return 100.0 * inside / len(points)
+
+
+def check_clip(name):
+    arm, scene = bpy.data.objects["Armature"], bpy.context.scene
+    found = [a.name for a in bpy.data.actions if a.name.startswith("clip_" + name)]
+    assert found == ["clip_" + name], "%s: expected one action, found %s" % (name, found)
+    action = bpy.data.actions[found[0]]
+    first, last = action["first"], action["last"]
+    track, soles, inside = [], [], {g: 0.0 for g in GARMENTS}
+    chains = [c for c, _ in spring.chains(arm)]
+    tips = {c[-1].name: [] for c in chains}
+    knees = {"L": [], "R": []}
+    for f in range(first, last + 1):
+        sp.pose(arm, scene, name, f)
+        track.append([np.array(arm.matrix_world @ arm.pose.bones[b].head) for b in WATCH])
+        for side in knees:
+            thigh, shin = (arm.pose.bones["J_Bip_%s_%s" % (side, n)] for n in ("UpperLeg", "LowerLeg"))
+            knees[side].append(np.degrees((thigh.tail - thigh.head).angle(shin.tail - shin.head)) - KNEE_AT_REST)
+        for c in chains:
+            frame = arm.pose.bones["J_Bip_C_UpperChest" if "Bust" in c[0].name else "J_Bip_C_Head"].matrix.inverted()
+            tips[c[-1].name].append(np.array(frame @ arm.pose.bones[c[-1].name].tail))
+        if (f - first) % 4 == 0:
+            soles.append((sole("sneaker_L"), sole("sneaker_R")))
+        if (f - first) % 24 == 0:
+            tree = spring.solid_tree(("Body",))
+            for g in GARMENTS:
+                inside[g] = max(inside[g], percent_inside(g, tree))
+    track = np.array(track)
+    step = np.linalg.norm(track[1:] - track[:-1], axis=2).max(axis=0)
+    seam = np.linalg.norm(track[0] - track[-1], axis=1)
+    if name in LOOPS and (seam > 1.6 * step + 0.001).any():
+        bad("%s: the loop jumps at %s" % (name, [b for b, s, t in zip(WATCH, seam, step) if s > 1.6 * t + 0.001]))
+    soles = np.array(soles)
+    if soles.min() < sp.GROUND - 0.006:
+        bad("%s: a foot sinks %.1f mm below the ground" % (name, (sp.GROUND - soles.min()) * 1000))
+    if name == "walk" and soles.min(axis=1).max() > sp.GROUND + 0.012:
+        bad("walk: both feet leave the ground")
+    if name in ("idle", "look_up"):
+        drift = np.linalg.norm(track[:, 3:5] - track[0, 3:5], axis=2).max()
+        if drift > 0.002:
+            bad("%s: a planted foot slides %.1f mm" % (name, drift * 1000))
+    for g, pct in inside.items():
+        if pct > GARMENT_MOST:
+            bad("%s: %s is %.1f%% inside her" % (name, g, pct))
+    if name == "walk":
+        for side, bends in knees.items():
+            if min(bends) > KNEE_STRAIGHT or max(bends) < KNEE_SWING:
+                bad("walk: %s knee bends %.0f to %.0f degrees; a person's straightens to under %d and bends past %d in the swing" % (side, min(bends), max(bends), KNEE_STRAIGHT, KNEE_SWING))
+            print("KNEE walk", side, "%.0f to %.0f degrees" % (min(bends), max(bends)))
+    for tip, path in tips.items():
+        travel = float(np.ptp(np.array(path), axis=0).max() * 1000)
+        print("SWING", name, tip, "tip travel %.1f mm" % travel)
+        for kind, (least, most) in SWING_MM.get(name, {}).items():
+            if kind in tip and not least <= travel <= most:
+                bad("%s: %s travels %.1f mm, allowed %d to %d" % (name, tip, travel, least, most))
+    print("CLIP", name, "frames", first, last, "soles", round(float(soles.min() - sp.GROUND) * 1000, 1), "mm", "worst inside", {g: round(p, 1) for g, p in inside.items() if p > 1})
+
+
+for g in [o for o in bpy.data.objects if o.type == "MESH"]:
+    for m in g.modifiers:
+        if m.type == "SOLIDIFY":
+            m.show_viewport = args[0] != "clip"  # the check measures cloth without its drawn outline
 if args[0] == "sprites":
     check_sprites(Path(args[1]))
 elif args[0] == "state":
     check_state()
+elif args[0] == "clip":
+    for clip_name in args[1].split(","):
+        check_clip(clip_name)
 if problems:
     raise RuntimeError("%d problems" % len(problems))
 print("CLIPS check passed")

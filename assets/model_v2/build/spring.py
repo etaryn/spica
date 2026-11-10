@@ -9,17 +9,22 @@ from mathutils.bvhtree import BVHTree
 
 import body as shape
 
-# stiffness: share of the way back to rest per frame; drag: speed lost per frame; cone: most it may swing (degrees); margin: gap kept from her (m)
-PONY = dict(stiffness=0.10, drag=0.40, cone=12, margin=0.010)
-BUST = dict(stiffness=0.20, drag=0.45, cone=15, margin=0.0)
+# stiffness: share of the way back to rest per frame; drag: speed lost per frame; cone: most it may swing (degrees); margin: gap kept from her (m);
+# follow: how much of her body's own movement a chain's first bone is carried by, rather than left behind by (the rest of a chain is always carried by the bone above it)
+PONY = dict(stiffness=0.14, drag=0.60, cone=8, margin=0.010, follow=0.0)
+BUST = dict(stiffness=0.20, drag=0.70, cone=6, margin=0.0, follow=0.6)
+BOB = dict(stiffness=0.08, drag=0.60, cone=8, margin=0.0, follow=0.0)
 SOLID = ("Body", "Face", "hoodie", "hair_bob")
 TORSO = np.array(shape.TORSO)  # her measured outline by height: half width, front, back
-ROOTS = (("J_Sec_Pony1", PONY), ("J_Sec_L_Bust1", BUST), ("J_Sec_R_Bust1", BUST))
+BOB_SECTORS, BOB_BONE = 8, "J_Sec_Bob%d"  # the bob's swing bones, one per sector round her head, made by clips.py
+ROOTS = (("J_Sec_Pony1", PONY), ("J_Sec_L_Bust1", BUST), ("J_Sec_R_Bust1", BUST)) + tuple((BOB_BONE % k, BOB) for k in range(BOB_SECTORS))
 
 
 def chains(arm):
     out = []
     for name, kind in ROOTS:
+        if name not in arm.data.bones:
+            continue  # the bob's bones exist only once clips.py has made them
         chain = [arm.data.bones[name]]
         while chain[-1].children:
             chain.append(chain[-1].children[0])
@@ -102,14 +107,17 @@ def bake(arm, f0, f1):
                 head, length = rest.translation, b.length
                 along = (rest.to_3x3() @ Vector((0, 1, 0))).normalized()
                 target = head + along * length
-                tail, prev = state.get(b.name, (target.copy(), target.copy()))
+                tail, prev, was = state.get(b.name, (target.copy(), target.copy(), head.copy()))
                 if f == f0:
                     tail = prev = target.copy()
+                    was = head.copy()
+                moved = (head - was) * (k["follow"] if b is chain[0] else 1.0)  # a bone left behind by the bones above it whips: small turns grow down a chain
+                tail, prev = tail + moved, prev + moved
                 nxt = tail + (tail - prev) * (1 - k["drag"]) + (target - tail) * k["stiffness"]
                 q = along.rotation_difference((nxt - head).normalized())
                 q = within_cone(q, k["cone"])
                 nxt = head + (q @ along) * length
-                state[b.name] = (nxt, tail)  # the free motion: collision only corrects what is keyed, so it can never stick
+                state[b.name] = (nxt, tail, head.copy())  # the free motion: collision only corrects what is keyed, so it can never stick
                 if k["margin"]:
                     outside = out_of_torso(nxt, k["margin"])
                     if outside != nxt:

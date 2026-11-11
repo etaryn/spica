@@ -84,7 +84,7 @@ const solid = (width: number, height: number, c: Rgb, alpha = 1) =>
 const pango = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** Seeded grain: a grey noise layer, the same for the same seed. */
-async function grain(width: number, height: number, amount: number, seed: string) {
+export async function grain(width: number, height: number, amount: number, seed: string) {
   let state = Math.floor(seededUnit(`${seed}:grain`) * 2 ** 32) >>> 0;
   const next = () => {
     // mulberry32: tiny, fast and deterministic.
@@ -102,6 +102,35 @@ async function grain(width: number, height: number, amount: number, seed: string
     .toColourspace("srgb")
     .png()
     .toBuffer();
+}
+
+/** The content's light: its mean colour (her tint), brightest colour (her rim) and brightness. */
+export type Light = { mean: Rgb; rim: Rgb; luma: number };
+
+export async function lightOf(base: Buffer): Promise<Light> {
+  const stats = await sharp(base).stats();
+  const [r, g, b] = stats.channels.map((c) => c.mean);
+  const mean = { r: r!, g: g!, b: b! };
+  return { mean, rim: stats.dominant, luma: 0.299 * mean.r + 0.587 * mean.g + 0.114 * mean.b };
+}
+
+/** Her sprite lit by the content: tinted toward its mean colour, and a rim glow in its brightest. */
+export async function lightHer(her: Buffer, light: Light, rd: Config["posts"]["render"]) {
+  const { width: w, height: h } = await sharp(her).metadata();
+  const tinted = await sharp(her)
+    .modulate({ brightness: clamp(light.luma / rd.tint_luma_divisor, ...rd.tint_brightness) })
+    .composite([
+      { input: await solid(w!, h!, light.mean), blend: "soft-light" },
+      { input: her, blend: "dest-in" },
+    ])
+    .png()
+    .toBuffer();
+  const glow = await sharp(await solid(w!, h!, light.rim))
+    .composite([{ input: her, blend: "dest-in" }])
+    .blur(rd.glow_blur)
+    .png()
+    .toBuffer();
+  return { tinted, glow };
 }
 
 export async function renderStill(input: RenderInput): Promise<Buffer> {
@@ -129,10 +158,8 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
     .toBuffer();
 
   const side = format.placement.side === "auto" ? await quieterSide(base) : format.placement.side;
-  const stats = await sharp(base).stats();
-  const [r, g, b] = stats.channels.map((c) => c.mean);
-  const mean = { r: r!, g: g!, b: b! };
-  const rim = stats.dominant;
+  const light = await lightOf(base);
+  const { mean } = light;
   const dark = {
     r: mean.r * rd.shadow_darkness,
     g: mean.g * rd.shadow_darkness,
@@ -157,20 +184,7 @@ export async function renderStill(input: RenderInput): Promise<Buffer> {
   const ax = input.pose.facing !== facing ? w - input.pose.anchor[0] * k : input.pose.anchor[0] * k;
   const ay = input.pose.anchor[1] * k;
 
-  const luma = 0.299 * mean.r + 0.587 * mean.g + 0.114 * mean.b;
-  const tinted = await sharp(her)
-    .modulate({ brightness: clamp(luma / rd.tint_luma_divisor, ...rd.tint_brightness) })
-    .composite([
-      { input: await solid(w, height, mean), blend: "soft-light" },
-      { input: her, blend: "dest-in" },
-    ])
-    .png()
-    .toBuffer();
-  const glow = await sharp(await solid(w, height, rim))
-    .composite([{ input: her, blend: "dest-in" }])
-    .blur(rd.glow_blur)
-    .png()
-    .toBuffer();
+  const { tinted, glow } = await lightHer(her, light, rd);
 
   const footX =
     W *

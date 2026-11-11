@@ -22,7 +22,7 @@
     {
       "tags": ["looking_up"],
       "framing": "face",
-      "azimuth": [0, 10],
+      "azimuth": [3, 10],
       "elevation": [-5, 0],
       "frames": [40, 56],
       "pan": [0.1, 0.2]

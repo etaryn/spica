@@ -1,15 +1,17 @@
 # Formats
 
-A format is a popular post shape Ethan has reviewed, kept as data: the aspect, frame, where her
-body goes, which poses fit, any overlay text and the tone of the caption. She only picks formats
-marked `reviewed: true` whose `min_skill` her craft skill has reached.
+A reel format is a popular post shape Ethan has reviewed, kept as data: its shots, each with the
+clip tags she may play, the framing, and ranges for the camera, length and pan, plus the faces
+that fit a find that moved her warmly or weighed on her, the grain and the tone of the caption.
+She only picks formats marked `reviewed: true` whose `min_skill` her skill (`posts.skill`) has
+reached. Code fills each range, seeded by the find; no model writes the edit.
 
-To add one, run `pnpm formats:add <image>`, edit the drafted JSON, set `reviewed: true` and
-commit it. The file name must match the `name` field.
+To add one, copy `reels/drift.json`, change it, render it with `pnpm reels:review <image>`, set
+`reviewed: true` and commit it. The file name must match the `name` field. A format asking for a
+clip tag, face or framing `assets/reels/clips.json` lacks, or longer than `posts.reel.max_frames`,
+is skipped.
 
-Fields and allowed values: `name` (lowercase letters, digits, hyphens), `medium` (`still`),
-`min_skill` (0 to 1), `aspect` (`1:1`, `4:5`, `9:16`), `frame` (`none`, `polaroid`, `screenshot`,
-`border`), `placement.side` (`auto`, `left`, `right`), `placement.scale` (`[low, high]`, each
-above 0 and at most 1), `poses` (pose tags), `overlay.kind` (`none`, `caption_in_image`, `label`),
-`overlay.position` (`top`, `bottom`), `overlay.style` (`plain`, `handwritten`), `grain` (0 to 1),
-`caption_pattern` (text), `reviewed` (boolean).
+Fields: `name` (lowercase letters, digits, hyphens), `medium` (`reel`), `min_skill` (0 to 1),
+`shots[]` (`tags`, `framing`, `azimuth` `[low, high]` degrees 0 to 180, `elevation` -30 to 30,
+`frames` whole numbers from 1, `pan` 0 to 1), `faces.warm` and `faces.low` (face names),
+`grain` (0 to 1), `caption_pattern` (text), `reviewed` (boolean).

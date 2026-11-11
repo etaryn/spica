@@ -36,12 +36,10 @@ async function draft(deps: ReturnType<typeof makeTestDeps>) {
   });
   return deps.core.posts.insertPost({
     find_id: findId,
-    medium: "still",
-    format: "plain",
-    pose: "walk-01",
+    format: "drift",
+    clips: "walk+idle+look_up",
     caption: "came across the pillars today",
-    overlay_text: null,
-    media_path: "p.png",
+    media_path: "p.mp4",
     skill: 0,
     check: "ok",
     check_reason: null,
@@ -49,9 +47,9 @@ async function draft(deps: ReturnType<typeof makeTestDeps>) {
   });
 }
 
-async function craftGoal(deps: ReturnType<typeof makeTestDeps>) {
+async function postGoalRow(deps: ReturnType<typeof makeTestDeps>) {
   return deps.core.goals.insert({
-    title: deps.config.posts.craft_goals.still,
+    title: deps.config.posts.goal,
     why: "early posts look rough",
     status: "active",
     progress: 0,
@@ -63,9 +61,9 @@ async function craftGoal(deps: ReturnType<typeof makeTestDeps>) {
   });
 }
 
-test("approve records an action event now, tied to the craft goal", async () => {
+test("approve records an action event now, tied to her posts' goal", async () => {
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
-  const goal = await craftGoal(deps);
+  const goal = await postGoalRow(deps);
   const postId = await draft(deps);
   expect(await decidePost(coreDepsOf(deps), postId, "approve")).toBe(true);
   const post = await deps.core.posts.getPost(postId);
@@ -80,7 +78,7 @@ test("approve records an action event now, tied to the craft goal", async () => 
   expect(event!.at).toEqual(deps.clock.now());
 });
 
-test("approve without a craft goal still records the event, untied", async () => {
+test("approve without her posts' goal still records the event, untied", async () => {
   const deps = makeTestDeps({ life: { timezone: "UTC" } });
   const postId = await draft(deps);
   await decidePost(coreDepsOf(deps), postId, "approve");

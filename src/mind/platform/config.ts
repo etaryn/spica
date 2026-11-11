@@ -760,7 +760,6 @@ const prompts = z.object({
   sim_user: promptVersion,
   post_draft: promptVersion,
   post_check: promptVersion,
-  format_draft: promptVersion,
   labels: promptVersion,
   notes: promptVersion,
   core_notes: promptVersion,
@@ -870,8 +869,6 @@ const onboarding = z.object({
   max_name_chars: positiveInt,
 });
 
-const font = z.object({ file: text, family: text });
-
 const posts = z.object({
   tick_cron: cron,
   browse_per_day: countFromZero,
@@ -884,44 +881,24 @@ const posts = z.object({
   // Largest image she will download; a full-size original can be tens of megabytes.
   max_download_bytes: positiveInt,
   user_agent: text,
-  // What's built: a medium outside this list is never posted, whatever her skill.
-  capabilities: z.array(z.enum(["still", "reel"])).min(1),
-  craft_goals: z.object({ still: text, reel: text }),
-  // Set by Ethan when her posting should get better; she reads it as her own progress.
-  craft_skill: z.object({ still: unit, reel: unit }),
+  // The goal her approved posts count toward; her appraisal of how each landed moves it.
+  goal: text,
+  // Set by Ethan when her making should get better (one dial for everything she makes).
+  skill: unit,
   max_per_week: positiveInt,
   max_pending: positiveInt,
   max_find_age_hours: z.number().positive(),
   min_valence: unit,
   candidate_limit: positiveInt,
   max_find_px: positiveInt,
-  output_width: positiveInt,
+  // A reel's width; even, as H.264 needs.
+  output_width: positiveInt.refine((n) => n % 2 === 0, "output_width must be even"),
   caption_max_chars: positiveInt,
   caption_target_chars: positiveInt,
-  overlay_max_chars: positiveInt,
   media_dir: text,
-  formats_dir: text,
-  poses_dir: text,
-  fonts: z.object({ plain: font, handwritten: font }),
-  // Homemade roughness at skill 0; it shrinks linearly to none at skill 1.
-  jitter: z.object({
-    crop: z.number().min(0).max(0.3),
-    tilt_deg: z.number().min(0).max(15),
-    place: z.number().min(0).max(0.3),
-  }),
-  // The look of a render: shadow, glow, caption band, type and placement.
+  // How she's lit inside what she found, and where she stands across it.
   render: z.object({
-    shadow_blur: z.number().positive(),
-    shadow_opacity: unit,
-    shadow_darkness: unit,
     glow_blur: z.number().positive(),
-    band_alpha: unit,
-    label_font_size: positiveInt,
-    caption_font_size: positiveInt,
-    text_dpi: positiveInt,
-    text_width_share: unit,
-    overlay_pad_share: unit,
-    floor_line: unit,
     foot_left: unit,
     foot_right: unit,
     tint_luma_divisor: z.number().positive(),

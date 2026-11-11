@@ -2,7 +2,7 @@
  * Phase 15d exit, all fake: her plain news reaches people under their things; reach-outs carry
  * their dates and the guard sees now and why; a thread goes out once until they revive it; her
  * own rate moves her readiness; her events, plans and wanderings vary;
- * captions cut at a word and a picture never comes twice; her craft skill is Ethan's to set. A
+ * captions cut at a word and a picture never comes twice; her posts' goal always stays. A
  * thread's dated notes never reach another user, and a reach-out leaves core unchanged.
  */
 import { randomUUID } from "node:crypto";
@@ -19,7 +19,7 @@ import { REACH_OUT_SEND_QUEUE } from "@/mind/platform/jobs";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { CoreMemoryItem } from "@/mind/memory/core/types";
 import { browseIfDue } from "@/mind/process/core/browse";
-import { craftSkill } from "@/mind/process/core/post-library";
+import { postGoal } from "@/mind/process/core/post-library";
 import { cutAtWord } from "@/mind/process/core/post-words";
 import { coreReflect } from "@/mind/process/core/reflect";
 import { pickCue } from "@/mind/process/core/wander";
@@ -227,14 +227,11 @@ test("9: captions cut at a word; a repeated picture and a stale weekly feed brin
   }
 });
 
-test("10: her craft skill is configured, and reflection can't drop the craft goal", async () => {
-  const d = makeTestDeps({
-    posts: { craft_skill: { still: 0.3 } },
-    core: { goals: { min_active: 0 } },
-  });
+test("10: reflection can't drop her posts' goal", async () => {
+  const d = makeTestDeps({ core: { goals: { min_active: 0 } } });
   const core = coreDepsOf(d);
-  const { goalId, skill } = await craftSkill(core, "still");
-  expect(skill).toBe(0.3);
+  const goalId = await postGoal(core);
+  expect(goalId).toBeTruthy();
   await core.core.memory.insert({
     kind: "episode",
     content: "A day.",

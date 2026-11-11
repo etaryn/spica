@@ -108,11 +108,10 @@ export type PostStatus = "draft" | "approved" | "rejected";
 export type PostCheck = "ok" | "flagged" | "unchecked";
 export type NewPost = {
   find_id: string;
-  medium: "still" | "reel";
   format: string;
-  pose: string;
+  /** The reel's clips in order, joined by "+". */
+  clips: string;
   caption: string;
-  overlay_text: string | null;
   media_path: string;
   skill: number;
   check: PostCheck;

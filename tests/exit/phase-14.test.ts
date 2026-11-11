@@ -1,6 +1,7 @@
 /**
- * Phase 14 exit, all fake: she browses, the find lands, the post tick drafts a post of her inside
- * it, Ethan approves it, and it lands in her life and moves her craft goal. A rejected draft leaves
+ * Phase 14 exit, all fake (Blender stood in for): she browses, the find lands, the post tick drafts
+ * a reel of her inside it, Ethan approves it, and it lands in her life and moves her posts' goal
+ * ("Find friends and share her life"). A rejected draft leaves
  * nothing. A user's data never reaches any of it, and a user's exchange changes nothing it reads.
  */
 import { randomUUID } from "node:crypto";
@@ -29,29 +30,33 @@ afterAll(closeTestDb);
 const TOKEN = "CANARY-14c0ffee";
 const DAY = "2026-01-05";
 const at = (hour: number, minute = 0, day = 5) => new Date(Date.UTC(2026, 0, day, hour, minute));
-const CRAFT = /- \[([0-9a-f-]{36})\] Get better at making posts/;
+const GOAL = /- \[([0-9a-f-]{36})\] Find friends and share her life/;
 
-async function setup(posts: object = {}) {
+async function setup() {
   const { sources } = fakeSources({ apod: await webItem() });
   const deps = makeTestDeps(
     {
       life: { timezone: "UTC" },
       core: { world: { events_local_hour: 23 } },
-      posts: { media_dir: tmpMediaDir(), sources: [{ name: "apod", weight: 1 }], ...posts },
+      posts: {
+        media_dir: tmpMediaDir(),
+        sources: [{ name: "apod", weight: 1 }],
+        output_width: 108,
+      },
     },
     [],
     sources,
   );
-  // Her take: the find moves her; a post she made advances her craft.
+  // Her take: the find moves her; a post she made advances her posts' goal.
   deps.llm.handlers.core_appraise = (input: string) => {
     const content = /^Event \([^)]*\): (.*)$/m.exec(input)?.[1] ?? "";
-    const craft = CRAFT.exec(input)?.[1];
+    const goal = GOAL.exec(input)?.[1];
     const posted = content.startsWith("Spica posted");
     return {
       episode: content,
       emotion: { label: "moved", valence: 0.8, arousal: 0.5, about: "" },
       salience: "medium",
-      goal_effects: posted && craft ? [{ goal_id: craft, effect: "advance", size: "medium" }] : [],
+      goal_effects: posted && goal ? [{ goal_id: goal, effect: "advance", size: "medium" }] : [],
       need_effects: { autonomy: 0, competence: 0 },
     };
   };
@@ -119,16 +124,16 @@ async function dayOfPosting(deps: Awaited<ReturnType<typeof setup>>) {
   return postTick(core, at(23, 40));
 }
 
-test("1-4: browse, land, draft, approve: she remembers posting; her craft stays where Ethan set it", async () => {
+test("1-4: browse, land, draft a reel, approve: she remembers posting and her goal moves", async () => {
   const deps = await setup();
   const out = await dayOfPosting(deps);
   expect(out.status).toBe("drafted");
   const postId = (out as { postId: string }).postId;
   const post = await deps.core.posts.getPost(postId);
-  expect(post).toMatchObject({ status: "draft", check: "ok", medium: "still" });
+  expect(post).toMatchObject({ status: "draft", check: "ok", format: "drift" });
   expect(post!.caption.length).toBeGreaterThan(0);
   expect(existsSync(post!.media_path)).toBe(true);
-  const goal = await deps.core.goals.byTitle(deps.config.posts.craft_goals.still);
+  const goal = await deps.core.goals.byTitle(deps.config.posts.goal);
   expect(goal).toMatchObject({ status: "active", progress: 0 });
 
   deps.clock.set(at(10, 0, 6));
@@ -140,7 +145,7 @@ test("1-4: browse, land, draft, approve: she remembers posting; her craft stays 
     `world_event:${approved!.action_event_id}`,
   );
   expect(episode?.content).toMatch(/^Spica posted "/);
-  expect((await deps.core.goals.get(goal!.id))!.progress).toBe(0); // her skill is configured, not earned
+  expect((await deps.core.goals.get(goal!.id))!.progress).toBeGreaterThan(0);
 });
 
 test("5: a rejected draft leaves no event and no memory", async () => {
@@ -159,7 +164,7 @@ test("5: a rejected draft leaves no event and no memory", async () => {
   expect((await deps.core.posts.getPost(postId))!.action_event_id).toBeNull();
 });
 
-test("6: canary: no user data in any find, post, model input or overlay", async () => {
+test("6: canary: no user data in any find, post or model input", async () => {
   const deps = await setup();
   await plantCanary(deps);
   const out = await dayOfPosting(deps);
@@ -183,7 +188,7 @@ test("7: side channel: a user's exchange changes nothing the engine reads", asyn
     JSON.stringify({
       persona: await publicPersona(core),
       finds: await deps.core.posts.unposted(at(0), 10),
-      goal: await deps.core.goals.byTitle(deps.config.posts.craft_goals.still),
+      goal: await deps.core.goals.byTitle(deps.config.posts.goal),
     });
   expect(await deps.core.posts.unposted(at(0), 10)).not.toEqual([]);
   const before = await read();
@@ -191,13 +196,12 @@ test("7: side channel: a user's exchange changes nothing the engine reads", asyn
   expect(await read()).toBe(before);
 });
 
-test("8: with reels built, the day's find becomes a reel: an MP4 of every shot, no user data", async () => {
-  const deps = await setup({ capabilities: ["reel"], output_width: 108 });
+test("8: the reel is an MP4 of every shot, and its edit list carries no user data", async () => {
+  const deps = await setup();
   await plantCanary(deps);
   const out = await dayOfPosting(deps);
   expect(out.status).toBe("drafted");
   const post = await deps.core.posts.getPost((out as { postId: string }).postId);
-  expect(post).toMatchObject({ status: "draft", check: "ok", medium: "reel", format: "drift" });
   const reelJson = readFileSync(
     path.join(deps.config.posts.media_dir, "reels", post!.find_id, "reel.json"),
     "utf8",

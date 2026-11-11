@@ -15,8 +15,6 @@
     "lint": "eslint . && prettier --check .",
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=.env evals/run.ts",
-    "formats:add": "tsx --env-file-if-exists=.env evals/scripts/formats-add.ts",
-    "posts:review": "tsx --env-file-if-exists=.env evals/scripts/posts-review.ts",
     "reels:review": "tsx --env-file-if-exists=.env evals/scripts/reels-review.ts",
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",

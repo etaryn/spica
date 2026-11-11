@@ -9,7 +9,7 @@ import { loadPersona } from "@/mind/platform/persona";
 import { loadPrompt } from "@/mind/platform/prompts";
 import { cosine } from "@/mind/platform/math";
 import { DAY } from "@/mind/platform/time";
-import { isCraftGoal } from "./post-library";
+import { isPostGoal } from "./post-library";
 import { runCoreLoop } from "./runner";
 import { nowLine, stamped } from "@/mind/platform/time-anchors";
 import { coreCitables } from "@/mind/memory/core/citables";
@@ -271,8 +271,8 @@ export async function coreReflect(deps: CoreDeps, now: Date): Promise<LoopStatus
         // A seed goal gets its first week before reflection can give it up.
         const young =
           goal?.source === "seed" && now.getTime() - goal.started_at.getTime() < seedKeep;
-        // Her craft goal is her outward aim: its progress is Ethan's to set, so it stays.
-        if (goal?.status === "active" && !young && !isCraftGoal(goal, config))
+        // Her posts' goal is her outward aim, set by Ethan, so it stays.
+        if (goal?.status === "active" && !young && !isPostGoal(goal, config))
           if (await tx.goals.setStatus(id, "dropped", now)) {
             droppedGoalIds.push(id);
             droppable--;

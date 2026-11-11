@@ -34,7 +34,7 @@ handlers are in `src/worker/<engine>-jobs.ts`; every number is in `config/defaul
 | Outreach | §13 | `process/outreach/` | `reach-out/` |
 | Onboarding | §14 | `process/onboarding/`, `src/app/onboarding/` | `onboarding/` |
 | Module bus, public persona | §16 | `platform/{modules,social}.ts`, `src/modules/`, `process/core/public-persona.ts` | — |
-| Post engine | §16a | `process/core/{browse,post*}.ts`, `formats/`, `assets/poses/` | `post/` |
+| Post engine, reels | §16a | `process/core/{browse,post*,reel-*}.ts`, `runtime/reel-tools.ts`, `formats/reels/`, `assets/reels/` | `post/` |
 | Evals, review runs, inspector | §17 | `evals/`, `src/app/inspector/`, `src/db/repos/admin/` | `eval/` |
 | HTTP, SSE, push | §5 | `src/app/api/`, `src/server/`, `src/runtime/` | — |
 | Phases · open questions · backlog | §20 · §21 · §25 | `docs/spec-v3-history.md` (built-phase detail, done items) | — |
@@ -130,9 +130,10 @@ off except where a role sets it; the guard caches its prompt (`models.guard_cach
 **Cost free wins** (2026-10-28, side phase, closed 2026-11-02): every model call for a user is
 booked in `llm_usage`, `prices` cover cache tokens, reply, guard and labels caches default `1h`,
 and paragraphs prompts repeat word for word live in `prompts/shared/`.
-**Orbit O1 stage 6, main side** (2026-11-12): the reel engine, a proof of concept gated off
-(`"reel"` not in `posts.capabilities`): seeded reel formats write `reel.json`, orbit's `reel.py`
-renders her in Blender, ffmpeg and sharp composite and encode the MP4 (§16a Reels, B147, B148).
+**Orbit O1 stage 6, main side** (2026-11-12): the reel engine. Seeded reel formats write
+`reel.json`, orbit's `reel.py` renders her in Blender, ffmpeg and sharp composite and encode the MP4
+(§16a, B147, B148). Same day, **reels only**: stills are gone from her posts, her posts' goal is
+"Find friends and share her life" (persona v8), and her skill is one dial, `posts.skill`.
 **Phases 16 and 17 are closed** (2026-10-28). Dates, as they stand: a date is a token
 (`platform/time-anchors.ts`) made by code from a date it holds or from a time label a model filled
 in (`platform/time-labels.ts`); nothing reads prose for dates. Tokens render with their distance

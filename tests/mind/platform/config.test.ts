@@ -53,7 +53,7 @@ test("phase 1 config groups load with defaults", () => {
     stale_floor: 0.05,
     dormant_after_days: 14,
   });
-  expect(c.prompts.persona).toBe("v7");
+  expect(c.prompts.persona).toBe("v8");
 });
 
 test("turn, hot_path and events config load with conservative defaults", () => {
@@ -93,7 +93,7 @@ test("life, core and availability config load with her fixed zone", () => {
   expect(c.models.life).toBe("claude-haiku-5-5");
   expect(c.prompts.life_plan).toBe("v5");
   expect(c.prompts.life_event).toBe("v8");
-  expect(c.prompts.post_check).toBe("v3");
+  expect(c.prompts.post_check).toBe("v4");
 });
 
 test("life.timezone must be a real IANA zone", () => {
@@ -126,13 +126,13 @@ test("rejects the removed backchannel style keys", () => {
 
 test("posts config: defaults load, draft and check are optional loops", () => {
   const c = loadConfig();
-  expect(c.posts.capabilities).toEqual(["still"]);
-  expect(c.posts.craft_goals.still).toBe("Get better at making posts");
+  expect(c.posts.goal).toBe("Find friends and share her life");
+  expect(c.posts.skill).toBe(0);
   expect(c.core.loop_priority.optional).toEqual(
     expect.arrayContaining(["post_draft", "post_check"]),
   );
-  expect(c.prompts.post_draft).toBe("v2");
-  expect(() => loadConfig({ posts: { capabilities: ["video"] } })).toThrow();
+  expect(c.prompts.post_draft).toBe("v3");
+  expect(() => loadConfig({ posts: { output_width: 1081 } })).toThrow(/even/);
 });
 
 test("a long-conversation quiet gap shorter than the session gap is rejected", () => {

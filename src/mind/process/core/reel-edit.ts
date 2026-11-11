@@ -9,7 +9,7 @@ import sharp from "sharp";
 import type { Config } from "@/mind/platform/config";
 import { isStill, type ReelTools } from "@/mind/platform/reel-tools";
 import { seededUnit } from "@/mind/platform/seeded-random";
-import { quieterSide } from "./post-render";
+import { quieterSide } from "./reel-light";
 import type { ReelFormat, ReelManifest } from "./reel-library";
 
 export type ReelShot = {

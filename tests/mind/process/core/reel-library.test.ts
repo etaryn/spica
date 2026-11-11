@@ -3,8 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { eligibleFormats } from "@/mind/process/core/post-library";
-import { loadManifest, loadReelFormats } from "@/mind/process/core/reel-library";
+import { eligibleFormats, loadManifest, loadReelFormats } from "@/mind/process/core/reel-library";
 
 const manifest = loadManifest("assets/reels/clips.json");
 const drift = JSON.parse(readFileSync("formats/reels/drift.json", "utf8"));
@@ -24,8 +23,10 @@ test("the manifest and the shipped reel format load, eligible at skill 0", () =>
   const formats = loadReelFormats("formats/reels", manifest, 360, log);
   expect(formats.map((f) => f.name)).toEqual(["drift"]);
   expect(lines).toEqual([]);
-  expect(eligibleFormats(formats, ["reel"], 0)).toHaveLength(1);
-  expect(eligibleFormats(formats, ["still"], 0)).toHaveLength(0);
+  expect(eligibleFormats(formats, 0)).toHaveLength(1);
+  // Only reviewed formats her skill has reached.
+  expect(eligibleFormats([{ ...formats[0]!, min_skill: 0.5 }], 0.4)).toEqual([]);
+  expect(eligibleFormats([{ ...formats[0]!, reviewed: false }], 1)).toEqual([]);
 });
 
 test.each([

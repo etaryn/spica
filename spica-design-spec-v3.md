@@ -538,8 +538,9 @@ Holds no user data; no `user_id`. Core memory is **separate tables**
   `title`, `description` (what the source says the picture shows, or null; migration 0040),
   `credit`, `licence`, `media_path` (the cached image), `image_sha256`, `world_event_id` (→ the
   `action` event), `found_at`.
-- **`post`** (Built 14; no `user_id`): `find_id` (→ `web_find`, unique), `medium`, `format`, `pose`,
-  `caption`, `overlay_text`, `media_path`, `skill`, `check` (`ok | flagged | unchecked`),
+- **`post`** (Built 14, reels only since migration 0046; no `user_id`): `find_id` (→ `web_find`,
+  unique), `format`, `clips` (the reel's clips joined by `+`), `caption`, `media_path` (the MP4),
+  `skill`, `check` (`ok | flagged | unchecked`),
   `check_reason`, `status` (`draft | approved | rejected`), `decided_at`, `action_event_id`
   (→ `world_event`), `created_at` (§16a).
 - **Traces:** `core_loop_trace` (Built: loop, inputs by id, outputs by id,
@@ -640,8 +641,8 @@ conversation her interests shade toward the user's and neighbouring ones. Her
 core interests never move toward any user (V2).
 
 **Persona v6 (Built 14; draft lines for Ethan to rewrite).** The body line says the avatar is her
-body and the internet is where she walks; `### Goals` gains "Get better at making posts" (the craft
-goal, §16a); `# Public voice` says she posts like a person keeping a homemade blog and is open that
+body and the internet is where she walks; `### Goals` gains her posts' goal (§16a: "Get better at
+making posts" until persona v8, 2026-11-12, made it "Find friends and share her life"); `# Public voice` says she posts like a person keeping a homemade blog and is open that
 she is an AI and the avatar is her.
 
 ### 7.6 Identity disclosure (DECIDED)
@@ -1521,9 +1522,10 @@ reply, all from data the reply already reads:
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
-seed self come from `prompts/persona/v7.md` (v7 adds one drafted line under "Who you are": she
-doesn't eat, drink or sleep and can't meet anyone in person, she's there by text; Ethan will
-rewrite the whole persona with Claude in a later phase); the reply prompt is
+seed self come from `prompts/persona/v8.md` (v7 added one drafted line under "Who you are": she
+doesn't eat, drink or sleep and can't meet anyone in person, she's there by text; v8, 2026-11-12,
+made her posts' goal "Find friends and share her life"; Ethan will rewrite the whole persona with
+Claude in a later phase); the reply prompt is
 `prompts/reply/v17.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the
@@ -2277,28 +2279,32 @@ is B97. Events carry ids, never content, and fire after their write commits:
   mood or goals. A public module is a core module, so it can never hear a user (V2).
 - **Comparing Spicas:** nothing beyond the fixed core values.
 
-## 16a. Public presence: the post engine (Built 14)
+## 16a. Public presence: the post engine (Built 14; reels only since 2026-11-12)
 
-She browses the internet, makes a still of herself inside what she found, writes a caption in her
-public voice and queues it for Ethan's approval. Stills only; publishing to platforms comes later
-(`SocialChannel` stays unwired). Everything here is core: no table, prompt or input carries a
-`user_id` (V2, V3, V6). Ethan, 2026-10-12/13: the avatar is her body, the shots are inside the
-screen (she walks through the internet next to what she looks at, never hands on a keyboard),
-captions are hers like a homemade blog, trends are formats and editing styles copied the way a
-person copies a popular format.
+She browses the internet, makes a short reel of herself inside what she found, writes a caption in
+her public voice and queues it for Ethan's approval. Reels only (Ethan, 2026-11-12: there are no
+more stills in the social media pipeline); publishing to platforms comes later (`SocialChannel`
+stays unwired, and reels ship only after the reel spec's Later list, B147). Everything here is
+core: no table, prompt or input carries a `user_id` (V2, V3, V6). Ethan, 2026-10-12/13: the avatar
+is her body, the shots are inside the screen (she walks through the internet next to what she looks
+at, never hands on a keyboard), captions are hers like a homemade blog, trends are formats and
+editing styles copied the way a person copies a popular format. Her posts' goal is "Find friends
+and share her life"; getting better is a direction Ethan sets for everything she makes
+(`posts.skill`), not a goal (2026-11-12).
 
 ```
 browse step (world tick) -> action world event + web_find -> appraisal (her take, her memory)
 post_tick (hourly) <- newest landed browse event
-  -> gates (code) -> format + pose (code, skill-gated)
-  -> draft caption (1 call) -> render (sharp) -> check (1 call) -> post row "draft"
-  -> inspector Posts tab -> approve: action event "she posted ..." (goal_ref: craft goal) -> appraisal
-                            reject: nothing reaches her mind
+  -> gates (code) -> reel format (code, skill-gated) -> renderer files there?
+  -> draft caption (1 call) -> edit list (code) -> Blender frames -> composite + MP4 -> check (1 call)
+  -> post row "draft" -> inspector Posts tab
+       approve: action event "she posted ..." (goal_ref: her posts' goal) -> appraisal
+       reject: nothing reaches her mind
 ```
 
 - **A scheduled tick, not the module bus** (bus delivery is in-process and core handlers have no
   queue). **Posting is a world event**: world events reach memory only through appraisal, so one
-  path gives both "she remembers her posts" (B99) and craft progress.
+  path gives both "she remembers her posts" (B99) and her posts' goal moving.
 - **Browsing** (`core_browse`, no model call, `calls: 0`): at most `posts.browse_per_day` times a
   local day, at a stepped minute anywhere in her day outside a busy block of the plan (she has no night,
   2026-10-20), and never while she's busy or offline at the tick (it retries the next one).
@@ -2316,106 +2322,90 @@ post_tick (hourly) <- newest landed browse event
   public domain, CC0, CC BY, CC BY-SA; anything with an `nc` or `nd` word is rejected. A failed
   fetch or non-free licence writes nothing. The image is cached under `posts.media_dir`, a
   `web_find` is written and a low-stakes `action` event (valence 0) says what she came across.
-- **Formats** (`formats/stills/<name>.json`, zod-validated, an invalid file logged and skipped):
-  `medium`, `min_skill`, `aspect` (1:1, 4:5, 9:16), `frame` (none, polaroid, screenshot,
-  border), `placement` (side, scale range), allowed pose tags, `overlay` (kind, position, style),
-  `grain`, `caption_pattern`, `reviewed` (ignored until Ethan flips it). Three reviewed starters
-  ship (plain, polaroid, screenshot). `pnpm formats:add <image>` drafts a spec from a reference
-  with one vision call (`prompts/post/format-draft/v1.md`); a dev script, no trace, outside the
-  budget.
-- **Poses** (`assets/poses/`, `poses.json`: name, file, tags, `facing`, feet `anchor`): flat
-  placeholder silhouettes until Ethan's model exists; his exports replace them with no code change.
-  A pose is mirrored when the other facing is needed.
-- **Progression (Built 15d):** skill for a medium is set by Ethan in `posts.craft_skill`
-  (`still` 0): her outward improvements are timed by him, and in her world they read as her
-  learning (§26, 2026-10-18). Her craft goal (`posts.craft_goals`, "Get better at making posts")
-  is her outward aim and mirrors the skill: `craftSkill` sets its progress to the configured value,
-  re-creates it if it was dropped (past `core.goals.max_active`), reflection can't drop it and
-  appraisal goal effects skip it. A format is eligible when its medium is in `posts.capabilities`
-  (`["still"]`, the ceiling is what's built) and `min_skill` <= skill. Homemade imperfection (crop offset, tilt, placement jitter) is drawn from
-  `posts.jitter` times `(1 - skill)`, seeded by the find id so renders reproduce.
+- **Her posts' goal and her skill (2026-11-12).** "Find friends and share her life"
+  (`posts.goal`) is a seed goal in her persona (v8), the one approved posts count toward:
+  `postGoal` re-creates it from the persona when it isn't active (even past
+  `core.goals.max_active`), reflection can't drop it, and her appraisal of how a post landed moves
+  its progress, which never completes it. Her skill is `posts.skill` (0), one dial Ethan sets for
+  everything she makes (her outward improvements are timed by him and read in her world as her
+  learning, §26 2026-10-18); a format is eligible when it's reviewed and its `min_skill` <= skill.
+- **Reel formats** (`formats/reels/<name>.json`, zod-validated; an invalid one, or one asking for a
+  clip tag, face or framing the clip manifest lacks, or longer than `posts.reel.max_frames`, is
+  logged and skipped): `min_skill`, `shots[]` (clip `tags`, `framing`, ranges for `azimuth` (its
+  size; code gives the sign), `elevation`, `frames` and `pan`), `faces.warm` / `faces.low`,
+  `grain`, `caption_pattern`, `reviewed` (ignored until Ethan flips it). One reviewed starter,
+  `drift` (walk, idle, look up). The clip manifest (`assets/reels/clips.json`) is copied by hand
+  from `orbit`.
+- **The seam with `orbit`** (`orbit:docs/orbit/o1-reels-spec.md`): the clip manifest, the edit list
+  `reel.json` (`width`, `height`, per shot `clip`, `start`, `frames`, `face`, `azimuth`,
+  `elevation`, `framing`, `x`, `background {file, offset, pan}`; `pan` always written) and
+  transparent frames `shot-NN/NNNN.png`. A field changes only by agreement with the orbit side.
 - **`post_tick`** (hourly, `src/worker/world-jobs.ts`; logic in `process/core/post.ts`). Skip
   reasons, logged: `today` (one post per local day), `week` (`max_per_week`), `busy` (busy or offline
   block), `pending` (`max_pending` drafts waiting), `no_find` (newest landed browse event within
   `max_find_age_hours` whose appraised valence has `|valence| >= min_valence`), `no_format`,
-  `no_pose`, `budget` (the drafting loops are optional, so they stop before the reserve),
-  `draft_failed`, `no_words`, `render_failed`. A failed render or draft leaves the find eligible.
-- **Draft** (`post_draft`, `prompts/post/draft/v2.md`): input is `publicPersona`, the find, the
-  valence only, the format's `caption_pattern` and overlay kind, skill and the target length
+  `budget` (the drafting loops are optional, so they stop before the reserve), `draft_failed`,
+  `no_words`, `render_failed` (also before the draft call when the find's file or a renderer file
+  is missing, so a reel that can't render spends nothing). A failed render or draft leaves the find
+  eligible. The render runs inside the job (`posts.reel.job_expire_seconds`, 3600): Blender takes
+  about 6.6 s a frame at 1080x1920, so a 10 s reel takes about 26 minutes; nothing else waits on
+  the post tick (B148 for a separate queue).
+- **Draft** (`post_draft`, `prompts/post/draft/v3.md`): input is `publicPersona`, the find, the
+  valence only, the format's name and `caption_pattern`, skill and the target length
   (`posts.caption_target_chars`, 200; code cuts at the last whole word within
   `caption_max_chars`); how the find makes her feel is allowed, her relationships, hurts and fears
-  are not; output
-  `{ caption, overlay_text }` (null when the overlay kind is `none`). Words only: code owns every
-  visual choice. It never sees her appraisal episode (her take is private memory).
-- **Render** (`process/core/post-render.ts`, `sharp`, no model): crop to the aspect with jitter; put
-  her on the quieter side (edge density as a JS gradient sum, `quieterSide`) facing the busier
-  one, scaled within the format's range, feet on the floor line; tint toward the content's mean
-  colour, rim glow in its brightest colour, soft shadow in its darkest; SVG frame and overlay with
-  bundled fonts (`assets/fonts/`, Caveat and Inter, each with its OFL licence file); grain; the
-  skill-scaled tilt, cropped exactly so corners never show; a PNG under `posts.media_dir`. Tuning
-  numbers live in `posts.render`; frame proportions and the aspect table are constants.
-- **Check** (`post_check`, `prompts/post/check/v3.md`): does the caption or overlay mention a
-  person she talks to or her relationships, reveal a hurt, a fear or something she's working
-  through, compare her to other products, say she was physically somewhere or with people there
-  (standing inside the picture is fine: that's her avatar), or misstate the find? Her feelings about the find, taste,
-  small moods and opinions are fine. `{ ok, reason }` recorded on the
-  post; a flagged draft is still stored and shown. A model failure stores it `unchecked`.
-- **Approval** (inspector **Posts** tab, admin-only): pending drafts show image, caption, overlay,
-  check and skill. **Approve**, one transaction with the row locked and only from `draft`:
-  `approved`, `decided_at`, an `action` event "posted ..." with `goal_ref` = the craft goal, which
-  lands through appraisal on the next world tick (she remembers it; the craft goal's progress stays
-  Ethan's). **Reject**: nothing reaches her mind.
-- **Tables:** `web_find`, `post` (§6.2); `world_event.kind` gains `action`.
-- **Config `posts.*`:** `tick_cron` ("40 * * * *"), `browse_per_day` (1), `browse_step_minutes` (15), `sources` (commons_potd, eso_potw, noirlab_iotw, 1 each),
-  `weekly_max_age_days` (7), `craft_skill`, `caption_target_chars` (200),
-  `fetch_timeout_ms`, `user_agent`, `capabilities`, `craft_goals`, `max_per_week` (4),
-  `max_pending` (1), `max_find_age_hours` (48), `min_valence` (0.3), `candidate_limit`,
-  `max_find_px`, `output_width`, `caption_max_chars`, `overlay_max_chars`, `media_dir`
-  (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`,
-  `reel` (`formats_dir`, `manifest`, `blender`, `script`, `blend`, `crf` (18),
-  `job_expire_seconds` (3600), `max_frames` (360)).
-  Prompts `post_draft` v2, `post_check` v2, `format_draft` v1; `post_draft` and `post_check` join
+  are not; output `{ caption }`. Words only: code owns every visual choice. It never sees her
+  appraisal episode (her take is private memory).
+- **Edit list** (`process/core/reel-edit.ts`, no model): every choice is drawn by `seededUnit` from
+  the find id (Ethan, 2026-11-12: seeded templates, no tokens). Per shot: a manifest clip with one
+  of the slot's tags (a loop starts at a seeded frame, a one-shot at 0), its length, a face from
+  `warm` when the valence is positive and `low` otherwise, a seeded pan span and direction; she
+  stands on the quieter side of the shot's opening frame (`quieterSide`; `x` is
+  `render.foot_left` or `foot_right`) and turns toward the busier one (the azimuth's sign). A still
+  find is held; a video find plays on across cuts (`offset`). Width `posts.output_width` (even),
+  height 16:9 of it.
+- **Render** (`ReelTools`, a `CoreDeps` member like `webSources`, `runtime/reel-tools.ts`; the
+  mind never spawns a process): `renderShots` runs Blender headless with orbit's `reel.py` and the
+  clips `.blend` (`posts.reel.blender`, `script`, `blend`: paths into the orbit checkout for now,
+  B147); `background` has ffmpeg (`ffmpeg-static`) fill 9:16, pan eased (smoothstep) along the
+  overflowing axis, start a video at `offset` and retime it to 24 fps (a video shorter than its
+  shot fails, naming it); her frames are lit as the stills were (`process/core/reel-light.ts`:
+  tint toward the content's mean colour, rim glow in its brightest, both set once a shot from its
+  opening frame, then seeded grain) and `encode` writes a silent H.264 MP4 (`posts.reel.crf`).
+  The frames are deleted after encoding; `reel.json` stays under `media_dir/reels/<find>/`.
+- **Check** (`post_check`, `prompts/post/check/v4.md`): does the caption mention a person she talks
+  to or her relationships, reveal a hurt, a fear or something she's working through, compare her to
+  other products, say she was physically somewhere or with people there (being in front of it in
+  the video is fine: that's her avatar), or misstate the find? Her feelings about the find, taste,
+  small moods and opinions are fine. `{ ok, reason }` recorded on the post; a flagged draft is
+  still stored and shown. A model failure stores it `unchecked`.
+- **Approval** (inspector **Posts** tab, admin-only): pending drafts play the reel and show the
+  caption, check, format, clips and skill. **Approve**, one transaction with the row locked and
+  only from `draft`: `approved`, `decided_at`, an `action` event "posted ..." with `goal_ref` = her
+  posts' goal, which lands through appraisal on the next world tick (she remembers it and decides
+  for herself how it went). **Reject**: nothing reaches her mind.
+- **Tables:** `web_find`, `post` (§6.2: `format`, `clips`, `caption`, `media_path`, `skill`, check,
+  status; migration 0046 dropped `medium` and `overlay_text` and renamed `pose` to `clips`);
+  `world_event.kind` gains `action`.
+- **Config `posts.*`:** `tick_cron` ("40 * * * *"), `browse_per_day` (1), `browse_step_minutes`
+  (15), `description_max_chars` (300), `sources` (commons_potd, eso_potw, noirlab_iotw, 1 each),
+  `weekly_max_age_days` (7), `fetch_timeout_ms`, `max_download_bytes`, `user_agent`, `goal`,
+  `skill` (0), `max_per_week` (4), `max_pending` (1), `max_find_age_hours` (48), `min_valence`
+  (0.3), `candidate_limit`, `max_find_px`, `output_width` (1080, even), `caption_max_chars`,
+  `caption_target_chars` (200), `media_dir` (`.data/media`), `render` (`glow_blur`, `foot_left`,
+  `foot_right`, `tint_luma_divisor`, `tint_brightness`), `reel` (`formats_dir`, `manifest`,
+  `blender`, `script`, `blend`, `crf` (18), `job_expire_seconds` (3600), `max_frames` (360)),
+  `recent_limit`. Prompts `post_draft` v3, `post_check` v4; both join
   `core.loop_priority.optional`.
-- **Reels (Built O1 stage 6, proof of concept; gated off, 2026-11-12).** A reel is her clips
-  rendered to order over a find. The seam with `orbit` (`orbit:docs/orbit/o1-reels-spec.md`) is
-  the clip manifest (`assets/reels/clips.json`, copied by hand), the edit list `reel.json` and
-  transparent frames `shot-NN/NNNN.png`. `post_tick` picks the medium `reel` only when `"reel"`
-  is in `posts.capabilities` (default `["still"]`); a reel format is then a candidate beside the
-  stills (seeded pick). Reel formats (`formats/reels/<name>.json`, zod, an invalid one or one
-  asking for a clip tag, face or framing the manifest lacks, or longer than
-  `posts.reel.max_frames`, logged and skipped) give each shot's clip tags, framing and ranges for
-  azimuth, elevation, frames and pan, plus `faces.warm` / `faces.low` (picked by the find's
-  valence sign), `grain` and `caption_pattern`. Edit lists come from seeded templates, no model
-  (Ethan, 2026-11-12): every choice is drawn by `seededUnit` from the find id; she stands on the
-  quieter side of the shot's opening frame (`quieterSide`, `x` = `render.foot_left` /
-  `foot_right`) and turns toward the busier one (the azimuth's sign); a video background plays on
-  across cuts (`offset`), a still is held. `ReelTools` (a `CoreDeps` member, like `webSources`)
-  is the only way out of the mind: `renderShots` runs Blender headless with orbit's `reel.py` and
-  the clips `.blend` (`posts.reel.blender`, `script`, `blend`: paths into the orbit checkout
-  for now; `missing` checks them before the draft call, so a reel that can't render spends
-  nothing); `background` has ffmpeg fill 9:16, pan eased along the overflowing axis, start a
-  video at `offset` and retime it to 24 fps (a video shorter than its shot fails); `encode`
-  writes H.264, silent, `posts.reel.crf`. Node lays her over each frame with the stills' tint and
-  rim light (`lightOf` / `lightHer`, set once per shot) and grain. The render runs inside the
-  `post_tick` job (`posts.reel.job_expire_seconds`, 3600: Blender takes about 6.6 s a frame at
-  1080×1920, so a 10 s reel takes about 26 minutes), the frames are deleted after encoding, and
-  `reel.json` stays under `media_dir/reels/<find>/`. The draft reuses `post_draft` v2 and
-  `post_check` v3 unchanged (overlay `none`); `post.medium` is `"reel"`, `post.pose` the shots'
-  clips joined by `+`, `media_path` an `.mp4`; the Posts tab plays it. Reels share her craft goal
-  ("Get better at making posts", `craft_goals.reel`), `craft_skill.reel` (0) is read from
-  config, and only the still path syncs the goal. `pnpm reels:review <image|video|reel.json>`
-  renders one reel with real Blender and no model or database into `.data/reels/<time>/`.
-  Reels ship only after the reel spec's Later list (B147).
 - **Rules:** posts don't pass the guard; the check plus Ethan's approval stand in, so revisit when
   posts publish without approval. The platform phase labels her posts as AI-generated (her public
   voice already says so). The rule 8 note is in §2.
-- **Tools:** `pnpm formats:add`; `pnpm posts:review` runs browse, draft, render and check on the
-  real sources, logging every input and output beside the images (it reads the craft skill
-  read-only: no writes to the dev DB). Quality is reviewed by eye, never an exit criterion.
-- **Exit:** `tests/exit/phase-14.test.ts` (browse, appraisal, a draft with image, caption and
-  check, approve lands an `action` episode (the craft goal stays at the configured skill since
-  15d), a rejected find leaves no
-  trace, the canary and the side channel).
+- **Tools:** `pnpm reels:review <image|video|reel.json> [seed]` renders one reel with real
+  Blender and no model or database into `.data/reels/<time>/` (an edit list's relative background
+  paths are read from the orbit checkout). Quality is reviewed by eye, never an exit criterion.
+- **Exit:** `tests/exit/phase-14.test.ts` (browse, appraisal, a reel draft with its MP4, caption
+  and check, approve lands an `action` episode and moves her posts' goal, a rejected find leaves no
+  trace, the MP4 has every shot's frames, the canary through the edit list, the side channel).
 
 ---
 
@@ -2661,7 +2651,7 @@ The full record of what each built phase delivered (migrations, prompt versions,
 |---|---|---|
 | **Publishing** | Platform publishing through `SocialChannel` with AI labels; posts pass the guard or a standing approval rule; songs attached in-app | B106, B107 |
 | **Video** | Voice for her videos; the video itself is the reel engine below | B102 |
-| **O1 reels, main side** (built 2026-11-12, proof of concept, gated off; full row in `docs/spec-v3-history.md`) | Her clips rendered to order over a find, built against the seam with `orbit`: seeded reel formats write `reel.json`, Blender renders her with orbit's `reel.py`, ffmpeg and sharp composite and encode a silent 24 fps MP4, `post_tick` drafts it when `"reel"` is in `posts.capabilities` (§16a Reels). Ships only after the reel spec's Later list | B147, B148 |
+| **O1 reels, main side** (built 2026-11-12; reels only the same day; full rows in `docs/spec-v3-history.md`) | Her clips rendered to order over a find, built against the seam with `orbit`: seeded reel formats write `reel.json`, Blender renders her with orbit's `reel.py`, ffmpeg and sharp composite and encode a silent 24 fps MP4, and `post_tick` drafts one a day at most (§16a). Stills are gone; her posts' goal is "Find friends and share her life". Ships only after the reel spec's Later list | B147, B148 |
 | **Tuning** (Phase 15, closed 2026-10-21) | Every §25 item marked *Tuning*, in four slices, each opened by an item-by-item discussion with Ethan: **15a her voice** (built), **15b negative situations** (built), **15c memory, relationship, user mind** (built), **15d world, outreach, posts** (built). B35 (the reply model) waits on Ethan's comparison. No external samples: tuning sets base Spica, and each user's own messages bring their bias | §25 |
 | **Time model** (Phase 16, built 2026-10-21; closed 2026-10-28, still live) | Times stored as data and rendered by code with their distance (first `platform/relative-date.ts`, since 16b date tokens and `withTimeRendering`), written-on stamps on her notes and snapshot, `fact.stale_after` retired by the day sweep, guard v6 (NOW in both zones, misdating, B127). Full row in `docs/spec-v3-history.md` | — |
 | **Time anchors** (Phase 16b, built 2026-10-24; closed 2026-10-28, its writing half replaced by Phase 17; full row in `docs/spec-v3-history.md`) | Still live: date tokens placed by code, one render wrapper, day dividers, guard v7 `wrong_day`, code-picked reach-out framing. Replaced: the repos' anchoring of every write and extract's time words (17b, 17d, 17e). As built: one date system: stored text keeps the date each time phrase meant (the repos anchor every write; weekdays match the dates the writer was shown; counted durations), builders place date tokens in their owner's zone instead of rendering dates, and one wrapper renders every token where prompts reach the model (replaces `relative-date.ts` and builder-side rendering). Message timestamps are the anchoring moment: extract keeps a fact's time words, labels them past or upcoming and is cross-checked by weekday name (its `when`, `{when}` and its own date guesses go); her view of the conversation gets day dividers and glosses from each message's send time (replaces the gap marker). Reach-outs get code-picked framing, and guard v7 `wrong_day` drops a misdated one. Her messages are never post-processed | — |
@@ -3039,12 +3029,10 @@ Ethan, not changed.
   that `publicPersona` reads. *Public presence.*
 
 ### 25.12 Post engine (Phase 14)
-- **B124.** The pose figure can stand on the picture's subject (the tiger in the 2026-10-19
-  posts review); placement only weighs edge density. *With Ethan's sprites.*
-- **B102.** Voice for her videos. Her video itself is now the reel engine (Blender renders, §16a
-  Reels), in place of Remotion and three.js. *Video phase.*
-- **B103.** The format extractor reads one reference by one vision call; pattern recognition over
-  many references (or open statistics) would find trends itself. *Later.*
+- **B102.** Voice for her videos. Her video itself is now the reel engine (Blender renders, §16a),
+  in place of Remotion and three.js. *Video phase.*
+- **B103.** Trends found by pattern recognition over many reference reels (or open statistics), to
+  draft reel formats; today a format is written by hand. *Later.*
 - **B104.** Depth masks, so she can stand behind foreground objects in the content. *Later.*
 - **B105.** Object storage for media: it is local disk under `posts.media_dir`, and
   `pnpm db:reset-self` leaves media files behind in `.data/media`. *Before users.*
@@ -3055,9 +3043,7 @@ Ethan, not changed.
   *Before users.*
 - **B147.** Reels before they ship: the reel spec's Later list (blended moves and faces changing
   mid-shot, camera moves, her travelling across the frame, music with cuts on the beat, a larger
-  clip library with `turn`), a reel-aware caption prompt (`post_draft` v2 says "picture"), the
-  soft shadow, overlay text and frames on reels, whether reels get their own craft goal (Ethan,
-  persona), Blender with the clips `.blend` shipped beside the app in place of paths into
+  clip library with `turn`), the soft shadow, overlay text and frames on reels, Blender with the clips `.blend` shipped beside the app in place of paths into
   the orbit checkout, a Blender timeout, and a video find's length checked before Blender runs
   (today a too-short video fails only at compositing; finds are images only). *O1 reels, before
   publishing.*
@@ -3088,5 +3074,6 @@ Ethan, not changed.
 | 2026-10-13 | `invented_self` grounds her self claims at its own threshold, 0.5 (§10.5) | Ethan |
 | 2026-10-13 | Digs repeated across days stay unchecked for now (B113) | Ethan |
 | 2026-10-15 | Hurt and tension share one evenly spaced 0–1 scale, 0 nothing to 1 grounds for ending a friendship on the spot; gains 1; commitment cushions only slights; an ending is scored with a 0.5 floor; pointed remarks count once per occasion across sessions; outage keywords by category; regressions by status only (§11.1, §10.5, §17.2, B14, B91, B115, B15, B113, B37, B40) | Ethan |
-| 2026-10-18 | Her outward improvements (craft skill, new capabilities, updates) are set and timed by Ethan, not by her loops; in-world they read as her learning, outside they are also a marketing decision timed strategically. Her craft goal stays as her outward aim and core loops can't drop it (B109) | Ethan |
+| 2026-10-18 | Her outward improvements (craft skill, new capabilities, updates) are set and timed by Ethan, not by her loops; in-world they read as her learning, outside they are also a marketing decision timed strategically. Her craft goal stays as her outward aim and core loops can't drop it (B109; since 2026-11-12 her posts' goal, which her appraisals move) | Ethan |
 | 2026-10-22 | No prompt is retried or regenerated after a failure: guard rewrites and re-asks, event regeneration, the day plan retry, cold-path job retries and the reply turn's retry after a failed generation are removed, so failures show as structural rather than being regenerated away. A flagged honesty-only reply is sent as is; a safety one gets the fallback line. SDK transport retries (timeouts, 529s) stay | Ethan |
+| 2026-11-12 | Reels only: there are no more stills in the social media pipeline (formats, poses, overlay text and the still renderer deleted). Her posts' goal is "Find friends and share her life"; getting better is an overall direction (Ethan's skill dial for everything she makes), not a goal. Edit lists come from seeded templates, no model | Ethan |

@@ -35,8 +35,8 @@ export interface Deps {
 /**
  * What a core loop gets: her own memory, state and world, and the model, but no database, queue
  * or push, so it cannot reach a user's data even by mistake. It also gets the web sources she
- * browses and the reel tools her posts are made with, neither of which carries a user. It can announce her own events to
- * modules, and nothing about a user.
+ * browses and the reel tools her posts are made with, neither of which carries a user. It can
+ * announce her own events to modules, and nothing about a user.
  */
 export type CoreDeps = Pick<
   Deps,

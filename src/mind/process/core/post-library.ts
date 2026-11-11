@@ -65,8 +65,8 @@ export function loadFormats(dir: string, log: Logger): StillFormat[] {
   return formats;
 }
 
-export const eligibleFormats = (
-  formats: StillFormat[],
+export const eligibleFormats = <F extends { reviewed: boolean; medium: string; min_skill: number }>(
+  formats: F[],
   capabilities: readonly string[],
   skill: number,
 ) => formats.filter((f) => f.reviewed && capabilities.includes(f.medium) && f.min_skill <= skill);

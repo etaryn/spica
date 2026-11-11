@@ -885,10 +885,10 @@ const posts = z.object({
   max_download_bytes: positiveInt,
   user_agent: text,
   // What's built: a medium outside this list is never posted, whatever her skill.
-  capabilities: z.array(z.enum(["still"])).min(1),
-  craft_goals: z.object({ still: text }),
+  capabilities: z.array(z.enum(["still", "reel"])).min(1),
+  craft_goals: z.object({ still: text, reel: text }),
   // Set by Ethan when her posting should get better; she reads it as her own progress.
-  craft_skill: z.object({ still: unit }),
+  craft_skill: z.object({ still: unit, reel: unit }),
   max_per_week: positiveInt,
   max_pending: positiveInt,
   max_find_age_hours: z.number().positive(),
@@ -926,6 +926,19 @@ const posts = z.object({
     foot_right: unit,
     tint_luma_divisor: z.number().positive(),
     tint_brightness: z.tuple([z.number().positive(), z.number().positive()]),
+  }),
+  // Reels: her frames come from Blender (orbit's renderer); the edit and the MP4 are made here.
+  reel: z.object({
+    formats_dir: text,
+    manifest: text,
+    blender: text,
+    script: text,
+    blend: text,
+    crf: z.number().int().min(0).max(51),
+    // A reel renders inside the post_tick job, at seconds per frame; the job must outlive it.
+    job_expire_seconds: positiveInt,
+    // The longest reel a format may plan, in frames: render time grows with it.
+    max_frames: positiveInt,
   }),
   recent_limit: positiveInt,
 });

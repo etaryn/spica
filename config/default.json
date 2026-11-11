@@ -729,8 +729,8 @@
     "max_download_bytes": 15000000,
     "user_agent": "SpicaPostEngine/0.1 (personal project; contact via repository owner)",
     "capabilities": ["still"],
-    "craft_goals": { "still": "Get better at making posts" },
-    "craft_skill": { "still": 0 },
+    "craft_goals": { "still": "Get better at making posts", "reel": "Get better at making posts" },
+    "craft_skill": { "still": 0, "reel": 0 },
     "max_per_week": 4,
     "max_pending": 1,
     "max_find_age_hours": 48,
@@ -765,6 +765,16 @@
       "foot_right": 0.72,
       "tint_luma_divisor": 140,
       "tint_brightness": [0.75, 1.15]
+    },
+    "reel": {
+      "formats_dir": "formats/reels",
+      "manifest": "assets/reels/clips.json",
+      "blender": "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe",
+      "script": "../spica/assets/model_v2/build/reel.py",
+      "blend": "../spica/assets/model_v2/spica-v2-clips.blend",
+      "crf": 18,
+      "job_expire_seconds": 3600,
+      "max_frames": 360
     },
     "recent_limit": 30
   },

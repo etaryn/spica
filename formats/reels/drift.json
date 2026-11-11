@@ -1,0 +1,38 @@
+{
+  "name": "drift",
+  "medium": "reel",
+  "min_skill": 0,
+  "shots": [
+    {
+      "tags": ["walking"],
+      "framing": "full",
+      "azimuth": [25, 40],
+      "elevation": [0, 0],
+      "frames": [60, 84],
+      "pan": [0.3, 0.5]
+    },
+    {
+      "tags": ["standing"],
+      "framing": "waist",
+      "azimuth": [5, 15],
+      "elevation": [5, 12],
+      "frames": [40, 56],
+      "pan": [0.1, 0.2]
+    },
+    {
+      "tags": ["looking_up"],
+      "framing": "face",
+      "azimuth": [3, 10],
+      "elevation": [-5, 0],
+      "frames": [40, 56],
+      "pan": [0.1, 0.2]
+    }
+  ],
+  "faces": {
+    "warm": ["soft_smile", "fond", "wonder", "curious"],
+    "low": ["observing", "thinking", "sigh"]
+  },
+  "grain": 0.15,
+  "caption_pattern": "short, lowercase, one or two lines, no hashtags",
+  "reviewed": true
+}

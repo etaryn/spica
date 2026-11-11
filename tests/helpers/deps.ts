@@ -11,12 +11,15 @@ import { RecordingQueue } from "@/mind/platform/jobs";
 import { createCoreLayer } from "@/db/repos/core";
 import type { WebSources } from "@/mind/world/types";
 import { getTestDb } from "./db";
+import type { ReelTools } from "@/mind/platform/reel-tools";
+import { fakeReelTools } from "./reel";
 
 /** Handlers get this object, so a copy spread from it doesn't reach them. */
 export function makeTestDeps(
   configOverrides: unknown = {},
   modules: readonly Module[] = [],
   webSources: WebSources = {},
+  reelTools?: ReelTools,
 ) {
   const config = loadConfig(configOverrides);
   const ref: { deps?: Deps } = {};
@@ -33,6 +36,7 @@ export function makeTestDeps(
     pusher: new RecordingPusher(),
     modules: createModuleBus(modules, () => ref.deps!),
     webSources,
+    reelTools: reelTools ?? fakeReelTools(config),
   } satisfies Deps;
   ref.deps = deps;
   return deps;

@@ -29,6 +29,10 @@ export async function registerWorldJobs(boss: PgBoss, deps: Deps): Promise<void>
   );
   await boss.schedule(CORE_WORLD_TICK_QUEUE, deps.config.core.world.tick_cron);
 
+  // A reel renders inside the tick (minutes per reel), so the job must outlive the default expiry.
+  const tick = { retryLimit: 0, expireInSeconds: deps.config.posts.reel.job_expire_seconds };
+  await boss.createQueue(POST_TICK_QUEUE, tick);
+  await boss.updateQueue(POST_TICK_QUEUE, tick);
   await boss.work(
     POST_TICK_QUEUE,
     scrubErrors(POST_TICK_QUEUE, deps.log, async () => {

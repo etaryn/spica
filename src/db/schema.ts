@@ -921,7 +921,7 @@ export const post = pgTable(
       .notNull()
       .unique()
       .references(() => web_find.id, { onDelete: "cascade" }),
-    medium: text("medium").$type<"still">().notNull(),
+    medium: text("medium").$type<"still" | "reel">().notNull(),
     format: text("format").notNull(),
     pose: text("pose").notNull(),
     caption: text("caption").notNull(),

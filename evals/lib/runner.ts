@@ -55,6 +55,7 @@ import { DEFERRED, parseAt, turnText, type Profile, type Script } from "./script
 import { SignalLLM } from "./signal-llm";
 import { checkTurn } from "./turn-check";
 import { DAY, HOUR } from "@/mind/platform/time";
+import { createReelTools } from "@/runtime/reel-tools";
 
 export type AssertionResult = {
   type: string;
@@ -406,6 +407,7 @@ export async function runScript(script: Script, opts: RunOptions): Promise<Scrip
     pusher,
     modules: createModuleBus([], () => deps),
     webSources: {},
+    reelTools: createReelTools(config.posts.reel),
   };
   await seedCore(coreDepsOf(deps));
   const lifeSnaps = async () => (script.life ? await lifeSnapshot(db) : undefined);

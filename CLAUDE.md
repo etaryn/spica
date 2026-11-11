@@ -130,6 +130,9 @@ off except where a role sets it; the guard caches its prompt (`models.guard_cach
 **Cost free wins** (2026-10-28, side phase, closed 2026-11-02): every model call for a user is
 booked in `llm_usage`, `prices` cover cache tokens, reply, guard and labels caches default `1h`,
 and paragraphs prompts repeat word for word live in `prompts/shared/`.
+**Orbit O1 stage 6, main side** (2026-11-12): the reel engine, a proof of concept gated off
+(`"reel"` not in `posts.capabilities`): seeded reel formats write `reel.json`, orbit's `reel.py`
+renders her in Blender, ffmpeg and sharp composite and encode the MP4 (§16a Reels, B147, B148).
 **Phases 16 and 17 are closed** (2026-10-28). Dates, as they stand: a date is a token
 (`platform/time-anchors.ts`) made by code from a date it holds or from a time label a model filled
 in (`platform/time-labels.ts`); nothing reads prose for dates. Tokens render with their distance

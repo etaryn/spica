@@ -12,8 +12,17 @@ import { DAY, HOUR } from "@/mind/platform/time";
 import { blockAt, todaysBlocks } from "@/mind/world/blocks";
 import { lifeDate } from "@/mind/world/her-clock";
 import { eventRef } from "./appraise";
-import { choosePose, craftSkill, eligibleFormats, loadFormats, loadPoses } from "./post-library";
+import {
+  choosePose,
+  craftSkill,
+  eligibleFormats,
+  loadFormats,
+  loadPoses,
+  type Pose,
+} from "./post-library";
 import { renderStill } from "./post-render";
+import { loadManifest, loadReelFormats, type ReelManifest } from "./reel-library";
+import { makeReel } from "./reel-render";
 import { checkPost, draftPost, type Draft } from "./post-words";
 import { publicPersona } from "./public-persona";
 import { budgetDayStart, runCoreLoop } from "./runner";
@@ -68,19 +77,42 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
   }
   if (!find) return skip("no_find");
 
-  const { skill } = await craftSkill(deps, "still");
-  const formats = eligibleFormats(loadFormats(cfg.formats_dir, log), cfg.capabilities, skill);
+  const stillSkill = (await craftSkill(deps, "still")).skill;
+  const stills = eligibleFormats(loadFormats(cfg.formats_dir, log), cfg.capabilities, stillSkill);
+  let manifest: ReelManifest | null = null;
+  if (cfg.capabilities.includes("reel")) manifest = loadManifest(cfg.reel.manifest);
+  const reels = manifest
+    ? eligibleFormats(
+        loadReelFormats(cfg.reel.formats_dir, manifest, cfg.reel.max_frames, log),
+        cfg.capabilities,
+        cfg.craft_skill.reel,
+      )
+    : [];
+  const formats = [...stills, ...reels];
   if (!formats.length) return skip("no_format");
   const format = formats[Math.floor(seededUnit(`${find.id}:format`) * formats.length)]!;
-  const pose = choosePose(loadPoses(cfg.poses_dir), format, seededUnit(`${find.id}:pose`));
-  if (!pose) return skip("no_pose");
+  const skill = format.medium === "still" ? stillSkill : cfg.craft_skill.reel;
+  let pose: Pose | null = null;
+  if (format.medium === "reel") {
+    // Checked before drafting: a reel that can't render would otherwise re-spend a draft call
+    // every hour.
+    const missing = deps.reelTools.missing();
+    if (missing) {
+      log.error("reel renderer missing", { find: find.id, file: missing });
+      return skip("render_failed");
+    }
+  }
+  if (format.medium === "still") {
+    pose = choosePose(loadPoses(cfg.poses_dir), format, seededUnit(`${find.id}:pose`));
+    if (!pose) return skip("no_pose");
+  }
 
   // Read before drafting: a missing file would otherwise re-spend a draft call every hour.
   let content: Buffer;
-  let posePng: Buffer;
+  let posePng: Buffer | null = null;
   try {
     content = await readMedia(find.media_path);
-    posePng = await readMedia(path.join(cfg.poses_dir, pose.file));
+    if (pose) posePng = await readMedia(path.join(cfg.poses_dir, pose.file));
   } catch (error) {
     log.error("post media unreadable", { find: find.id, error: errorName(error) });
     return skip("render_failed");
@@ -88,7 +120,17 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
 
   const persona = await publicPersona(deps, now);
   const drafted = await runCoreLoop<Draft | null>(deps, "post_draft", now, async (ctx) => {
-    const draft = await draftPost(ctx.deps, { persona, find, valence, format, skill });
+    const draft = await draftPost(ctx.deps, {
+      persona,
+      find,
+      valence,
+      format: {
+        name: format.name,
+        caption_pattern: format.caption_pattern,
+        overlay: { kind: format.medium === "still" ? format.overlay.kind : "none" },
+      },
+      skill,
+    });
     return {
       inputs: { find: find.id, format: format.name, skill },
       outputs: draft,
@@ -104,21 +146,29 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
   if (!draft) return skip("no_words");
 
   let media: string;
+  let made: string; // the pose, or a reel's clips
   try {
-    const image = await renderStill({
-      content,
-      format,
-      pose: {
-        png: posePng,
-        facing: pose.facing,
-        anchor: pose.anchor,
-      },
-      overlayText: draft.overlay_text,
-      skill,
-      seed: find.id,
-      posts: cfg,
-    });
-    media = await saveMedia(cfg.media_dir, `posts/${find.id}.png`, image);
+    if (format.medium === "still") {
+      const image = await renderStill({
+        content,
+        format,
+        pose: { png: posePng!, facing: pose!.facing, anchor: pose!.anchor },
+        overlayText: draft.overlay_text,
+        skill,
+        seed: find.id,
+        posts: cfg,
+      });
+      media = await saveMedia(cfg.media_dir, `posts/${find.id}.png`, image);
+      made = pose!.name;
+    } else {
+      // Rendered in this job: minutes of Blender, but nothing else waits on the post tick.
+      ({ media, clips: made } = await makeReel(deps, {
+        format,
+        manifest: manifest!,
+        find,
+        valence,
+      }));
+    }
   } catch (error) {
     log.error("post render failed", { find: find.id, error: errorName(error) });
     return skip("render_failed");
@@ -144,9 +194,9 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
 
   const postId = await core.posts.insertPost({
     find_id: find.id,
-    medium: "still",
+    medium: format.medium,
     format: format.name,
-    pose: pose.name,
+    pose: made,
     caption: draft.caption,
     overlay_text: draft.overlay_text,
     media_path: media,

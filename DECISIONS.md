@@ -297,3 +297,10 @@ code itself.
 | 2026-10-28 | The usage write is fire and forget, a failure logged | Bookkeeping must never delay or lose a reply. |
 | 2026-10-28 | `reply_cache`, `guard_cache`, `labels_cache` default `1h` | Measured prefixes are shared by every user: at 2 to 50 users a 5-minute entry lapses between replies and pays the write again, so 1h costs up to 43% less per exchange and never more beyond one user. |
 | 2026-10-28 | Paragraphs identical across prompts live once in `prompts/shared/` behind `{{include}}`, with no prompt version bump | Two copies (Depth in 6 core prompts, Dates in 5) could drift; the rendered text is byte-identical, which a hash check of the configured prompts confirmed. |
+| 2026-11-12 | ffmpeg does a reel background's fill, pan, video offset and retime in one filter graph, for stills and videos alike; sharp only lays her over it | One path for both kinds of find, and no per-frame resize in Node. |
+| 2026-11-12 | A reel's pan is eased (smoothstep) between its first and last frame | Matches orbit's review reel (Blender's default Bezier keys); Ethan hasn't ruled on linear. |
+| 2026-11-12 | `ffmpeg-static` (a GPL ffmpeg build) is spawned as a separate process, never linked | No ffmpeg is installed; a child process keeps the licence apart from the app's code. |
+| 2026-11-12 | `posts.reel.blender`, `script`, `blend` default to this machine's Blender and the sibling orbit checkout | orbit never merges into main; one-user dev setup, overridable through `SPICA_CONFIG`. |
+| 2026-11-12 | A reel's light and grain are set once per shot from its opening frame | Light that changed every frame would flicker as the pan moves. |
+| 2026-11-12 | Her rendered frames are deleted once the MP4 is encoded; `reel.json` is kept | A reel's PNGs are hundreds of megabytes; the edit list is enough to redo it. |
+| 2026-11-12 | The `drift` face shot's azimuth starts at 3 degrees, not 0 | An azimuth of 0 has no sign, so she couldn't turn toward the busier side. |

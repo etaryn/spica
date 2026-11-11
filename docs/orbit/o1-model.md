@@ -246,8 +246,9 @@ code in a running Blender).
    a first guess to tune on the first real clip (stage 5), by eye.
 5. **Animation preset.** Built 2026-11-11 for v2: idle, walk, look_up, sit_edge, any of the 32 faces on any clip (`o1-clips-spec.md`,
    `clips.py`, `sprites.py`). Check: `check_clips.py`, and Ethan's review of each clip's sheet and GIF.
-6. **Reels.** Ethan (2026-11-11): straight to reels. Stills from clip frames only check the model. Next: render clips to video for
-   reels, and design their seam with the post engine. (`.blend` plus renders; a `.glb` is a structure test only.)
+6. **Reels.** Ethan (2026-11-11): straight to reels. Stills from clip frames only check the model. Built 2026-11-12 as a proof of
+   concept (`o1-reels-spec.md`): `reel.py` renders her shots from an edit list on demand, `reel_review.py` lays them over a
+   background to MP4, `clips.json` is the manifest `main`'s reel engine writes edit lists from. Run: `sh build/run_reel.sh`.
 
 ## Limits (be honest)
 Rendered looks are judged by Ethan; Claude checks proportions, silhouette, palette and consistency from renders and measures what can be

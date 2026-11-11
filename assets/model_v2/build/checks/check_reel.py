@@ -95,7 +95,8 @@ def check_frames(folder, edit):
                 bad("shot %d %s: size %s" % (n, path.name, a.shape))
                 continue
             alpha = a[:, :, 3]
-            if max(alpha[0, 0], alpha[0, -1], alpha[-1, 0], alpha[-1, -1]) > 0.01:
+            corners = [alpha[0, 0], alpha[0, -1]] + ([alpha[-1, 0], alpha[-1, -1]] if shot["framing"] == "full" else [])  # closer in, her body fills the bottom
+            if max(corners) > 0.01:
                 bad("shot %d %s: the corners are not transparent" % (n, path.name))
             solid = alpha > 0.5
             if solid.mean() < 0.02:

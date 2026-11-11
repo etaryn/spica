@@ -2,7 +2,20 @@
 
 What O1 stage 6 builds: her clips rendered to order from an edit list, and a review reel that lays
 them over content, so the reel engine on `main` has a seam to build against.
-Nov 11, 2026. Status: designed with Ethan, not built.
+Nov 11, 2026. Status: built Nov 12 as a proof of concept, waiting for Ethan's review of `renders/reel/reel.mp4`. Where the
+build went a different way, this list and `DECISIONS.md` win.
+
+## What changed while building it
+
+- **Placeholder video** is a CC0 timelapse in `.webm` at 25 fps (`reel_samples/SOURCES.txt`). The Sequencer plays a video
+  frame for frame without retiming, so the review allows 5% off 24 fps (25 runs 4% slow) and fails beyond; `main` retimes
+  with ffmpeg.
+- **Checks:** the face-framing check measures the whole head bone inside the frame; the frames check wants transparent
+  bottom corners only for `full` (closer in, her hoodie fills the bottom); the wrap check uses `walk`, because `idle` moves
+  too little to tell neighbouring frames apart.
+- **Pans ease in and out** (Blender's default keys); `main` matches with smoothstep.
+- **The review writes one still per shot** beside the MP4 (`reel-shot-NN.png`) for the sheet.
+- **Render time** is measured below.
 
 ## Goal
 
@@ -117,9 +130,13 @@ scaling and no anchor.
    stills' 3x supersample would cost 9x per frame). If edges look rough, samples go up before
    supersampling does.
 
-It imports `sprites`' functions rather than copying them, and never saves the `.blend`. Seconds per
-frame are measured on the first build and written here; that is what `main`'s render worker plans
-round.
+It imports `sprites`' functions rather than copying them, and never saves the `.blend`.
+
+**Render time (measured Nov 12):** 6.6 s per frame at 1080×1920 with the GPU to itself, inside one Blender session, so a
+10-second reel (240 frames) is about 26 minutes. Every frame is two renders (`brow_over`), and the cost barely falls with
+size (5.5 s at 270×480), so overhead dominates. With a second render sharing the GPU it rose to 7 to 9.3 s per frame;
+`main`'s per-call figure, Blender's startup included, was about 10.7 s per frame for a 6-frame call. Composing the MP4
+takes about 20 seconds. Plan the render worker as a slow background job.
 
 ## The review reel
 

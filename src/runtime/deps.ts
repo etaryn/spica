@@ -23,6 +23,7 @@ import { vapidPublicKey, type Env } from "./env";
 import { PgEventBus } from "./pg-event-bus";
 import { usageSink } from "./usage-sink";
 import { WebPushPusher } from "./web-push";
+import { createReelTools } from "./reel-tools";
 import { createWebSources } from "./web-sources";
 
 /** Production wiring shared by the Next.js server and the worker. */
@@ -88,6 +89,7 @@ export function buildRuntime(env: Env): { deps: Deps; boss: PgBoss } {
       weeklyMaxAgeDays: config.posts.weekly_max_age_days,
       descriptionMaxChars: config.posts.description_max_chars,
     }),
+    reelTools: createReelTools(config.posts.reel),
   };
   return { deps, boss };
 }

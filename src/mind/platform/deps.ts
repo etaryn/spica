@@ -13,6 +13,7 @@ import type { LLMProvider } from "@/mind/platform/llm/types";
 import type { Logger } from "./log";
 import type { CoreEvent, ModuleBus } from "./modules";
 import type { Pusher } from "./push";
+import type { ReelTools } from "./reel-tools";
 import type { WebSources } from "@/mind/world/types";
 
 export interface Deps {
@@ -28,6 +29,7 @@ export interface Deps {
   pusher: Pusher;
   modules: ModuleBus;
   webSources: WebSources;
+  reelTools: ReelTools;
 }
 
 /**
@@ -38,13 +40,13 @@ export interface Deps {
  */
 export type CoreDeps = Pick<
   Deps,
-  "core" | "llm" | "embedder" | "clock" | "config" | "log" | "webSources"
+  "core" | "llm" | "embedder" | "clock" | "config" | "log" | "webSources" | "reelTools"
 > & {
   emitCore(event: CoreEvent): Promise<void>;
 };
 
 export function coreDepsOf(deps: Deps): CoreDeps {
-  const { core, llm, embedder, clock, config, log, webSources } = deps;
+  const { core, llm, embedder, clock, config, log, webSources, reelTools } = deps;
   return {
     core,
     llm,
@@ -53,6 +55,7 @@ export function coreDepsOf(deps: Deps): CoreDeps {
     config,
     log,
     webSources,
+    reelTools,
     emitCore: (event) => deps.modules.emit(event),
   };
 }

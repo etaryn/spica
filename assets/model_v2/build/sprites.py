@@ -74,6 +74,7 @@ def set_sit(on):
 def pose(arm, scene, clip, frame):
     if arm.animation_data:
         arm.animation_data.action = None
+    rp.reset(arm)  # an action only writes the bones it keys; without this, the last clip's spine or toes stay in the next
     set_sit(clip == "sit_edge")
     if clip == "stance":
         rp.apply(arm, "arms_down")

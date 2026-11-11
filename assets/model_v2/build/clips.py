@@ -320,6 +320,7 @@ def build(arm, name):
     action.use_fake_user = True
     arm.animation_data.action = action
     down = {pb.name: pb.rotation_quaternion.copy() for pb in arm.pose.bones}
+    standing = {pb.name: pb.matrix.to_quaternion() @ pb.bone.matrix_local.to_quaternion().inverted() for pb in arm.pose.bones}  # each bone's turn from rest to her arms-down stance
     for bone in json.loads(arm["arms_down"]):
         pb = arm.pose.bones[bone]
         pb.keyframe_insert("rotation_quaternion", frame=1)
@@ -331,6 +332,8 @@ def build(arm, name):
         turns, at = function(arm, f)
         for bone, q in turns.items():
             pb = arm.pose.bones[bone]
+            held = standing[pb.parent.name] if pb.parent else Quaternion()
+            q = held.inverted() @ q @ held  # a turn in her axes as she stands: a forearm hangs, so its bend is about her X, not the T-pose arm's
             rest = pb.bone.matrix_local.to_quaternion()
             pb.rotation_quaternion = rest.inverted() @ q @ rest @ down[bone]
             pb.keyframe_insert("rotation_quaternion", frame=f)

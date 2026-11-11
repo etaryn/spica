@@ -61,6 +61,22 @@ def check_sprites(folder):
     print("SPRITES checked", len(entries))
 
 
+def check_no_leftovers():
+    """Posing a clip after another must leave every bone the clip does not key at rest: a leftover lean or toe would put the wrong frame in a sprite."""
+    arm, scene = bpy.data.objects["Armature"], bpy.context.scene
+    names = [a.name[5:] for a in bpy.data.actions if a.name.startswith("clip_")]
+    for name in names:
+        for before in names:
+            sp.pose(arm, scene, before, bpy.data.actions["clip_" + before]["first"] + 5)
+            action = bpy.data.actions["clip_" + name]
+            sp.pose(arm, scene, name, action["first"])
+            keyed = {fc.data_path.split('"')[1] for layer in action.layers for strip in layer.strips for fc in strip.channelbag(action.slots[0]).fcurves}
+            for pb in arm.pose.bones:
+                if pb.name not in keyed and (pb.rotation_quaternion.angle > 1e-4 or pb.location.length > 1e-6):
+                    bad("%s after %s: %s keeps a leftover pose" % (name, before, pb.name))
+                    break
+
+
 def check_state():
     keys = bpy.data.objects["Face"].data.shape_keys.key_blocks
     right = sp.image_right_gaze(keys)
@@ -76,6 +92,7 @@ GARMENTS = ("shorts", "shorts_cuff_L", "shorts_cuff_R", "stocking", "ankle_sock"
 GARMENT_MOST = 10  # percent of a garment's points inside her skin, the limit her rig check uses
 KNEE_AT_REST = 7.9  # degrees between her thigh and shin bones standing straight, from their rest positions
 KNEE_STRAIGHT, KNEE_SWING = 6, 45  # a walking knee nearly straightens at heel strike and mid-stance and bends about 60 degrees in the swing
+ELBOW_SWING = 8  # degrees the elbow should open and close through a walking step (keyed 16)
 PONY_HANG_MOST = 15  # degrees the whole ponytail may turn from its standing line while her head is tipped back 25
 SWING_MM = {"idle": {"Pony": (0, 20), "Bust": (0, 3), "Bob": (0, 10)}, "walk": {"Pony": (10, 90), "Bust": (2, 12), "Bob": (4, 30)}}  # least and most a chain's tip may travel against her head or chest: Ethan found the first numbers far too lively
 
@@ -121,12 +138,15 @@ def check_clip(name):
     chains = [c for c, _ in spring.chains(arm)]
     tips = {c[-1].name: [] for c in chains}
     knees = {"L": [], "R": []}
+    elbows = {"L": [], "R": []}
     for f in range(first, last + 1):
         sp.pose(arm, scene, name, f)
         track.append([np.array(arm.matrix_world @ arm.pose.bones[b].head) for b in WATCH])
         for side in knees:
             thigh, shin = (arm.pose.bones["J_Bip_%s_%s" % (side, n)] for n in ("UpperLeg", "LowerLeg"))
             knees[side].append(np.degrees((thigh.tail - thigh.head).angle(shin.tail - shin.head)) - KNEE_AT_REST)
+            upper, fore = (arm.pose.bones["J_Bip_%s_%s" % (side, n)] for n in ("UpperArm", "LowerArm"))
+            elbows[side].append(np.degrees((upper.tail - upper.head).angle(fore.tail - fore.head)))
         for c in chains:
             frame = arm.pose.bones["J_Bip_C_UpperChest" if "Bust" in c[0].name else "J_Bip_C_Head"].matrix.inverted()
             tips[c[-1].name].append(np.array(frame @ arm.pose.bones[c[-1].name].tail))
@@ -166,6 +186,10 @@ def check_clip(name):
             if min(bends) > KNEE_STRAIGHT or max(bends) < KNEE_SWING:
                 bad("walk: %s knee bends %.0f to %.0f degrees; a person's straightens to under %d and bends past %d in the swing" % (side, min(bends), max(bends), KNEE_STRAIGHT, KNEE_SWING))
             print("KNEE walk", side, "%.0f to %.0f degrees" % (min(bends), max(bends)))
+        for side, bends in elbows.items():
+            print("ELBOW walk", side, "%.1f to %.1f degrees" % (min(bends), max(bends)))
+            if max(bends) - min(bends) < ELBOW_SWING:
+                bad("walk: %s elbow bends only %.1f degrees through the step; the swing should bend it" % (side, max(bends) - min(bends)))
     for tip, path in tips.items():
         travel = float(np.ptp(np.array(path), axis=0).max() * 1000)
         print("SWING", name, tip, "tip travel %.1f mm" % travel)
@@ -221,6 +245,8 @@ if args[0] == "sprites":
     check_sprites(Path(args[1]))
 elif args[0] == "state":
     check_state()
+    if any(a.name.startswith("clip_") for a in bpy.data.actions):
+        check_no_leftovers()
 elif args[0] == "clip":
     for clip_name in args[1].split(","):
         check_clip(clip_name)

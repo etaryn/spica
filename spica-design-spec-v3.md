@@ -2371,7 +2371,9 @@ post_tick (hourly) <- newest landed browse event
   `fetch_timeout_ms`, `user_agent`, `capabilities`, `craft_goals`, `max_per_week` (4),
   `max_pending` (1), `max_find_age_hours` (48), `min_valence` (0.3), `candidate_limit`,
   `max_find_px`, `output_width`, `caption_max_chars`, `overlay_max_chars`, `media_dir`
-  (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`.
+  (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`,
+  `reel` (`formats_dir`, `manifest`, `blender`, `script`, `blend`, `crf` (18),
+  `job_expire_seconds` (3600), `max_frames` (360)).
   Prompts `post_draft` v2, `post_check` v2, `format_draft` v1; `post_draft` and `post_check` join
   `core.loop_priority.optional`.
 - **Reels (Built O1 stage 6, proof of concept; gated off, 2026-11-12).** A reel is her clips
@@ -2390,7 +2392,8 @@ post_tick (hourly) <- newest landed browse event
   across cuts (`offset`), a still is held. `ReelTools` (a `CoreDeps` member, like `webSources`)
   is the only way out of the mind: `renderShots` runs Blender headless with orbit's `reel.py` and
   the clips `.blend` (`posts.reel.blender`, `script`, `blend`: paths into the orbit checkout
-  for now); `background` has ffmpeg fill 9:16, pan eased along the overflowing axis, start a
+  for now; `missing` checks them before the draft call, so a reel that can't render spends
+  nothing); `background` has ffmpeg fill 9:16, pan eased along the overflowing axis, start a
   video at `offset` and retime it to 24 fps (a video shorter than its shot fails); `encode`
   writes H.264, silent, `posts.reel.crf`. Node lays her over each frame with the stills' tint and
   rim light (`lightOf` / `lightHer`, set once per shot) and grain. The render runs inside the
@@ -3053,8 +3056,10 @@ Ethan, not changed.
   mid-shot, camera moves, her travelling across the frame, music with cuts on the beat, a larger
   clip library with `turn`), a reel-aware caption prompt (`post_draft` v2 says "picture"), the
   soft shadow, overlay text and frames on reels, whether reels get their own craft goal (Ethan,
-  persona), and Blender with the clips `.blend` shipped beside the app in place of paths into
-  the orbit checkout. *O1 reels, before publishing.*
+  persona), Blender with the clips `.blend` shipped beside the app in place of paths into
+  the orbit checkout, a Blender timeout, and a video find's length checked before Blender runs
+  (today a too-short video fails only at compositing; finds are images only). *O1 reels, before
+  publishing.*
 - **B148.** A separate render queue for reels, with an in-flight state on `post` so the `today`
   and `pending` gates see a reel still rendering. *When two renders must run at once.*
 

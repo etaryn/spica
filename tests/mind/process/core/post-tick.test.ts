@@ -240,3 +240,14 @@ test("a failed reel render skips and leaves the find for the next tick", async (
   deps.reelTools = working;
   expect((await postTick(coreDepsOf(deps), at(10))).status).toBe("drafted");
 });
+
+test("a reel whose renderer is missing skips before any draft call is spent", async () => {
+  const deps = reelSetup();
+  await landedFind(deps);
+  deps.reelTools = fakeReelTools(deps.config, { missing: () => "blender.exe" });
+  expect(await postTick(coreDepsOf(deps), at(9))).toEqual({
+    status: "skipped",
+    reason: "render_failed",
+  });
+  expect(deps.llm.structuredCalls.filter((c) => c.purpose === "post_draft")).toEqual([]);
+});

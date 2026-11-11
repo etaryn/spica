@@ -93,6 +93,15 @@ export async function postTick(deps: CoreDeps, now: Date): Promise<PostTickResul
   const format = formats[Math.floor(seededUnit(`${find.id}:format`) * formats.length)]!;
   const skill = format.medium === "still" ? stillSkill : cfg.craft_skill.reel;
   let pose: Pose | null = null;
+  if (format.medium === "reel") {
+    // Checked before drafting: a reel that can't render would otherwise re-spend a draft call
+    // every hour.
+    const missing = deps.reelTools.missing();
+    if (missing) {
+      log.error("reel renderer missing", { find: find.id, file: missing });
+      return skip("render_failed");
+    }
+  }
   if (format.medium === "still") {
     pose = choosePose(loadPoses(cfg.poses_dir), format, seededUnit(`${find.id}:pose`));
     if (!pose) return skip("no_pose");

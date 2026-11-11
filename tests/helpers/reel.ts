@@ -19,6 +19,7 @@ export function fakeReelTools(
   return {
     ...createReelTools(config.posts.reel),
     rendered,
+    missing: () => null,
     async renderShots(editListPath, outDir) {
       rendered.push(editListPath);
       const edit = JSON.parse(await readFile(editListPath, "utf8")) as Edit;

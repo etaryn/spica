@@ -72,3 +72,34 @@ test("a missing Blender fails naming the exe", async () => {
   const broken = createReelTools({ ...cfg, blender: "no-such-blender" });
   await expect(broken.renderShots("x.json", dir())).rejects.toThrow(/no-such-blender/);
 });
+
+test("an encode that ffmpeg can't write fails with ffmpeg's reason, not a broken pipe", async () => {
+  const out = path.join(dir(), "missing-folder", "x.mp4");
+  await expect(
+    tools.encode(solid(200), { width: W, height: H, fps: 24, crf: 18, out }),
+  ).rejects.toThrow(/exited/);
+});
+
+test("a frame source that fails stops the encode with its own error", async () => {
+  async function* failing() {
+    yield* solid(3);
+    throw new Error("frame 4 broke");
+  }
+  const out = path.join(dir(), "b.mp4");
+  await expect(
+    tools.encode(failing(), { width: W, height: H, fps: 24, crf: 18, out }),
+  ).rejects.toThrow("frame 4 broke");
+});
+
+test("missing names a renderer file that isn't there; none missing is null", () => {
+  expect(createReelTools({ ...cfg, blend: "no/such.blend" }).missing()).toMatch(
+    /no[\/]such\.blend/,
+  );
+  const here = createReelTools({
+    ...cfg,
+    blender: "package.json",
+    script: "package.json",
+    blend: "package.json",
+  });
+  expect(here.missing()).toBeNull();
+});

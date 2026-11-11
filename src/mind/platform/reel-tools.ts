@@ -15,6 +15,8 @@ export type BackgroundOptions = {
 };
 
 export type ReelTools = {
+  /** The first renderer file that isn't there, or null: checked before anything is spent. */
+  missing(): string | null;
   /** Her shots for an edit list file, as <outDir>/shot-NN/NNNN.png; throws with the renderer's last words. */
   renderShots(editListPath: string, outDir: string): Promise<void>;
   /** One shot's background: filled to the frame, panned (eased), as raw RGB frames of width×height. */

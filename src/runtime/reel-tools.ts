@@ -5,7 +5,7 @@
  * ship them with the app before reels publish.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import ffmpegStatic from "ffmpeg-static";
 import type { Config } from "@/mind/platform/config";
@@ -43,10 +43,13 @@ async function run(exe: string, args: string[], stdin?: AsyncIterable<Buffer>): 
     try {
       for await (const chunk of stdin) {
         if (pipe.destroyed) break;
-        if (!pipe.write(chunk)) await Promise.race([once(pipe, "drain"), exited]);
+        // Not events.once: it rejects on the pipe's EPIPE, which would hide the tool's own reason.
+        if (!pipe.write(chunk))
+          await Promise.race([new Promise((r) => pipe.once("drain", r)), exited]);
       }
     } catch (error) {
-      proc.kill(); // the frames failed: no half-written video
+      proc.kill(); // the frames failed: stop the tool, and let it close its file before cleanup
+      await exited.catch(() => {});
       throw error;
     }
     pipe.end();
@@ -97,6 +100,8 @@ async function* background(file: string, o: BackgroundOptions): AsyncIterable<Bu
 
 export function createReelTools(cfg: Config["posts"]["reel"]): ReelTools {
   return {
+    missing: () =>
+      [cfg.blender, cfg.script, cfg.blend].find((f) => !existsSync(path.resolve(f))) ?? null,
     renderShots: (editList, outDir) =>
       run(cfg.blender, [
         ...["-b", path.resolve(cfg.blend), "--python-exit-code", "1"],

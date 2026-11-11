@@ -17,6 +17,7 @@
     "eval": "tsx --env-file-if-exists=.env evals/run.ts",
     "formats:add": "tsx --env-file-if-exists=.env evals/scripts/formats-add.ts",
     "posts:review": "tsx --env-file-if-exists=.env evals/scripts/posts-review.ts",
+    "reels:review": "tsx --env-file-if-exists=.env evals/scripts/reels-review.ts",
     "eval:guard": "tsx --env-file-if-exists=.env evals/guard.ts",
     "eval:judge": "tsx --env-file-if-exists=.env evals/judge.ts",
     "review:reconcile": "tsx --env-file-if-exists=.env evals/run.ts --only \"reconcile-*\" --runs 3 --review --real labels_read,labels_meaning,labels_signals,reconcile,embed",

@@ -2374,6 +2374,35 @@ post_tick (hourly) <- newest landed browse event
   (`.data/media`), `formats_dir`, `poses_dir`, `fonts`, `jitter`, `render`, `recent_limit`.
   Prompts `post_draft` v2, `post_check` v2, `format_draft` v1; `post_draft` and `post_check` join
   `core.loop_priority.optional`.
+- **Reels (Built O1 stage 6, proof of concept; gated off, 2026-11-12).** A reel is her clips
+  rendered to order over a find. The seam with `orbit` (`orbit:docs/orbit/o1-reels-spec.md`) is
+  the clip manifest (`assets/reels/clips.json`, copied by hand), the edit list `reel.json` and
+  transparent frames `shot-NN/NNNN.png`. `post_tick` picks the medium `reel` only when `"reel"`
+  is in `posts.capabilities` (default `["still"]`); a reel format is then a candidate beside the
+  stills (seeded pick). Reel formats (`formats/reels/<name>.json`, zod, an invalid one or one
+  asking for a clip tag, face or framing the manifest lacks, or longer than
+  `posts.reel.max_frames`, logged and skipped) give each shot's clip tags, framing and ranges for
+  azimuth, elevation, frames and pan, plus `faces.warm` / `faces.low` (picked by the find's
+  valence sign), `grain` and `caption_pattern`. Edit lists come from seeded templates, no model
+  (Ethan, 2026-11-12): every choice is drawn by `seededUnit` from the find id; she stands on the
+  quieter side of the shot's opening frame (`quieterSide`, `x` = `render.foot_left` /
+  `foot_right`) and turns toward the busier one (the azimuth's sign); a video background plays on
+  across cuts (`offset`), a still is held. `ReelTools` (a `CoreDeps` member, like `webSources`)
+  is the only way out of the mind: `renderShots` runs Blender headless with orbit's `reel.py` and
+  the clips `.blend` (`posts.reel.blender`, `script`, `blend`: paths into the orbit checkout
+  for now); `background` has ffmpeg fill 9:16, pan eased along the overflowing axis, start a
+  video at `offset` and retime it to 24 fps (a video shorter than its shot fails); `encode`
+  writes H.264, silent, `posts.reel.crf`. Node lays her over each frame with the stills' tint and
+  rim light (`lightOf` / `lightHer`, set once per shot) and grain. The render runs inside the
+  `post_tick` job (`posts.reel.job_expire_seconds`, 3600: Blender takes about 6.6 s a frame at
+  1080×1920, so a 10 s reel takes about 26 minutes), the frames are deleted after encoding, and
+  `reel.json` stays under `media_dir/reels/<find>/`. The draft reuses `post_draft` v2 and
+  `post_check` v3 unchanged (overlay `none`); `post.medium` is `"reel"`, `post.pose` the shots'
+  clips joined by `+`, `media_path` an `.mp4`; the Posts tab plays it. Reels share her craft goal
+  ("Get better at making posts", `craft_goals.reel`), `craft_skill.reel` (0) is read from
+  config, and only the still path syncs the goal. `pnpm reels:review <image|video|reel.json>`
+  renders one reel with real Blender and no model or database into `.data/reels/<time>/`.
+  Reels ship only after the reel spec's Later list (B147).
 - **Rules:** posts don't pass the guard; the check plus Ethan's approval stand in, so revisit when
   posts publish without approval. The platform phase labels her posts as AI-generated (her public
   voice already says so). The rule 8 note is in §2.
@@ -3008,9 +3037,8 @@ Ethan, not changed.
 ### 25.12 Post engine (Phase 14)
 - **B124.** The pose figure can stand on the picture's subject (the tiger in the 2026-10-19
   posts review); placement only weighs edge density. *With Ethan's sprites.*
-- **B102.** Video and voice: Remotion plus live three.js (`three-vrm`) rendering, a `video` craft
-  goal and `"video"` in `posts.capabilities`; her first videos gate on the new goal so they start
-  clumsy. *Video phase.*
+- **B102.** Voice for her videos. Her video itself is now the reel engine (Blender renders, §16a
+  Reels), in place of Remotion and three.js. *Video phase.*
 - **B103.** The format extractor reads one reference by one vision call; pattern recognition over
   many references (or open statistics) would find trends itself. *Later.*
 - **B104.** Depth masks, so she can stand behind foreground objects in the content. *Later.*
@@ -3021,6 +3049,14 @@ Ethan, not changed.
 - **B107.** Songs: attached in-app at posting until a platform API allows it. *Publishing phase.*
 - **B112.** Media written outside the browse lock can orphan or overwrite a cached find on a race.
   *Before users.*
+- **B147.** Reels before they ship: the reel spec's Later list (blended moves and faces changing
+  mid-shot, camera moves, her travelling across the frame, music with cuts on the beat, a larger
+  clip library with `turn`), a reel-aware caption prompt (`post_draft` v2 says "picture"), the
+  soft shadow, overlay text and frames on reels, whether reels get their own craft goal (Ethan,
+  persona), and Blender with the clips `.blend` shipped beside the app in place of paths into
+  the orbit checkout. *O1 reels, before publishing.*
+- **B148.** A separate render queue for reels, with an in-flight state on `post` so the `today`
+  and `pending` gates see a reel still rendering. *When two renders must run at once.*
 
 ---
 

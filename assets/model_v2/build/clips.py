@@ -360,6 +360,9 @@ def main():
     rp.apply(arm, "arms_down")
     bpy.context.scene.frame_set(1)
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT))
+    import reel  # here, not at the top: reel imports sprites, which clips.py does not otherwise need
+
+    reel.write_manifest(OUT.parent / "clips.json")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,76 @@
+{
+  "fps": 24,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": 96,
+      "loops": true,
+      "tags": [
+        "standing"
+      ]
+    },
+    {
+      "name": "look_up",
+      "frames": 48,
+      "loops": false,
+      "tags": [
+        "looking_up"
+      ]
+    },
+    {
+      "name": "sit_edge",
+      "frames": 96,
+      "loops": true,
+      "tags": [
+        "sitting_edge"
+      ]
+    },
+    {
+      "name": "walk",
+      "frames": 96,
+      "loops": true,
+      "tags": [
+        "walking"
+      ]
+    }
+  ],
+  "faces": [
+    "observing",
+    "deadpan",
+    "side_eye",
+    "eye_roll",
+    "skeptical",
+    "smirk",
+    "amused",
+    "curious",
+    "thinking",
+    "realizing",
+    "wonder",
+    "soft_smile",
+    "fond",
+    "laugh",
+    "flustered",
+    "shy",
+    "startled",
+    "quiet_hurt",
+    "teary",
+    "weeping",
+    "sorry",
+    "annoyed",
+    "opinion",
+    "sigh",
+    "drowsy",
+    "pout",
+    "angry",
+    "frightened",
+    "cry",
+    "tongue_focus",
+    "tongue_mischief",
+    "practising_smile"
+  ],
+  "framings": [
+    "full",
+    "waist",
+    "face"
+  ]
+}

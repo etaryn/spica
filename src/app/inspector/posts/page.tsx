@@ -31,7 +31,11 @@ export default async function InspectPosts() {
           {posts.map((p) => (
             <tr key={p.id}>
               <td>
-                <img src={`/inspector/posts/${p.id}/image`} alt="" width={240} />
+                {p.medium === "reel" ? (
+                  <video src={`/inspector/posts/${p.id}/image`} controls muted width={240} />
+                ) : (
+                  <img src={`/inspector/posts/${p.id}/image`} alt="" width={240} />
+                )}
               </td>
               <td>
                 <p>{p.caption}</p>

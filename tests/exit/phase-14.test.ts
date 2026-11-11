@@ -4,7 +4,8 @@
  * nothing. A user's data never reaches any of it, and a user's exchange changes nothing it reads.
  */
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { and, eq, like } from "drizzle-orm";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { insertTurn } from "@/db/repos/user/session-log";
@@ -20,6 +21,7 @@ import { closeTestDb, createTestUser, getTestDb, resetDb } from "../helpers/db";
 import { makeTestDeps } from "../helpers/deps";
 import { scriptedLabels } from "@/mind/platform/llm/fake-labels";
 import { fakeSources, tmpMediaDir, webItem } from "../helpers/web";
+import { mp4Frames } from "../helpers/reel";
 
 beforeEach(resetDb);
 afterAll(closeTestDb);
@@ -29,13 +31,13 @@ const DAY = "2026-01-05";
 const at = (hour: number, minute = 0, day = 5) => new Date(Date.UTC(2026, 0, day, hour, minute));
 const CRAFT = /- \[([0-9a-f-]{36})\] Get better at making posts/;
 
-async function setup() {
+async function setup(posts: object = {}) {
   const { sources } = fakeSources({ apod: await webItem() });
   const deps = makeTestDeps(
     {
       life: { timezone: "UTC" },
       core: { world: { events_local_hour: 23 } },
-      posts: { media_dir: tmpMediaDir(), sources: [{ name: "apod", weight: 1 }] },
+      posts: { media_dir: tmpMediaDir(), sources: [{ name: "apod", weight: 1 }], ...posts },
     },
     [],
     sources,
@@ -187,4 +189,28 @@ test("7: side channel: a user's exchange changes nothing the engine reads", asyn
   const before = await read();
   await plantCanary(deps);
   expect(await read()).toBe(before);
+});
+
+test("8: with reels built, the day's find becomes a reel: an MP4 of every shot, no user data", async () => {
+  const deps = await setup({ capabilities: ["reel"], output_width: 108 });
+  await plantCanary(deps);
+  const out = await dayOfPosting(deps);
+  expect(out.status).toBe("drafted");
+  const post = await deps.core.posts.getPost((out as { postId: string }).postId);
+  expect(post).toMatchObject({ status: "draft", check: "ok", medium: "reel", format: "drift" });
+  const reelJson = readFileSync(
+    path.join(deps.config.posts.media_dir, "reels", post!.find_id, "reel.json"),
+    "utf8",
+  );
+  const edit = JSON.parse(reelJson) as { shots: { frames: number }[] };
+  expect((await mp4Frames(post!.media_path)).frames).toBe(
+    edit.shots.reduce((n, s) => n + s.frames, 0),
+  );
+  const rows = JSON.stringify({
+    finds: await getTestDb().select().from(s.web_find),
+    posts: await getTestDb().select().from(s.post),
+  });
+  expect(`${rows}${reelJson}`).not.toContain(TOKEN);
+  const postCalls = deps.llm.structuredCalls.filter((c) => c.purpose.startsWith("post_"));
+  expect(JSON.stringify(postCalls)).not.toContain(TOKEN);
 });

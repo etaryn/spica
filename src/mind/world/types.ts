@@ -108,7 +108,7 @@ export type PostStatus = "draft" | "approved" | "rejected";
 export type PostCheck = "ok" | "flagged" | "unchecked";
 export type NewPost = {
   find_id: string;
-  medium: "still";
+  medium: "still" | "reel";
   format: string;
   pose: string;
   caption: string;

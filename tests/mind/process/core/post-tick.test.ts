@@ -6,6 +6,7 @@ import { coreDepsOf } from "@/mind/platform/deps";
 import { postTick } from "@/mind/process/core/post";
 import { closeTestDb, resetDb } from "../../../helpers/db";
 import { makeTestDeps } from "../../../helpers/deps";
+import { fakeReelTools } from "../../../helpers/reel";
 import { fixturePng, tmpMediaDir } from "../../../helpers/web";
 
 beforeEach(resetDb);
@@ -206,4 +207,36 @@ test("an unreadable find image skips before any draft call is spent", async () =
   const out = await postTick(coreDepsOf(deps), at(9));
   expect(out).toEqual({ status: "skipped", reason: "render_failed" });
   expect(deps.llm.structuredCalls.some((c) => c.purpose === "post_draft")).toBe(false);
+});
+
+const reelSetup = () =>
+  setup({ posts: { media_dir: tmpMediaDir(), capabilities: ["reel"], output_width: 108 } });
+
+test("with reels built, a landed find becomes a reel draft", async () => {
+  const deps = reelSetup();
+  const findId = await landedFind(deps);
+  const out = await postTick(coreDepsOf(deps), at(9));
+  expect(out.status).toBe("drafted");
+  const post = await deps.core.posts.getPost((out as { postId: string }).postId);
+  expect(post).toMatchObject({ find_id: findId, medium: "reel", format: "drift", skill: 0 });
+  expect(post!.pose).toMatch(/^walk\+idle\+look_up$/);
+  expect(post!.media_path).toMatch(/\.mp4$/);
+  expect(existsSync(post!.media_path)).toBe(true);
+  expect(post!.caption.length).toBeGreaterThan(0);
+});
+
+test("a failed reel render skips and leaves the find for the next tick", async () => {
+  const deps = reelSetup();
+  await landedFind(deps);
+  const working = deps.reelTools;
+  deps.reelTools = fakeReelTools(deps.config, {
+    renderShots: () => Promise.reject(new Error("blender exited 1")),
+  });
+  expect(await postTick(coreDepsOf(deps), at(9))).toEqual({
+    status: "skipped",
+    reason: "render_failed",
+  });
+  expect(await deps.core.posts.recent(5)).toEqual([]);
+  deps.reelTools = working;
+  expect((await postTick(coreDepsOf(deps), at(10))).status).toBe("drafted");
 });

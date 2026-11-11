@@ -19,7 +19,10 @@ export type DraftInput = {
   persona: PublicPersona;
   find: Find;
   valence: number;
-  format: StillFormat;
+  /** What the words need of a format, a still's or a reel's. */
+  format: Pick<StillFormat, "name" | "caption_pattern"> & {
+    overlay: { kind: StillFormat["overlay"]["kind"] };
+  };
   skill: number;
 };
 

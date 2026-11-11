@@ -18,7 +18,9 @@ import rig_poses as rp
 GROUND = -0.0316  # her soles
 SCALE = 1.85  # metres of her world from the top of a sprite to the bottom; the same for all, so she is always the same size
 W, H, MASTER = 400, 1000, 3
+WIDE = {"sit_edge": 560}  # seated, her legs reach forward: a wider canvas at the same scale, so she stays the same size
 ANCHOR = [200, 980]  # the ground under her lands on this pixel
+SEAT_ROW = 724  # seated, her seat lands on the anchor instead, so the floor line is the edge she sits on (Ethan's pick): 980 - (0.8677 - 0.335 - 0.09 - GROUND) * H / SCALE
 AZIMUTH = {"left": 32, "right": -32}  # the review views q and qr
 TAGS = {"stance": "standing", "idle": "standing", "walk": "walking", "look_up": "looking_up", "sit_edge": "sitting_edge"}
 LOOK_UP_GAZE = 0.45  # 100% is 20 degrees
@@ -63,9 +65,10 @@ def aim(cam, facing):
 
 
 def set_sit(on):
-    key = bpy.data.objects["hoodie"].data.shape_keys.key_blocks.get("sit_seat")
-    if key:
-        key.value = float(on)
+    """The seated cloth shapes (hoodie, shorts, cuffs) on only in sit_edge."""
+    for ob in bpy.data.objects:
+        if ob.type == "MESH" and ob.data.shape_keys and "sit_seat" in ob.data.shape_keys.key_blocks:
+            ob.data.shape_keys.key_blocks["sit_seat"].value = float(on)
 
 
 def pose(arm, scene, clip, frame):
@@ -110,7 +113,11 @@ def set_face(name, facing, clip):
         keys["Gaze_Down"].value = 0.0
 
 
-def shrink(master, path):
+def width(clip):
+    return WIDE.get(clip, W)
+
+
+def shrink(master, path, w_out):
     """Master to sprite: an exact 3x box filter in premultiplied alpha, so edges pick up no dark fringe."""
     image = bpy.data.images.load(str(master))
     image.colorspace_settings.name = "Non-Color"
@@ -120,9 +127,9 @@ def shrink(master, path):
     bpy.data.images.remove(image)
     a = a.reshape(h, w, 4)
     alpha = a[:, :, 3:]
-    small = np.concatenate([a[:, :, :3] * alpha, alpha], axis=2).reshape(H, MASTER, W, MASTER, 4).mean(axis=(1, 3))
+    small = np.concatenate([a[:, :, :3] * alpha, alpha], axis=2).reshape(H, MASTER, w_out, MASTER, 4).mean(axis=(1, 3))
     small[:, :, :3] = np.clip(small[:, :, :3] / np.maximum(small[:, :, 3:], 1e-6), 0, 1)
-    out = bpy.data.images.new(path.stem, W, H, alpha=True)
+    out = bpy.data.images.new(path.stem, w_out, H, alpha=True)
     out.colorspace_settings.name = "Non-Color"
     out.pixels.foreach_set(small.astype(np.float32).ravel())
     out.filepath_raw = str(path)
@@ -142,11 +149,11 @@ def sprite(arm, scene, cam, out, clip, frame, face):
         master = out / "master" / (stem + ".png")
         master.parent.mkdir(parents=True, exist_ok=True)
         master.unlink(missing_ok=True)
-        scene.render.resolution_x, scene.render.resolution_y = W * MASTER, H * MASTER
+        scene.render.resolution_x, scene.render.resolution_y = width(clip) * MASTER, H * MASTER
         scene.render.filepath = str(master)
         brow_over.render(scene)
-        shrink(master, out / (stem + ".png"))
-    return {"name": name, "files": {s: "%s-%s.png" % (name, s) for s in ("left", "right")}, "tags": [TAGS[clip]], "anchor": ANCHOR}
+        shrink(master, out / (stem + ".png"), width(clip))
+    return {"name": name, "files": {s: "%s-%s.png" % (name, s) for s in ("left", "right")}, "tags": [TAGS[clip]], "anchor": [width(clip) // 2, SEAT_ROW if clip == "sit_edge" else ANCHOR[1]]}
 
 
 def review(arm, scene, cam, out, clip, face):
@@ -154,7 +161,7 @@ def review(arm, scene, cam, out, clip, face):
     action = bpy.data.actions["clip_" + clip]
     out.mkdir(parents=True, exist_ok=True)
     aim(cam, "right")
-    scene.render.resolution_x, scene.render.resolution_y = W, H
+    scene.render.resolution_x, scene.render.resolution_y = width(clip), H
     for f in range(action["first"], action["last"] + 1, 2):
         pose(arm, scene, clip, f)
         set_face(face, "right", clip)

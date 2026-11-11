@@ -32,9 +32,9 @@ def read_png(path):
     return a.reshape(h, w, 4)[::-1]
 
 
-def check_sprite(path, standing):
+def check_sprite(path, standing, wide):
     a = read_png(path)
-    if a.shape[:2] != (sp.H, sp.W):
+    if a.shape[:2] != (sp.H, wide):
         return bad("%s: size %s" % (path.name, a.shape))
     alpha = a[:, :, 3]
     if (alpha > 0.5).mean() < 0.03:
@@ -56,7 +56,8 @@ def check_sprites(folder):
     for e in entries:
         assert sorted(e) == ["anchor", "files", "name", "tags"], e["name"] + ": wrong fields"
         for side in ("left", "right"):
-            check_sprite(folder / e["files"][side], not e["name"].startswith("sit-"))
+            check_sprite(folder / e["files"][side], not e["name"].startswith("sit-"), e["anchor"][0] * 2)
+        assert e["anchor"][0] * 2 in (sp.W, *sp.WIDE.values()), e["name"] + ": anchor is not centred on the canvas"
     print("SPRITES checked", len(entries))
 
 
@@ -174,6 +175,44 @@ def check_clip(name):
     print("CLIP", name, "frames", first, last, "soles", round(float(soles.min() - sp.GROUND) * 1000, 1), "mm", "worst inside", {g: round(p, 1) for g, p in inside.items() if p > 1})
 
 
+SEAT_DEEP = 0.003  # hoodie points this far inside her shorts would show them through; resting on them, a hair inside, does not show (seen from the front, side and back)
+SIT_DROP = 0.335  # how far her hips come down in sit_edge, as clips.py sets it
+
+
+def check_seat():
+    import body as shape
+
+    arm, scene = bpy.data.objects["Armature"], bpy.context.scene
+    sp.pose(arm, scene, "sit_edge", bpy.data.actions["clip_sit_edge"]["first"])
+    tree = spring.solid_tree(("shorts", "shorts_cuff_L", "shorts_cuff_R"))
+    points = evaluated(bpy.data.objects["hoodie"])
+    low = points[points[:, 2] < points[:, 2].min() + 0.25]
+    under = 0
+    for c in low:
+        loc, nrm, _, _ = tree.find_nearest(Vector(c))
+        under += (Vector(c) - loc).dot(nrm) < -SEAT_DEEP and (Vector(c) - loc).length < 0.03
+    print("SEAT %d of %d low hoodie points inside her shorts" % (under, len(low)))
+    if under > 0.01 * len(low):
+        bad("sit_edge: %d of %d hoodie points are inside her shorts" % (under, len(low)))
+    torso = np.array(shape.TORSO)  # measured standing, so a seated height is compared SIT_DROP higher
+    for chain, kind in spring.chains(arm):
+        if kind is spring.PONY:
+            for b in chain:
+                p = arm.matrix_world @ arm.pose.bones[b.name].tail
+                z = p.z + SIT_DROP
+                if torso[0, 0] <= z <= torso[-1, 0]:
+                    half, front, back = (np.interp(z, torso[:, 0], torso[:, c]) for c in (1, 2, 3))
+                    if abs(p.x) < half and front < p.y < back:
+                        bad("sit_edge: %s is inside her" % b.name)
+    sp.pose(arm, scene, "walk", bpy.data.actions["clip_walk"]["first"])
+    key = bpy.data.objects["hoodie"].data.shape_keys.key_blocks["sit_seat"]
+    assert key.value == 0, "the seat shape stayed on after sit_edge"
+    sp.set_face("teary", "right", "walk")
+    sp.set_face("observing", "right", "walk")
+    assert bpy.data.objects["accent_water"].hide_render, "one face's water stayed on the next"
+    assert bpy.data.objects["accent_water_back"].hide_render, "one face's water stayed on the next"
+
+
 for g in [o for o in bpy.data.objects if o.type == "MESH"]:
     for m in g.modifiers:
         if m.type == "SOLIDIFY":
@@ -185,6 +224,8 @@ elif args[0] == "state":
 elif args[0] == "clip":
     for clip_name in args[1].split(","):
         check_clip(clip_name)
+        if clip_name == "sit_edge":
+            check_seat()
 if problems:
     raise RuntimeError("%d problems" % len(problems))
 print("CLIPS check passed")

@@ -70,11 +70,12 @@ def clearance(tree, p):
     return away.normalized(), away.length
 
 
-def out_of_torso(p, margin):
+def out_of_torso(p, margin, drop=0.0):
     """If p is inside her outline, the nearest place just outside it. By measurement, because the skin under the hoodie has been removed."""
-    if not TORSO[0, 0] <= p.z <= TORSO[-1, 0]:
+    z = p.z + drop  # how far her body has come down from standing, as when she sits
+    if not TORSO[0, 0] <= z <= TORSO[-1, 0]:
         return p
-    half, front, back = (float(np.interp(p.z, TORSO[:, 0], TORSO[:, c])) for c in (1, 2, 3))
+    half, front, back = (float(np.interp(z, TORSO[:, 0], TORSO[:, c])) for c in (1, 2, 3))
     if not (abs(p.x) < half and front < p.y < back):
         return p
     moves = (
@@ -90,7 +91,7 @@ def within_cone(q, degrees):
     return Quaternion().slerp(q, limit / q.angle) if q.angle > limit else q
 
 
-def bake(arm, f0, f1):
+def bake(arm, f0, f1, torso_drop=0.0):
     clear(arm)
     scene = bpy.context.scene
     cs = chains(arm)
@@ -121,7 +122,7 @@ def bake(arm, f0, f1):
                 nxt = head + (q @ along) * length
                 state[b.name] = (nxt, tail, head.copy())  # the free motion: collision only corrects what is keyed, so it can never stick
                 if k["margin"]:
-                    outside = out_of_torso(nxt, k["margin"])
+                    outside = out_of_torso(nxt, k["margin"], torso_drop)
                     if outside != nxt:
                         q = within_cone(along.rotation_difference((outside - head).normalized()), k["cone"])
                         nxt = head + (q @ along) * length

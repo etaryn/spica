@@ -11,6 +11,7 @@ from mathutils import Quaternion, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import base_mesh as bm
+import drape
 import rig_poses as rp
 import spring
 
@@ -29,6 +30,11 @@ BOB_CENTRE = (0.0, -0.012)  # the axis of her head, for the sectors of the bob
 BOB_CROWN = 1.58  # the top of the bob
 BOB_ROOT_SHARE = 0.6  # how far up from a lock's tip to the crown the swing begins
 BOB_FULL_AT = 0.7  # how far down from there a lock is fully free
+SIT_DROP = 0.335  # how far her hips come down: her hanging toes clear the ground by about a centimetre
+SEAT_ABOVE = 1.0  # hoodie points below this height, in her rest pose, may move for the seat shape
+SEAT_MARGIN = 0.006  # the gap the hoodie keeps outside her shorts
+SEAT_BLUR = 0.006  # how widely each push is shared with the cloth around it
+SEAT_ROUNDS = 6
 
 
 def B(side, name):
@@ -166,7 +172,102 @@ def look_up(arm, frame):
     return turns, at
 
 
-CLIPS = {"idle": (idle, 96, True), "walk": (walk, 96, True), "look_up": (look_up, 48, False)}
+def sit_edge(arm, frame):
+    """She sits on an edge, shins hanging, hands beside her hips, one foot swinging slowly."""
+    s = (frame - 1) / 96
+    breath = math.sin(TAU * 2 * s)
+    turns = {
+        HIPS: Quaternion(),
+        SPINE: turn("X", 4),
+        CHEST: turn("X", -0.5 * breath),
+        UPPER_CHEST: turn("X", 3 - 0.6 * breath),
+        NECK: turn("X", -3),
+        HEAD: turn("X", -3) @ turn("Z", 2 * math.sin(TAU * s + 0.8)),
+        B("L", "UpperLeg"): turn("Z", 4) @ turn("X", -88),
+        B("R", "UpperLeg"): turn("Z", -4) @ turn("X", -88),
+        B("L", "LowerLeg"): turn("X", 88 + 9 * math.sin(TAU * s)),
+        B("R", "LowerLeg"): turn("X", 86 + 2 * math.sin(TAU * s + 1)),
+        B("L", "Foot"): turn("X", 15),
+        B("R", "Foot"): turn("X", 15),
+        B("L", "UpperArm"): turn("X", -8),
+        B("R", "UpperArm"): turn("X", -8),
+    }
+    return turns, Vector((0, 0, -SIT_DROP))
+
+
+def evaluated_points(ob):
+    ev = ob.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    me = ev.to_mesh()
+    a = np.empty(len(me.vertices) * 3)
+    me.vertices.foreach_get("co", a)
+    ev.to_mesh_clear()
+    return a.reshape(-1, 3)
+
+
+def gaps(points, tree, zone):
+    """Each point's distance out from the nearest surface of the tree, NaN where it is outside the zone or more than 4 cm away."""
+    out = np.full(len(points), np.nan)
+    hits = [None] * len(points)
+    for i in np.where(zone)[0]:
+        p = Vector(points[i])
+        loc, nrm, _, _ = tree.find_nearest(p)
+        if (p - loc).length < 0.04:
+            out[i], hits[i] = (p - loc).dot(nrm), (np.array(loc), np.array(nrm))
+    return out, hits
+
+
+def seat_shape(arm, ob, zone, aim):
+    """Adds the shape `sit_seat` to a garment: rounds of moving its points, before the armature, until the seated pose puts them where aim(posed) says."""
+    keys = ob.data.shape_keys.key_blocks if ob.data.shape_keys else None
+    if keys and "sit_seat" in keys:
+        ob.shape_key_remove(keys["sit_seat"])
+    if not ob.data.shape_keys:
+        ob.shape_key_add(name="Basis", from_mix=False)
+    keys = ob.data.shape_keys.key_blocks
+    basis = bm.get_co(ob)
+    before = basis.copy()
+    if "arms_down" in keys:
+        keys["arms_down"].data.foreach_get("co", before.ravel())  # what the armature receives, with her arms-down shape on
+    deform = {b.name: np.array(b.matrix @ b.bone.matrix_local.inverted()) for b in arm.pose.bones}
+    blend = drape.blended_bones(ob, deform)
+    key = ob.shape_key_add(name="sit_seat", from_mix=False)
+    key.value = 1.0
+    change = np.zeros_like(basis)
+    for _ in range(SEAT_ROUNDS):  # each round moves from where the last left the cloth, so deep points come out without a wide blur diluting them
+        key.data.foreach_set("co", (basis + change).astype(np.float32).ravel())
+        bpy.context.view_layer.update()
+        posed = evaluated_points(ob)
+        change = change + bm.spread(basis, drape.rest_change(blend, before + change, aim(posed)), zone, SEAT_BLUR)
+    key.data.foreach_set("co", (basis + change).astype(np.float32).ravel())
+    print("CLIP seat shape on", ob.name, "moved up to", round(float(np.linalg.norm(change, axis=1).max()), 3))
+
+
+def add_seat_shapes(arm):
+    """Seated, her shorts push through the hoodie's seat; the hoodie is pushed out over them. Only for sit_edge; standing clips are untouched."""
+    shorts = ("shorts", "shorts_cuff_L", "shorts_cuff_R")
+    hoodie = bpy.data.objects["hoodie"]
+    quiet = [m for o in bpy.data.objects if o.type == "MESH" for m in o.modifiers if m.type == "SOLIDIFY"]
+    quiet += [m for m in hoodie.modifiers if m.type not in ("ARMATURE", "SOLIDIFY")]  # a shape is per point of the mesh itself, so only the armature may act on it
+    for m in quiet:
+        m.show_viewport = False
+    bpy.context.view_layer.update()
+    cloth = spring.solid_tree(shorts)
+    zone = bm.get_co(hoodie)[:, 2] < SEAT_ABOVE
+
+    def clear(posed):
+        now, hits = gaps(posed, cloth, zone)
+        target = posed.copy()
+        for i in np.where(now < SEAT_MARGIN)[0]:
+            loc, nrm = hits[i]
+            target[i] = posed[i] + nrm * (SEAT_MARGIN - now[i])
+        return target
+
+    seat_shape(arm, hoodie, zone, clear)
+    for m in quiet:
+        m.show_viewport = True
+
+
+CLIPS = {"idle": (idle, 96, True), "walk": (walk, 96, True), "look_up": (look_up, 48, False), "sit_edge": (sit_edge, 96, True)}
 
 
 def add_bob_bones(arm):
@@ -235,7 +336,15 @@ def build(arm, name):
             pb.keyframe_insert("rotation_quaternion", frame=f)
         hips.location = to_bone @ at
         hips.keyframe_insert("location", frame=f)
-    spring.bake(arm, 1, last)
+    if name == "sit_edge":
+        bpy.context.scene.frame_set(1)
+        bpy.context.view_layer.update()
+        add_seat_shapes(arm)
+    spring.bake(arm, 1, last, SIT_DROP if name == "sit_edge" else 0.0)
+    if name == "sit_edge":
+        for ob in bpy.data.objects:
+            if ob.type == "MESH" and ob.data.shape_keys and "sit_seat" in ob.data.shape_keys.key_blocks:
+                ob.data.shape_keys.key_blocks["sit_seat"].value = 0.0
     action["first"], action["last"] = (length + 1 if loops else 1), last
     arm.animation_data.action = None
 

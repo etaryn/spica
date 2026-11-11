@@ -33,7 +33,9 @@ from renders.
 
 - Reels: the next stage, built on these clips. Voice.
 - The still post engine on `main`: no sprite reaches it (see Change on `main`, deferred).
-- More clips. Smirk and flustered are faces for now, with no body movement of their own.
+- More clips. These four are a starter set for testing the model; a larger library comes later, for
+  the reels backend to choose from (Ethan, Nov 11). A clip is a function plus a line in `CLIPS`.
+  Smirk and flustered are faces for now, with no body movement of their own.
 - The engine choosing a face to match a post. Until it can, only faces that suit any post ship.
 - Props or anything else new in her design.
 - Publishing, and re-exporting the VRoid sample (see Licence).

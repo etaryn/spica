@@ -84,6 +84,8 @@ def still(scene, frame, path):
 def write(scene, edit, out):
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
+    for old in out.parent.glob(out.stem + "-shot-*.png"):
+        old.unlink()  # a longer earlier reel's stills would land on the sheet
     t0 = 1
     for n, shot in enumerate(edit["shots"], 1):
         still(scene, t0 + shot["frames"] // 2, out.parent / ("%s-shot-%02d.png" % (out.stem, n)))

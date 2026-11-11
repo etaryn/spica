@@ -96,7 +96,7 @@ Three things cross between the branches.
 | `elevation` | Degrees; positive looks down on her. -30 to 30. |
 | `framing` | `full`, `waist` or `face`. |
 | `x` | Where her centre sits across the frame, 0 to 1. `main` picks the quieter side, as for stills. |
-| `background` | Ignored by the renderer; for `main` and the review script. `file` is an image or video; `offset` is where a video starts, in seconds (default 0); `pan` is the crop centre, 0 to 1, moving from the first value to the second over the shot, along whichever axis the content overflows 9:16 (sideways for wide content, down for tall). |
+| `background` | Ignored by the renderer; for `main` and the review script. `file` is an image or video; `offset` is where a video starts, in seconds (default 0); `pan` (required, no default; agreed with `main` Nov 12) is the crop centre, 0 to 1, moving from the first value to the second over the shot, along whichever axis the content overflows 9:16 (sideways for wide content, down for tall). |
 
 `width` and `height` are 1080 and 1920 for now; the renderer takes them as given.
 
@@ -132,10 +132,11 @@ scaling and no anchor.
 
 It imports `sprites`' functions rather than copying them, and never saves the `.blend`.
 
-**Render time (measured Nov 12):** 6.6 s per frame at 1080×1920 with the GPU to itself, inside one Blender session, so a
-10-second reel (240 frames) is about 26 minutes. Every frame is two renders (`brow_over`), and the cost barely falls with
+**Render time (measured Nov 12):** 4.4 to 5 s per frame at 1080×1920 with the GPU to itself, inside one Blender session, once
+warm (a 4-frame call measured 6.6 s with its warm-up), so a 10-second reel (240 frames) is about 20 minutes. Every frame is two renders (`brow_over`), and the cost barely falls with
 size (5.5 s at 270×480), so overhead dominates. With a second render sharing the GPU it rose to 7 to 9.3 s per frame;
-`main`'s per-call figure, Blender's startup included, was about 10.7 s per frame for a 6-frame call. Composing the MP4
+`main`'s per-call figure, Blender's startup included, was about 10.7 s per frame for a 6-frame call. `main`'s full run of `reel_poc.json` (one call, 240 frames, GPU shared)
+averaged 7.47 s per frame, and its own compositing and encoding took 97 s. Composing the MP4
 takes about 20 seconds. Plan the render worker as a slow background job.
 
 ## The review reel

@@ -10,6 +10,7 @@ CHECK="$ROOT/build/checks/check_reel.py"
 SHOW="Error|Traceback|PROBLEM|checked|SHOT|REEL|ok$"
 set -e -o pipefail  # a failing Blender run stops the script even through grep
 python "$ROOT/build/checks/test_reel_edit.py"
+python -c "import json, sys; sys.path.insert(0, sys.argv[1]); import reel_edit as r; e = r.load(sys.argv[2]); r.validate(e, json.load(open(sys.argv[3]))); r.validate_backgrounds(e); print('EDIT LIST ok')" "$ROOT/build" "$REEL" "$ROOT/clips.json"  # a bad list fails in a second, not after the render
 for m in manifest camera "wrap $OUT/wrap"; do "$B" -b "$F" --python-exit-code 1 -P "$CHECK" -- $m 2>&1 | grep -E "$SHOW"; done
 "$B" -b --factory-startup --python-exit-code 1 -P "$CHECK" -- pan "$OUT/pan" 2>&1 | grep -E "$SHOW"
 "$B" -b "$F" --python-exit-code 1 -P "$ROOT/build/reel.py" -- "$REEL" "$OUT/frames" 2>&1 | grep -E "$SHOW"

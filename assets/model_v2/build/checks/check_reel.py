@@ -106,6 +106,7 @@ def check_frames(folder, edit):
             if abs(centre - shot["x"]) > X_TOLERANCE:
                 bad("shot %d %s: her centre is at x %.2f, the edit list says %.2f" % (n, path.name, centre, shot["x"]))
         print("FRAMES shot", n, len(pngs))
+    print("FRAMES checked", len(edit["shots"]), "shots")
 
 
 def same(p, q):

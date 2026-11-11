@@ -16,6 +16,8 @@ Design docs: `docs/orbit/o1-character-brief.md` (the look, source of truth) and
 - Her rest pose is the T-pose; `rig_poses.apply(arm, "arms_down")` is how she stands. Expressions:
   `face_expr2.use(name)` is the current set of 32 (`expr2_defs.py`), `face_expr.use(name)` the
   original 25. Render through `brow_over.render(scene)`, which puts her brows over her fringe.
+- Clips: `blender -b assets/model_v2/spica-v2.blend -P assets/model_v2/build/clips.py -- idle,walk,look_up,sit_edge`
+  makes `spica-v2-clips.blend`; check: `checks/check_clips.py -- clip <names>`; stills: `sh assets/model_v2/build/run_sprites.sh`.
 - v1 build: `sh assets/model/build/run.sh [palette]`; check: `check_model.py` (see README). All colours
   live in `assets/model/build/palette.py`. v1 has its own 25 expressions and spring bones.
 - `.blend`, `.vrm`, textures and renders are git-ignored (the VRoid samples' licence forbids

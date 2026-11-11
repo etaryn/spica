@@ -3,8 +3,24 @@
 What O1 stage 5 builds for her v2 model: four animation clips, and still sprites rendered from them
 to check the model. Her posts go straight to reels (Ethan, Nov 11): stills are a bridging step, not
 what she posts, so the still change on `main` below is deferred.
-Nov 11, 2026. Status: clips built and approved; the 24 stills render as the model check; the change
-on `main` is deferred.
+Nov 11, 2026. Status: built. Clips approved, and the 24 stills render as the model check; the change
+on `main` is deferred. The sections below are the design as agreed; where the build went a different way,
+this list and `DECISIONS.md` win.
+
+## What changed while building it
+
+- **Swing:** Ethan found it far too lively. The solver left each bone behind when the bones above it
+  turned, so the ponytail whipped; each bone is now carried by its parent, and hair keeps part of the
+  line it hangs in standing, so it no longer tips with her head (`follow`, `hang` in `spring.py`).
+- **The bob moves**, at his request: eight swing bones round her head, made by `clips.py`.
+- **Walk:** rebuilt on human gait curves after he found it awkward (knees never straightened).
+- **Seated:** the hoodie is lifted over her shorts by a shape only `sit_edge` uses; seated sprites are
+  560 wide at the same scale; her seat is on the anchor (`[280, 724]`), his pick.
+- **Reels first:** her posts go straight to reels; the stills only check the model, and the change on
+  `main` is deferred.
+- **Builds:** `clips.py -- <names>` makes `spica-v2-clips.blend` from `spica-v2.blend`;
+  `sh assets/model_v2/build/run_sprites.sh` renders and checks the 24 stills; review frames, sheets
+  and GIFs come from `sprites.py -- review` and `gif.py`.
 
 ## Goal
 

@@ -1,0 +1,50 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "shots": [
+    {
+      "clip": "walk",
+      "start": 0,
+      "frames": 72,
+      "face": "soft_smile",
+      "azimuth": -32,
+      "elevation": 0,
+      "framing": "full",
+      "x": 0.35,
+      "background": { "file": "assets/model_v2/reel_samples/video.webm", "offset": 0, "pan": [0.2, 0.6] }
+    },
+    {
+      "clip": "idle",
+      "start": 0,
+      "frames": 48,
+      "face": "observing",
+      "azimuth": -10,
+      "elevation": 10,
+      "framing": "waist",
+      "x": 0.5,
+      "background": { "file": "assets/model_v2/reel_samples/video.webm", "offset": 4, "pan": [0.6, 0.7] }
+    },
+    {
+      "clip": "look_up",
+      "start": 0,
+      "frames": 48,
+      "face": "wonder",
+      "azimuth": 0,
+      "elevation": 0,
+      "framing": "face",
+      "x": 0.5,
+      "background": { "file": "assets/model_v2/reel_samples/tall.jpg", "offset": 0, "pan": [0.0, 0.3] }
+    },
+    {
+      "clip": "sit_edge",
+      "start": 0,
+      "frames": 72,
+      "face": "fond",
+      "azimuth": 32,
+      "elevation": 0,
+      "framing": "full",
+      "x": 0.6,
+      "background": { "file": "assets/model_v2/reel_samples/tall.jpg", "offset": 0, "pan": [0.4, 0.8] }
+    }
+  ]
+}

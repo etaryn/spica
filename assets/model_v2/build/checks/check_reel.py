@@ -136,6 +136,68 @@ def check_wrap(scratch):
     print("WRAP checked")
 
 
+def picture(path, size, first, second):
+    """A plain test picture, one colour in the first half and another in the second, split across its longer side."""
+    w, h = size
+    a = np.zeros((h, w, 4), np.float32)
+    a[:, :, 3] = 1
+    if w > h:
+        a[:, : w // 2, :3], a[:, w // 2 :, :3] = first, second
+    else:
+        a[: h // 2, :, :3], a[h // 2 :, :, :3] = first, second
+    image = bpy.data.images.new(path.stem, w, h, alpha=True)
+    image.pixels.foreach_set(a[::-1].ravel())  # Blender's rows run bottom up
+    image.filepath_raw, image.file_format = str(path), "PNG"
+    path.unlink(missing_ok=True)
+    image.save()
+
+
+def check_pan(scratch):
+    """Pan 0 shows the left or top of the content, pan 1 the right or bottom; a video too short for its shot fails before rendering."""
+    import reel_review as rr
+
+    red, blue = (1, 0, 0), (0, 0, 1)
+    picture(scratch / "wide.png", (1920, 480), red, blue)
+    picture(scratch / "tall.png", (270, 1920), red, blue)
+    for n in (1, 2):  # her frames: empty, so only the background shows
+        (scratch / ("shot-%02d" % n)).mkdir(exist_ok=True)
+        for k in (1, 2):
+            image = bpy.data.images.new("empty", 270, 480, alpha=True)
+            image.pixels.foreach_set(np.zeros(270 * 480 * 4, np.float32))
+            image.filepath_raw, image.file_format = str(scratch / ("shot-%02d" % n) / ("%04d.png" % k)), "PNG"
+            image.save()
+    shot = lambda file: {"frames": 2, "background": {"file": str(scratch / file), "offset": 0, "pan": [0, 1]}}
+    edit = {"width": 270, "height": 480, "shots": [shot("wide.png"), shot("tall.png")]}
+    scene = bpy.context.scene
+    rr.build(scene, edit, scratch, scratch)
+    for frame, name, want in ((1, "wide first", red), (2, "wide last", blue), (3, "tall first", red), (4, "tall last", blue)):
+        path = scratch / ("pan-%d.png" % frame)
+        rr.still(scene, frame, path)
+        mean = read_png(path)[:, :, :3].reshape(-1, 3).mean(axis=0)
+        if mean[list(want).index(1)] < 0.8:
+            bad("pan %s: expected mostly %s, got mean colour %s" % (name, "red" if want == red else "blue", np.round(mean, 2)))
+    video = re_.ROOT / "assets/model_v2/reel_samples/video.webm"
+    try:
+        rr.build(bpy.data.scenes.new("short"), {"width": 270, "height": 480, "shots": [{"frames": 2, "background": {"file": str(video), "offset": 3600, "pan": [0, 1]}}]}, scratch, scratch)
+        bad("a background video shorter than its shot was accepted")
+    except ValueError as e:
+        if "frames" not in str(e) or not str(e).startswith("shot 1:"):
+            bad("short video: unclear error %r" % str(e))
+    print("PAN checked")
+
+
+def check_review(mp4, edit):
+    clip = bpy.data.movieclips.load(str(mp4))
+    total = sum(s["frames"] for s in edit["shots"])
+    if clip.frame_duration != total:
+        bad("the reel is %d frames, the edit list adds up to %d" % (clip.frame_duration, total))
+    if tuple(clip.size) != (edit["width"], edit["height"]):
+        bad("the reel is %s, the edit list says %dx%d" % (tuple(clip.size), edit["width"], edit["height"]))
+    if abs(clip.fps - 24) > 0.01:
+        bad("the reel is %.2f fps" % clip.fps)
+    print("REVIEW checked", total, "frames")
+
+
 def main():
     mode, *rest = args
     if mode == "manifest":
@@ -148,6 +210,12 @@ def main():
         scratch = Path(rest[0])
         scratch.mkdir(parents=True, exist_ok=True)
         check_wrap(scratch)
+    elif mode == "pan":
+        scratch = Path(rest[0])
+        scratch.mkdir(parents=True, exist_ok=True)
+        check_pan(scratch)
+    elif mode == "review":
+        check_review(Path(rest[0]), re_.load(rest[1]))
     else:
         raise SystemExit("unknown mode " + mode)
     if problems:

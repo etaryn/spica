@@ -75,7 +75,8 @@ GARMENTS = ("shorts", "shorts_cuff_L", "shorts_cuff_R", "stocking", "ankle_sock"
 GARMENT_MOST = 10  # percent of a garment's points inside her skin, the limit her rig check uses
 KNEE_AT_REST = 7.9  # degrees between her thigh and shin bones standing straight, from their rest positions
 KNEE_STRAIGHT, KNEE_SWING = 6, 45  # a walking knee nearly straightens at heel strike and mid-stance and bends about 60 degrees in the swing
-SWING_MM ={"idle": {"Pony": (0, 20), "Bust": (0, 3), "Bob": (0, 10)}, "walk": {"Pony": (10, 90), "Bust": (2, 12), "Bob": (4, 30)}}  # least and most a chain's tip may travel against her head or chest: Ethan found the first numbers far too lively
+PONY_HANG_MOST = 15  # degrees the whole ponytail may turn from its standing line while her head is tipped back 25
+SWING_MM = {"idle": {"Pony": (0, 20), "Bust": (0, 3), "Bob": (0, 10)}, "walk": {"Pony": (10, 90), "Bust": (2, 12), "Bob": (4, 30)}}  # least and most a chain's tip may travel against her head or chest: Ethan found the first numbers far too lively
 
 
 def evaluated(ob):
@@ -151,6 +152,14 @@ def check_clip(name):
     for g, pct in inside.items():
         if pct > GARMENT_MOST:
             bad("%s: %s is %.1f%% inside her" % (name, g, pct))
+    if name == "look_up":
+        pony = [arm.data.bones["J_Sec_Pony%d" % i] for i in (1, 8)]
+        standing = pony[1].tail_local - pony[0].head_local
+        held = arm.matrix_world @ arm.pose.bones[pony[1].name].tail - arm.matrix_world @ arm.pose.bones[pony[0].name].head
+        turned = np.degrees(standing.angle(held))
+        print("HANG look_up ponytail turned %.0f degrees from how it hangs standing" % turned)
+        if turned > PONY_HANG_MOST:
+            bad("look_up: the ponytail turns %.0f degrees with her head; hair hangs" % turned)
     if name == "walk":
         for side, bends in knees.items():
             if min(bends) > KNEE_STRAIGHT or max(bends) < KNEE_SWING:

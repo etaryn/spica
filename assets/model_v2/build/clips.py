@@ -148,7 +148,25 @@ def walk(arm, frame):
     return turns, at
 
 
-CLIPS = {"idle": (idle, 96, True), "walk": (walk, 96, True)}
+def look_up(arm, frame):
+    """She stands, then her head and eyes rise to something above her, and she holds."""
+    rise = min(max((frame - 8) / 20, 0.0), 1.0)
+    rise = rise * rise * (3 - 2 * rise)
+    at = Vector((0, 0, -0.004))
+    hips = Quaternion()
+    turns = {
+        HIPS: hips,
+        CHEST: turn("X", -2 * rise),
+        UPPER_CHEST: turn("X", -4 * rise),
+        NECK: turn("X", -8 * rise),
+        HEAD: turn("X", -17 * rise),
+    }
+    for side in "LR":
+        turns.update(leg(arm, side, head_of(arm, B(side, "Foot")), 0, hips, at))
+    return turns, at
+
+
+CLIPS = {"idle": (idle, 96, True), "walk": (walk, 96, True), "look_up": (look_up, 48, False)}
 
 
 def add_bob_bones(arm):

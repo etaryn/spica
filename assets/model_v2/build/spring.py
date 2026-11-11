@@ -11,9 +11,10 @@ import body as shape
 
 # stiffness: share of the way back to rest per frame; drag: speed lost per frame; cone: most it may swing (degrees); margin: gap kept from her (m);
 # follow: how much of her body's own movement a chain's first bone is carried by, rather than left behind by (the rest of a chain is always carried by the bone above it)
-PONY = dict(stiffness=0.14, drag=0.60, cone=8, margin=0.010, follow=0.0)
-BUST = dict(stiffness=0.20, drag=0.70, cone=6, margin=0.0, follow=0.6)
-BOB = dict(stiffness=0.08, drag=0.60, cone=8, margin=0.0, follow=0.0)
+# hang: share of the line a bone hangs in when she stands that it keeps as she tips (0 turns rigidly with her, 1 never turns)
+PONY = dict(stiffness=0.14, drag=0.60, cone=8, margin=0.010, follow=0.0, hang=0.6)
+BUST = dict(stiffness=0.20, drag=0.70, cone=6, margin=0.0, follow=0.6, hang=0.0)
+BOB = dict(stiffness=0.08, drag=0.60, cone=8, margin=0.0, follow=0.0, hang=0.3)
 SOLID = ("Body", "Face", "hoodie", "hair_bob")
 TORSO = np.array(shape.TORSO)  # her measured outline by height: half width, front, back
 BOB_SECTORS, BOB_BONE = 8, "J_Sec_Bob%d"  # the bob's swing bones, one per sector round her head, made by clips.py
@@ -106,7 +107,8 @@ def bake(arm, f0, f1):
                 rest = parent_world @ (parent_rest.inverted() @ b.matrix_local)
                 head, length = rest.translation, b.length
                 along = (rest.to_3x3() @ Vector((0, 1, 0))).normalized()
-                target = head + along * length
+                standing = (mw.to_3x3() @ b.matrix_local.to_3x3() @ Vector((0, 1, 0))).normalized()
+                target = head + along.lerp(standing, k["hang"]).normalized() * length  # hair keeps part of the line it hangs in when she stands, so it does not tip with her head like a handle
                 tail, prev, was = state.get(b.name, (target.copy(), target.copy(), head.copy()))
                 if f == f0:
                     tail = prev = target.copy()

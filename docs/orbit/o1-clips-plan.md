@@ -2,7 +2,8 @@
 
 The step-by-step build of `docs/orbit/o1-clips-spec.md`: her four clips, the sprites rendered from
 them, and the small change on `main` that stops her being mirrored.
-Nov 11, 2026. Status: written, not started.
+Nov 11, 2026. Status: Tasks 1 to 4 built and approved; Task 5 renders the stills as the model check;
+Tasks 6 and 7 deferred (Ethan: her posts go straight to reels, stills only check the model).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
@@ -1106,7 +1107,10 @@ git commit -m "feat(orbit): O1 sprites: the first batch of 24, with Ethan's fram
 
 ---
 
-## Checkpoint 4: into the post engine
+## Checkpoint 4: into the post engine (deferred)
+
+Deferred (Ethan, Nov 11): her posts go straight to reels, so these tasks do not run now. They stay
+as written in case stills ever ship.
 
 These tasks run on `main`: `git switch main`, and back with `git switch orbit`. Its tests need the
 test database up, as they always do. Tasks 6 and 7 land as one commit, so the placeholders leave in
@@ -1414,8 +1418,7 @@ values Ethan set by review.
 
 Mark stages 5 and 6 done in `docs/orbit/o1-model.md`, pointing to `o1-clips-spec.md`. Set the spec's
 status line to built and add a "What changed while building it" list like `o1-v2-rig-spec.md` has.
-In `CLAUDE.md`, change "Next: clips and sprites; doodles only when Ethan asks." to name the new
-build commands (`clips.py`, `run_sprites.sh`) and what is next.
+In `CLAUDE.md`, name the new build commands (`clips.py`, `run_sprites.sh`); what is next is reels.
 
 - [ ] **Step 3: Commit on Ethan's word**
 

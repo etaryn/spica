@@ -32,3 +32,4 @@ Implementation choices for her model and social pipeline that the design docs do
 | 2026-11-10 | The bob stays stiff; only the ponytail and bust swing | Spec: swing on the bob is out of scope, and nothing touches it |
 | 2026-11-10 | The skin hidden under her hoodie is removed from the mesh, so she cannot be shown without it | Ethan approved; it stops skin poking through the cloth when she moves |
 | 2026-11-10 | `run.sh` is the one build, and `check_tee.py` allows 52 mm of cloth under her arm (it was 45) | The moderate armpit fit Ethan chose measures 50 mm, and he set the limit to match |
+| 2026-11-11 | Her posts go straight to reels. Still sprites rendered from clip frames only check the model; the still post engine change on `main` (one picture per facing, real sprites replacing the placeholders) is deferred | Ethan: stills are a bridging process to check the model |

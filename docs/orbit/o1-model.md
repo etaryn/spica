@@ -6,7 +6,7 @@ repeated here). Branch: `orbit/o1-model`. This file is the build side: what exis
 was tried and dropped. The day-by-day history is in git.
 
 ## Goal
-A fixed, rigged, toon-shaded 3D Spica that the post engine can turn into stills, and later video. This phase delivers the model and a
+A fixed, rigged, toon-shaded 3D Spica that the post engine can turn into reels (Ethan, 2026-11-11: straight to reels; stills only check the model). This phase delivers the model and a
 preset of animations; posting stays with the existing sprite seam until O2.
 
 ## Decisions (Ethan, 2026-11-07)
@@ -21,6 +21,8 @@ Engine input today: transparent PNG sprites, 400×1000, feet anchor, facing, tag
 frame to that format (plus a higher-res master), so no mind-side code changes. Replacing the placeholder silhouettes follows the replace
 rule: the old PNGs go in the same slice that ships real renders. The look is made by Blender's materials (toon shader nodes, shader
 glows), which do not export to glTF, so sprites are rendered from Blender, not from a `.glb`.
+**Changed 2026-11-11 (Ethan):** her posts go straight to reels. Still sprites only check the model, nothing ships through the
+sprite seam above, and its change on `main` is deferred (`o1-clips-spec.md`). The reel seam is the next design.
 
 ## How it is built
 `sh assets/model/build/run.sh` builds `assets/model/spica-v1.blend` and its review renders (`renders/v1`); `run.sh <palette>` builds
@@ -242,13 +244,14 @@ code in a running Blender).
    show no skin through cloth and no torn armpit; the counts in `check_model.py` (hoodie 2.8% and shorts 5.5% in sit) are the compressed side of the
    bend. Build them only if a clip shows a problem. Stage 4 is closed; the stiffness and drag numbers (`HAIR`, `BUST` in `spring.py`) are
    a first guess to tune on the first real clip (stage 5), by eye.
-5. **Animation preset.** Clips list set with Ethan (starting guess: idle, walk, look-up, sit, smirk, flustered). Check: playblast of each.
-6. **Export and integration.** `.blend` plus renders (a `.glb` is a structure test only); `render.py` makes sprites from clip frames; one
-   end-to-end test post through `pnpm eval --llm=fake`.
+5. **Animation preset.** Built 2026-11-11 for v2: idle, walk, look_up, sit_edge, any of the 32 faces on any clip (`o1-clips-spec.md`,
+   `clips.py`, `sprites.py`). Check: `check_clips.py`, and Ethan's review of each clip's sheet and GIF.
+6. **Reels.** Ethan (2026-11-11): straight to reels. Stills from clip frames only check the model. Next: render clips to video for
+   reels, and design their seam with the post engine. (`.blend` plus renders; a `.glb` is a structure test only.)
 
 ## Limits (be honest)
 Rendered looks are judged by Ethan; Claude checks proportions, silhouette, palette and consistency from renders and measures what can be
 measured (distances, weights, clipping counts). Hair is the highest risk. Procedural animation is functional, not polished.
 
 ## Out of scope
-Version arc beyond v1, voice, video output, emotion-flare effects, publishing (O2+).
+Version arc beyond v1, voice, emotion-flare effects, publishing (O2+).

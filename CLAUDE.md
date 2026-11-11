@@ -3,11 +3,11 @@
 This branch, `orbit`, is Spica's **visual design and social-media pipeline** (tracks O1, O2...).
 The chatbot backend (mind, memory, spec, tests, prompts) is the `main` branch and is **not here**:
 do backend work there, and never merge `orbit` into `main` (it deletes the backend). What crosses
-over is data, by hand: her rendered sprites are copied into `assets/poses/` on `main`.
+over is data, by hand. Her posts go straight to reels; still sprites only check her model.
 
 Design docs: `docs/orbit/o1-character-brief.md` (the look, source of truth) and
 `docs/orbit/o1-model.md` (the build, flaws, next stages). Choices the docs don't cover go in
-`DECISIONS.md`. Next: clips and sprites; doodles only when Ethan asks.
+`DECISIONS.md`. Clips: `docs/orbit/o1-clips-spec.md`. Next: reels; doodles only when Ethan asks.
 
 - **v2 is her current model** (`docs/orbit/o1-v2-spec.md`, rig `docs/orbit/o1-v2-rig-spec.md`, later
   choices in `DECISIONS.md`). Build from nothing: `sh assets/model_v2/build/run.sh`; every check:

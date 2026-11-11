@@ -1,19 +1,22 @@
 # Orbit O1 v2: clips and sprites
 
-What O1 stages 5 and 6 build for her v2 model: four animation clips, the sprites rendered from
-them, and how those sprites reach the post engine on `main`.
-Nov 11, 2026. Status: design agreed with Ethan, not built.
+What O1 stage 5 builds for her v2 model: four animation clips, and still sprites rendered from them
+to check the model. Her posts go straight to reels (Ethan, Nov 11): stills are a bridging step, not
+what she posts, so the still change on `main` below is deferred.
+Nov 11, 2026. Status: clips built and approved; the 24 stills render as the model check; the change
+on `main` is deferred.
 
 ## Goal
 
-Her real body replaces the four placeholder silhouettes in her posts. Any frame of a clip can be
-rendered as a still with any of her 32 faces, so nothing is hand-posed. Done means one test post
-per facing shows her, correctly lit and placed, and Ethan has approved the clips and the sprites
+Her four clips, approved by Ethan, ready for the reels that come next. Any frame of a clip can be
+rendered as a still with any of her 32 faces, so nothing is hand-posed; the stills check the model
+from the angle her posts will see her. Done means Ethan has approved the clips and the 24 stills
 from renders.
 
 ## Out of scope
 
-- Video output and voice. The clips are real animation, so video can use them later.
+- Reels: the next stage, built on these clips. Voice.
+- The still post engine on `main`: no sprite reaches it (see Change on `main`, deferred).
 - More clips. Smirk and flustered are faces for now, with no body movement of their own.
 - The engine choosing a face to match a post. Until it can, only faces that suit any post ship.
 - Props or anything else new in her design.
@@ -84,9 +87,10 @@ post ship.
 Names are `<clip>-<face>` with every `_` written as `-` (for example `look-up-soft-smile`), and
 files are `<name>-left.png` and `<name>-right.png`.
 
-## Change on `main`
+## Change on `main` (deferred)
 
-Its own small commit on `main`. `orbit` is never merged. The sprites and `poses.json` cross by hand.
+Deferred (Ethan, Nov 11): her posts go straight to reels, so still sprites never reach the post
+engine. Kept as the design if stills ever ship; reels will need their own seam. Its own small commit on `main`. `orbit` is never merged. The sprites and `poses.json` cross by hand.
 
 - **Manifest:** each entry in `assets/poses/poses.json` becomes
   `{name, files: {left, right}, tags, anchor}`. `facing` and `file` go.
@@ -117,9 +121,8 @@ A new `assets/model_v2/build/checks/check_clips.py`:
 - Each sprite has a transparent background, nothing touching its canvas edges, and its anchor in
   the agreed place.
 
-Ethan judges the look from renders. On `main`, the post tests pass, and a temporary test calls
-`renderStill` directly to make one test post per facing, with no LLM or database. (`pnpm eval
---llm=fake` replays chat scripts and makes no posts.)
+Ethan judges the look from renders. The checks on `main` (post tests, one test post per facing
+through `renderStill`) belong to the deferred change.
 
 ## Known risks
 
@@ -140,4 +143,4 @@ Each step stops for Ethan's review.
 2. `idle` and `walk`, then `look_up`, then `sit_edge` with its anchor options. Ethan reviews each
    sheet and video and picks its frame.
 3. The 24 sprites, reviewed as one sheet.
-4. The change on `main`, then the test posts, one per facing.
+4. Deferred: the change on `main` and its test posts. Next is reels.

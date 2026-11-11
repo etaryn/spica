@@ -7,10 +7,9 @@ import { z } from "zod";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { loadPrompt } from "@/mind/platform/prompts";
 import type { WebFindRow } from "@/mind/world/types";
-import type { StillFormat } from "./post-library";
 import type { PublicPersona } from "./public-persona";
 
-export type Draft = { caption: string; overlay_text: string | null };
+export type Draft = { caption: string };
 type Find = Pick<WebFindRow, "title" | "source" | "credit"> & { description?: string | null };
 
 /** What the source says the picture shows, so a punning title doesn't stand in for the picture. */
@@ -19,14 +18,11 @@ export type DraftInput = {
   persona: PublicPersona;
   find: Find;
   valence: number;
-  /** What the words need of a format, a still's or a reel's. */
-  format: Pick<StillFormat, "name" | "caption_pattern"> & {
-    overlay: { kind: StillFormat["overlay"]["kind"] };
-  };
+  format: { name: string; caption_pattern: string };
   skill: number;
 };
 
-const DraftSchema = z.object({ caption: z.string(), overlay_text: z.string().nullable() });
+const DraftSchema = z.object({ caption: z.string() });
 const CheckSchema = z.object({ ok: z.boolean(), reason: z.string() });
 
 const tidy = (s: string, max: number) => cutAtWord(clean(s), max);
@@ -71,7 +67,7 @@ export async function draftPost(
       `How much it moved you: ${input.valence.toFixed(2)}`,
       `Who you are in public:\n${persona.lines.map((l) => `- ${l}`).join("\n")}`,
       `Your day so far: ${persona.today.happened.join("; ") || "nothing much yet"}`,
-      `Format: ${format.name}; caption pattern: ${format.caption_pattern}; overlay: ${format.overlay.kind}`,
+      `Format: ${format.name}; caption pattern: ${format.caption_pattern}`,
       `Your skill at posts: ${input.skill.toFixed(2)}`,
       `Keep the caption under ${config.posts.caption_target_chars} characters: one or two short sentences.`,
     ].join("\n\n"),
@@ -81,12 +77,7 @@ export async function draftPost(
     maxRetries: config.core.max_retries,
   });
   const caption = tidy(raw.caption, config.posts.caption_max_chars);
-  if (!caption) return null;
-  const overlay =
-    format.overlay.kind === "none" || raw.overlay_text === null
-      ? null
-      : tidy(raw.overlay_text, config.posts.overlay_max_chars) || null;
-  return { caption, overlay_text: overlay };
+  return caption ? { caption } : null;
 }
 
 export async function checkPost(
@@ -101,7 +92,6 @@ export async function checkPost(
     system: loadPrompt("post/check", config.prompts.post_check),
     input: [
       `Caption: ${draft.caption}`,
-      `Text on the image: ${draft.overlay_text ?? "none"}`,
       `The find: "${find.title}" (${find.source}, credit ${find.credit})`,
       ...shows(find),
     ].join("\n"),

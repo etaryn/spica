@@ -1,6 +1,6 @@
 ---
 name: review-run
-description: Use before and after any paid model run in Spica (review:*, exit:*, calibrate:*, eval:guard, eval:judge, posts:review, formats:add, or pnpm eval with --real / --llm=real). Pre-flight for purpose, cost and logging; afterwards, turns the outputs into findings without reading raw logs whole.
+description: Use before and after any paid model run in Spica (review:*, exit:*, calibrate:*, eval:guard, eval:judge, or pnpm eval with --real / --llm=real). Pre-flight for purpose, cost and logging; afterwards, turns the outputs into findings without reading raw logs whole.
 ---
 
 # Paid review runs

@@ -49,9 +49,11 @@ test("loads the turn judge prompt", () => {
   expect(p).toMatch(/backchannel/);
 });
 
-test("persona v7 is the configured persona", () => {
+test("persona v8 is the configured persona; her posts' goal is a seed goal in it", () => {
   const c = loadConfig();
-  expect(c.prompts.persona).toBe("v7");
+  expect(c.prompts.persona).toBe("v8");
+  expect(loadPrompt("persona", c.prompts.persona)).toContain(`- ${c.posts.goal}: `);
+  expect(loadPrompt("persona", c.prompts.persona)).not.toMatch(/Get better at making posts/);
   const p = loadPrompt("persona", c.prompts.persona);
   expect(p).toMatch(/Alcor/);
   expect(p).not.toMatch(/Pesto/);

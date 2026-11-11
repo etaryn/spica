@@ -63,11 +63,10 @@ export class FakeLLMProvider implements LLMProvider {
       if (lastDay.includes("busy (reading)")) plan.blocks[0]!.label = "rewatching an old film";
       return plan;
     },
-    // A plain caption about the find, with a short overlay only when the format asks for one.
+    // A plain caption about the find.
     post_draft: (input: string) => {
       const title = /What you found: "([^"]*)"/.exec(input)?.[1] ?? "something";
-      const overlay = !/overlay: none/.test(input);
-      return { caption: `came across ${title} today`, overlay_text: overlay ? "look" : null };
+      return { caption: `came across ${title} today` };
     },
     post_check: () => ({ ok: true, reason: "fine" }),
     // Goal identity comes from code; fake content stays stable across fresh goal row IDs.

@@ -921,11 +921,9 @@ export const post = pgTable(
       .notNull()
       .unique()
       .references(() => web_find.id, { onDelete: "cascade" }),
-    medium: text("medium").$type<"still" | "reel">().notNull(),
     format: text("format").notNull(),
-    pose: text("pose").notNull(),
+    clips: text("clips").notNull(),
     caption: text("caption").notNull(),
-    overlay_text: text("overlay_text"),
     media_path: text("media_path").notNull(),
     skill: real("skill").notNull(),
     check: postCheck("check").notNull(),

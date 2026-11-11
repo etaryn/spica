@@ -3,8 +3,8 @@
 import { readFileSync } from "node:fs";
 
 const PAID = [
-  // Every review, exit, calibration and posts script runs real model calls.
-  /\b(?:pnpm|npm\s+run|yarn)\s+(?:run\s+)?(?:review:|exit:|calibrate:|eval:guard\b|eval:judge\b|posts:review\b|formats:add\b)/,
+  // Every review, exit and calibration script runs real model calls.
+  /\b(?:pnpm|npm\s+run|yarn)\s+(?:run\s+)?(?:review:|exit:|calibrate:|eval:guard\b|eval:judge\b)/,
   // `pnpm eval` is free with fakes and paid with --real or --llm=real.
   /\b(?:pnpm|npm\s+run|yarn)\s+(?:run\s+)?eval\b[^;&|]*--(?:real\b|llm[= ]real\b)/,
   // The same entry points called directly.

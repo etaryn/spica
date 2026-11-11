@@ -1,6 +1,5 @@
 /** The hourly post tick: every gate on its own, then a draft with an image, words and a check. */
 import { existsSync } from "node:fs";
-import sharp from "sharp";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { coreDepsOf } from "@/mind/platform/deps";
 import { postTick } from "@/mind/process/core/post";
@@ -66,11 +65,17 @@ async function landedFind(
   });
 }
 
-function setup(over: object = {}) {
-  return makeTestDeps({ life: { timezone: "UTC" }, posts: { media_dir: tmpMediaDir() }, ...over });
+/** Small reels, so a test composites in milliseconds. */
+function setup(over: { posts?: object; [key: string]: unknown } = {}) {
+  const { posts, ...rest } = over;
+  return makeTestDeps({
+    life: { timezone: "UTC" },
+    posts: { media_dir: tmpMediaDir(), output_width: 108, ...posts },
+    ...rest,
+  });
 }
 
-test("drafts a post from a landed find: image, words, check and skill", async () => {
+test("drafts a reel from a landed find: the video, words, check and skill", async () => {
   const deps = setup();
   const findId = await landedFind(deps);
   const out = await postTick(coreDepsOf(deps), at(9));
@@ -78,17 +83,18 @@ test("drafts a post from a landed find: image, words, check and skill", async ()
   const post = await deps.core.posts.getPost((out as { postId: string }).postId);
   expect(post).toMatchObject({
     find_id: findId,
-    medium: "still",
+    format: "drift",
+    clips: "walk+idle+look_up",
     status: "draft",
     check: "ok",
     caption: "came across The Pillars today",
     skill: 0,
   });
-  expect(["plain", "polaroid"]).toContain(post!.format); // screenshot needs skill 0.2
+  expect(post!.media_path).toMatch(/\.mp4$/);
   expect(existsSync(post!.media_path)).toBe(true);
-  expect((await sharp(post!.media_path).metadata()).format).toBe("png");
   const draftCall = deps.llm.structuredCalls.find((c) => c.purpose === "post_draft")!;
   expect(`${draftCall.system}${draftCall.input}`).not.toContain("PRIVATE-TAKE");
+  expect(await deps.core.goals.byTitle(deps.config.posts.goal)).toMatchObject({ status: "active" });
 });
 
 test("gate: one post per her local day", async () => {
@@ -106,7 +112,7 @@ test("gate: one post per her local day", async () => {
 });
 
 test("gate: the weekly cap", async () => {
-  const deps = setup({ posts: { media_dir: tmpMediaDir(), max_per_week: 1 } });
+  const deps = setup({ posts: { max_per_week: 1 } });
   await landedFind(deps, 0.6, 8, "https://x/1.png");
   expect((await postTick(coreDepsOf(deps), at(9))).status).toBe("drafted");
   const [first] = await deps.core.posts.recent(1);
@@ -158,9 +164,7 @@ test("gate: only stale finds", async () => {
 });
 
 test("gate: nothing she can make yet", async () => {
-  const deps = setup({
-    posts: { media_dir: tmpMediaDir(), formats_dir: "tests/fixtures/no-formats" },
-  });
+  const deps = setup({ posts: { reel: { formats_dir: "tests/fixtures/no-formats" } } });
   await landedFind(deps);
   expect(await postTick(coreDepsOf(deps), at(9))).toEqual({
     status: "skipped",
@@ -209,24 +213,8 @@ test("an unreadable find image skips before any draft call is spent", async () =
   expect(deps.llm.structuredCalls.some((c) => c.purpose === "post_draft")).toBe(false);
 });
 
-const reelSetup = () =>
-  setup({ posts: { media_dir: tmpMediaDir(), capabilities: ["reel"], output_width: 108 } });
-
-test("with reels built, a landed find becomes a reel draft", async () => {
-  const deps = reelSetup();
-  const findId = await landedFind(deps);
-  const out = await postTick(coreDepsOf(deps), at(9));
-  expect(out.status).toBe("drafted");
-  const post = await deps.core.posts.getPost((out as { postId: string }).postId);
-  expect(post).toMatchObject({ find_id: findId, medium: "reel", format: "drift", skill: 0 });
-  expect(post!.pose).toMatch(/^walk\+idle\+look_up$/);
-  expect(post!.media_path).toMatch(/\.mp4$/);
-  expect(existsSync(post!.media_path)).toBe(true);
-  expect(post!.caption.length).toBeGreaterThan(0);
-});
-
 test("a failed reel render skips and leaves the find for the next tick", async () => {
-  const deps = reelSetup();
+  const deps = setup();
   await landedFind(deps);
   const working = deps.reelTools;
   deps.reelTools = fakeReelTools(deps.config, {
@@ -242,7 +230,7 @@ test("a failed reel render skips and leaves the find for the next tick", async (
 });
 
 test("a reel whose renderer is missing skips before any draft call is spent", async () => {
-  const deps = reelSetup();
+  const deps = setup();
   await landedFind(deps);
   deps.reelTools = fakeReelTools(deps.config, { missing: () => "blender.exe" });
   expect(await postTick(coreDepsOf(deps), at(9))).toEqual({

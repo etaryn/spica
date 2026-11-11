@@ -470,7 +470,7 @@ test("each new memory keeps its judged depth, or its kind's default", async () =
   expect(depth("narrative")).toBe(byKind.narrative);
 });
 
-test("reflection can't drop the craft goal; others drop as before", async () => {
+test("reflection can't drop her posts' goal; others drop as before", async () => {
   const { all, deps } = setup({ core: { goals: { min_active: 0 } } });
   await memory(deps, "episode", "A day.");
   const goal = (title: string) =>
@@ -485,7 +485,7 @@ test("reflection can't drop the craft goal; others drop as before", async () => 
       target_at: null,
       embedding: apart(),
     });
-  const craft = await goal(deps.config.posts.craft_goals.still);
+  const craft = await goal(deps.config.posts.goal);
   const other = await goal("Watch");
   all.llm.handlers.core_reflect = () => ({
     insights: [],

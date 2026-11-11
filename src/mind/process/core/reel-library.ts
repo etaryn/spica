@@ -74,6 +74,10 @@ function misfit(f: ReelFormat, m: ReelManifest, maxFrames: number): string | nul
   return longest > maxFrames ? `up to ${longest} frames, over ${maxFrames}` : null;
 }
 
+/** Reviewed formats her skill has reached. */
+export const eligibleFormats = (formats: ReelFormat[], skill: number) =>
+  formats.filter((f) => f.reviewed && f.min_skill <= skill);
+
 /** Every valid reel format; an invalid one is logged by file name and skipped, never fatal. */
 export function loadReelFormats(
   dir: string,

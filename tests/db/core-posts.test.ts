@@ -36,12 +36,10 @@ async function find(layer = createCoreLayer(getTestDb()), url = "https://x/1.png
 
 const draft = (findId: string, hour = 10) => ({
   find_id: findId,
-  medium: "still" as const,
-  format: "plain",
-  pose: "walk-01",
+  format: "drift",
+  clips: "walk+idle+look_up",
   caption: "look at this",
-  overlay_text: null,
-  media_path: ".data/media/posts/p.png",
+  media_path: ".data/media/posts/p.mp4",
   skill: 0.1,
   check: "ok" as const,
   check_reason: null,
@@ -95,10 +93,10 @@ test("one post per find", async () => {
 
 test("goals are found by title, whatever their status", async () => {
   const layer = createCoreLayer(getTestDb());
-  expect(await layer.goals.byTitle("Get better at making posts")).toBeNull();
+  expect(await layer.goals.byTitle("Find friends and share her life")).toBeNull();
   const id = await layer.goals.insert({
-    title: "Get better at making posts",
-    why: "early posts look rough",
+    title: "Find friends and share her life",
+    why: "she wants to be known",
     status: "active",
     progress: 0.2,
     source: "seed",
@@ -108,7 +106,7 @@ test("goals are found by title, whatever their status", async () => {
     embedding: vec(),
   });
   await layer.goals.setStatus(id, "dropped", at(2));
-  expect(await layer.goals.byTitle("Get better at making posts")).toMatchObject({
+  expect(await layer.goals.byTitle("Find friends and share her life")).toMatchObject({
     id,
     status: "dropped",
     progress: 0.2,

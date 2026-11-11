@@ -10,7 +10,7 @@ import type { Config } from "@/mind/platform/config";
 import type { CoreDeps } from "@/mind/platform/deps";
 import { saveMedia } from "@/mind/platform/media";
 import type { ReelTools } from "@/mind/platform/reel-tools";
-import { grain, lightHer, lightOf, type Light } from "./post-render";
+import { grain, lightHer, lightOf, type Light } from "./reel-light";
 import { editList, type EditList } from "./reel-edit";
 import type { ReelFormat, ReelManifest } from "./reel-library";
 

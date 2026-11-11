@@ -242,13 +242,13 @@ test("the episode keeps the appraisal's depth", async () => {
   expect((await deps.core.memory.get(out.episodeId))!.depth).toBe(3);
 });
 
-test("appraisal goal effects skip the craft goal: her skill is set, not earned", async () => {
+test("appraisal moves her posts' goal but never completes it", async () => {
   const { deps, event } = await setup();
-  const craft = await deps.core.goals.insert({
-    title: deps.config.posts.craft_goals.still,
+  const goal = await deps.core.goals.insert({
+    title: deps.config.posts.goal,
     why: "w",
     status: "active",
-    progress: 0.2,
+    progress: 0.8,
     source: "seed",
     source_ref: null,
     started_at: earlier,
@@ -265,7 +265,7 @@ test("appraisal goal effects skip the craft goal: her skill is set, not earned",
         episode: "Spica posted a picture of the Carina Nebula.",
         emotion: { label: "pleased", valence: 0.4, arousal: 0.3, phrase: null },
         salience: 0.4,
-        goalEffects: [{ goalId: craft, delta: 0.3 }],
+        goalEffects: [{ goalId: goal, delta: 0.3 }],
         needEffects: { autonomy: 0, competence: 0 },
         depth: 1,
       },
@@ -273,7 +273,7 @@ test("appraisal goal effects skip the craft goal: her skill is set, not earned",
       now,
     ),
   );
-  expect(await deps.core.goals.get(craft)).toMatchObject({ progress: 0.2, status: "active" });
+  expect(await deps.core.goals.get(goal)).toMatchObject({ progress: 1, status: "active" });
 });
 
 test("an episode keeps what its words cite as lineage", async () => {

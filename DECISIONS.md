@@ -304,3 +304,7 @@ code itself.
 | 2026-11-12 | A reel's light and grain are set once per shot from its opening frame | Light that changed every frame would flicker as the pan moves. |
 | 2026-11-12 | Her rendered frames are deleted once the MP4 is encoded; `reel.json` is kept | A reel's PNGs are hundreds of megabytes; the edit list is enough to redo it. |
 | 2026-11-12 | The `drift` face shot's azimuth starts at 3 degrees, not 0 | An azimuth of 0 has no sign, so she couldn't turn toward the busier side. |
+| 2026-11-12 | Reels are on whenever the worker runs (no `capabilities` switch); a machine without the renderer files skips before any call | With stills gone a switch would leave the post engine doing nothing; the missing-file check makes it free where Blender isn't there. |
+| 2026-11-12 | `post.medium` dropped rather than kept for one value; `pose` renamed `clips` by a hand-written `RENAME COLUMN` in migration 0046 | One medium needs no column; drizzle-kit asks interactively about renames, and a rename keeps any rows. |
+| 2026-11-12 | Her posts' goal fills up through appraisal but is never marked done | It's an ongoing aim; a done goal would be re-created at 0 by `postGoal`. |
+| 2026-11-12 | What stayed of the still renderer (quieter side, light, grain) lives in `reel-light.ts` | Kept apart from `reel-render.ts`, which imports the edit list, to avoid an import cycle. |

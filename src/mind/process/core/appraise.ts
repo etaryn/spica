@@ -22,7 +22,7 @@ import { applyEvent, moodOf } from "@/mind/state/core/core-state";
 import type { CoreNeeds, CoreStatePatch } from "@/mind/state/core/types";
 import type { LoopContext } from "./runner";
 import { clamp } from "@/mind/platform/math";
-import { isCraftGoal } from "./post-library";
+import { isPostGoal } from "./post-library";
 import { latestSelf } from "@/mind/memory/core/self";
 import { lifeTimezone } from "@/mind/world/her-clock";
 
@@ -241,10 +241,12 @@ export async function applyAppraisal(
     await core.memory.setStatus(target.id, "resolved");
   for (const g of a.goalEffects) {
     const goal = await core.goals.get(g.goalId);
-    if (!goal || goal.status !== "active" || isCraftGoal(goal, deps.config)) continue;
+    if (!goal || goal.status !== "active") continue;
     const progress = clamp(goal.progress + g.delta, 0, 1);
     await core.goals.setProgress(goal.id, progress, now);
-    if (progress >= 1) await core.goals.setStatus(goal.id, "done", now);
+    // Her posts' goal is an ongoing aim: it fills up but is never finished.
+    if (progress >= 1 && !isPostGoal(goal, deps.config))
+      await core.goals.setStatus(goal.id, "done", now);
   }
   const firstGoal = a.goalEffects[0];
   if (firstGoal && !event.goalRef && event.kind !== "resolution")

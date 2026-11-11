@@ -2,7 +2,6 @@
 import { expect, test } from "vitest";
 import { loadConfig } from "@/mind/platform/config";
 import { FakeLLMProvider } from "@/mind/platform/llm/fake";
-import type { StillFormat } from "@/mind/process/core/post-library";
 import { checkPost, cutAtWord, draftPost } from "@/mind/process/core/post-words";
 import type { PublicPersona } from "@/mind/process/core/public-persona";
 
@@ -14,26 +13,13 @@ const persona: PublicPersona = {
   lines: ["SURFACE-LINE"],
   today: { date: "2026-01-05", plan: null, happened: ["read a book"] },
 };
-const format = {
-  name: "plain",
-  medium: "still",
-  min_skill: 0,
-  aspect: "4:5",
-  frame: "none",
-  placement: { side: "auto", scale: [0.4, 0.5] },
-  poses: ["walking"],
-  overlay: { kind: "none", position: "bottom", style: "plain" },
-  grain: 0,
-  caption_pattern: "PATTERN",
-  reviewed: true,
-} satisfies StillFormat;
+const format = { name: "drift", caption_pattern: "PATTERN" };
 const find = { title: "The Pillars", source: "apod", credit: "NASA" };
 
 test("the draft call sees her public self, the find, the valence and the format; nothing else", async () => {
   const llm = new FakeLLMProvider();
   const out = await draftPost({ llm, config }, { persona, find, valence: 0.6, format, skill: 0.2 });
   expect(out?.caption.length).toBeGreaterThan(0);
-  expect(out?.overlay_text).toBeNull();
   const [call] = llm.structuredCalls;
   expect(call!.purpose).toBe("post_draft");
   const seen = `${call!.system}\n${call!.input}`;
@@ -49,7 +35,7 @@ test("the draft call sees her public self, the find, the valence and the format;
     expect(seen).toContain(s);
 });
 
-test("the draft and the check see what the picture shows, when the feed says", async () => {
+test("the draft and the check see what the find shows, when the feed says", async () => {
   const llm = new FakeLLMProvider();
   const shown = { ...find, description: "A dome under the Milky Way." };
   await draftPost({ llm, config }, { persona, find: shown, valence: 0.5, format, skill: 0 });
@@ -57,7 +43,7 @@ test("the draft and the check see what the picture shows, when the feed says", a
   const [withIt, without] = llm.structuredCalls.filter((c) => c.purpose === "post_draft");
   expect(withIt!.input).toContain("What it shows: A dome under the Milky Way.");
   expect(without!.input).not.toContain("What it shows");
-  await checkPost({ llm, config }, { draft: { caption: "c", overlay_text: null }, find: shown });
+  await checkPost({ llm, config }, { draft: { caption: "c" }, find: shown });
   expect(llm.structuredCalls.find((c) => c.purpose === "post_check")!.input).toContain(
     "What it shows: A dome under the Milky Way.",
   );
@@ -65,27 +51,17 @@ test("the draft and the check see what the picture shows, when the feed says", a
 
 test("a two-line caption keeps its line break", async () => {
   const llm = new FakeLLMProvider();
-  llm.handlers.post_draft = () => ({ caption: "one  line \n\n\n\n two", overlay_text: null });
+  llm.handlers.post_draft = () => ({ caption: "one  line \n\n\n\n two" });
   const out = await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 });
   expect(out!.caption).toBe("one line\n\ntwo");
 });
 
-test("captions and overlays are trimmed; an overlay is dropped when the format has none", async () => {
+test("captions are trimmed to the limit; an empty one is no draft", async () => {
   const llm = new FakeLLMProvider();
-  llm.handlers.post_draft = () => ({
-    caption: `  ${"x".repeat(500)}  `,
-    overlay_text: "y".repeat(200),
-  });
-  const none = await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 });
-  expect(none!.caption.length).toBe(config.posts.caption_max_chars);
-  expect(none!.overlay_text).toBeNull();
-  const label = { ...format, overlay: { ...format.overlay, kind: "label" as const } };
-  const withText = await draftPost(
-    { llm, config },
-    { persona, find, valence: 0.5, format: label, skill: 0 },
-  );
-  expect(withText!.overlay_text!.length).toBe(config.posts.overlay_max_chars);
-  llm.handlers.post_draft = () => ({ caption: "   ", overlay_text: null });
+  llm.handlers.post_draft = () => ({ caption: `  ${"x".repeat(500)}  ` });
+  const out = await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 });
+  expect(out!.caption.length).toBe(config.posts.caption_max_chars);
+  llm.handlers.post_draft = () => ({ caption: "   " });
   expect(
     await draftPost({ llm, config }, { persona, find, valence: 0.5, format, skill: 0 }),
   ).toBeNull();
@@ -93,16 +69,15 @@ test("captions and overlays are trimmed; an overlay is dropped when the format h
 
 test("the check returns the model's verdict", async () => {
   const llm = new FakeLLMProvider();
-  expect(
-    await checkPost({ llm, config }, { draft: { caption: "hi", overlay_text: null }, find }),
-  ).toEqual({
+  expect(await checkPost({ llm, config }, { draft: { caption: "hi" }, find })).toEqual({
     ok: true,
     reason: expect.any(String),
   });
   llm.handlers.post_check = () => ({ ok: false, reason: "mentions her mood" });
-  expect(
-    await checkPost({ llm, config }, { draft: { caption: "hi", overlay_text: null }, find }),
-  ).toEqual({ ok: false, reason: "mentions her mood" });
+  expect(await checkPost({ llm, config }, { draft: { caption: "hi" }, find })).toEqual({
+    ok: false,
+    reason: "mentions her mood",
+  });
   expect(llm.structuredCalls.at(-1)!.input).toContain("The Pillars");
 });
 

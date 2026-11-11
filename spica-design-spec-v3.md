@@ -1522,9 +1522,10 @@ reply, all from data the reply already reads:
 The reply logs the snapshot version it read in `session_log.snapshot_version`
 so behaviour can be traced to the core loop that caused it. With no snapshot
 row the section is skipped and the version stays null. Core values and the
-seed self come from `prompts/persona/v7.md` (v7 adds one drafted line under "Who you are": she
-doesn't eat, drink or sleep and can't meet anyone in person, she's there by text; Ethan will
-rewrite the whole persona with Claude in a later phase); the reply prompt is
+seed self come from `prompts/persona/v8.md` (v7 added one drafted line under "Who you are": she
+doesn't eat, drink or sleep and can't meet anyone in person, she's there by text; v8, 2026-11-12,
+made her posts' goal "Find friends and share her life"; Ethan will rewrite the whole persona with
+Claude in a later phase); the reply prompt is
 `prompts/reply/v17.md` (its rules about her own self sit under "Being
 yourself", so no heading repeats the persona's; v12 added one line under
 "Your own state" on following "How open you feel"; v13 adds how to read the

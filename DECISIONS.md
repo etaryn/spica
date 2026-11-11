@@ -308,3 +308,4 @@ code itself.
 | 2026-11-12 | `post.medium` dropped rather than kept for one value; `pose` renamed `clips` by a hand-written `RENAME COLUMN` in migration 0046 | One medium needs no column; drizzle-kit asks interactively about renames, and a rename keeps any rows. |
 | 2026-11-12 | Her posts' goal fills up through appraisal but is never marked done | It's an ongoing aim; a done goal would be re-created at 0 by `postGoal`. |
 | 2026-11-12 | What stayed of the still renderer (quieter side, light, grain) lives in `reel-light.ts` | Kept apart from `reel-render.ts`, which imports the edit list, to avoid an import cycle. |
+| 2026-11-12 | Migration 0046 drops the old active goal "Get better at making posts"; it deletes no post rows | The old goal would contradict Ethan's direction; no database holds still posts (a still row left elsewhere would show as a broken video in the inspector). |

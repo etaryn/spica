@@ -4,9 +4,9 @@
   "frames": 360,
   "faces": [[1, "observing"], [90, "laugh"], [152, "curious"], [210, "startled"], [262, "curious"], [332, "soft_smile"]],
   "feed": [
-    { "file": "assets/model_v2/reel_samples/feed-1.mp4", "offset": 0 },
-    { "file": "assets/model_v2/reel_samples/feed-2.mp4", "offset": 0 },
-    { "file": "assets/model_v2/reel_samples/feed-3.mp4", "offset": 0 }
+    { "file": "assets/model_v2/reel_samples/feed-1.webm", "offset": 0 },
+    { "file": "assets/model_v2/reel_samples/feed-2.webm", "offset": 0 },
+    { "file": "assets/model_v2/reel_samples/feed-3.webm", "offset": 0 }
   ],
   "swipes": [130, 250]
 }

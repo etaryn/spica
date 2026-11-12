@@ -2,6 +2,7 @@
 
 What O1 stage 6 builds: her clips rendered to order from an edit list, and a review reel that lays
 them over content, so the reel engine on `main` has a seam to build against.
+Next: scroll reels (`o1-scroll-reel-spec.md`), Ethan's direction after this proof of concept.
 Nov 11, 2026. Status: built Nov 12 as a proof of concept, waiting for Ethan's review of `renders/reel/reel.mp4`. Where the
 build went a different way, this list and `DECISIONS.md` win.
 

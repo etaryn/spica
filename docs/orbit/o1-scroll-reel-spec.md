@@ -3,7 +3,21 @@
 What comes after the reels proof of concept (`o1-reels-spec.md`): one test reel in which she stands in front of a
 giant screen playing a feed of reels, watches them over her shoulder, reacts to the camera and swipes to the next
 one. Her motion is written fresh for this reel, not taken from the clip library.
-Nov 12, 2026. Status: spec, not built.
+Nov 12, 2026. Status: built Nov 12 to the preview, waiting for Ethan's review of `renders/reels/scroll_test/preview.mp4`.
+Where the build went a different way, this list and `DECISIONS.md` win.
+
+## What changed while building it
+
+- **Sequencer channels:** every strip has a channel of its own (feed 1..n, her n+1, sounds after), and all feed videos
+  are retimed before any sound strip is added. A strip made over another is moved aside by Blender; in Blender 5.2.3 a
+  sound strip made first hands its retiming keys to the next video's, and writing to them crashes.
+- **The swipe's wind-up** keeps her arm out and her forearm open, so her hand rises beside her face, not across it.
+- **Placeholder feed:** three CC0 vertical Commons clips with sound (a cat, two birds), `.webm` at 30 and 60 fps, in
+  `reel_samples/SOURCES.txt`. The reel's `reel.json` names them `feed-N.webm`.
+- **The preview saves little time:** 4.03 s per frame at 540×960 against about 4.4–5 s at full size, because each frame
+  is two EEVEE renders (`brow_over`) whatever its size. A 15-second preview is about 24 minutes; the full reel about 30.
+- **The old checks see reel motions:** `check_reel.py -- camera` covers every clip in the file, so it now places the
+  camera on `scroll_test` too (810 placements, all pass). `clips.json` is unchanged.
 
 ## Why it changed (Ethan, Nov 12, after watching the proof of concept)
 
@@ -82,7 +96,7 @@ elevation 0, x 0.5, with her face looked up per frame from `faces`. Output as no
 
 **Two renders per version:** a preview at half size (540×960) for Ethan to check her motion, then the full
 1080×1920 once he is happy. One command does each: `sh assets/model_v2/build/run_scroll.sh reels/<name> [preview]`,
-writing `renders/reels/<name>/preview.mp4` or `reel.mp4`.
+writing `renders/reels/<name>/preview.mp4` or `reel.mp4` (the shot's edit list is written beside the frames as `frames/edit.json` for the frames check).
 
 ## The feed
 

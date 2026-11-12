@@ -88,8 +88,65 @@ def test_backgrounds():
     assert re_.ROOT == Path(__file__).resolve().parents[4], re_.ROOT
 
 
+FACES = ["observing", "soft_smile", "laugh"]
+SCROLL = {
+    "width": 1080,
+    "height": 1920,
+    "frames": 360,
+    "faces": [[1, "observing"], [96, "laugh"]],
+    "feed": [{"file": "a.mp4", "offset": 0}, {"file": "b.mp4"}, {"file": "a.mp4", "offset": 2.5}],
+    "swipes": [130, 250],
+}
+
+
+def scroll_rejects(root, change, words):
+    edit = copy.deepcopy(SCROLL)
+    change(edit)
+    try:
+        re_.validate_scroll(edit, FACES, root)
+    except ValueError as e:
+        assert words in str(e), "expected %r in %r" % (words, str(e))
+        return
+    raise AssertionError("accepted a bad scroll reel: expected " + words)
+
+
+def test_scroll():
+    with tempfile.TemporaryDirectory() as root:
+        root = Path(root)
+        for name in ("a.mp4", "b.mp4"):
+            (root / name).write_bytes(b"x")
+        re_.validate_scroll(SCROLL, FACES, root)
+        scroll_rejects(root, lambda e: e["faces"].append([200, "grin"]), "unknown face")
+        scroll_rejects(root, lambda e: e["faces"][0].__setitem__(0, 2), "start at 1")
+        scroll_rejects(root, lambda e: e["faces"].append([50, "laugh"]), "rise")
+        scroll_rejects(root, lambda e: e["faces"].append([361, "laugh"]), "inside")
+        scroll_rejects(root, lambda e: e["faces"].append(["x", "laugh"]), "[frame, name]")
+        scroll_rejects(root, lambda e: e.update(faces=[]), "no faces")
+        scroll_rejects(root, lambda e: e.update(swipes=[130, 160]), "apart")
+        scroll_rejects(root, lambda e: e.update(swipes=[250, 130]), "rise")
+        scroll_rejects(root, lambda e: e.update(swipes=[30, 250]), "either end")
+        scroll_rejects(root, lambda e: e.update(swipes=[130, 330]), "either end")
+        scroll_rejects(root, lambda e: e.update(swipes=[130.5, 250]), "list of frames")
+        scroll_rejects(root, lambda e: e["feed"].pop(), "one more than the swipes")
+        scroll_rejects(root, lambda e: e["feed"][1].update(file="c.mp4"), "feed video 2: ")
+        scroll_rejects(root, lambda e: e["feed"][2].update(offset=-1), "feed video 3: offset")
+        scroll_rejects(root, lambda e: e["feed"][0].pop("file"), "feed video 1: no file")
+        scroll_rejects(root, lambda e: e.update(frames=0), "frames")
+        scroll_rejects(root, lambda e: e.update(width=1081), "width")
+    assert [re_.face_at(SCROLL["faces"], f) for f in (1, 95, 96, 360)] == ["observing", "observing", "laugh", "laugh"]
+    assert re_.feed_spans(SCROLL) == [(1, 138), (130, 258), (250, 361)]
+    assert re_.sound_spans(SCROLL) == [(1, 130), (130, 250), (250, 361)]
+    edit = re_.scroll_shot(SCROLL, "scroll_test")
+    re_.validate(edit, {"clips": [{"name": "scroll_test", "frames": 360, "loops": False}], "faces": FACES, "framings": ["full"]})
+    shot = edit["shots"][0]
+    assert (shot["face"], shot["faces"], shot["azimuth"], shot["elevation"], shot["framing"], shot["x"]) == ("observing", SCROLL["faces"], 0, 0, "full", 0.5)
+    small = re_.preview(SCROLL)
+    assert (small["width"], small["height"], SCROLL["width"]) == (540, 960, 1080)
+
+
 if __name__ == "__main__":
     test_validate()
     test_clip_frame()
     test_backgrounds()
+    test_scroll()
     print("REEL_EDIT ok")

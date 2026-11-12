@@ -18,6 +18,7 @@ python -c "import json, sys; sys.path.insert(0, sys.argv[1]); import reel_edit a
 "$B" -b "$F" --python-exit-code 1 -P "$M/build/checks/check_clips.py" -- clip "$NAME" 2>&1 | grep -E "$SHOW"
 "$B" -b "$F" --python-exit-code 1 -P "$CHECK" -- scroll "$DIR" 2>&1 | grep -E "$SHOW"
 "$B" -b --factory-startup --python-exit-code 1 -P "$CHECK" -- feed "$OUT/feedcheck" 2>&1 | grep -E "$SHOW"
+"$B" -b "$F" --python-exit-code 1 -P "$CHECK" -- feedfirst "$OUT/feedfirst" 2>&1 | grep -E "$SHOW"
 "$B" -b "$F" --python-exit-code 1 -P "$M/build/reel.py" -- scroll "$DIR" "$OUT/frames" $MODE 2>&1 | grep -E "$SHOW"
 "$B" -b "$F" --python-exit-code 1 -P "$CHECK" -- frames "$OUT/frames" "$OUT/frames/edit.json" 2>&1 | grep -E "$SHOW"
 "$B" -b --factory-startup --python-exit-code 1 -P "$M/build/reel_review.py" -- scroll "$DIR" "$OUT/frames" "$MP4" $MODE 2>&1 | grep -E "$SHOW"

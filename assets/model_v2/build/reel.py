@@ -87,9 +87,13 @@ def render(edit, out):
 
 
 def render_scroll(folder, out, preview):
-    """A scroll reel as one front-on shot; the shot's edit list goes beside the frames for the frames check."""
+    """A scroll reel as one front-on shot; the shot's edit list goes beside the frames for the frames check.
+    The feed is checked first (sound, length), so a bad video fails now, not after half an hour of rendering."""
+    import reel_review
+
     edit = re_.load(folder / "reel.json")
     re_.validate_scroll(edit, manifest()["faces"])
+    reel_review.check_feed(edit)
     shot = re_.scroll_shot(re_.preview(edit) if preview else edit, folder.name)
     out.mkdir(parents=True, exist_ok=True)
     (out / "edit.json").write_text(json.dumps(shot, indent=2) + "\n", newline="\n")

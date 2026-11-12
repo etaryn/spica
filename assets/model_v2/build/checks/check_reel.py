@@ -1,5 +1,5 @@
 # Tests her reels by measurement, and raises on any failure.
-# Args after --: manifest | camera | wrap <abs scratch dir> | frames <abs frames dir> <reel.json> | scroll <abs reel dir> run on spica-v2-clips.blend;
+# Args after --: manifest | camera | wrap <abs scratch dir> | frames <abs frames dir> <reel.json> | scroll <abs reel dir> | feedfirst <abs scratch dir> run on spica-v2-clips.blend;
 # pan <abs scratch dir> | review <mp4> <reel.json> | feed <abs scratch dir> | scroll_review <mp4> <abs reel dir> [preview] run in an empty session (--factory-startup).
 import json
 import math
@@ -301,6 +301,27 @@ def check_scroll_review(mp4, edit):
     print("REVIEW checked", edit["frames"], "frames with sound")
 
 
+def check_feed_first(scratch):
+    """A scroll reel whose feed cannot play fails in reel.py, before any frame of her is rendered, not half an hour later in the review."""
+    import reel
+
+    folder, out = scratch / "scroll_test", scratch / "frames"  # named as a built reel motion, so without the check reel.py would render
+    folder.mkdir(parents=True, exist_ok=True)
+    silent = test_video(scratch / "silent.mp4", 24, 48, (0, 0, 1), (0, 0, 1), False)
+    (folder / "reel.json").write_text(json.dumps({"width": 270, "height": 480, "frames": 2, "faces": [[1, "observing"]], "feed": [{"file": str(silent)}], "swipes": []}), newline="\n")
+    for old in out.glob("shot-*/*.png"):
+        old.unlink()
+    try:
+        reel.render_scroll(folder, out, False)
+        bad("reel.py rendered a reel whose feed has no sound")
+    except ValueError as e:
+        if not str(e).startswith("feed video 1: silent.mp4 has no sound"):
+            bad("feed first: unclear error %r" % str(e))
+    if list(out.glob("shot-*/*.png")):
+        bad("reel.py rendered her frames before finding the feed has no sound")
+    print("FEEDFIRST checked")
+
+
 def check_scroll(folder):
     """A scroll reel's motion, measured on her pose every frame: feet planted, all of her in the picture, each swipe's hand rising with the feed."""
     import reel
@@ -366,6 +387,10 @@ def main():
         check_review(Path(rest[0]), re_.load(rest[1]))
     elif mode == "scroll":
         check_scroll(Path(rest[0]))
+    elif mode == "feedfirst":
+        scratch = Path(rest[0])
+        scratch.mkdir(parents=True, exist_ok=True)
+        check_feed_first(scratch)
     elif mode == "feed":
         scratch = Path(rest[0])
         scratch.mkdir(parents=True, exist_ok=True)

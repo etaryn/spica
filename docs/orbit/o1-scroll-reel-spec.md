@@ -53,7 +53,7 @@ Each reel is a folder `assets/model_v2/reels/<name>/` (committed; its renders an
   | `frames` | the reel's length at 24 fps |
   | `faces` | `[frame, expression]` pairs, frames ascending, the first at frame 1; her face is the last pair at or before each frame. Names from her 32 (`face_expr2`). |
   | `feed` | the videos in the order she sees them; one more than `swipes`. `offset` is the second of the video the feed starts at, as in the old edit list. |
-  | `swipes` | the frame each swipe's scroll starts on, ascending, inside the reel, at least `SWIPE_GAP` (24 frames, one gesture's length) apart and from either end |
+  | `swipes` | the frame each swipe's scroll starts on, ascending, inside the reel, at least `SWIPE_GAP` (48 frames; one gesture, wind-up to arm down, is about 36) apart and from either end |
 
 - **`motion.py`**, her motion: a function `motion(arm, frame, edit)` returning bone turns and a hips offset, the same
   form as the clips in `clips.py` (`idle`, `walk`...), so it can use `clips.py`'s helpers and her `idle` as its

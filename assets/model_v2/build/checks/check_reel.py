@@ -1,8 +1,11 @@
 # Tests her reels by measurement, and raises on any failure.
-# Args after --: manifest | camera | wrap <abs scratch dir> | frames <abs frames dir> <reel.json> run on spica-v2-clips.blend;
-# pan <abs scratch dir> | review <mp4> <reel.json> run in an empty session (--factory-startup).
+# Args after --: manifest | camera | wrap <abs scratch dir> | frames <abs frames dir> <reel.json> | scroll <abs reel dir> run on spica-v2-clips.blend;
+# pan <abs scratch dir> | review <mp4> <reel.json> | feed <abs scratch dir> | scroll_review <mp4> <abs reel dir> [preview] run in an empty session (--factory-startup).
 import json
+import math
+import struct
 import sys
+import wave
 from pathlib import Path
 
 import bpy
@@ -200,6 +203,101 @@ def check_review(mp4, edit):
     print("REVIEW checked", total, "frames")
 
 
+def test_video(path, fps, frames, first, last, sound):
+    """A test video, one colour fading linearly to another, with a tone if sound is on. Blender makes it: there is no ffmpeg here."""
+    import reel_review as rr
+
+    scene = bpy.data.scenes.new(path.stem)
+    r = scene.render
+    r.resolution_x, r.resolution_y, r.resolution_percentage, r.fps = 270, 480, 100, fps
+    scene.view_settings.view_transform = "Standard"
+    strips = scene.sequence_editor_create().strips
+    colour = strips.new_effect("colour", "COLOR", 1, 1, length=frames)
+    for f, c in ((1, first), (frames, last)):
+        colour.color = c
+        colour.keyframe_insert("color", frame=f)
+    for fc in scene.animation_data.action.layers[0].strips[0].channelbags[0].fcurves:
+        for k in fc.keyframe_points:
+            k.interpolation = "LINEAR"
+    if sound:
+        tone = path.with_suffix(".wav")
+        with wave.open(str(tone), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(48000)
+            w.writeframes(b"".join(struct.pack("<h", int(8000 * math.sin(math.tau * 440 * i / 48000))) for i in range(48000 * (frames // fps + 1))))
+        strips.new_sound("tone", str(tone), 2, 1)
+    scene.frame_start, scene.frame_end = 1, frames
+    rr.write_video(scene, path, audio=sound)
+    return path
+
+
+def check_feed(scratch):
+    """The feed by pixel: a 30 fps video plays at real speed from its offset, a swipe slides the old video up as the next comes in, and bad videos fail first."""
+    import reel_review as rr
+
+    red, blue, green = (1, 0, 0), (0, 0, 1), (0, 1, 0)
+    v1 = test_video(scratch / "ramp30.mp4", 30, 150, (0, 0, 0), red, True)  # 5 s, red rising frame by frame
+    v2 = test_video(scratch / "blue24.mp4", 24, 120, blue, blue, True)
+    v3 = test_video(scratch / "green25.mp4", 25, 125, green, green, True)
+    silent = test_video(scratch / "silent24.mp4", 24, 120, blue, blue, False)
+    (scratch / "shot-01").mkdir(exist_ok=True)
+    for k in range(1, 151):  # her frames: empty, so only the feed shows
+        image = bpy.data.images.new("empty", 270, 480, alpha=True)
+        image.pixels.foreach_set(np.zeros(270 * 480 * 4, np.float32))
+        image.filepath_raw, image.file_format = str(scratch / "shot-01" / ("%04d.png" % k)), "PNG"
+        image.save()
+        bpy.data.images.remove(image)
+    edit = {"width": 270, "height": 480, "frames": 150, "faces": [[1, "observing"]], "swipes": [50, 100], "feed": [{"file": str(v1), "offset": 1.0}, {"file": str(v2)}, {"file": str(v3)}]}
+    for change, words in ((lambda e: e["feed"][1].update(file=str(silent)), "feed video 2: silent24.mp4 has no sound"), (lambda e: e["feed"][0].update(offset=3.0), "feed video 1: ramp30.mp4 is too short")):
+        broken = json.loads(json.dumps(edit))
+        change(broken)
+        try:
+            rr.build_scroll(bpy.data.scenes.new("broken"), broken, scratch, scratch)
+            bad("a bad feed was accepted: expected " + words)
+        except ValueError as e:
+            if not str(e).startswith(words):
+                bad("bad feed: unclear error %r, expected %r" % (str(e), words))
+    scene = bpy.context.scene
+    rr.build_scroll(scene, edit, scratch, scratch)
+    mean = lambda f, rows=slice(None): read_still(scene, scratch, f)[rows, :, :3].reshape(-1, 3).mean(axis=0)
+    want = 2.0 * 30 / 149  # frame 25 is 1 s into the shot, from 1 s into the video: its 60th frame of 150
+    if abs(mean(25)[0] - want) > 0.04:
+        bad("feed: a 30 fps video does not play at real speed from its offset (red %.3f, expected %.3f)" % (mean(25)[0], want))
+    if mean(49)[2] > 0.05:
+        bad("feed: the next video shows before its swipe")
+    top, bottom = mean(54, slice(0, 120)), mean(54, slice(360, 480))
+    if not (top[0] > 0.3 and top[2] < 0.1 and bottom[2] > 0.8):
+        bad("feed: halfway through a swipe the old video should be leaving the top and the next coming in below (top %s, bottom %s)" % (np.round(top, 2), np.round(bottom, 2)))
+    if mean(58)[2] < 0.9 or mean(125)[1] < 0.9:
+        bad("feed: after a swipe the next video should fill the frame")
+    mp4 = scratch / "feed.mp4"
+    rr.write_video(scene, mp4, audio=True)
+    check_scroll_review(mp4, edit)
+    print("FEED checked")
+
+
+def read_still(scene, scratch, frame):
+    import reel_review as rr
+
+    path = scratch / ("feed-%d.png" % frame)
+    rr.still(scene, frame, path)
+    return read_png(path)
+
+
+def check_scroll_review(mp4, edit):
+    clip = bpy.data.movieclips.load(str(mp4))
+    if clip.frame_duration != edit["frames"]:
+        bad("the reel is %d frames, the edit list says %d" % (clip.frame_duration, edit["frames"]))
+    if tuple(clip.size) != (edit["width"], edit["height"]):
+        bad("the reel is %s, the edit list says %dx%d" % (tuple(clip.size), edit["width"], edit["height"]))
+    if abs(clip.fps - 24) > 0.01:
+        bad("the reel is %.2f fps" % clip.fps)
+    if bpy.data.sounds.load(str(mp4)).samplerate == 0:
+        bad("the reel has no sound")
+    print("REVIEW checked", edit["frames"], "frames with sound")
+
+
 def main():
     mode, *rest = args
     if mode == "manifest":
@@ -218,6 +316,13 @@ def main():
         check_pan(scratch)
     elif mode == "review":
         check_review(Path(rest[0]), re_.load(rest[1]))
+    elif mode == "feed":
+        scratch = Path(rest[0])
+        scratch.mkdir(parents=True, exist_ok=True)
+        check_feed(scratch)
+    elif mode == "scroll_review":
+        edit = re_.load(Path(rest[1]) / "reel.json")
+        check_scroll_review(Path(rest[0]), re_.preview(edit) if rest[2:] == ["preview"] else edit)
     else:
         raise SystemExit("unknown mode " + mode)
     if problems:

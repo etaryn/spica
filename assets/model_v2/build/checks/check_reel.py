@@ -19,6 +19,9 @@ problems = []
 MANIFEST = Path(__file__).resolve().parents[2] / "clips.json"
 X_TOLERANCE = 0.08  # share of the frame width her alpha's centre may sit from x: she is not symmetric, and a side view moves her centre
 SAME = 0.004  # mean difference per channel under which two renders are the same picture
+FOOT_DRIFT = 0.003  # metres a planted foot may move through a scroll reel
+EDGE = 0.01  # share of the picture kept clear at each edge
+SWIPE_RISE = 0.15  # metres her swiping hand must rise during the scroll
 
 
 def bad(message):
@@ -298,6 +301,51 @@ def check_scroll_review(mp4, edit):
     print("REVIEW checked", edit["frames"], "frames with sound")
 
 
+def check_scroll(folder):
+    """A scroll reel's motion, measured on her pose every frame: feet planted, all of her in the picture, each swipe's hand rising with the feed."""
+    import reel
+    import sprites as sp
+    from bpy_extras.object_utils import world_to_camera_view
+
+    edit, name = re_.load(folder / "reel.json"), folder.name
+    shot = re_.scroll_shot(edit, name)["shots"][0]
+    arm, scene = bpy.data.objects["Armature"], bpy.context.scene
+    action = bpy.data.actions.get("clip_" + name)
+    assert action and action.get("reel"), "clip_%s is missing or not marked as a reel motion; run clips.py -- reel:%s" % (name, name)
+    if (action["first"], action["last"]) != (1, edit["frames"]):
+        bad("clip_%s runs %d to %d, the reel is %d frames" % (name, action["first"], action["last"], edit["frames"]))
+    cam = sp.setup(scene, transparent=True)
+    scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage = edit["width"], edit["height"], 100
+    at = lambda bone, end="head": arm.matrix_world @ getattr(arm.pose.bones[bone], end)
+    feet = ("J_Bip_L_Foot", "J_Bip_R_Foot", "J_Bip_L_ToeBase", "J_Bip_R_ToeBase")
+    start, worst, outside, hands = None, (0.0, 1), {}, []
+    for f in range(1, edit["frames"] + 1):
+        sp.pose(arm, scene, name, f)
+        reel.place_camera(cam, arm, scene, shot)
+        now = [at(b) for b in feet]
+        start = start or now
+        worst = max(worst, (max((a - b).length for a, b in zip(now, start)), f))
+        parts = {"head top": at("J_Bip_C_Head", "tail"), "left hand": at("J_Bip_L_Middle3", "tail"), "right hand": at("J_Bip_R_Middle3", "tail"), "left foot": now[2], "right foot": now[3]}
+        for part, p in parts.items():
+            v = world_to_camera_view(scene, cam, p)
+            if not (EDGE < v.x < 1 - EDGE and EDGE < v.y < 1 - EDGE):
+                outside.setdefault(part, f)
+        hands.append(max(parts["left hand"].z, parts["right hand"].z))
+    if worst[0] > FOOT_DRIFT:
+        bad("a planted foot moves %.1f mm (worst at frame %d)" % (worst[0] * 1000, worst[1]))
+    for part, f in outside.items():
+        bad("her %s leaves the picture (first at frame %d)" % (part, f))
+    height = lambda f: hands[f - 1]
+    for s in edit["swipes"]:
+        end = s + re_.SWIPE_FRAMES
+        if height(end) < height(s) + SWIPE_RISE:
+            bad("swipe at %d: her hand rises only %.2f m during the scroll" % (s, height(end) - height(s)))
+        top = max(range(max(1, s - 12), min(edit["frames"], s + 30) + 1), key=height)
+        if abs(top - end) > 3:
+            bad("swipe at %d: her hand is highest at frame %d, not within 3 frames of the scroll's end (%d)" % (s, top, end))
+    print("SCROLL checked", name, edit["frames"], "frames; feet within %.1f mm" % (worst[0] * 1000))
+
+
 def main():
     mode, *rest = args
     if mode == "manifest":
@@ -316,6 +364,8 @@ def main():
         check_pan(scratch)
     elif mode == "review":
         check_review(Path(rest[0]), re_.load(rest[1]))
+    elif mode == "scroll":
+        check_scroll(Path(rest[0]))
     elif mode == "feed":
         scratch = Path(rest[0])
         scratch.mkdir(parents=True, exist_ok=True)

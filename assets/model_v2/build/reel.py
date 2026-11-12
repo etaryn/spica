@@ -1,6 +1,7 @@
 # Renders her shots for a reel from an edit list, as transparent frames for the reel engine on main to lay over content.
 # Args after --: <reel.json> <absolute out dir> | manifest <absolute out.json>. Runs on spica-v2-clips.blend and never saves it.
 # Seam and fields: docs/orbit/o1-reels-spec.md.
+# Scroll reels: -- scroll <abs reel dir> <abs out dir> [preview] (docs/orbit/o1-scroll-reel-spec.md).
 import json
 import math
 import sys
@@ -23,12 +24,15 @@ FACE_UP = 0.07  # from the base of her skull to the middle of her face
 DISTANCE = 6  # metres from the aim point; orthographic, so it only has to clear her
 
 
-def manifest():
-    """The clips in this file, her faces and the framings: what main's engine writes edit lists from."""
+def manifest(reels=False):
+    """The clips in this file, her faces and the framings: what main's engine writes edit lists from. Reel motions are one-offs, listed only when asked."""
     clips = []
     for a in sorted((a for a in bpy.data.actions if a.name.startswith("clip_")), key=lambda a: a.name):
+        if a.get("reel") and not reels:
+            continue
         name = a.name[5:]
-        clips.append({"name": name, "frames": a["last"] - a["first"] + 1, "loops": a["first"] > 1, "tags": [sp.TAGS[name]]})  # clips.py starts a loop at its second cycle
+        tags = ["reel"] if a.get("reel") else [sp.TAGS[name]]
+        clips.append({"name": name, "frames": a["last"] - a["first"] + 1, "loops": a["first"] > 1, "tags": tags})  # clips.py starts a loop at its second cycle
     return {"fps": FPS, "clips": clips, "faces": list(face_expr2.NAMES), "framings": list(FRAMING)}
 
 
@@ -59,7 +63,7 @@ def place_camera(cam, arm, scene, shot):
 
 def render(edit, out):
     out = Path(out)
-    re_.validate(edit, manifest())
+    re_.validate(edit, manifest(reels=True))
     for old in out.glob("shot-*/*.png"):
         old.unlink()
     scene, arm = bpy.context.scene, bpy.data.objects["Armature"]
@@ -74,17 +78,31 @@ def render(edit, out):
         for i in range(shot["frames"]):
             f = re_.clip_frame(action["first"], action["last"], action["first"] > 1, shot["start"], i)
             sp.pose(arm, scene, shot["clip"], f)
-            sp.set_face(shot["face"], facing, shot["clip"])
+            face = re_.face_at(shot["faces"], i + 1) if "faces" in shot else shot["face"]
+            sp.set_face(face, facing, shot["clip"])
             place_camera(cam, arm, scene, shot)
             scene.render.filepath = str(folder / ("%04d.png" % (i + 1)))
             brow_over.render(scene)
         print("SHOT %d %s %d frames, %.2f s per frame" % (n, shot["clip"], shot["frames"], (time.time() - began) / shot["frames"]))
 
 
+def render_scroll(folder, out, preview):
+    """A scroll reel as one front-on shot; the shot's edit list goes beside the frames for the frames check."""
+    edit = re_.load(folder / "reel.json")
+    re_.validate_scroll(edit, manifest()["faces"])
+    shot = re_.scroll_shot(re_.preview(edit) if preview else edit, folder.name)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "edit.json").write_text(json.dumps(shot, indent=2) + "\n", newline="\n")
+    render(shot, out)
+
+
 def main():
     rest = sys.argv[sys.argv.index("--") + 1:]
     if rest[0] == "manifest":
         write_manifest(rest[1])
+        return
+    if rest[0] == "scroll":
+        render_scroll(Path(rest[1]), Path(rest[2]), rest[3:] == ["preview"])
         return
     render(re_.load(rest[0]), Path(rest[1]))
 

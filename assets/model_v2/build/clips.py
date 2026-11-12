@@ -1,5 +1,7 @@
 # Keys her clips on the finished model and saves spica-v2-clips.blend, leaving spica-v2.blend alone. Args after --: <name,...>; only those are replaced.
+# reel:<name> builds a scroll reel's motion (assets/model_v2/reels/<name>/motion.py) as a one-shot clip marked "reel"; run it on spica-v2-clips.blend, as a library rebuild from spica-v2.blend drops it.
 # A clip is a function from a frame to bone turns in her own axes, each relative to the bone's parent and laid over her arms-down pose. Loops are keyed for two cycles and bake swing over both; the second is the clip.
+import importlib.util
 import json
 import math
 import sys
@@ -16,6 +18,7 @@ import rig_poses as rp
 import spring
 
 OUT = Path(__file__).resolve().parent.parent / "spica-v2-clips.blend"
+REELS = OUT.parent / "reels"
 TAU = 2 * math.pi
 AXES = {"X": Vector((1, 0, 0)), "Y": Vector((0, 1, 0)), "Z": Vector((0, 0, 1))}
 SPINE, CHEST, UPPER_CHEST, NECK, HEAD, HIPS = (("J_Bip_C_%s" % n) for n in ("Spine", "Chest", "UpperChest", "Neck", "Head", "Hips"))
@@ -352,17 +355,36 @@ def build(arm, name):
     arm.animation_data.action = None
 
 
+def add_reel(name):
+    """A reel's motion as a clip: reels/<name>/motion.py, timed by the reel.json beside it."""
+    if name in CLIPS:
+        raise SystemExit("reel %r has a library clip's name" % name)
+    folder = REELS / name
+    spec = importlib.util.spec_from_file_location("motion_" + name, folder / "motion.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    edit = json.loads((folder / "reel.json").read_text(encoding="utf-8"))
+    CLIPS[name] = (lambda arm, frame: module.motion(arm, frame, edit), edit["frames"], False)
+
+
 def main():
     arm = bpy.data.objects["Armature"]
     add_bob_bones(arm)
-    for name in sys.argv[sys.argv.index("--") + 1].split(","):
+    names = sys.argv[sys.argv.index("--") + 1].split(",")
+    for item in names:
+        name = item[len("reel:"):] if item.startswith("reel:") else item
+        if name != item:
+            add_reel(name)
         build(arm, name)
+        if name != item:
+            bpy.data.actions["clip_" + name]["reel"] = True
     rp.apply(arm, "arms_down")
     bpy.context.scene.frame_set(1)
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT))
     import reel  # here, not at the top: reel imports sprites, which clips.py does not otherwise need
 
     reel.write_manifest(OUT.parent / "clips.json")
+    print("BUILT", names)
 
 
 if __name__ == "__main__":
